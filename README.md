@@ -1,5 +1,5 @@
 <p align="center">
-    <img src="https://user-images.githubusercontent.com/6702424/80216211-00ef5280-863e-11ea-81de-59f3a3d4b8e4.png">  
+    <img src="https://github.com/garronej/oidc-spa/assets/6702424/6adde1f7-b7b6-4b1a-b48f-bd02095b99ea">  
 </p>
 <p align="center">
     <i>Openidconnect client for Single Page Applications</i>
