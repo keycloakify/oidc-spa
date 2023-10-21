@@ -1,0 +1,66 @@
+{
+    "name": "#{REPO_NAME}#",
+    "version": "0.0.0",
+    "description": "#{DESC}#",
+    "repository": {
+        "type": "git",
+        "url": "git://github.com/#{USER_OR_ORG}#/#{REPO_NAME}#.git"
+    },
+    "scripts": {
+        "build": "tsc",
+        "test": "vitest",
+        "lint:check": "eslint . --ext .ts,.tsx",
+        "lint": "npm run lint:check -- --fix",
+        "_format": "prettier '**/*.{ts,tsx,json,md}'",
+        "format": "npm run _format -- --write",
+        "format:check": "npm run _format -- --list-different",
+        "link-in-app": "ts-node --skipProject scripts/link-in-app.ts"
+    },
+    "main": "dist/index.js",
+    "types": "dist/index.d.ts",
+    "exports": {
+        ".": "./dist/index.js",
+        "./*": "./dist/*.js",
+        "./tools": "./dist/tools/index.js"
+    },
+    "lint-staged": {
+        "*.{ts,tsx}": [
+            "eslint --fix"
+        ],
+        "*.{ts,tsx,json,md}": [
+            "prettier --write"
+        ]
+    },
+    "husky": {
+        "hooks": {
+            "pre-commit": "lint-staged -v"
+        }
+    },
+    "author": "u/#{USER_OR_ORG}#",
+    "license": "MIT",
+    "files": [
+        "src/",
+        "dist/",
+        "!dist/tsconfig.tsbuildinfo"
+    ],
+    "keywords": [],
+    "homepage": "https://github.com/#{USER_OR_ORG}#/#{REPO_NAME}#",
+    "devDependencies": {
+        "@types/node": "^20.2.1",
+        "typescript": "^5.0.4",
+        "@typescript-eslint/eslint-plugin": "^5.59.6",
+        "@typescript-eslint/parser": "^5.59.6",
+        "eslint": "^8.41.0",
+        "eslint-config-prettier": "^8.8.0",
+        "husky": "^4.3.8",
+        "lint-staged": "^11.1.1",
+        "prettier": "^2.8.8",
+        "vitest": "^0.31.1",
+        "ts-node": "^10.9.1",
+        "react": "^18.2.0",
+        "@types/react": "^18.2.6"
+    },
+    "publishConfig": {
+        "access": "public"
+    }
+}

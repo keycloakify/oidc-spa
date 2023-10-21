@@ -1,0 +1,24 @@
+{
+    "compilerOptions": {
+        "module": "CommonJS",
+        "target": "es5",
+        "moduleResolution": "node",
+        "lib": ["es2015", "DOM", "ES2019.Object"],
+        "esModuleInterop": true,
+        "declaration": true,
+        // Do not change or the linking script will stop working
+        "outDir": "./dist",
+        "sourceMap": true,
+        "newLine": "LF",
+        "noUnusedLocals": true,
+        "noUnusedParameters": true,
+        "incremental": true,
+        "strict": true,
+        "downlevelIteration": true,
+        "jsx": "react-jsx",
+        "noFallthroughCasesInSwitch": true,
+        "skipLibCheck": true
+    },
+    "include": ["src"],
+    "exclude": ["src/**/*.deno.ts", "src/**/*.deno.tsx"]
+}
