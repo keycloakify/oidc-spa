@@ -56,9 +56,7 @@ Create a `silent-sso.html` file and put it in your public directory.
 </html>
 ```
 
-# Usage
-
-## Isolated from the UI library
+## Basic usage (without involving React)
 
 ```ts
 import { createOidc, decodeJwt } from "oidc-spa";
