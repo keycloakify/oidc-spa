@@ -36,7 +36,7 @@ While `oidc-client-ts` serves as a comprehensive toolkit, our library aims to pr
 #### react-oidc-context
 
 Our library takes a modular approach to OIDC and React, treating them as separate concerns that don't necessarily have to be intertwined.
-We offer an optional React adapter for added convenience, but it's not a requirement to use it, even in a react project and [it's really trivial](https://github.com/garronej/oidc-spa/blob/main/src/react.tsx).
+We offer an optional React adapter for added convenience, but it's not a requirement to use it and [it's really trivial anyway](https://github.com/garronej/oidc-spa/blob/main/src/react.tsx).
 
 # Install / Import
 
