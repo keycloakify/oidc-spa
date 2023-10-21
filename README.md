@@ -24,22 +24,19 @@
   <a href="https://github.com/garronej/oidc-spa">Documentation</a>
 </p>
 
-An OIDC client for Single Page Applications that comes with an optional adapter for React.  
-Very minimal API surface, you don't need to know the in and out of oidc or OAuth to use this.
+An OIDC client designed for Single Page Applications, featuring an optional React adapter for enhanced convenience.  
+With a streamlined API, you can easily integrate OIDC without needing to understand every detail of the protocol.
 
-Why not oidc-client-ts ?
+### Comparison with Existing Libraries
 
--   `oidc-client-ts` more a toolkit than a ready to use adapter. This lib use it internally but abstract away most of it's complexity.
--   It's used under the hood by this lib but it's hard to setup directly in a SPA setup especially the silent SSO.
--   It's more resilient do misconfigured server.
--   It restrict what params can be passed on the url when redirecting to the login page.
+#### oidc-client-ts
 
-Why not react-oidc-context?
+While `oidc-client-ts` serves as a comprehensive toolkit, our library aims to provide a simplified, ready-to-use adapter. We utilize `oidc-client-ts` internally but abstract away most of its intricacies.
 
--   There's no overlap between OIDC and React. Not everything should be though as a React problem. Oidc and React are
-    completely different problem space they have no business being intertwined.  
-    This library provide an optional React adapter for convenience in the spirit of being truly ready to use but don't
-    get mistaken, it's trivial you could as well do without it.
+#### react-oidc-context
+
+Our library takes a modular approach to OIDC and React, treating them as separate concerns that don't necessarily have to be intertwined.
+We offer an optional React adapter for added convenience, but it's not a requirement to use it, even in a react project and [it's really trivial](https://github.com/garronej/oidc-spa/blob/main/src/react.tsx).
 
 # Install / Import
 
