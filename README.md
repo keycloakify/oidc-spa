@@ -86,11 +86,13 @@ import { createOidc, decodeJwt } from "oidc-spa";
             idToken
         } = oidc.getTokens();
 
-        const { sub, preferred_username } = decodeJwt<{
+        const user = decodeJwt<{
             // Use https://jwt.io/ to tell what's in your idToken
             sub: string;
             preferred_username: string;
         }>(idToken);
+
+        console.log(`Hello ${user.preferred_username}`);
 
         // To call when the user click on logout.
         oidc.logout();
@@ -134,16 +136,37 @@ function App() {
         );
     }
 
-    const { preferred_username } = decodeJwt<{
-        preferred_username: string;
-    }>(oidc.getTokens().idToken);
+    const { user } = useUser();
 
     return (
         <>
-            <h1>Hello {preferred_username}</h1>
+            <h1>Hello {user.preferred_username}</h1>
             <button onClick={() => oidc.logout()}>Log out</button>
         </>
     );
+}
+
+// Convenience hook to get the parsed idToken
+// To call only when the user is logged in
+function useUser() {
+    const { oidc } = useOidc();
+
+    if (!oidc.isUserLoggedIn) {
+        throw new Error("This hook should be used only on authenticated route");
+    }
+
+    const { idToken } = oidc.getTokens();
+
+    const user = useMemo(
+        () =>
+            decodeJwt<{
+                sub: string;
+                preferred_username: string;
+            }>(idToken),
+        idToken
+    );
+
+    return { user };
 }
 ```
 
