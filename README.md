@@ -24,16 +24,16 @@
   <a href="https://github.com/garronej/oidc-spa">Documentation</a>
 </p>
 
-An OIDC client designed for Single Page Applications, featuring an optional React adapter for enhanced convenience.  
+An OIDC client designed for Single Page Applications, typically [Vite](https://vitejs.dev/) projects.
 With a streamlined API, you can easily integrate OIDC without needing to understand every detail of the protocol.
 
 ### Comparison with Existing Libraries
 
-#### oidc-client-ts
+#### [oidc-client-ts](https://github.com/authts/oidc-client-ts)
 
 While `oidc-client-ts` serves as a comprehensive toolkit, our library aims to provide a simplified, ready-to-use adapter. We utilize `oidc-client-ts` internally but abstract away most of its intricacies.
 
-#### react-oidc-context
+#### [react-oidc-context](https://github.com/authts/react-oidc-context)
 
 Our library takes a modular approach to OIDC and React, treating them as separate concerns that don't necessarily have to be intertwined.
 We offer an optional React adapter for added convenience, but it's not a requirement to use it and [it's really trivial anyway](https://github.com/garronej/oidc-spa/blob/main/src/react.tsx).
