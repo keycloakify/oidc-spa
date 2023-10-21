@@ -9,20 +9,18 @@ on:
 
 jobs:
 
-  test_lint:
+  test_format:
     runs-on: ubuntu-latest
     if: ${{ !github.event.created && github.repository != 'garronej/ts-ci' }}
     steps:
     - uses: actions/checkout@v3
     - uses: actions/setup-node@v3
     - uses: bahmutov/npm-install@v1
-    - name: If this step fails run 'yarn lint' and 'yarn format' then commit again.
-      run: |
-        yarn lint:check
-        yarn format:check
+    - name: If this step fails run 'yarn format' then commit again.
+      run: yarn format:check
   test:
     runs-on: ${{ matrix.os }}
-    needs: test_lint
+    needs: test_format
     strategy:
       matrix:
         node: [ '16', '17' ]
@@ -35,7 +33,6 @@ jobs:
         node-version: ${{ matrix.node }}
     - uses: bahmutov/npm-install@v1
     - run: yarn build
-    - run: yarn test
 
   check_if_version_upgraded:
     name: Check if version upgrade

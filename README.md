@@ -24,23 +24,138 @@
   <a href="https://github.com/garronej/oidc-spa">Documentation</a>
 </p>
 
+An OIDC client for Single Page Applications that comes with an optional adapter for React.  
+Very minimal API surface, you don't need to know the in and out of oidc or OAuth to use this.
+
+Why not oidc-client-ts ?
+
+-   `oidc-client-ts` more a toolkit than a ready to use adapter. This lib use it internally but abstract away most of it's complexity.
+-   It's used under the hood by this lib but it's hard to setup directly in a SPA setup especially the silent SSO.
+-   It's more resilient do misconfigured server.
+-   It restrict what params can be passed on the url when redirecting to the login page.
+
+Why not react-oidc-context?
+
+-   There's no overlap between OIDC and React. Not everything should be though as a React problem. Oidc and React are
+    completely different problem space they have no business being intertwined.  
+    This library provide an optional React adapter for convenience in the spirit of being truly ready to use but don't
+    get mistaken, it's trivial you could as well do without it.
+
 # Install / Import
 
 ```bash
-$ npm install --save oidc-spa
+$ yarn add oidc-spa
 ```
 
-```typescript
-import { myFunction, myObject, MyReactComponent } from "oidc-spa";
+Create a `silent-sso.html` file and put it in your public directory.
+
+```html
+<html>
+    <body>
+        <script>
+            parent.postMessage(location.href, location.origin);
+        </script>
+    </body>
+</html>
 ```
 
-Specific imports, only import what you need:
+# Usage
 
-```typescript
-import { myFunction } from "oidc-spa/myFunction";
-import { myObject } from "oidc-spa/myObject";
-import MyReactComponent from "oidc-spa/MyReactComponent";
+## Isolated from the UI library
+
+```ts
+import { createOidc, decodeJwt } from "oidc-spa";
+
+(async () => {
+    const oidc = await createOidc({
+        issuerUri: "https://auth.your-domain.net/auth/realms/myrealm",
+        clientId: "myclient",
+        // Optional, you can modify the url before redirection to the identity server
+        transformUrlBeforeRedirect: url => `${url}&ui_locales=fr`
+        /** Optional: Provide only if your app is not hosted at the origin  */
+        //silentSsoUrl: `${window.location.origin}/foo/bar/baz/silent-sso.html`,
+    });
+
+    if (oidc.isUserLoggedIn) {
+        // This return a promise that never resolve. Your user will be redirected to the identity server.
+        // If you are calling login because the user clicked
+        // on a 'login' button you should set doesCurrentHrefRequiresAuth to false.
+        // When you are calling login because your user navigated to a path that require authentication
+        // you should set doesCurrentHrefRequiresAuth to true
+        oidc.login({ doesCurrentHrefRequiresAuth: false });
+    } else {
+        const {
+            // The accessToken is what you'll use a a Bearer token to authenticate to your APIs
+            accessToken,
+            // You can parse the idToken as a JWT to get some information about the user.
+            idToken
+        } = oidc.getTokens();
+
+        const { sub, preferred_username } = decodeJwt<{
+            // Use https://jwt.io/ to tell what's in your idToken
+            sub: string;
+            preferred_username: string;
+        }>(idToken);
+
+        // To call when the user click on logout.
+        oidc.logout();
+    }
+})();
 ```
+
+## Use via React Adapter
+
+```tsx
+import { createOidcProvider, useOidc } from "oidc-spa/react";
+import { decodeJwt } from "oidc-spa";
+
+const { OidcProvider } = createOidcProvider({
+    issuerUri: "https://auth.your-domain.net/auth/realms/myrealm",
+    clientId: "myclient"
+    // See above for other parameters
+});
+
+ReactDOM.render(
+    <OidcProvider
+        // Optional, it's usually so fast that a fallback is really not required.
+        fallback={<>Logging you in...</>}
+    >
+        <App />
+    </OidcProvider>,
+    document.getElementById("root")
+);
+
+function App() {
+    const { oidc } = useOidc();
+
+    if (!oidc.isUserLoggedIn) {
+        return (
+            <>
+                You're not logged in.
+                <button onClick={() => oidc.login({ doesCurrentHrefRequiresAuth: false })}>
+                    Login now
+                </button>
+            </>
+        );
+    }
+
+    const { preferred_username } = decodeJwt<{
+        preferred_username: string;
+    }>(oidc.getTokens().idToken);
+
+    return (
+        <>
+            <h1>Hello {preferred_username}</h1>
+            <button onClick={() => oidc.logout()}>Log out</button>
+        </>
+    );
+}
+```
+
+# Setup example
+
+-   Basic setup: https://github.com/keycloakify/keycloakify-starter
+-   Fully fledged app: https://github.com/InseeFrLab/onyxia
 
 # Contributing
 
