@@ -31,7 +31,8 @@ With a streamlined API, you can easily integrate OIDC without needing to underst
 
 ### [oidc-client-ts](https://github.com/authts/oidc-client-ts)
 
-While `oidc-client-ts` serves as a comprehensive toolkit, our library aims to provide a simplified, ready-to-use adapter. We utilize `oidc-client-ts` internally but abstract away most of its intricacies.
+While `oidc-client-ts` serves as a comprehensive toolkit, our library aims to provide a simplified, ready-to-use adapter that will pass
+any security audit. We utilize `oidc-client-ts` internally but abstract away most of its intricacies.
 
 ### [react-oidc-context](https://github.com/authts/react-oidc-context)
 
