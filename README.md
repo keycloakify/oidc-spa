@@ -170,7 +170,7 @@ function useUser() {
                 sub: string;
                 preferred_username: string;
             }>(idToken),
-        idToken
+        [idToken]
     );
 
     return { user };
