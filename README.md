@@ -27,18 +27,18 @@
 An OIDC client designed for Single Page Applications, typically [Vite](https://vitejs.dev/) projects.
 With a streamlined API, you can easily integrate OIDC without needing to understand every detail of the protocol.
 
-### Comparison with Existing Libraries
+## Comparison with Existing Libraries
 
-#### [oidc-client-ts](https://github.com/authts/oidc-client-ts)
+### [oidc-client-ts](https://github.com/authts/oidc-client-ts)
 
 While `oidc-client-ts` serves as a comprehensive toolkit, our library aims to provide a simplified, ready-to-use adapter. We utilize `oidc-client-ts` internally but abstract away most of its intricacies.
 
-#### [react-oidc-context](https://github.com/authts/react-oidc-context)
+### [react-oidc-context](https://github.com/authts/react-oidc-context)
 
 Our library takes a modular approach to OIDC and React, treating them as separate concerns that don't necessarily have to be intertwined.
 We offer an optional React adapter for added convenience, but it's not a requirement to use it and [it's really trivial anyway](https://github.com/garronej/oidc-spa/blob/main/src/react.tsx).
 
-# Install / Import
+## Usage
 
 ```bash
 $ yarn add oidc-spa
@@ -56,7 +56,7 @@ Create a `silent-sso.html` file and put it in your public directory.
 </html>
 ```
 
-## Basic usage (without involving React)
+### Option 1: Usage without involving the UI framework
 
 ```ts
 import { createOidc, decodeJwt } from "oidc-spa";
@@ -100,7 +100,7 @@ import { createOidc, decodeJwt } from "oidc-spa";
 })();
 ```
 
-## Use via React Adapter
+## Option 2: Usage directly within React
 
 ```tsx
 import { createOidcProvider, useOidc } from "oidc-spa/react";
@@ -176,14 +176,43 @@ function useUser() {
 }
 ```
 
-# Setup example
+## Demo setup
 
--   Basic setup: https://github.com/keycloakify/keycloakify-starter
--   Fully fledged app: https://github.com/InseeFrLab/onyxia
+<p align="center">
+  <img width="764" alt="image" src="https://github.com/garronej/oidc-spa/assets/6702424/1c8922de-d724-4e9d-b630-e82562449612">
+</p>
 
-# Contributing
+A very basic setup with Keycloak and Create React App.
 
-## Testing your changes in an external app
+-   It's live here: https://starter.keycloakify.dev/
+-   The source code is [here](https://github.com/keycloakify/keycloakify-starter).
+    The setup is collocated with a custom Keycloak theme. The part where we use `oidc-spa` is [here](https://github.com/keycloakify/keycloakify-starter/blob/main/src/App/App.tsx).
+
+## Showcases
+
+This library is powers the authentication of the following platforms:
+
+### Onyxia
+
+-   [Source code](https://github.com/InseeFrLab/onyxia)
+-   [Public instance](https://datalab.sspcloud.fr)
+
+<a href="https://youtu.be/FvpNfVrxBFM">
+  <img width="1712" alt="image" src="https://user-images.githubusercontent.com/6702424/231314534-2eeb1ab5-5460-4caa-b78d-55afd400c9fc.png">
+</a>
+
+### The French Interministerial Base of Free Software
+
+-   [Source code](https://github.com/codegouvfr/sill-web/)
+-   [Deployment of the website](https://code.gouv.fr/sill)
+
+<a href="https://youtu.be/AT3CvmY_Y7M?si=Edkf0vRNjosGLA3R">
+  <img width="1712" alt="image" src="https://github.com/garronej/i18nifty/assets/6702424/aa06cc30-b2bd-4c8b-b435-2f875f53175b">
+</a>
+
+## Contributing
+
+### Testing your changes in an external app
 
 You have made some changes to the code and you want to test them
 in your app before submitting a pull request?
@@ -217,13 +246,3 @@ are in the same directory.
 > Note for the maintainer: You might run into issues if you do not list all your singleton dependencies in
 > `src/link-in-app.js -> singletonDependencies`. A singleton dependency is a dependency that can
 > only be present once in an App. Singleton dependencies are usually listed as peerDependencies example `react`, `@emotion/*`.
-
-## Releasing
-
-For releasing a new version on GitHub and NPM you don't need to create a tag.  
-Just update the `package.json` version number and push.
-
-For publishing a release candidate update your `package.json` with `1.3.4-rc.0` (`.1`, `.2`, ...).  
-It also work if you do it from a branch that have an open PR on main.
-
-> Make sure your have defined the `NPM_TOKEN` repository secret or NPM publishing will fail.
