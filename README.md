@@ -136,6 +136,11 @@ function App() {
         );
     }
 
+    return <AppLoggedIn />;
+}
+
+function AppLoggedIn() {
+    const { oidc } = useOidc();
     const { user } = useUser();
 
     return (
@@ -152,7 +157,7 @@ function useUser() {
     const { oidc } = useOidc();
 
     if (!oidc.isUserLoggedIn) {
-        throw new Error("This hook should be used only on authenticated route");
+        throw new Error("This hook should be used only on authenticated routes");
     }
 
     const { idToken } = oidc.getTokens();
@@ -160,6 +165,7 @@ function useUser() {
     const user = useMemo(
         () =>
             decodeJwt<{
+                // Use https://jwt.io/ to tell what's in your idToken
                 sub: string;
                 preferred_username: string;
             }>(idToken),
