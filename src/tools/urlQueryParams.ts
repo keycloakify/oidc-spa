@@ -1,9 +1,11 @@
-export function addParamToUrl(params: { url: string; name: string; value: string }): { newUrl: string } {
+export function addQueryParamToUrl(params: { url: string; name: string; value: string }): {
+    newUrl: string;
+} {
     const { url, name, value } = params;
 
     let newUrl = url;
 
-    const result = retrieveParamFromUrl({
+    const result = retrieveQueryParamFromUrl({
         url,
         name
     });
@@ -19,7 +21,7 @@ export function addParamToUrl(params: { url: string; name: string; value: string
     return { newUrl };
 }
 
-export function retrieveAllParamStartingWithPrefixFromUrl<
+export function retrieveAllQueryParamStartingWithPrefixFromUrl<
     Prefix extends string,
     DoLeave extends boolean
 >(params: {
@@ -58,13 +60,13 @@ export function retrieveAllParamStartingWithPrefixFromUrl<
     };
 }
 
-export function retrieveParamFromUrl(params: {
+export function retrieveQueryParamFromUrl(params: {
     url: string;
     name: string;
 }): { wasPresent: false } | { wasPresent: true; newUrl: string; value: string } {
     const { url, name } = params;
 
-    const { newUrl, values } = retrieveAllParamStartingWithPrefixFromUrl({
+    const { newUrl, values } = retrieveAllQueryParamStartingWithPrefixFromUrl({
         url,
         "prefix": name,
         "doLeavePrefixInResults": true
@@ -79,8 +81,4 @@ export function retrieveParamFromUrl(params: {
         : {
               "wasPresent": false
           };
-}
-
-export function updateSearchBarUrl(url: string) {
-    window.history.replaceState("", "", url);
 }

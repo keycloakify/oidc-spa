@@ -2,7 +2,7 @@ import { UserManager, type User } from "oidc-client-ts";
 import { id } from "tsafe/id";
 import { readExpirationTimeInJwt } from "./tools/readExpirationTimeInJwt";
 import { assert } from "tsafe/assert";
-import { addParamToUrl, retrieveParamFromUrl } from "./tools/urlSearchParams";
+import { addQueryParamToUrl, retrieveQueryParamFromUrl } from "./tools/urlQueryParams";
 import { fnv1aHashToHex } from "./tools/fnv1aHashToHex";
 import { Deferred } from "./tools/Deferred";
 
@@ -90,7 +90,7 @@ export async function createOidc(params: {
 
         Object.defineProperty(window, "URL", { "value": URL });
 
-        const { newUrl: redirect_uri } = addParamToUrl({
+        const { newUrl: redirect_uri } = addQueryParamToUrl({
             "url": window.location.href,
             "name": configHashKey,
             "value": configHash
@@ -108,7 +108,7 @@ export async function createOidc(params: {
             let url = window.location.href;
 
             {
-                const result = retrieveParamFromUrl({ "name": configHashKey, url });
+                const result = retrieveQueryParamFromUrl({ "name": configHashKey, url });
 
                 if (!result.wasPresent || result.value !== configHash) {
                     break read_successful_login_query_params;
@@ -118,7 +118,7 @@ export async function createOidc(params: {
             }
 
             {
-                const result = retrieveParamFromUrl({ "name": "error", url });
+                const result = retrieveQueryParamFromUrl({ "name": "error", url });
 
                 if (result.wasPresent) {
                     throw new Error(`OIDC error: ${result.value}`);
@@ -128,11 +128,11 @@ export async function createOidc(params: {
             let loginSuccessUrl = "https://dummy.com";
 
             for (const name of paramsToRetrieveFromSuccessfulLogin) {
-                const result = retrieveParamFromUrl({ name, url });
+                const result = retrieveQueryParamFromUrl({ name, url });
 
                 assert(result.wasPresent);
 
-                loginSuccessUrl = addParamToUrl({
+                loginSuccessUrl = addQueryParamToUrl({
                     "url": loginSuccessUrl,
                     "name": name,
                     "value": result.value
@@ -191,10 +191,10 @@ export async function createOidc(params: {
                 const url = event.data;
 
                 {
-                    let result: ReturnType<typeof retrieveParamFromUrl>;
+                    let result: ReturnType<typeof retrieveQueryParamFromUrl>;
 
                     try {
-                        result = retrieveParamFromUrl({ "name": configHashKey, url });
+                        result = retrieveQueryParamFromUrl({ "name": configHashKey, url });
                     } catch {
                         // This could possibly happen if url is not a valid url.
                         return;
@@ -210,7 +210,7 @@ export async function createOidc(params: {
                 window.removeEventListener("message", listener);
 
                 {
-                    const result = retrieveParamFromUrl({ "name": "error", url });
+                    const result = retrieveQueryParamFromUrl({ "name": "error", url });
 
                     if (result.wasPresent) {
                         dLoginSuccessUrl.resolve(undefined);
@@ -221,11 +221,11 @@ export async function createOidc(params: {
                 let loginSuccessUrl = "https://dummy.com";
 
                 for (const name of paramsToRetrieveFromSuccessfulLogin) {
-                    const result = retrieveParamFromUrl({ name, url });
+                    const result = retrieveQueryParamFromUrl({ name, url });
 
                     assert(result.wasPresent);
 
-                    loginSuccessUrl = addParamToUrl({
+                    loginSuccessUrl = addQueryParamToUrl({
                         "url": loginSuccessUrl,
                         "name": name,
                         "value": result.value
