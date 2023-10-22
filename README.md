@@ -136,17 +136,18 @@ function App() {
         );
     }
 
-    return <AppLoggedIn />;
+    return <AppLoggedIn logout={oidc.logout} />;
 }
 
-function AppLoggedIn() {
-    const { oidc } = useOidc();
+function AppLoggedIn(props: { logout: () => Promise<never> }) {
+    const { logout } = props;
+
     const { user } = useUser();
 
     return (
         <>
             <h1>Hello {user.preferred_username}</h1>
-            <button onClick={() => oidc.logout()}>Log out</button>
+            <button onClick={logout}>Log out</button>
         </>
     );
 }
