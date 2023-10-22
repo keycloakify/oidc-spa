@@ -2,10 +2,7 @@ import { execSync } from "child_process";
 import { join as pathJoin, relative as pathRelative } from "path";
 import * as fs from "fs";
 
-const singletonDependencies: string[] = [
-    //"react",
-    //"@types/react"
-];
+const singletonDependencies: string[] = ["react", "@types/react"];
 
 const rootDirPath = pathJoin(__dirname, "..");
 
