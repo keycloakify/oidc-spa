@@ -4,10 +4,10 @@ import { assert } from "tsafe/assert";
 
 const oidcClientContext = createContext<Oidc | undefined>(undefined);
 
-export function createOidcClientProvider(params: Parameters<typeof createOidc>[0]) {
+export function createOidcProvider(params: Parameters<typeof createOidc>[0]) {
     const prOidc = createOidc(params);
 
-    function OidcClientProvider(props: { fallback?: ReactNode; children: ReactNode }) {
+    function OidcProvider(props: { fallback?: ReactNode; children: ReactNode }) {
         const { children, fallback } = props;
 
         const [oidcClient, setOidcClient] = useState<Oidc | undefined>(undefined);
@@ -23,7 +23,7 @@ export function createOidcClientProvider(params: Parameters<typeof createOidc>[0
         return <oidcClientContext.Provider value={oidcClient}>{children}</oidcClientContext.Provider>;
     }
 
-    return { OidcClientProvider };
+    return { OidcProvider };
 }
 
 export function useOidc() {
