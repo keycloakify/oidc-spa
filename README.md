@@ -68,15 +68,18 @@ import { createOidc, decodeJwt } from "oidc-spa";
         clientId: "myclient",
         // Optional, you can modify the url before redirection to the identity server
         transformUrlBeforeRedirect: url => `${url}&ui_locales=fr`
-        /*
-         * This is to provide if your App is not hosted at the origin of the subdomain.
+        /**
+         * This parameter have to be provided provide if your App is not hosted at the origin of the subdomain.
          * For example if your site is hosted by navigating to `https://www.example.com`
          * you don't have to provide this parameter.
          * On the other end if your site is hosted by navigating to `https://www.example.com/my-app`
-         * Then you want to set website root to `${${window.location.origin}/my-app`
+         * Then you want to set publicUrl to `/my-app`
          *
-         * Be mindful that `${websiteRootUrl}/silent-sso.html` must return the `silent-sso.html` that
+         * Be mindful that `${window.location.origin}${publicUrl}/silent-sso.html` must return the `silent-sso.html` that
          * you are supposed to have created in your `public/` directory.
+         *
+         * If your are still using `create-react-app` you can just set
+         * publicUrl to `process.env.PUBLIC_URL` and don't have to think about it further.
          */
         //websiteRootUrl: `${window.location.origin}/my-app`
     });

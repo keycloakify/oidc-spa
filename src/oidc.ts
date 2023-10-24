@@ -46,7 +46,7 @@ export async function createOidc(params: {
     clientId: string;
     transformUrlBeforeRedirect?: (url: string) => string;
     /**
-     * This is to provide if your App is not hosted at the origin of the subdomain.
+     * This parameter have to be provided provide if your App is not hosted at the origin of the subdomain.
      * For example if your site is hosted by navigating to `https://www.example.com`
      * you don't have to provide this parameter.
      * On the other end if your site is hosted by navigating to `https://www.example.com/my-app`
