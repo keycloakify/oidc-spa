@@ -82,7 +82,7 @@ import { createOidc, decodeJwt } from "oidc-spa";
          * If your are still using `create-react-app` you can just set
          * publicUrl to `process.env.PUBLIC_URL` and don't have to think about it further.
          */
-        //websiteRootUrl: `${window.location.origin}/my-app`
+        //publicUrl: `${window.location.origin}/my-app`
     });
 
     if (oidc.isUserLoggedIn) {
