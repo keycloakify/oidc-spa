@@ -2,7 +2,7 @@ import { useEffect, useState, createContext, useContext, type ReactNode } from "
 import { createOidc, type Oidc } from "./oidc";
 import { assert } from "tsafe/assert";
 
-const oidcClientContext = createContext<Oidc | undefined>(undefined);
+const oidcContext = createContext<Oidc | undefined>(undefined);
 
 /** @see: https://github.com/garronej/oidc-spa#option-2-usage-directly-within-react */
 export function createOidcProvider(params: Parameters<typeof createOidc>[0]) {
@@ -11,17 +11,17 @@ export function createOidcProvider(params: Parameters<typeof createOidc>[0]) {
     function OidcProvider(props: { fallback?: ReactNode; children: ReactNode }) {
         const { children, fallback } = props;
 
-        const [oidcClient, setOidcClient] = useState<Oidc | undefined>(undefined);
+        const [oidc, setOidc] = useState<Oidc | undefined>(undefined);
 
         useEffect(() => {
-            prOidc.then(setOidcClient);
+            prOidc.then(setOidc);
         }, []);
 
-        if (oidcClient === undefined) {
+        if (oidc === undefined) {
             return <>{fallback === undefined ? null : fallback}</>;
         }
 
-        return <oidcClientContext.Provider value={oidcClient}>{children}</oidcClientContext.Provider>;
+        return <oidcContext.Provider value={oidc}>{children}</oidcContext.Provider>;
     }
 
     return { OidcProvider };
@@ -29,7 +29,7 @@ export function createOidcProvider(params: Parameters<typeof createOidc>[0]) {
 
 /** @see: https://github.com/garronej/oidc-spa#option-2-usage-directly-within-react */
 export function useOidc() {
-    const oidc = useContext(oidcClientContext);
-    assert(oidc !== undefined, "You must use useOidc inside a OidcClientProvider");
+    const oidc = useContext(oidcContext);
+    assert(oidc !== undefined, "You must use useOidc inside a OidcProvider");
     return { oidc };
 }
