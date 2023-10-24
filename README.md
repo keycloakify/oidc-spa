@@ -74,8 +74,8 @@ import { createOidc, decodeJwt } from "oidc-spa";
 
     if (oidc.isUserLoggedIn) {
         // This return a promise that never resolve. Your user will be redirected to the identity server.
-        // doesCurrentHrefRequiresAuth determines the behavior when a user gives up on loggin in and navigate back.  
-        // We don't want to send him back to a authenticated route.  
+        // doesCurrentHrefRequiresAuth determines the behavior when a user gives up on loggin in and navigate back.
+        // We don't want to send him back to a authenticated route.
         // If you are calling login because the user clicked
         // on a 'login' button you should set doesCurrentHrefRequiresAuth to false.
         // When you are calling login because your user navigated to a path that require authentication
