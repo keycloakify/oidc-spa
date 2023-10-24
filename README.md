@@ -68,8 +68,17 @@ import { createOidc, decodeJwt } from "oidc-spa";
         clientId: "myclient",
         // Optional, you can modify the url before redirection to the identity server
         transformUrlBeforeRedirect: url => `${url}&ui_locales=fr`
-        /** Optional: Provide only if your app is not hosted at the origin  */
-        //silentSsoUrl: `${window.location.origin}/foo/bar/baz/silent-sso.html`,
+        /*
+         * This is to provide if your App is not hosted at the origin of the subdomain.
+         * For example if your site is hosted by navigating to `https://www.example.com`
+         * you don't have to provide this parameter.
+         * On the other end if your site is hosted by navigating to `https://www.example.com/my-app`
+         * Then you want to set website root to `${${window.location.origin}/my-app`
+         *
+         * Be mindful that `${websiteRootUrl}/silent-sso.html` must return the `silent-sso.html` that
+         * you are supposed to have created in your `public/` directory.
+         */
+        //websiteRootUrl: `${window.location.origin}/my-app`
     });
 
     if (oidc.isUserLoggedIn) {
@@ -98,7 +107,8 @@ import { createOidc, decodeJwt } from "oidc-spa";
         console.log(`Hello ${user.preferred_username}`);
 
         // To call when the user click on logout.
-        oidc.logout();
+        // You can also redirect to a custom url with { redirectTo: "specific url", url: `${location.origin}/bye` }
+        oidc.logout({ redirectTo: "home" });
     }
 })();
 ```
@@ -139,7 +149,12 @@ function App() {
         );
     }
 
-    return <AppLoggedIn logout={oidc.logout} />;
+    return (
+        <AppLoggedIn
+            // You can also redirect to a custom url with { redirectTo: "specific url", url: `${location.origin}/bye` }
+            logout={() => oidc.logout({ redirectTo: "home" })}
+        />
+    );
 }
 
 function AppLoggedIn(props: { logout: () => Promise<never> }) {

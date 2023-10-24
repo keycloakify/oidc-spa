@@ -1,7 +1,7 @@
 import { UserManager, type User } from "oidc-client-ts";
 import { id } from "tsafe/id";
 import { readExpirationTimeInJwt } from "./tools/readExpirationTimeInJwt";
-import { assert } from "tsafe/assert";
+import { assert, type Equals } from "tsafe/assert";
 import { addQueryParamToUrl, retrieveQueryParamFromUrl } from "./tools/urlQueryParams";
 import { fnv1aHashToHex } from "./tools/fnv1aHashToHex";
 import { Deferred } from "./tools/Deferred";
@@ -25,7 +25,9 @@ export declare namespace Oidc {
         isUserLoggedIn: true;
         renewTokens(): Promise<void>;
         getTokens: () => Tokens;
-        logout: (params: { redirectTo: "home" | "current page" }) => Promise<never>;
+        logout: (
+            params: { redirectTo: "home" | "current page" } | { redirectTo: "specific url"; url: string }
+        ) => Promise<never>;
     };
 
     export type Tokens = {
@@ -43,15 +45,22 @@ export async function createOidc(params: {
     issuerUri: string;
     clientId: string;
     transformUrlBeforeRedirect?: (url: string) => string;
-    /** Default `${window.location.origin}/silent-sso.html` */
-    silentSsoUrl?: string;
+    /**
+     * This is to provide if your App is not hosted at the origin of the subdomain.
+     * For example if your site is hosted by navigating to `https://www.example.com`
+     * you don't have to provide this parameter.
+     * On the other end if your site is hosted by navigating to `https://www.example.com/my-app`
+     * Then you want to set publicUrl to `/my-app`
+     *
+     * Be mindful that `${window.location.origin}${publicUrl}/silent-sso.html` must return the `silent-sso.html` that
+     * you are supposed to have created in your `public/` directory.
+     *
+     * If your are still using `create-react-app` you can just set
+     * publicUrl to `process.env.PUBLIC_URL` and don't have to think about it further.
+     */
+    publicUrl?: string;
 }): Promise<Oidc> {
-    const {
-        issuerUri,
-        clientId,
-        silentSsoUrl = `${window.location.origin}/silent-sso.html`,
-        transformUrlBeforeRedirect = url => url
-    } = params;
+    const { issuerUri, clientId, transformUrlBeforeRedirect = url => url, publicUrl = "" } = params;
 
     const configHash = fnv1aHashToHex(`${issuerUri} ${clientId}`);
     const configHashKey = "configHash";
@@ -63,7 +72,7 @@ export async function createOidc(params: {
         "response_type": "code",
         "scope": "openid profile",
         "automaticSilentRenew": false,
-        "silent_redirect_uri": `${silentSsoUrl}?${configHashKey}=${configHash}`
+        "silent_redirect_uri": `${window.location.origin}${publicUrl}/silent-sso.html?${configHashKey}=${configHash}`
     });
 
     const login: Oidc.NotLoggedIn["login"] = async ({ doesCurrentHrefRequiresAuth }) => {
@@ -298,15 +307,18 @@ export async function createOidc(params: {
             "refreshTokenExpirationTime": currentTokens.refreshTokenExpirationTime,
             "accessTokenExpirationTime": currentTokens.accessTokenExpirationTime
         }),
-        "logout": async ({ redirectTo }) => {
+        "logout": async params => {
             await userManager.signoutRedirect({
                 "post_logout_redirect_uri": (() => {
-                    switch (redirectTo) {
+                    switch (params.redirectTo) {
                         case "current page":
                             return window.location.href;
                         case "home":
-                            return window.location.origin;
+                            return `${window.location.origin}${publicUrl}`;
+                        case "specific url":
+                            return params.url;
                     }
+                    assert<Equals<typeof params, never>>(false);
                 })()
             });
             return new Promise<never>(() => {});
