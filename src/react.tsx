@@ -4,6 +4,7 @@ import { assert } from "tsafe/assert";
 
 const oidcClientContext = createContext<Oidc | undefined>(undefined);
 
+/** @see: https://github.com/garronej/oidc-spa#option-2-usage-directly-within-react */
 export function createOidcProvider(params: Parameters<typeof createOidc>[0]) {
     const prOidc = createOidc(params);
 
@@ -26,6 +27,7 @@ export function createOidcProvider(params: Parameters<typeof createOidc>[0]) {
     return { OidcProvider };
 }
 
+/** @see: https://github.com/garronej/oidc-spa#option-2-usage-directly-within-react */
 export function useOidc() {
     const oidc = useContext(oidcClientContext);
     assert(oidc !== undefined, "You must use useOidc inside a OidcClientProvider");
