@@ -69,8 +69,20 @@ export async function createOidc(params: {
         clientId,
         transformUrlBeforeRedirect = url => url,
         getExtraQueryParams,
-        publicUrl = ""
+        publicUrl: publicUrl_params
     } = params;
+
+    const publicUrl = (() => {
+        if (publicUrl_params === undefined) {
+            return window.location.origin;
+        }
+
+        if (publicUrl_params.startsWith("http")) {
+            return publicUrl_params.replace(/\/$/, "");
+        }
+
+        return `${window.location.origin}${publicUrl_params}`;
+    })();
 
     const configHash = fnv1aHashToHex(`${issuerUri} ${clientId}`);
     const configHashKey = "configHash";
@@ -82,7 +94,7 @@ export async function createOidc(params: {
         "response_type": "code",
         "scope": "openid profile",
         "automaticSilentRenew": false,
-        "silent_redirect_uri": `${window.location.origin}${publicUrl}/silent-sso.html?${configHashKey}=${configHash}`
+        "silent_redirect_uri": `${publicUrl}/silent-sso.html?${configHashKey}=${configHash}`
     });
 
     const login: Oidc.NotLoggedIn["login"] = async ({
@@ -344,7 +356,7 @@ export async function createOidc(params: {
                         case "current page":
                             return window.location.href;
                         case "home":
-                            return `${window.location.origin}${publicUrl}`;
+                            return publicUrl;
                         case "specific url":
                             return params.url;
                     }
