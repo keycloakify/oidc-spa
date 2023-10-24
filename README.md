@@ -211,6 +211,11 @@ function useUser() {
 }
 ```
 
+## Refreshing token
+
+The token refresh is handled automatically for you, however you can manually trigger
+a token refresh with `oidc.getTokens()`.
+
 ## Demo setup
 
 <p align="center">
