@@ -67,6 +67,7 @@ import { createOidc, decodeJwt } from "oidc-spa";
         issuerUri: "https://auth.your-domain.net/auth/realms/myrealm",
         clientId: "myclient",
         // Optional, you can modify the url before redirection to the identity server
+        // Alternatively you can use: getExtraQueryParams: ()=> ({ ui_locales: "fr" })
         transformUrlBeforeRedirect: url => `${url}&ui_locales=fr`
         /**
          * This parameter have to be provided provide if your App is not hosted at the origin of the subdomain.
@@ -85,14 +86,18 @@ import { createOidc, decodeJwt } from "oidc-spa";
     });
 
     if (oidc.isUserLoggedIn) {
-        // This return a promise that never resolve. Your user will be redirected to the identity server.
-        // doesCurrentHrefRequiresAuth determines the behavior when a user gives up on loggin in and navigate back.
-        // We don't want to send him back to a authenticated route.
-        // If you are calling login because the user clicked
-        // on a 'login' button you should set doesCurrentHrefRequiresAuth to false.
-        // When you are calling login because your user navigated to a path that require authentication
-        // you should set doesCurrentHrefRequiresAuth to true
-        oidc.login({ doesCurrentHrefRequiresAuth: false });
+        oidc.login({
+            // This return a promise that never resolve. Your user will be redirected to the identity server.
+            // doesCurrentHrefRequiresAuth determines the behavior when a user gives up on loggin in and navigate back.
+            // We don't want to send him back to a authenticated route.
+            // If you are calling login because the user clicked
+            // on a 'login' button you should set doesCurrentHrefRequiresAuth to false.
+            // When you are calling login because your user navigated to a path that require authentication
+            // you should set doesCurrentHrefRequiresAuth to true
+            doesCurrentHrefRequiresAuth: false
+            //Optionally you can add some extra parameter to be added on the login url.
+            //extraQueryParams: { kc_idp_hint: "google" }
+        });
     } else {
         const {
             // The accessToken is what you'll use as a Bearer token to authenticate to your APIs
@@ -145,8 +150,16 @@ function App() {
         return (
             <>
                 You're not logged in.
-                <button onClick={() => oidc.login({ doesCurrentHrefRequiresAuth: false })}>
-                    Login now
+                <button
+                    onClick={() =>
+                        oidc.login({
+                            doesCurrentHrefRequiresAuth: false
+                            //Optionally you can add some extra parameter to be added on the login url.
+                            //extraQueryParams: { kc_idp_hint: "google" }
+                        })
+                    }
+                >
+                    Login
                 </button>
             </>
         );

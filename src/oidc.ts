@@ -18,7 +18,10 @@ export declare namespace Oidc {
 
     export type NotLoggedIn = Common & {
         isUserLoggedIn: false;
-        login: (params: { doesCurrentHrefRequiresAuth: boolean }) => Promise<never>;
+        login: (params: {
+            doesCurrentHrefRequiresAuth: boolean;
+            extraQueryParams?: Record<string, string>;
+        }) => Promise<never>;
     };
 
     export type LoggedIn = Common & {
@@ -45,6 +48,7 @@ export async function createOidc(params: {
     issuerUri: string;
     clientId: string;
     transformUrlBeforeRedirect?: (url: string) => string;
+    getExtraQueryParams?: () => Record<string, string>;
     /**
      * This parameter have to be provided provide if your App is not hosted at the origin of the subdomain.
      * For example if your site is hosted by navigating to `https://www.example.com`
@@ -60,7 +64,13 @@ export async function createOidc(params: {
      */
     publicUrl?: string;
 }): Promise<Oidc> {
-    const { issuerUri, clientId, transformUrlBeforeRedirect = url => url, publicUrl = "" } = params;
+    const {
+        issuerUri,
+        clientId,
+        transformUrlBeforeRedirect = url => url,
+        getExtraQueryParams,
+        publicUrl = ""
+    } = params;
 
     const configHash = fnv1aHashToHex(`${issuerUri} ${clientId}`);
     const configHashKey = "configHash";
@@ -75,10 +85,14 @@ export async function createOidc(params: {
         "silent_redirect_uri": `${window.location.origin}${publicUrl}/silent-sso.html?${configHashKey}=${configHash}`
     });
 
-    const login: Oidc.NotLoggedIn["login"] = async ({ doesCurrentHrefRequiresAuth }) => {
+    const login: Oidc.NotLoggedIn["login"] = async ({
+        doesCurrentHrefRequiresAuth,
+        extraQueryParams
+    }) => {
         //NOTE: We know there is a extraQueryParameter option but it doesn't allow
-        // to control the encoding so we have to hack the global URL Class that is
-        // used internally by oidc-client-ts
+        // to control the encoding so we have to highjack global URL Class that is
+        // used internally by oidc-client-ts. It's save to do so since this is the
+        // last thing that will be done before the redirect.
 
         const URL_real = window.URL;
 
@@ -88,7 +102,23 @@ export async function createOidc(params: {
             return new Proxy(urlInstance, {
                 "get": (target, prop) => {
                     if (prop === "href") {
-                        return transformUrlBeforeRedirect(urlInstance.href);
+                        let url = urlInstance.href;
+
+                        Object.entries({
+                            ...getExtraQueryParams?.(),
+                            ...extraQueryParams
+                        }).forEach(
+                            ([name, value]) =>
+                                (url = addQueryParamToUrl({
+                                    url,
+                                    name,
+                                    value
+                                }).newUrl)
+                        );
+
+                        url = transformUrlBeforeRedirect(url);
+
+                        return url;
                     }
 
                     //@ts-expect-error
