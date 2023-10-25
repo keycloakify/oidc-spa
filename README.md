@@ -85,7 +85,7 @@ import { createOidc, decodeJwt } from "oidc-spa";
         //publicUrl: `${window.location.origin}/my-app`
     });
 
-    if (oidc.isUserLoggedIn) {
+    if (!oidc.isUserLoggedIn) {
         oidc.login({
             // This return a promise that never resolve. Your user will be redirected to the identity server.
             // doesCurrentHrefRequiresAuth determines the behavior when a user gives up on loggin in and navigate back.
