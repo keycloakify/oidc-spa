@@ -236,7 +236,7 @@ export async function createOidc(params: {
             );
 
             const listener = (event: MessageEvent) => {
-                if (event.origin !== window.location.origin || typeof event.data !== "string") {
+                if (typeof event.data !== "string") {
                     return;
                 }
 
