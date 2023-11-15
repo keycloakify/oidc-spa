@@ -232,7 +232,7 @@ export async function createOidc(params: {
                     dLoginSuccessUrl.reject(
                         new Error(`SSO silent login timeout with clientId: ${clientId}`)
                     ),
-                5000
+                2500
             );
 
             const listener = (event: MessageEvent) => {
@@ -305,25 +305,31 @@ export async function createOidc(params: {
         }
 
         return undefined;
-    })().then(user => {
-        if (user === undefined) {
-            return undefined;
+    })().then(
+        user => {
+            if (user === undefined) {
+                return undefined;
+            }
+
+            const tokens = userToTokens(user);
+
+            if (tokens.refreshTokenExpirationTime < tokens.accessTokenExpirationTime) {
+                console.warn(
+                    [
+                        "The OIDC refresh token shorter than the one of the access token.",
+                        "This is very unusual and probably a misconfiguration.",
+                        `Check your oidc server configuration for ${clientId} ${issuerUri}`
+                    ].join(" ")
+                );
+            }
+
+            return tokens;
+        },
+        error => {
+            assert(error instanceof Error);
+            return error;
         }
-
-        const tokens = userToTokens(user);
-
-        if (tokens.refreshTokenExpirationTime < tokens.accessTokenExpirationTime) {
-            console.warn(
-                [
-                    "The OIDC refresh token shorter than the one of the access token.",
-                    "This is very unusual and probably a misconfiguration.",
-                    `Check your oidc server configuration for ${clientId} ${issuerUri}`
-                ].join(" ")
-            );
-        }
-
-        return tokens;
-    });
+    );
 
     const common: Oidc.Common = {
         "params": {
@@ -331,6 +337,21 @@ export async function createOidc(params: {
             clientId
         }
     };
+
+    if (currentTokens instanceof Error) {
+        const error = currentTokens;
+
+        console.error(`The OIDC server is down or misconfigured: ${error.message}`);
+
+        return id<Oidc.NotLoggedIn>({
+            ...common,
+            "isUserLoggedIn": false,
+            "login": async () => {
+                alert("Authentication is currently unavailable. Please try again later.");
+                return new Promise<never>(() => {});
+            }
+        });
+    }
 
     if (currentTokens === undefined) {
         return id<Oidc.NotLoggedIn>({

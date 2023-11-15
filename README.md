@@ -216,6 +216,14 @@ function useUser() {
 The token refresh is handled automatically for you, however you can manually trigger
 a token refresh with `oidc.getTokens()`.
 
+## What happens if the OIDC server is down?
+
+If the OIDC server is down or misconfigured an error get printed in the console, everything
+continues as normal with the user unauthenticated. If the user tries to login an alert saying
+that authentication is not available at the moment is displayed and nothing happens.  
+This enable your the part of your app that do not requires authentication to remain up even when
+your identities server is facing issues.
+
 ## Demo setup
 
 <p align="center">
