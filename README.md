@@ -73,7 +73,7 @@ import { createOidc, decodeJwt } from "oidc-spa";
          * This parameter have to be provided provide if your App is not hosted at the origin of the subdomain.
          * For example if your site is hosted by navigating to `https://www.example.com`
          * you don't have to provide this parameter.
-         * On the other end if your site is hosted by navigating to `https://www.example.com/my-app`
+         * On the other end if your site is at `https://www.example.com/my-app`
          * Then you want to set publicUrl to `/my-app`
          *
          * Be mindful that `${window.location.origin}${publicUrl}/silent-sso.html` must return the `silent-sso.html` that
