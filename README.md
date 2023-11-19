@@ -82,14 +82,6 @@ import { createOidc, decodeJwt } from "oidc-spa";
          * you are supposed to have created in your `public/` directory.
          */
         //publicUrl: `${window.location.origin}/my-app`
-        /**
-         * When a user navigate back from the login pages, essentially if he renounces to login,
-         * he is usually redirected to the last non auth route on your app but on some browsers
-         * it might not be the case and we might need to redirect to the homepage manually.
-         * If you don't provide this parameter, the user will be redirected to `${window.location.origin}${publicUrl}`
-         * You can use this function to involve your client side router and thus prevent a double page load.
-         */
-        //navigateToHomepage?: () => route.home().push();
     });
 
     if (!oidc.isUserLoggedIn) {
