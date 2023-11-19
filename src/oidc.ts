@@ -97,6 +97,17 @@ export async function createOidc(params: {
         "silent_redirect_uri": `${publicUrl}/silent-sso.html?${configHashKey}=${configHash}`
     });
 
+    let lastPublicRoute: string | undefined = undefined;
+
+    {
+        const realPushState = history.pushState.bind(history);
+        history.pushState = function pushState(...args) {
+            lastPublicRoute = window.location.href;
+            console.log(`lastPublicRoute set to ${lastPublicRoute}`);
+            return realPushState(...args);
+        };
+    }
+
     const login: Oidc.NotLoggedIn["login"] = async ({
         doesCurrentHrefRequiresAuth,
         extraQueryParams
@@ -148,31 +159,22 @@ export async function createOidc(params: {
         });
 
         if (doesCurrentHrefRequiresAuth) {
-            console.log("Here!");
+            const callback = () => {
+                console.log(`visibilitychange event fired, the document is ${document.visibilityState}`);
 
-            {
-                const callback = () => {
-                    console.log("callback visibilitychange!");
+                if (document.visibilityState === "visible") {
+                    document.removeEventListener("visibilitychange", callback);
 
-                    if (document.visibilityState === "visible") {
-                        document.removeEventListener("visibilitychange", callback);
-                        // User has returned to the app
-                        console.log("We should navigate back visibilitychange");
-                        //window.history.back();
+                    if (lastPublicRoute !== undefined) {
+                        console.log(`redirecting to ${lastPublicRoute}`);
+                        window.location.href = lastPublicRoute;
+                    } else {
+                        console.log(`No previous route found, navigating back`);
+                        window.history.back();
                     }
-                };
-                document.addEventListener("visibilitychange", callback);
-            }
-
-            {
-                const callback = () => {
-                    console.log("callback focus!");
-
-                    console.log({ "document.visibilityState": document.visibilityState });
-                };
-
-                window.addEventListener("focus", callback);
-            }
+                }
+            };
+            document.addEventListener("visibilitychange", callback);
         }
 
         await userManager.signinRedirect({
