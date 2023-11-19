@@ -148,12 +148,14 @@ export async function createOidc(params: {
         });
 
         if (doesCurrentHrefRequiresAuth) {
-            document.addEventListener("visibilitychange", () => {
+            const callback = () => {
                 if (document.visibilityState === "visible") {
+                    document.removeEventListener("visibilitychange", callback);
                     // User has returned to the app
                     window.history.back();
                 }
-            });
+            };
+            document.addEventListener("visibilitychange", callback);
         }
 
         await userManager.signinRedirect({
