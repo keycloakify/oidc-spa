@@ -103,7 +103,6 @@ export async function createOidc(params: {
         const realPushState = history.pushState.bind(history);
         history.pushState = function pushState(...args) {
             lastPublicRoute = window.location.href;
-            console.log(`lastPublicRoute set to ${lastPublicRoute}`);
             return realPushState(...args);
         };
     }
@@ -160,16 +159,12 @@ export async function createOidc(params: {
 
         if (doesCurrentHrefRequiresAuth) {
             const callback = () => {
-                console.log(`visibilitychange event fired, the document is ${document.visibilityState}`);
-
                 if (document.visibilityState === "visible") {
                     document.removeEventListener("visibilitychange", callback);
 
                     if (lastPublicRoute !== undefined) {
-                        console.log(`redirecting to ${lastPublicRoute}`);
                         window.location.href = lastPublicRoute;
                     } else {
-                        console.log(`No previous route found, navigating back`);
                         window.history.back();
                     }
                 }
