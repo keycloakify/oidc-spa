@@ -51,26 +51,34 @@ export async function createOidc(params: {
     transformUrlBeforeRedirect?: (url: string) => string;
     getExtraQueryParams?: () => Record<string, string>;
     /**
-     * This parameter have to be provided provide if your App is not hosted at the origin of the subdomain.
+     * This parameter have to be provided if your App is not hosted at the origin of the subdomain.
      * For example if your site is hosted by navigating to `https://www.example.com`
      * you don't have to provide this parameter.
      * On the other end if your site is hosted by navigating to `https://www.example.com/my-app`
-     * Then you want to set publicUrl to `/my-app`
+     * Then you want to set publicUrl to `/my-app`.
+     * If you are using Vite: `publicUrl: import.meta.env.BASE_URL`
+     * If you using Create React App: `publicUrl: process.env.PUBLIC_URL`
      *
      * Be mindful that `${window.location.origin}${publicUrl}/silent-sso.html` must return the `silent-sso.html` that
      * you are supposed to have created in your `public/` directory.
-     *
-     * If your are still using `create-react-app` you can just set
-     * publicUrl to `process.env.PUBLIC_URL` and don't have to think about it further.
      */
     publicUrl?: string;
+    /**
+     * When a user navigate back from the login pages, essentially if he renounces to login,
+     * it's usually redirected to the last non auth route on your app but on some browsers
+     * it might not be the case and we might need to redirect to the homepage manually.
+     * If you don't provide this parameter, the user will be redirected to ``${window.location.origin}${publicUrl}`
+     * You can use this function to involve your client side router and thus prevent a double page load.
+     */
+    navigateToHomepage?: () => void;
 }): Promise<Oidc> {
     const {
         issuerUri,
         clientId,
         transformUrlBeforeRedirect = url => url,
         getExtraQueryParams,
-        publicUrl: publicUrl_params
+        publicUrl: publicUrl_params,
+        navigateToHomepage: navigateToHomepage_params
     } = params;
 
     const publicUrl = (() => {
@@ -78,12 +86,18 @@ export async function createOidc(params: {
             return window.location.origin;
         }
 
-        if (publicUrl_params.startsWith("http")) {
-            return publicUrl_params.replace(/\/$/, "");
-        }
-
-        return `${window.location.origin}${publicUrl_params}`;
+        return (
+            publicUrl_params.startsWith("http")
+                ? publicUrl_params
+                : `${window.location.origin}${publicUrl_params}`
+        ).replace(/\/$/, "");
     })();
+
+    const navigateToHomepage =
+        navigateToHomepage_params ??
+        (() => {
+            window.location.href = publicUrl;
+        });
 
     const configHash = fnv1aHashToHex(`${issuerUri} ${clientId}`);
     const configHashKey = "configHash";
@@ -97,6 +111,8 @@ export async function createOidc(params: {
         "automaticSilentRenew": false,
         "silent_redirect_uri": `${publicUrl}/silent-sso.html?${configHashKey}=${configHash}`
     });
+
+    const navigatedBackKey = "hasUserBackNavigatedFromLogin";
 
     const login: Oidc.NotLoggedIn["login"] = async ({
         doesCurrentHrefRequiresAuth,
@@ -148,6 +164,24 @@ export async function createOidc(params: {
             "value": configHash
         });
 
+        if (doesCurrentHrefRequiresAuth) {
+            let updatedHref = window.location.href;
+
+            updatedHref = addQueryParamToUrl({
+                "url": updatedHref,
+                "name": configHashKey,
+                "value": configHash
+            }).newUrl;
+
+            updatedHref = addQueryParamToUrl({
+                "url": updatedHref,
+                "name": navigatedBackKey,
+                "value": "true"
+            }).newUrl;
+
+            window.history.replaceState(null, "", updatedHref);
+        }
+
         await userManager.signinRedirect({
             redirect_uri,
             "redirectMethod": doesCurrentHrefRequiresAuth ? "replace" : "assign"
@@ -167,6 +201,15 @@ export async function createOidc(params: {
                 }
 
                 url = result.newUrl;
+            }
+
+            {
+                const result = retrieveQueryParamFromUrl({ "name": navigatedBackKey, url });
+
+                if (result.wasPresent) {
+                    navigateToHomepage();
+                    await new Promise(() => {});
+                }
             }
 
             {
