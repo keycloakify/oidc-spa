@@ -105,11 +105,11 @@ import { createOidc, decodeJwt } from "oidc-spa";
             idToken
         } = oidc.getTokens();
 
-        const user = decodeJwt<{
+        const user = decodeJwt(idToken) as {
             // Use https://jwt.io/ to tell what's in your idToken
             sub: string;
             preferred_username: string;
-        }>(idToken);
+        };
 
         console.log(`Hello ${user.preferred_username}`);
 
