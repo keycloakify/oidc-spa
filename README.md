@@ -198,11 +198,11 @@ function useUser() {
 
     const user = useMemo(
         () =>
-            decodeJwt<{
+            decodeJwt(idToken) as {
                 // Use https://jwt.io/ to tell what's in your idToken
                 sub: string;
                 preferred_username: string;
-            }>(idToken),
+            },
         [idToken]
     );
 
