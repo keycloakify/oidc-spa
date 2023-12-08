@@ -251,12 +251,14 @@ export async function createOidc(params: {
         restore_from_http_only_cookie: {
             const dLoginSuccessUrl = new Deferred<string | undefined>();
 
+            const timeoutDelayMs = 2500;
+
             const timeout = setTimeout(
                 () =>
                     dLoginSuccessUrl.reject(
                         new Error(`SSO silent login timeout with clientId: ${clientId}`)
                     ),
-                2500
+                timeoutDelayMs
             );
 
             const listener = (event: MessageEvent) => {
@@ -313,9 +315,11 @@ export async function createOidc(params: {
 
             window.addEventListener("message", listener, false);
 
-            userManager.signinSilent({ "silentRequestTimeoutInSeconds": 1 }).catch(() => {
-                /* error expected */
-            });
+            userManager
+                .signinSilent({ "silentRequestTimeoutInSeconds": timeoutDelayMs / 1000 })
+                .catch(() => {
+                    /* error expected */
+                });
 
             const loginSuccessUrl = await dLoginSuccessUrl.pr;
 
