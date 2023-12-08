@@ -85,8 +85,8 @@ import { createOidc, decodeJwt } from "oidc-spa";
     });
 
     if (!oidc.isUserLoggedIn) {
+        // This return a promise that never resolve. Your user will be redirected to the identity server.
         oidc.login({
-            // This return a promise that never resolve. Your user will be redirected to the identity server.
             // doesCurrentHrefRequiresAuth determines the behavior when a user gives up on loggin in and navigate back.
             // We don't want to send him back to a authenticated route.
             // If you are calling login because the user clicked
@@ -105,11 +105,11 @@ import { createOidc, decodeJwt } from "oidc-spa";
             idToken
         } = oidc.getTokens();
 
-        const user = decodeJwt<{
+        const user = decodeJwt(idToken) as {
             // Use https://jwt.io/ to tell what's in your idToken
             sub: string;
             preferred_username: string;
-        }>(idToken);
+        };
 
         console.log(`Hello ${user.preferred_username}`);
 
@@ -198,11 +198,11 @@ function useUser() {
 
     const user = useMemo(
         () =>
-            decodeJwt<{
+            decodeJwt(idToken) as {
                 // Use https://jwt.io/ to tell what's in your idToken
                 sub: string;
                 preferred_username: string;
-            }>(idToken),
+            },
         [idToken]
     );
 
