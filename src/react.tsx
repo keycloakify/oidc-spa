@@ -24,19 +24,7 @@ export function createOidcProvider(params: Parameters<typeof createOidc>[0]) {
         return <oidcContext.Provider value={oidc}>{children}</oidcContext.Provider>;
     }
 
-    let oidc: Oidc | undefined = undefined;
-
-    prOidc.then(oidc_ => {
-        oidc = oidc_;
-    });
-
-    function getOidc() {
-        assert(oidc !== undefined, "oidc not ready yet");
-
-        return oidc;
-    }
-
-    return { OidcProvider, getOidc, prOidc };
+    return { OidcProvider, prOidc };
 }
 
 /** @see: https://github.com/garronej/oidc-spa#option-2-usage-directly-within-react */
