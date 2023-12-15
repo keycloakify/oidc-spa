@@ -194,6 +194,8 @@ function useUser() {
         throw new Error("This hook should be used only on authenticated routes");
     }
 
+    // NOTE: When idToken changes, the component get re-rendered
+    // so idToken can be used in dependency arrays. ✅
     const { idToken } = oidc.getTokens();
 
     const user = useMemo(

@@ -1,4 +1,4 @@
-import { useEffect, useState, createContext, useContext, type ReactNode } from "react";
+import { useEffect, useState, createContext, useContext, useReducer, type ReactNode } from "react";
 import { createOidc, type Oidc } from "./oidc";
 import { assert } from "tsafe/assert";
 
@@ -27,9 +27,30 @@ export function createOidcProvider(params: Parameters<typeof createOidc>[0]) {
     return { OidcProvider, prOidc };
 }
 
-/** @see: https://github.com/garronej/oidc-spa#option-2-usage-directly-within-react */
+/**
+ * @see: https://github.com/garronej/oidc-spa#option-2-usage-directly-within-react
+ *
+ * Note that when the tokens changes the component will rerender automatically so
+ * you can safely use the returned values of getTokens() as state variables.
+ * In other terms you can use accessToken and idToken as dependencies of useEffect() or useMemo().
+ *
+ * */
 export function useOidc() {
     const oidc = useContext(oidcContext);
+
     assert(oidc !== undefined, "You must use useOidc inside a OidcProvider");
+
+    const [, forceUpdate] = useReducer(() => [], []);
+
+    useEffect(() => {
+        if (!oidc.isUserLoggedIn) {
+            return;
+        }
+
+        const { unsubscribe } = oidc.subscribeToTokensChange(forceUpdate);
+
+        return unsubscribe;
+    }, [oidc]);
+
     return { oidc };
 }

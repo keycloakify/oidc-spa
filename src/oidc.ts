@@ -28,6 +28,7 @@ export declare namespace Oidc {
         isUserLoggedIn: true;
         renewTokens(): Promise<void>;
         getTokens: () => Tokens;
+        subscribeToTokensChange: (onTokenChange: () => void) => { unsubscribe: () => void };
         logout: (
             params: { redirectTo: "home" | "current page" } | { redirectTo: "specific url"; url: string }
         ) => Promise<never>;
@@ -389,6 +390,8 @@ export async function createOidc(params: {
         });
     }
 
+    const onTokenChanges = new Set<() => void>();
+
     const oidc = id<Oidc.LoggedIn>({
         ...common,
         "isUserLoggedIn": true,
@@ -421,6 +424,17 @@ export async function createOidc(params: {
             assert(user !== null);
 
             Object.assign(currentTokens, userToTokens(user));
+
+            onTokenChanges.forEach(onTokenChange => onTokenChange());
+        },
+        "subscribeToTokensChange": onTokenChange => {
+            onTokenChanges.add(onTokenChange);
+
+            return {
+                "unsubscribe": () => {
+                    onTokenChanges.delete(onTokenChange);
+                }
+            };
         }
     });
 
