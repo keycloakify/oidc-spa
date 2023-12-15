@@ -36,7 +36,7 @@ export function createOidcProvider(params: Parameters<typeof createOidc>[0]) {
         return oidc;
     }
 
-    return { OidcProvider, getOidc };
+    return { OidcProvider, getOidc, prOidc };
 }
 
 /** @see: https://github.com/garronej/oidc-spa#option-2-usage-directly-within-react */
