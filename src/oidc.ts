@@ -63,18 +63,14 @@ export async function createOidc(params: {
      * you are supposed to have created in your `public/` directory.
      */
     publicUrl?: string;
-    log?: typeof console.log;
 }): Promise<Oidc> {
     const {
         issuerUri,
         clientId,
         transformUrlBeforeRedirect = url => url,
         getExtraQueryParams,
-        publicUrl: publicUrl_params,
-        log
+        publicUrl: publicUrl_params
     } = params;
-
-    log?.(`createOidc called with params:`, params);
 
     const publicUrl = (() => {
         if (publicUrl_params === undefined) {
@@ -87,8 +83,6 @@ export async function createOidc(params: {
                 : `${window.location.origin}${publicUrl_params}`
         ).replace(/\/$/, "");
     })();
-
-    log?.(`Using publicUrl: ${publicUrl}`);
 
     const configHash = fnv1aHashToHex(`${issuerUri} ${clientId}`);
     const configHashKey = "configHash";
@@ -108,11 +102,7 @@ export async function createOidc(params: {
     {
         const realPushState = history.pushState.bind(history);
         history.pushState = function pushState(...args) {
-            const newLastPublicRoute = window.location.href;
-
-            log?.(`pushState called`, { lastPublicRoute, newLastPublicRoute });
-
-            lastPublicRoute = newLastPublicRoute;
+            lastPublicRoute = window.location.href;
             return realPushState(...args);
         };
     }
@@ -125,8 +115,6 @@ export async function createOidc(params: {
         // to control the encoding so we have to highjack global URL Class that is
         // used internally by oidc-client-ts. It's save to do so since this is the
         // last thing that will be done before the redirect.
-
-        log?.("login called", { doesCurrentHrefRequiresAuth, extraQueryParams });
 
         const URL_real = window.URL;
 
@@ -184,13 +172,9 @@ export async function createOidc(params: {
             document.addEventListener("visibilitychange", callback);
         }
 
-        const redirectMethod = doesCurrentHrefRequiresAuth ? "replace" : "assign";
-
-        log?.("signinRedirect called", { redirect_uri, redirectMethod });
-
         await userManager.signinRedirect({
             redirect_uri,
-            redirectMethod
+            "redirectMethod": doesCurrentHrefRequiresAuth ? "replace" : "assign"
         });
         return new Promise<never>(() => {});
     };
@@ -217,8 +201,6 @@ export async function createOidc(params: {
                 }
             }
 
-            log?.("read_successful_login_query_params");
-
             let loginSuccessUrl = "https://dummy.com";
 
             for (const name of paramsToRetrieveFromSuccessfulLogin) {
@@ -235,25 +217,16 @@ export async function createOidc(params: {
                 url = result.newUrl;
             }
 
-            log?.("removing params from url");
-
             window.history.pushState(null, "", url);
 
             let user: User | undefined = undefined;
-
-            log?.("signinRedirectCallback called");
 
             try {
                 user = await userManager.signinRedirectCallback(loginSuccessUrl);
             } catch {
                 //NOTE: The user has likely pressed the back button just after logging in.
-                log?.(
-                    "signinRedirectCallback failed, The user has likely pressed the back button just after logging in."
-                );
                 return undefined;
             }
-
-            log?.("read_successful_login_query_params succeeded", user);
 
             return user;
         }
@@ -265,31 +238,20 @@ export async function createOidc(params: {
                 break restore_from_session;
             }
 
-            log?.("restore_from_session succeeded");
-
+            // The server might have restarted and the session might have been lost.
             try {
                 await userManager.signinSilent();
             } catch {
-                // The server might have restarted and the session might have been lost.
-                log?.(
-                    "restore_from_session failed, The server might have restarted and the session might have been lost."
-                );
                 return undefined;
             }
-
-            log?.("restore_from_session succeeded", user);
 
             return user;
         }
 
         restore_from_http_only_cookie: {
-            log?.("restore_from_http_only_cookie");
-
             const dLoginSuccessUrl = new Deferred<string | undefined>();
 
-            const timeoutDelayMs = log === undefined ? 2500 : 15_000;
-
-            log?.("restore_from_http_only_cookie timeoutDelayMs", timeoutDelayMs);
+            const timeoutDelayMs = 2500;
 
             const timeout = setTimeout(
                 () =>
@@ -300,8 +262,6 @@ export async function createOidc(params: {
             );
 
             const listener = (event: MessageEvent) => {
-                log?.("restore_from_http_only_cookie iframe message event", event);
-
                 if (typeof event.data !== "string") {
                     return;
                 }
@@ -314,13 +274,11 @@ export async function createOidc(params: {
                     try {
                         result = retrieveQueryParamFromUrl({ "name": configHashKey, url });
                     } catch {
-                        log?.("Ignore this event, it's not for us, the event.data is not a valid url.");
                         // This could possibly happen if url is not a valid url.
                         return;
                     }
 
                     if (!result.wasPresent || result.value !== configHash) {
-                        log?.("Ignore this event it's not our configHash", result);
                         return;
                     }
                 }
@@ -359,25 +317,17 @@ export async function createOidc(params: {
 
             userManager
                 .signinSilent({ "silentRequestTimeoutInSeconds": timeoutDelayMs / 1000 })
-                .catch(error => {
+                .catch(() => {
                     /* error expected */
-                    log?.(
-                        "restore_from_http_only_cookie signinSilent EXPECTED error (it's not an error actually)",
-                        error
-                    );
                 });
 
             const loginSuccessUrl = await dLoginSuccessUrl.pr;
-
-            log?.("restore_from_http_only_cookie loginSuccessUrl", loginSuccessUrl);
 
             if (loginSuccessUrl === undefined) {
                 break restore_from_http_only_cookie;
             }
 
             const user = await userManager.signinRedirectCallback(loginSuccessUrl);
-
-            log?.("restore_from_http_only_cookie user", user);
 
             return user;
         }
