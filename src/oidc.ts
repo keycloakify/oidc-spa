@@ -108,6 +108,8 @@ export async function createOidc(params: {
         };
     }
 
+    let hasLoginBeenCalled = false;
+
     const login: Oidc.NotLoggedIn["login"] = async ({
         doesCurrentHrefRequiresAuth,
         extraQueryParams
@@ -116,6 +118,12 @@ export async function createOidc(params: {
         // to control the encoding so we have to highjack global URL Class that is
         // used internally by oidc-client-ts. It's save to do so since this is the
         // last thing that will be done before the redirect.
+
+        if (hasLoginBeenCalled) {
+            return new Promise<never>(() => {});
+        }
+
+        hasLoginBeenCalled = true;
 
         const URL_real = window.URL;
 
