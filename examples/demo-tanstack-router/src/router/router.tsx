@@ -3,36 +3,35 @@ import { ProtectedPage } from "../pages/ProtectedPage";
 import { PublicPage } from "../pages/PublicPage";
 import { prOidc } from "oidc";
 
-import { RootRoute, Route, Router } from '@tanstack/react-router'
+import { RootRoute, Route, Router } from "@tanstack/react-router";
 
-const rootRoute = new RootRoute({ component: Layout })
-const indexRoute = new Route({ getParentRoute: () => rootRoute, path: '/', component: PublicPage })
-const protectedRoute = new Route({ getParentRoute: () => rootRoute, path: 'protected', component: ProtectedPage, beforeLoad: protectedRouteLoader })
+const rootRoute = new RootRoute({ component: Layout });
+const indexRoute = new Route({ getParentRoute: () => rootRoute, path: "/", component: PublicPage });
+const protectedRoute = new Route({
+    getParentRoute: () => rootRoute,
+    path: "protected",
+    component: ProtectedPage,
+    beforeLoad: protectedRouteLoader
+});
 
+const routeTree = rootRoute.addChildren([indexRoute, protectedRoute]);
 
-const routeTree = rootRoute.addChildren([
-  indexRoute,
-  protectedRoute
-])
+export const router = new Router({ routeTree });
 
-export const router = new Router({ routeTree })
-
-declare module '@tanstack/react-router' {
-  interface Register {
-    router: typeof router
-  }
+declare module "@tanstack/react-router" {
+    interface Register {
+        router: typeof router;
+    }
 }
 
 async function protectedRouteLoader() {
+    const oidc = await prOidc;
 
-  const oidc = await prOidc;
+    if (oidc.isUserLoggedIn) {
+        return null;
+    }
 
-  if (oidc.isUserLoggedIn) {
-    return null;
-  }
-
-  await oidc.login({
-    doesCurrentHrefRequiresAuth: true
-  });
-
+    await oidc.login({
+        doesCurrentHrefRequiresAuth: true
+    });
 }

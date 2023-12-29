@@ -1,3 +1,3 @@
 export function ProtectedPage() {
-  return <h1>Protected Page</h1>;
+    return <h1>Protected Page</h1>;
 }
