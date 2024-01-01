@@ -86,7 +86,7 @@ const execYarnLink = (params: { targetModuleName?: string; cwd: string }) => {
     });
 };
 
-const testAppNames = ["demo-react-router", "demo-tanstack-router"] as const;
+const testAppNames = ["react-router", "tanstack-router"] as const;
 
 const getTestAppPath = (testAppName: (typeof testAppNames)[number]) =>
     pathJoin(projectDirPath, "examples", testAppName);
