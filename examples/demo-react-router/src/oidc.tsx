@@ -4,8 +4,11 @@ import { decodeJwt } from "oidc-spa";
 
 export const { OidcProvider, prOidc } = createOidcProvider({
     clientId: import.meta.env.VITE_OIDC_CLIENT_ID,
-    issuerUri: import.meta.env.VITE_OIDC_ISSUER
+    issuerUri: import.meta.env.VITE_OIDC_ISSUER,
+    publicUrl: import.meta.env.BASE_URL
 });
+
+export { useOidc };
 
 // Convenience hook to get the parsed idToken
 // To call only when the user is logged in
