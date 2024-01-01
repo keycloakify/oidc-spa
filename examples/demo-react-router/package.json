@@ -10,7 +10,7 @@
         "preview": "vite preview"
     },
     "dependencies": {
-        "oidc-spa": "^2.3.1",
+        "oidc-spa": "latest",
         "react": "^18.2.0",
         "react-dom": "^18.2.0",
         "react-router-dom": "^6.20.1",
@@ -26,6 +26,6 @@
         "eslint-plugin-react-hooks": "^4.6.0",
         "eslint-plugin-react-refresh": "^0.4.5",
         "typescript": "^5.2.2",
-        "vite": "^5.0.8"
+        "vite": "^5.0.10"
     }
 }

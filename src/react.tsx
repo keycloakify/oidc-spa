@@ -2,6 +2,8 @@ import { useEffect, useState, createContext, useContext, useReducer, type ReactN
 import { createOidc, type Oidc } from "./oidc";
 import { assert } from "tsafe/assert";
 
+console.log("react.tsx!!!!!!!!! let's go!!!");
+
 const oidcContext = createContext<Oidc | undefined>(undefined);
 
 /** @see: https://github.com/garronej/oidc-spa#option-2-usage-directly-within-react */

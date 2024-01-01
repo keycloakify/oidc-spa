@@ -11,7 +11,8 @@
         "_format": "prettier '**/*.{ts,tsx,json,md}'",
         "format": "yarn _format --write",
         "format:check": "yarn _format --list-different",
-        "link-in-app": "ts-node --skipProject scripts/link-in-app.ts"
+        "link-in-app": "ts-node --skipProject scripts/link-in-app.ts",
+        "start-react-router-demo": "yarn build && ts-node --skipProject scripts/link-in-examples.ts && cd examples/demo-react-router && rm -rf node_modules/.vite && yarn dev"
     },
     "main": "dist/index.js",
     "types": "dist/index.d.ts",
