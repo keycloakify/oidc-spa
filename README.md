@@ -19,8 +19,6 @@
     </a>
 </p>
 <p align="center">
-  <a href="https://github.com/garronej/oidc-spa">Home</a>
-  -
   <a href="https://docs.oidc-spa.dev">Documentation</a>
 </p>
 
