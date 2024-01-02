@@ -1,8 +1,8 @@
-import { useOidc, useUser } from "oidc";
+import { useOidc } from "oidc";
 import { Link, useLocation } from "react-router-dom";
 
 export function Header() {
-    const { oidc } = useOidc();
+    const { isUserLoggedIn, login, logout, oidcTokens } = useOidc();
     const { pathname } = useLocation();
 
     return (
@@ -32,37 +32,17 @@ export function Header() {
                 </Link>
             </div>
 
-            {oidc.isUserLoggedIn ? (
-                <AuthSectionLoggedId logout={() => oidc.logout({ redirectTo: "home" })} />
+            {isUserLoggedIn ? (
+                <div>
+                    <span>Hello {oidcTokens.decodedIdToken.preferred_username}</span>
+                    &nbsp; &nbsp;
+                    <button onClick={() => logout({ redirectTo: "home" })}>Logout</button>
+                </div>
             ) : (
-                <AuthSectionNotAuthenticated
-                    login={() => oidc.login({ doesCurrentHrefRequiresAuth: false })}
-                />
+                <div>
+                    <button onClick={() => login({ doesCurrentHrefRequiresAuth: false })}>Login</button>
+                </div>
             )}
-        </div>
-    );
-}
-
-function AuthSectionLoggedId(props: { logout: () => void }) {
-    const { logout } = props;
-
-    const { user } = useUser();
-
-    return (
-        <div>
-            <span>Hello {user.preferred_username}!</span>
-            &nbsp; &nbsp;
-            <button onClick={logout}>Logout</button>
-        </div>
-    );
-}
-
-function AuthSectionNotAuthenticated(props: { login: () => void }) {
-    const { login } = props;
-
-    return (
-        <div>
-            <button onClick={login}>Login</button>
         </div>
     );
 }
