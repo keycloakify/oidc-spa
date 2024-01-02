@@ -53,8 +53,6 @@ Heads over to [the documentation website](https://docs.oidc-spa.dev) 📘!
 
 ## Showcases
 
-`oidc-spa` is used at scale by important organization with thousand of users!
-
 This library is powers the authentication of the following platforms:
 
 ### Onyxia
