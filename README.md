@@ -24,8 +24,8 @@
   <a href="https://docs.oidc-spa.dev">Documentation</a>
 </p>
 
-An OIDC client designed for Single Page Applications, typically [Vite](https://vitejs.dev/) projects.
-This is a lib that you would use, for example to enable authentication in your app with a Keycloak server.  
+An OIDC client designed for Single Page Applications, typically [Vite](https://vitejs.dev/) projects.  
+This is a lib that you would use, for example, to integrate your app with Keycloak.  
 oidc-spa aims at being **very easy to setup and use** even if you are not familiar with the OIDC protocol.
 
 ## Comparison with Existing Libraries
