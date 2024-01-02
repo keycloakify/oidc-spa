@@ -11,7 +11,9 @@
         "_format": "prettier '**/*.{ts,tsx,json,md}'",
         "format": "yarn _format --write",
         "format:check": "yarn _format --list-different",
-        "link-in-app": "ts-node --skipProject scripts/link-in-app.ts"
+        "link-in-app": "ts-node --skipProject scripts/link-in-app.ts",
+        "start-react-router-example": "yarn build && ts-node --skipProject scripts/link-in-examples.ts && cd examples/react-router && rm -rf node_modules/.vite && yarn dev",
+        "start-tanstack-router-example": "yarn build && ts-node --skipProject scripts/link-in-examples.ts && cd examples/tanstack-router && rm -rf node_modules/.vite && yarn dev"
     },
     "main": "dist/index.js",
     "types": "dist/index.d.ts",
@@ -46,7 +48,8 @@
         "prettier": "^2.8.8",
         "react": "^18.2.0",
         "ts-node": "^10.9.1",
-        "typescript": "^5.0.4"
+        "typescript": "^5.0.4",
+        "zod": "^3.22.4"
     },
     "publishConfig": {
         "access": "public"
