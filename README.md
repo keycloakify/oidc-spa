@@ -24,9 +24,9 @@
   <a href="https://docs.oidc-spa.dev">Documentation</a>
 </p>
 
-An OIDC client designed for Single Page Applications, typically [Vite](https://vitejs.dev/) projects.  
-This is a lib that you would use, for example, to integrate your app with Keycloak.  
-oidc-spa aims at being **very easy to setup and use** even if you are not familiar with the OIDC protocol.
+An OIDC client tailored for Single Page Applications, particularly suitable for [Vite](https://vitejs.dev/) projects.  
+This library is intended for scenarios such as integrating your application with Keycloak.  
+`oidc-spa` is designed to be **very easy to set up and use**, even for those who are not familiar with the OIDC protocol.
 
 ## Comparison with Existing Libraries
 
@@ -39,13 +39,12 @@ We utilize `oidc-client-ts` internally but abstract away most of its intricacies
 ### [react-oidc-context](https://github.com/authts/react-oidc-context)
 
 Our library takes a modular approach to OIDC and React, treating them as separate concerns that don't necessarily have to be intertwined.  
-At it's core, oidc-spa is a simple adapter that is not tie to any particular UI framework and is a good fit for projects
-that implement strict separation of concern between the core logic of the app and the UI.  
-However we also provide adapters for React and starter project for integrating with react-router-dom or @tanstack/react-router.
+At its core, `oidc-spa` is a straightforward adapter that isn't tied to any specific UI framework, making it suitable for projects that enforce a strict separation of concerns between the core logic of the application and the UI.  
+Additionally, we provide adapters for React and starter projects for integration with `react-router-dom` or `@tanstack/react-router`.
 
 ### [keycloak-js](https://www.npmjs.com/package/keycloak-js)
 
-Beside the fact that this lib only works with Keycloak [it is also likely to be deprecated or overhauled](https://www.keycloak.org/2023/03/adapter-deprecation-update), it's not type-safe, and hard to get working properly.
+Beside the fact that this lib only works with Keycloak [it is also likely to be deprecated](https://www.keycloak.org/2023/03/adapter-deprecation-update).
 
 ## 🚀 Quick start
 
