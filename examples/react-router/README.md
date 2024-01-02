@@ -1,5 +1,16 @@
-# Oidc-spa React Router Example
+# `oidc-spa` + `react-router-dom` example
 
-This example project demonstrates how to use the oidc-spa library with React Router for building a Single Page Application (SPA) with OpenID Connect (OIDC) authentication.
+Run this setup:
 
-Since RouterProvider decouples fetching from rendering, we can no longer rely on React context and/or hooks to get our user authentication status. We need access to this information outside of the React tree so we can use it in our route loader and action functions. We use [`prOidc`](src/oidc.tsx#L5) returned by `createOidcProvider`.
+```bash
+git clone https://github.com/garronej/oidc-spa
+cd oidc-spa
+yarn
+
+cat << EOF > ./examples/react-router/.env.local
+VITE_OIDC_ISSUER=<REPLACE HERE>
+VITE_OIDC_CLIENT_ID=<REPLACE HERE>
+EOF
+
+yarn start-react-router-example
+```

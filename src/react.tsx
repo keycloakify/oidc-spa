@@ -57,6 +57,7 @@ export namespace ReactiveOidc {
             decodedIdToken: DecodedIdToken;
         };
         logout: Oidc.LoggedIn["logout"];
+        renewTokens: Oidc.LoggedIn["renewTokens"];
         login: undefined;
     };
 }
@@ -122,6 +123,7 @@ export function createUseOidc<
                       "decodedIdToken": decodedIdToken!
                   },
                   "logout": oidc.logout,
+                  "renewTokens": oidc.renewTokens,
                   "login": undefined
               })
             : id<ReactiveOidc.NotLoggedIn>({
