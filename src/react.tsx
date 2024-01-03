@@ -64,8 +64,8 @@ export namespace ReactiveOidc {
 
 export function createUseOidc<
     DecodedOidcIdToken extends Record<string, unknown> = Record<string, unknown>
->(params?: { decodedIdTokenZodSchema?: { parse: (data: unknown) => DecodedOidcIdToken } }) {
-    const { decodedIdTokenZodSchema } = params ?? {};
+>(params?: { decodedIdTokenSchema?: { parse: (data: unknown) => DecodedOidcIdToken } }) {
+    const { decodedIdTokenSchema } = params ?? {};
 
     function useOidc(params?: { assertUserLoggedIn: false }): ReactiveOidc<DecodedOidcIdToken>;
     function useOidc(params: { assertUserLoggedIn: true }): ReactiveOidc.LoggedIn<DecodedOidcIdToken>;
@@ -103,8 +103,8 @@ export function createUseOidc<
 
             const decodedIdToken = decodeJwt(tokens.idToken) as DecodedOidcIdToken;
 
-            if (decodedIdTokenZodSchema !== undefined) {
-                decodedIdTokenZodSchema.parse(decodeJwt(tokens.idToken));
+            if (decodedIdTokenSchema !== undefined) {
+                decodedIdTokenSchema.parse(decodeJwt(tokens.idToken));
             }
 
             return decodedIdToken;
