@@ -1,34 +1,20 @@
-import { useMemo } from "react";
-import { createOidcProvider, useOidc } from "oidc-spa/react";
-import { decodeJwt } from "oidc-spa";
+import { createOidcProvider, createUseOidc } from "oidc-spa/react";
+import { z } from "zod";
 
 export const { OidcProvider, prOidc } = createOidcProvider({
     clientId: import.meta.env.VITE_OIDC_CLIENT_ID,
-    issuerUri: import.meta.env.VITE_OIDC_ISSUER
+    issuerUri: import.meta.env.VITE_OIDC_ISSUER,
+    publicUrl: import.meta.env.BASE_URL
 });
 
-// Convenience hook to get the parsed idToken
-// To call only when the user is logged in
-export function useUser() {
-    const { oidc } = useOidc();
-
-    if (!oidc.isUserLoggedIn) {
-        throw new Error("This hook should be used only on authenticated routes");
-    }
-
-    // NOTE: When idToken changes, the component get re-rendered
-    // so idToken can be used in dependency arrays. ✅
-    const { idToken } = oidc.getTokens();
-
-    const user = useMemo(
-        () =>
-            decodeJwt(idToken) as {
-                // Use https://jwt.io/ to tell what's in your idToken
-                sub: string;
-                preferred_username: string;
-            },
-        [idToken]
-    );
-
-    return { user };
-}
+export const { useOidc } = createUseOidc({
+    // This parameter is optional, it allows you to validate the shape of the idToken
+    // so that you can trust that oidcTokens.decodedIdToken is of the expected shape when the user is logged in.
+    // In most application you do not need to look into the JWT of the idToken on the frontend
+    // you usually obtain the user info by querying a GET /user endpoint with a authorization header
+    // like `Bearer <accessToken>`.
+    decodedIdTokenZodSchema: z.object({
+        sub: z.string(),
+        preferred_username: z.string()
+    })
+});
