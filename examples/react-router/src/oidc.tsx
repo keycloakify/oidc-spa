@@ -15,6 +15,10 @@ export const { useOidc } = createUseOidc({
      * It allows you to validate the shape of the idToken so that you
      * can trust that oidcTokens.decodedIdToken is of the expected shape
      * when the user is logged in.
+     * What is actually inside the idToken is defined by the OIDC server
+     * you are using.
+     * If you are not sure, you can copy the content of oidcTokens.idToken
+     * and paste it on https://jwt.io/ to see what is inside.
      *
      * The usage of zod here is just an example, you can use any other schema
      * validation library or write your own validation function.
