@@ -13,7 +13,7 @@ export const { useOidc } = createUseOidc({
     // In most application you do not need to look into the JWT of the idToken on the frontend
     // you usually obtain the user info by querying a GET /user endpoint with a authorization header
     // like `Bearer <accessToken>`.
-    decodedIdTokenZodSchema: z.object({
+    decodedIdTokenSchema: z.object({
         sub: z.string(),
         preferred_username: z.string()
     })
