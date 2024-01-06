@@ -1,0 +1,26 @@
+{
+    "version": 2,
+    "routes": [
+        {
+            "handle": "filesystem"
+        },
+        {
+            "src": "/(.*)",
+            "dest": "/index.html",
+            "status": 200
+        }
+    ],
+    "headers": [
+        {
+            "source": "/(.*)",
+            "headers": [
+                {
+                    "key": "Cache-Control",
+                    "value": "max-age=0, must-revalidate"
+                }
+            ]
+        }
+    ],
+    "trailingSlash": false,
+    "cleanUrls": true
+}
