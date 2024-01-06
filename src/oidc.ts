@@ -43,7 +43,7 @@ export declare namespace Oidc {
     };
 }
 
-const paramsToRetrieveFromSuccessfulLogin = ["code", "state", "session_state"] as const;
+const paramsToRetrieveFromSuccessfulLogin = ["code", "state", "session_state", "iss"] as const;
 
 /** @see: https://github.com/garronej/oidc-spa#option-1-usage-without-involving-the-ui-framework */
 export async function createOidc(params: {
