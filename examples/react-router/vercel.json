@@ -1,15 +1,5 @@
 {
-    "version": 2,
-    "routes": [
-        {
-            "handle": "filesystem"
-        },
-        {
-            "src": "/(.*)",
-            "dest": "/index.html",
-            "status": 200
-        }
-    ],
+    "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }],
     "headers": [
         {
             "source": "/(.*)",
