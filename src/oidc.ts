@@ -215,7 +215,12 @@ export async function createOidc(params: {
             for (const name of paramsToRetrieveFromSuccessfulLogin) {
                 const result = retrieveQueryParamFromUrl({ name, url });
 
-                assert(result.wasPresent);
+                if (!result.wasPresent) {
+                    if (name === "iss") {
+                        continue;
+                    }
+                    throw new Error(`Missing query param: ${name}`);
+                }
 
                 loginSuccessUrl = addQueryParamToUrl({
                     "url": loginSuccessUrl,
@@ -310,7 +315,12 @@ export async function createOidc(params: {
                 for (const name of paramsToRetrieveFromSuccessfulLogin) {
                     const result = retrieveQueryParamFromUrl({ name, url });
 
-                    assert(result.wasPresent);
+                    if (!result.wasPresent) {
+                        if (name === "iss") {
+                            continue;
+                        }
+                        throw new Error(`Missing query param: ${name}`);
+                    }
 
                     loginSuccessUrl = addQueryParamToUrl({
                         "url": loginSuccessUrl,
