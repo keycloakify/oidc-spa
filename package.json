@@ -4,7 +4,7 @@
     "description": "Openidconnect client for Single Page Applications",
     "repository": {
         "type": "git",
-        "url": "git://github.com/garronej/oidc-spa.git"
+        "url": "git://github.com/keycloakify/oidc-spa.git"
     },
     "scripts": {
         "build": "tsc",
@@ -31,7 +31,7 @@
             "pre-commit": "lint-staged -v"
         }
     },
-    "author": "u/garronej",
+    "author": "u/garronej & u/ddecrulle",
     "license": "MIT",
     "files": [
         "src/",
@@ -39,7 +39,12 @@
         "!dist/tsconfig.tsbuildinfo"
     ],
     "keywords": [],
-    "homepage": "https://github.com/garronej/oidc-spa",
+    "homepage": "https://docs.oidc-spa.dev/",
+    "dependencies": {
+        "jwt-decode": "^3.1.2",
+        "oidc-client-ts": "^2.3.0",
+        "tsafe": "^1.6.5"
+    },
     "devDependencies": {
         "@types/node": "^20.2.1",
         "@types/react": "^18.2.6",
@@ -53,10 +58,5 @@
     },
     "publishConfig": {
         "access": "public"
-    },
-    "dependencies": {
-        "jwt-decode": "^3.1.2",
-        "oidc-client-ts": "^2.3.0",
-        "tsafe": "^1.6.5"
     }
 }
