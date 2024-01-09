@@ -22,9 +22,17 @@
   <a href="https://docs.oidc-spa.dev">Documentation</a>
 </p>
 
-An OIDC client tailored for Single Page Applications, particularly suitable for [Vite](https://vitejs.dev/) projects.  
-This library is intended for scenarios such as integrating your application with Keycloak.  
-`oidc-spa` is designed to be **very easy to set up and use**, even for those who are not familiar with the OIDC protocol.
+An OIDC client tailored for Single Page Applications, particularly suitable for [Vite](https://vitejs.dev/) projects.\
+This library is intended for scenarios such as integrating your application with [Keycloak](https://www.keycloak.org/). &#x20;
+
+In straightforward terms, this library is ideal for those seeking to enable user login/registration in their web application. When used in conjunction with Keycloak (for example), it enables you to offer a modern and secure authentication experience with minimal coding effort. This includes options for signing in via Google, X, GitHub, or other social media platforms. We provide comprehensive guidance from beginning to end.
+
+* 🎓 Accessible to all skill levels; no need to be an OIDC expert.
+* 🛠️ Easy to set up; eliminates the need for creating special `/login` `/logout` routes.
+* 🎛️ Minimal API surface for ease of use.
+* ✨ Robust yet optional React integration.
+* 📖 Comprehensive documentation and project examples: End-to-end solutions for authenticating your app.
+* ✅ Best in class type safety: Enhanced API response types based on usage context.
 
 ## Comparison with Existing Libraries
 
