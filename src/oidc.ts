@@ -1,10 +1,11 @@
-import { UserManager, type User } from "oidc-client-ts";
+import { UserManager as OidcClientTsUserManager, type User as OidcClientTsUser } from "oidc-client-ts";
 import { id } from "tsafe/id";
 import { readExpirationTimeInJwt } from "./tools/readExpirationTimeInJwt";
 import { assert, type Equals } from "tsafe/assert";
 import { addQueryParamToUrl, retrieveQueryParamFromUrl } from "./tools/urlQueryParams";
 import { fnv1aHashToHex } from "./tools/fnv1aHashToHex";
 import { Deferred } from "./tools/Deferred";
+import { decodeJwt } from "./tools/decodeJwt";
 
 export declare type Oidc = Oidc.LoggedIn | Oidc.NotLoggedIn;
 
@@ -34,19 +35,22 @@ export declare namespace Oidc {
         ) => Promise<never>;
     };
 
-    export type Tokens = {
-        accessToken: string;
-        accessTokenExpirationTime: number;
-        idToken: string;
-        refreshToken: string;
-        refreshTokenExpirationTime: number;
-    };
+    export type Tokens<DecodedIdToken extends Record<string, unknown> = Record<string, unknown>> =
+        Readonly<{
+            accessToken: string;
+            accessTokenExpirationTime: number;
+            idToken: string;
+            refreshToken: string;
+            refreshTokenExpirationTime: number;
+            decodedIdToken: DecodedIdToken;
+        }>;
 }
 
 const paramsToRetrieveFromSuccessfulLogin = ["code", "state", "session_state", "iss"] as const;
 
-/** @see: https://github.com/garronej/oidc-spa#option-1-usage-without-involving-the-ui-framework */
-export async function createOidc(params: {
+export type ParamsOfCreateOidc<
+    DecodedIdToken extends Record<string, unknown> = Record<string, unknown>
+> = {
     issuerUri: string;
     clientId: string;
     transformUrlBeforeRedirect?: (url: string) => string;
@@ -64,13 +68,20 @@ export async function createOidc(params: {
      * you are supposed to have created in your `public/` directory.
      */
     publicUrl?: string;
-}): Promise<Oidc> {
+    decodedIdTokenSchema?: { parse: (data: unknown) => DecodedIdToken };
+};
+
+/** @see: https://github.com/garronej/oidc-spa#option-1-usage-without-involving-the-ui-framework */
+export async function createOidc<
+    DecodedIdToken extends Record<string, unknown> = Record<string, unknown>
+>(params: ParamsOfCreateOidc<DecodedIdToken>): Promise<Oidc> {
     const {
         issuerUri,
         clientId,
         transformUrlBeforeRedirect = url => url,
         getExtraQueryParams,
-        publicUrl: publicUrl_params
+        publicUrl: publicUrl_params,
+        decodedIdTokenSchema
     } = params;
 
     const publicUrl = (() => {
@@ -88,7 +99,7 @@ export async function createOidc(params: {
     const configHash = fnv1aHashToHex(`${issuerUri} ${clientId}`);
     const configHashKey = "configHash";
 
-    const userManager = new UserManager({
+    const oidcClientTsUserManager = new OidcClientTsUserManager({
         "authority": issuerUri,
         "client_id": clientId,
         "redirect_uri": "" /* provided when calling login */,
@@ -181,14 +192,14 @@ export async function createOidc(params: {
             document.addEventListener("visibilitychange", callback);
         }
 
-        await userManager.signinRedirect({
+        await oidcClientTsUserManager.signinRedirect({
             redirect_uri,
             "redirectMethod": doesCurrentHrefRequiresAuth ? "replace" : "assign"
         });
         return new Promise<never>(() => {});
     };
 
-    const currentTokens = await (async function getUser() {
+    const initialTokens = await (async function getUser() {
         read_successful_login_query_params: {
             let url = window.location.href;
 
@@ -233,33 +244,33 @@ export async function createOidc(params: {
 
             window.history.pushState(null, "", url);
 
-            let user: User | undefined = undefined;
+            let oidcClientTsUser: OidcClientTsUser | undefined = undefined;
 
             try {
-                user = await userManager.signinRedirectCallback(loginSuccessUrl);
+                oidcClientTsUser = await oidcClientTsUserManager.signinRedirectCallback(loginSuccessUrl);
             } catch {
                 //NOTE: The user has likely pressed the back button just after logging in.
                 return undefined;
             }
 
-            return user;
+            return oidcClientTsUser;
         }
 
         restore_from_session: {
-            const user = await userManager.getUser();
+            const oidcClientTsUser = await oidcClientTsUserManager.getUser();
 
-            if (user === null) {
+            if (oidcClientTsUser === null) {
                 break restore_from_session;
             }
 
             // The server might have restarted and the session might have been lost.
             try {
-                await userManager.signinSilent();
+                await oidcClientTsUserManager.signinSilent();
             } catch {
                 return undefined;
             }
 
-            return user;
+            return oidcClientTsUser;
         }
 
         restore_from_http_only_cookie: {
@@ -334,7 +345,7 @@ export async function createOidc(params: {
 
             window.addEventListener("message", listener, false);
 
-            userManager
+            oidcClientTsUserManager
                 .signinSilent({ "silentRequestTimeoutInSeconds": timeoutDelayMs / 1000 })
                 .catch(() => {
                     /* error expected */
@@ -346,19 +357,24 @@ export async function createOidc(params: {
                 break restore_from_http_only_cookie;
             }
 
-            const user = await userManager.signinRedirectCallback(loginSuccessUrl);
+            const oidcClientTsUser = await oidcClientTsUserManager.signinRedirectCallback(
+                loginSuccessUrl
+            );
 
-            return user;
+            return oidcClientTsUser;
         }
 
         return undefined;
     })().then(
-        user => {
-            if (user === undefined) {
+        oidcClientTsUser => {
+            if (oidcClientTsUser === undefined) {
                 return undefined;
             }
 
-            const tokens = userToTokens(user);
+            const tokens = oidcClientTsUserToTokens({
+                oidcClientTsUser,
+                decodedIdTokenSchema
+            });
 
             if (tokens.refreshTokenExpirationTime < tokens.accessTokenExpirationTime) {
                 console.warn(
@@ -385,8 +401,8 @@ export async function createOidc(params: {
         }
     };
 
-    if (currentTokens instanceof Error) {
-        const error = currentTokens;
+    if (initialTokens instanceof Error) {
+        const error = initialTokens;
 
         console.error(`The OIDC server is down or misconfigured: ${error.message}`);
 
@@ -400,7 +416,7 @@ export async function createOidc(params: {
         });
     }
 
-    if (currentTokens === undefined) {
+    if (initialTokens === undefined) {
         return id<Oidc.NotLoggedIn>({
             ...common,
             "isUserLoggedIn": false,
@@ -408,20 +424,16 @@ export async function createOidc(params: {
         });
     }
 
+    let currentTokens = initialTokens;
+
     const onTokenChanges = new Set<() => void>();
 
     const oidc = id<Oidc.LoggedIn>({
         ...common,
         "isUserLoggedIn": true,
-        "getTokens": () => ({
-            "accessToken": currentTokens.accessToken,
-            "idToken": currentTokens.idToken,
-            "refreshToken": currentTokens.refreshToken,
-            "refreshTokenExpirationTime": currentTokens.refreshTokenExpirationTime,
-            "accessTokenExpirationTime": currentTokens.accessTokenExpirationTime
-        }),
+        "getTokens": () => currentTokens,
         "logout": async params => {
-            await userManager.signoutRedirect({
+            await oidcClientTsUserManager.signoutRedirect({
                 "post_logout_redirect_uri": (() => {
                     switch (params.redirectTo) {
                         case "current page":
@@ -437,11 +449,24 @@ export async function createOidc(params: {
             return new Promise<never>(() => {});
         },
         "renewTokens": async () => {
-            const user = await userManager.signinSilent();
+            const oidcClientTsUser = await oidcClientTsUserManager.signinSilent();
 
-            assert(user !== null);
+            assert(oidcClientTsUser !== null);
 
-            Object.assign(currentTokens, userToTokens(user));
+            const decodedIdTokenPropertyDescriptor = Object.getOwnPropertyDescriptor(
+                currentTokens,
+                "decodedIdToken"
+            );
+
+            assert(decodedIdTokenPropertyDescriptor !== undefined);
+
+            currentTokens = oidcClientTsUserToTokens({
+                oidcClientTsUser,
+                decodedIdTokenSchema
+            });
+
+            // NOTE: We do that to preserve the cache and the object reference.
+            Object.defineProperty(currentTokens, "decodedIdToken", decodedIdTokenPropertyDescriptor);
 
             onTokenChanges.forEach(onTokenChange => onTokenChange());
         },
@@ -475,12 +500,17 @@ export async function createOidc(params: {
     return oidc;
 }
 
-function userToTokens(user: User): Oidc.Tokens {
-    const accessToken = user.access_token;
+function oidcClientTsUserToTokens<DecodedIdToken extends Record<string, unknown>>(params: {
+    oidcClientTsUser: OidcClientTsUser;
+    decodedIdTokenSchema?: { parse: (data: unknown) => DecodedIdToken };
+}): Oidc.Tokens<DecodedIdToken> {
+    const { oidcClientTsUser, decodedIdTokenSchema } = params;
+
+    const accessToken = oidcClientTsUser.access_token;
 
     const accessTokenExpirationTime = (() => {
         read_from_metadata: {
-            const { expires_at } = user;
+            const { expires_at } = oidcClientTsUser;
 
             if (expires_at === undefined) {
                 break read_from_metadata;
@@ -502,7 +532,7 @@ function userToTokens(user: User): Oidc.Tokens {
         assert(false, "Failed to get access token expiration time");
     })();
 
-    const refreshToken = user.refresh_token;
+    const refreshToken = oidcClientTsUser.refresh_token;
 
     assert(refreshToken !== undefined, "No refresh token provided by the oidc server");
 
@@ -520,15 +550,49 @@ function userToTokens(user: User): Oidc.Tokens {
         assert(false, "Failed to get refresh token expiration time");
     })();
 
-    const idToken = user.id_token;
+    const idToken = oidcClientTsUser.id_token;
 
     assert(idToken !== undefined, "No id token provided by the oidc server");
 
-    return {
+    const tokens: Oidc.Tokens<DecodedIdToken> = {
         accessToken,
         accessTokenExpirationTime,
         refreshToken,
         refreshTokenExpirationTime,
-        idToken
+        idToken,
+        "decodedIdToken": null as any
     };
+
+    let cache:
+        | {
+              idToken: string;
+              decodedIdToken: DecodedIdToken;
+          }
+        | undefined = undefined;
+
+    Object.defineProperty(tokens, "decodedIdToken", {
+        "get": function (this: Oidc.Tokens<DecodedIdToken>) {
+            if (cache !== undefined && cache.idToken === this.idToken) {
+                return cache.decodedIdToken;
+            }
+
+            let decodedIdToken = decodeJwt(this.idToken) as DecodedIdToken;
+
+            if (decodedIdTokenSchema !== undefined) {
+                decodedIdToken = decodedIdTokenSchema.parse(decodedIdToken);
+            }
+
+            cache = {
+                "idToken": this.idToken,
+                decodedIdToken
+            };
+
+            return tokens.decodedIdToken;
+        },
+        "configurable": true,
+        "enumerable": true,
+        "writable": false
+    });
+
+    return tokens;
 }
