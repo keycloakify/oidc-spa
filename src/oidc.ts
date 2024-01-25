@@ -590,6 +590,7 @@ function oidcClientTsUserToTokens<DecodedIdToken extends Record<string, unknown>
     let cache:
         | {
               idToken: string;
+              decodedIdToken_beforeParse: DecodedIdToken;
               decodedIdToken: DecodedIdToken;
           }
         | undefined = undefined;
@@ -600,7 +601,19 @@ function oidcClientTsUserToTokens<DecodedIdToken extends Record<string, unknown>
                 return cache.decodedIdToken;
             }
 
-            let decodedIdToken = decodeJwt(this.idToken) as DecodedIdToken;
+            const decodedIdToken_beforeParse = decodeJwt(this.idToken) as DecodedIdToken;
+
+            if (
+                cache !== undefined &&
+                JSON.stringify(cache.decodedIdToken_beforeParse) ===
+                    JSON.stringify(decodedIdToken_beforeParse)
+            ) {
+                cache.idToken = this.idToken;
+
+                return cache.decodedIdToken;
+            }
+
+            let decodedIdToken = decodedIdToken_beforeParse;
 
             if (decodedIdTokenSchema !== undefined) {
                 decodedIdToken = decodedIdTokenSchema.parse(decodedIdToken);
@@ -608,6 +621,7 @@ function oidcClientTsUserToTokens<DecodedIdToken extends Record<string, unknown>
 
             cache = {
                 "idToken": this.idToken,
+                decodedIdToken_beforeParse,
                 decodedIdToken
             };
 

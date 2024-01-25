@@ -1,17 +1,22 @@
-import { createOidcProvider, createUseOidc } from "oidc-spa/react";
+import { createReactOidc } from "oidc-spa/react";
 import { z } from "zod";
 
-export const { OidcProvider, prOidc } = createOidcProvider({
-    // The import.meta.env.*** are environment variables injected by Vite.
-    // You can change them by editing the .env.local file at the root of the project.
+export const {
+    OidcProvider,
+    /**
+     * Note: If you have multiple OidcProvider in your app
+     * you do not need to use the useClient hook that that corresponds
+     * to the above OidcProvider.
+     */
+    useOidc,
+    prOidc
+} = createReactOidc({
     clientId: import.meta.env.VITE_OIDC_CLIENT_ID,
     issuerUri: import.meta.env.VITE_OIDC_ISSUER,
-    publicUrl: import.meta.env.BASE_URL
-});
-
-export const { useOidc } = createUseOidc({
+    publicUrl: import.meta.env.BASE_URL,
     /**
      * This parameter is optional.
+     *
      * It allows you to validate the shape of the idToken so that you
      * can trust that oidcTokens.decodedIdToken is of the expected shape
      * when the user is logged in.
@@ -31,8 +36,6 @@ export const { useOidc } = createUseOidc({
      * of the idToken on the frontend side, you usually obtain the user info
      * by querying a GET /user endpoint with a authorization header
      * like `Bearer <accessToken>`.
-     * If you don't use the decodedIdToken just do:
-     * `export const { useOidc } = createUseOidc()`
      */
     decodedIdTokenSchema: z.object({
         sub: z.string(),
