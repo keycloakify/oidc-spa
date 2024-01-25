@@ -7,7 +7,9 @@ import { fnv1aHashToHex } from "./tools/fnv1aHashToHex";
 import { Deferred } from "./tools/Deferred";
 import { decodeJwt } from "./tools/decodeJwt";
 
-export declare type Oidc = Oidc.LoggedIn | Oidc.NotLoggedIn;
+export declare type Oidc<DecodedIdToken extends Record<string, unknown> = Record<string, unknown>> =
+    | Oidc.LoggedIn<DecodedIdToken>
+    | Oidc.NotLoggedIn;
 
 export declare namespace Oidc {
     export type Common = {
@@ -25,15 +27,18 @@ export declare namespace Oidc {
         }) => Promise<never>;
     };
 
-    export type LoggedIn = Common & {
-        isUserLoggedIn: true;
-        renewTokens(): Promise<void>;
-        getTokens: () => Tokens;
-        subscribeToTokensChange: (onTokenChange: () => void) => { unsubscribe: () => void };
-        logout: (
-            params: { redirectTo: "home" | "current page" } | { redirectTo: "specific url"; url: string }
-        ) => Promise<never>;
-    };
+    export type LoggedIn<DecodedIdToken extends Record<string, unknown> = Record<string, unknown>> =
+        Common & {
+            isUserLoggedIn: true;
+            renewTokens(): Promise<void>;
+            getTokens: () => Tokens<DecodedIdToken>;
+            subscribeToTokensChange: (onTokenChange: () => void) => { unsubscribe: () => void };
+            logout: (
+                params:
+                    | { redirectTo: "home" | "current page" }
+                    | { redirectTo: "specific url"; url: string }
+            ) => Promise<never>;
+        };
 
     export type Tokens<DecodedIdToken extends Record<string, unknown> = Record<string, unknown>> =
         Readonly<{
@@ -54,7 +59,14 @@ export type ParamsOfCreateOidc<
     issuerUri: string;
     clientId: string;
     transformUrlBeforeRedirect?: (url: string) => string;
-    getExtraQueryParams?: () => Record<string, string>;
+    /**
+     * Extra query params to be added on the login url.
+     * You can provide a function that returns those extra query params, it will be called
+     * when login() is called.
+     *
+     * Example: extraQueryParams: ()=> ({ ui_locales: "fr" })
+     */
+    extraQueryParams?: Record<string, string> | (() => Record<string, string>);
     /**
      * This parameter have to be provided if your App is not hosted at the origin of the subdomain.
      * For example if your site is hosted by navigating to `https://www.example.com`
@@ -74,15 +86,27 @@ export type ParamsOfCreateOidc<
 /** @see: https://github.com/garronej/oidc-spa#option-1-usage-without-involving-the-ui-framework */
 export async function createOidc<
     DecodedIdToken extends Record<string, unknown> = Record<string, unknown>
->(params: ParamsOfCreateOidc<DecodedIdToken>): Promise<Oidc> {
+>(params: ParamsOfCreateOidc<DecodedIdToken>): Promise<Oidc<DecodedIdToken>> {
     const {
         issuerUri,
         clientId,
         transformUrlBeforeRedirect = url => url,
-        getExtraQueryParams,
+        extraQueryParams: extraQueryParamsOrGetter,
         publicUrl: publicUrl_params,
         decodedIdTokenSchema
     } = params;
+
+    const getExtraQueryParams = (() => {
+        if (typeof extraQueryParamsOrGetter === "function") {
+            return extraQueryParamsOrGetter;
+        }
+
+        if (extraQueryParamsOrGetter !== undefined) {
+            return () => extraQueryParamsOrGetter;
+        }
+
+        return undefined;
+    })();
 
     const publicUrl = (() => {
         if (publicUrl_params === undefined) {
@@ -428,7 +452,7 @@ export async function createOidc<
 
     const onTokenChanges = new Set<() => void>();
 
-    const oidc = id<Oidc.LoggedIn>({
+    const oidc = id<Oidc.LoggedIn<DecodedIdToken>>({
         ...common,
         "isUserLoggedIn": true,
         "getTokens": () => currentTokens,
