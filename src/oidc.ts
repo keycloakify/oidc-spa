@@ -611,11 +611,10 @@ function oidcClientTsUserToTokens<DecodedIdToken extends Record<string, unknown>
                 decodedIdToken
             };
 
-            return tokens.decodedIdToken;
+            return decodedIdToken;
         },
         "configurable": true,
-        "enumerable": true,
-        "writable": false
+        "enumerable": true
     });
 
     return tokens;
