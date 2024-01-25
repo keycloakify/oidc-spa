@@ -113,7 +113,7 @@ export function createReactOidc<
 
                 let cache: { decodedIdToken: Record<string, unknown> } | undefined = undefined;
 
-                Object.defineProperty(tokens, "decodedIdToken", {
+                Object.defineProperty(oidcTokens, "decodedIdToken", {
                     "get": () => {
                         if (cache !== undefined) {
                             return cache.decodedIdToken;
@@ -130,7 +130,7 @@ export function createReactOidc<
 
                         cache = { decodedIdToken };
 
-                        return oidcTokens.decodedIdToken;
+                        return decodedIdToken;
                     }
                 });
 
