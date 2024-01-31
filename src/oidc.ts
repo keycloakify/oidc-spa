@@ -58,6 +58,7 @@ export type ParamsOfCreateOidc<
 > = {
     issuerUri: string;
     clientId: string;
+    clientSecret?: string;
     transformUrlBeforeRedirect?: (url: string) => string;
     /**
      * Extra query params to be added on the login url.
@@ -90,6 +91,7 @@ export async function createOidc<
     const {
         issuerUri,
         clientId,
+        clientSecret,
         transformUrlBeforeRedirect = url => url,
         extraQueryParams: extraQueryParamsOrGetter,
         publicUrl: publicUrl_params,
@@ -126,6 +128,7 @@ export async function createOidc<
     const oidcClientTsUserManager = new OidcClientTsUserManager({
         "authority": issuerUri,
         "client_id": clientId,
+        "client_secret": clientSecret,
         "redirect_uri": "" /* provided when calling login */,
         "response_type": "code",
         "scope": "openid profile",
