@@ -81,6 +81,7 @@ export type ParamsOfCreateOidc<
      * you are supposed to have created in your `public/` directory.
      */
     publicUrl?: string;
+    onError?: () => void;
     decodedIdTokenSchema?: { parse: (data: unknown) => DecodedIdToken };
 };
 
@@ -95,6 +96,7 @@ export async function createOidc<
         transformUrlBeforeRedirect = url => url,
         extraQueryParams: extraQueryParamsOrGetter,
         publicUrl: publicUrl_params,
+        onError,
         decodedIdTokenSchema
     } = params;
 
@@ -432,6 +434,8 @@ export async function createOidc<
         const error = initialTokens;
 
         console.error(`The OIDC server is down or misconfigured: ${error.message}`);
+
+        if (onError) onError();
 
         return id<Oidc.NotLoggedIn>({
             ...common,
