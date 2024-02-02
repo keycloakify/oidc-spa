@@ -6,6 +6,7 @@ import { addQueryParamToUrl, retrieveQueryParamFromUrl } from "./tools/urlQueryP
 import { fnv1aHashToHex } from "./tools/fnv1aHashToHex";
 import { Deferred } from "./tools/Deferred";
 import { decodeJwt } from "./tools/decodeJwt";
+import { getDownlinkAndRtt } from "./tools/getDownlinkAndRtt";
 
 export declare type Oidc<DecodedIdToken extends Record<string, unknown> = Record<string, unknown>> =
     | Oidc.LoggedIn<DecodedIdToken>
@@ -303,7 +304,24 @@ export async function createOidc<
         restore_from_http_only_cookie: {
             const dLoginSuccessUrl = new Deferred<string | undefined>();
 
-            const timeoutDelayMs = 2500;
+            const timeoutDelayMs = (() => {
+                const downlinkAndRtt = getDownlinkAndRtt();
+
+                if (downlinkAndRtt === undefined) {
+                    return 5000;
+                }
+
+                const { downlink, rtt } = downlinkAndRtt;
+
+                // Base delay is the minimum delay we're willing to tolerate
+                const baseDelay = 3000;
+
+                // Calculate dynamic delay based on RTT and downlink
+                // Add 1 to downlink to avoid division by zero
+                const dynamicDelay = rtt * 2.5 + 3000 / (downlink + 1);
+
+                return Math.max(baseDelay, dynamicDelay);
+            })();
 
             const timeout = setTimeout(
                 () =>

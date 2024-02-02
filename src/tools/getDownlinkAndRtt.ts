@@ -1,0 +1,22 @@
+import { assert } from "tsafe/assert";
+
+export function getDownlinkAndRtt(): { downlink: number; rtt: number } | undefined {
+    if (!(window.navigator instanceof Object)) {
+        return undefined;
+    }
+
+    const navigator: any = window.navigator;
+
+    for (const key of ["connection", "mozConnection", "webkitConnection"] as const) {
+        try {
+            const { downlink, rtt } = navigator[key];
+
+            assert(typeof downlink === "number");
+            assert(typeof rtt === "number");
+
+            return { downlink, rtt };
+        } catch {}
+    }
+
+    return undefined;
+}
