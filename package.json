@@ -42,7 +42,7 @@
     "homepage": "https://docs.oidc-spa.dev/",
     "dependencies": {
         "jwt-decode": "^3.1.2",
-        "oidc-client-ts": "^2.3.0",
+        "oidc-client-ts": "3.0.0",
         "tsafe": "^1.6.5"
     },
     "devDependencies": {
