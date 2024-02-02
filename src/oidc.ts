@@ -26,6 +26,7 @@ export declare namespace Oidc {
             doesCurrentHrefRequiresAuth: boolean;
             extraQueryParams?: Record<string, string>;
         }) => Promise<never>;
+        initializationError: OidcInitializationError | undefined;
     };
 
     export type LoggedIn<DecodedIdToken extends Record<string, unknown> = Record<string, unknown>> =
@@ -50,6 +51,42 @@ export declare namespace Oidc {
             refreshTokenExpirationTime: number;
             decodedIdToken: DecodedIdToken;
         }>;
+}
+
+export class OidcInitializationError extends Error {
+    public readonly type: "server down" | "bad configuration" | "unknown";
+
+    constructor(
+        params:
+            | {
+                  type: "server down";
+              }
+            | {
+                  type: "bad configuration";
+                  timeoutDelayMs: number;
+              }
+            | {
+                  type: "unknown";
+                  cause: Error;
+              }
+    ) {
+        super(
+            (() => {
+                switch (params.type) {
+                    case "server down":
+                        return "The OIDC server is down";
+                    case "bad configuration":
+                        return `Bad configuration. Timed out after ${params.timeoutDelayMs}ms`;
+                    case "unknown":
+                        return params.cause.message;
+                }
+            })(),
+            // @ts-expect-error
+            { "cause": params.type === "unknown" ? params.cause : undefined }
+        );
+        this.type = params.type;
+        Object.setPrototypeOf(this, new.target.prototype);
+    }
 }
 
 const paramsToRetrieveFromSuccessfulLogin = ["code", "state", "session_state", "iss"] as const;
@@ -294,7 +331,13 @@ export async function createOidc<
             // The server might have restarted and the session might have been lost.
             try {
                 await oidcClientTsUserManager.signinSilent();
-            } catch {
+            } catch (error) {
+                assert(error instanceof Error);
+
+                if (error.message === "Failed to fetch") {
+                    throw new OidcInitializationError({ "type": "server down" });
+                }
+
                 return undefined;
             }
 
@@ -326,7 +369,10 @@ export async function createOidc<
             const timeout = setTimeout(
                 () =>
                     dLoginSuccessUrl.reject(
-                        new Error(`SSO silent login timeout with clientId: ${clientId}`)
+                        new OidcInitializationError({
+                            "type": "bad configuration",
+                            timeoutDelayMs
+                        })
                     ),
                 timeoutDelayMs
             );
@@ -396,7 +442,7 @@ export async function createOidc<
                     if (error.message === "Failed to fetch") {
                         clearTimeout(timeout);
 
-                        dLoginSuccessUrl.reject(new Error("The identity server is down"));
+                        dLoginSuccessUrl.reject(new OidcInitializationError({ "type": "server down" }));
                     }
                 });
 
@@ -453,7 +499,15 @@ export async function createOidc<
     if (initialTokens instanceof Error) {
         const error = initialTokens;
 
-        console.error(`The OIDC server is down or misconfigured: ${error.message}`);
+        const initializationError =
+            error instanceof OidcInitializationError
+                ? error
+                : new OidcInitializationError({
+                      "type": "unknown",
+                      "cause": error
+                  });
+
+        console.error(`OIDC initilization error: ${initializationError.message}`);
 
         return id<Oidc.NotLoggedIn>({
             ...common,
@@ -461,7 +515,8 @@ export async function createOidc<
             "login": async () => {
                 alert("Authentication is currently unavailable. Please try again later.");
                 return new Promise<never>(() => {});
-            }
+            },
+            initializationError
         });
     }
 
@@ -469,7 +524,8 @@ export async function createOidc<
         return id<Oidc.NotLoggedIn>({
             ...common,
             "isUserLoggedIn": false,
-            login
+            login,
+            "initializationError": undefined
         });
     }
 

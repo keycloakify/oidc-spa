@@ -1,5 +1,5 @@
 import { useEffect, useState, createContext, useContext, useReducer, type ReactNode } from "react";
-import { createOidc, type ParamsOfCreateOidc, type Oidc } from "./oidc";
+import { createOidc, type ParamsOfCreateOidc, type Oidc, type OidcInitializationError } from "./oidc";
 import { assert } from "tsafe/assert";
 import { id } from "tsafe/id";
 import { useGuaranteedMemo } from "./tools/powerhooks/useGuaranteedMemo";
@@ -16,6 +16,7 @@ export namespace OidcReact {
         login: Oidc.NotLoggedIn["login"];
         oidcTokens?: never;
         logout?: never;
+        initializationError: OidcInitializationError | undefined;
     };
 
     export type LoggedIn<DecodedIdToken extends Record<string, unknown>> = Common & {
@@ -24,6 +25,7 @@ export namespace OidcReact {
         logout: Oidc.LoggedIn["logout"];
         renewTokens: Oidc.LoggedIn["renewTokens"];
         login?: never;
+        initializationError?: never;
     };
 }
 
@@ -164,7 +166,8 @@ export function createReactOidc<
             : id<OidcReact.NotLoggedIn>({
                   ...common,
                   "isUserLoggedIn": false,
-                  "login": oidc.login
+                  "login": oidc.login,
+                  "initializationError": oidc.initializationError
               });
     }
 
