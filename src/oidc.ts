@@ -392,8 +392,12 @@ export async function createOidc<
 
             oidcClientTsUserManager
                 .signinSilent({ "silentRequestTimeoutInSeconds": timeoutDelayMs / 1000 })
-                .catch(() => {
-                    /* error expected */
+                .catch((error: Error) => {
+                    if (error.message === "Failed to fetch") {
+                        clearTimeout(timeout);
+
+                        dLoginSuccessUrl.reject(new Error("The identity server is down"));
+                    }
                 });
 
             const loginSuccessUrl = await dLoginSuccessUrl.pr;
