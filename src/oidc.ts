@@ -623,7 +623,13 @@ export async function createOidc<
                 try {
                     await oidc.renewTokens();
                 } catch {
-                    await login({ "doesCurrentHrefRequiresAuth": true });
+                    // NOTE: Here semantically it's wrong. The user may very well be
+                    // on a page that require auth.
+                    // However there's no way to enforce the browser to redirect back to
+                    // the last public route if the user press back on the login page.
+                    // This is due to the fact that pushing to history only works if it's
+                    // triggered by a user interaction.
+                    await login({ "doesCurrentHrefRequiresAuth": false });
                 }
 
                 scheduleAutomaticRenew();
