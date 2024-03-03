@@ -586,21 +586,38 @@ export async function createOidc<
         }
     });
 
-    (function scheduleAutomaticRenew() {
-        const msBeforeExpiration =
-            Math.min(currentTokens.accessTokenExpirationTime, currentTokens.refreshTokenExpirationTime) -
-            Date.now();
+    {
+        const getMsBeforeExpiration = () => {
+            // NOTE: We refresh the token 25 seconds before it expires.
+            // If the token expiration time is less than 25 seconds we refresh the token when
+            // only 1/10 of the token time is left.
+            const tokenExpirationTime = Math.min(
+                currentTokens.accessTokenExpirationTime,
+                currentTokens.refreshTokenExpirationTime
+            );
 
-        setTimeout(async () => {
-            try {
-                await oidc.renewTokens();
-            } catch {
-                await login({ "doesCurrentHrefRequiresAuth": true });
-            }
+            return tokenExpirationTime - Date.now();
+        };
 
-            scheduleAutomaticRenew();
-        }, msBeforeExpiration - /* min validity in seconds */ 25 * 1000);
-    })();
+        // NOTE: We refresh the token 25 seconds before it expires.
+        // If the token expiration time is less than 25 seconds we refresh the token when
+        // only 1/10 of the token time is left.
+        const minValidity = Math.min(25 * 1000, getMsBeforeExpiration() * 0.1);
+
+        (function scheduleAutomaticRenew() {
+            const msBeforeExpiration = getMsBeforeExpiration();
+
+            setTimeout(async () => {
+                try {
+                    await oidc.renewTokens();
+                } catch {
+                    await login({ "doesCurrentHrefRequiresAuth": true });
+                }
+
+                scheduleAutomaticRenew();
+            }, msBeforeExpiration - minValidity);
+        })();
+    }
 
     return oidc;
 }
