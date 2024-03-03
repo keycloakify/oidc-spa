@@ -180,6 +180,7 @@ export async function createOidc<
         const realPushState = history.pushState.bind(history);
         history.pushState = function pushState(...args) {
             lastPublicRoute = window.location.href;
+            console.log("lastPublicRoute", lastPublicRoute);
             return realPushState(...args);
         };
     }
@@ -243,6 +244,9 @@ export async function createOidc<
         });
 
         if (doesCurrentHrefRequiresAuth) {
+            // NOTE: In Firefox, when the user navigate back from the login page
+            // the state of the app is restored. We don't want that to happen,
+            // we want to redirect the user to the last public page.
             const callback = () => {
                 if (document.visibilityState === "visible") {
                     document.removeEventListener("visibilitychange", callback);
@@ -259,6 +263,9 @@ export async function createOidc<
 
         await oidcClientTsUserManager.signinRedirect({
             redirect_uri,
+            // NOTE: This is for the behavior when the use presses the back button on the login pages.
+            // This is what happens when the user gave up the login process.
+            // We want to that to redirect to the last public page.
             "redirectMethod": doesCurrentHrefRequiresAuth ? "replace" : "assign"
         });
         return new Promise<never>(() => {});
