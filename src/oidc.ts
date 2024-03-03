@@ -174,16 +174,17 @@ export async function createOidc<
         "silent_redirect_uri": `${publicUrl}/silent-sso.html?${configHashKey}=${configHash}`
     });
 
+    // NOTE: Only useful for Firefox, see note bellow.
     let lastPublicRoute: string | undefined = undefined;
 
-    {
+    // NOTE: To call only if not logged in.
+    const startTrackingLastPublicRoute = () => {
         const realPushState = history.pushState.bind(history);
         history.pushState = function pushState(...args) {
             lastPublicRoute = window.location.href;
-            console.log("lastPublicRoute", lastPublicRoute);
             return realPushState(...args);
         };
-    }
+    };
 
     let hasLoginBeenCalled = false;
 
@@ -514,7 +515,9 @@ export async function createOidc<
                       "cause": error
                   });
 
-        console.error(`OIDC initilization error: ${initializationError.message}`);
+        console.error(`OIDC initialization error: ${initializationError.message}`);
+
+        startTrackingLastPublicRoute();
 
         return id<Oidc.NotLoggedIn>({
             ...common,
@@ -528,6 +531,8 @@ export async function createOidc<
     }
 
     if (initialTokens === undefined) {
+        startTrackingLastPublicRoute();
+
         return id<Oidc.NotLoggedIn>({
             ...common,
             "isUserLoggedIn": false,
