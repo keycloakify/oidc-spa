@@ -614,11 +614,9 @@ export async function createOidc<
         // NOTE: We refresh the token 25 seconds before it expires.
         // If the token expiration time is less than 25 seconds we refresh the token when
         // only 1/10 of the token time is left.
-        const minValidity = Math.min(25 * 1000, getMsBeforeExpiration() * 0.1);
+        const renewMsBeforeExpires = Math.min(25 * 1000, getMsBeforeExpiration() * 0.1);
 
         (function scheduleAutomaticRenew() {
-            const msBeforeExpiration = getMsBeforeExpiration();
-
             setTimeout(async () => {
                 try {
                     await oidc.renewTokens();
@@ -633,7 +631,7 @@ export async function createOidc<
                 }
 
                 scheduleAutomaticRenew();
-            }, msBeforeExpiration - minValidity);
+            }, getMsBeforeExpiration() - renewMsBeforeExpires);
         })();
     }
 
