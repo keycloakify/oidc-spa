@@ -7,6 +7,8 @@ import { fnv1aHashToHex } from "./tools/fnv1aHashToHex";
 import { Deferred } from "./tools/Deferred";
 import { decodeJwt } from "./tools/decodeJwt";
 import { getDownlinkAndRtt } from "./tools/getDownlinkAndRtt";
+import { create$isUserActive } from "./tools/create$isUserActive";
+import { createStartCountdown } from "./tools/startCountdown";
 
 export declare type Oidc<DecodedIdToken extends Record<string, unknown> = Record<string, unknown>> =
     | Oidc.LoggedIn<DecodedIdToken>
@@ -40,6 +42,17 @@ export declare namespace Oidc {
                     | { redirectTo: "home" | "current page" }
                     | { redirectTo: "specific url"; url: string }
             ) => Promise<never>;
+            enableAutoLogout: (params?: {
+                countdown?: {
+                    startTickAtSecondsLeft: number;
+                    tickCallback: (params: { secondsLeft: number }) => void;
+                    /**
+                     * Called when used moves when there was less than startTickAtSecondsLeft
+                     * seconds left before automatic logout.
+                     */
+                    onReset?: () => void;
+                };
+            }) => { disableAutoLogout: () => void };
         };
 
     export type Tokens<DecodedIdToken extends Record<string, unknown> = Record<string, unknown>> =
@@ -595,14 +608,54 @@ export async function createOidc<
                     onTokenChanges.delete(onTokenChange);
                 }
             };
-        }
+        },
+        "enableAutoLogout": (() => {
+            const { $isUserActive } = create$isUserActive({ "timeWindowMs": 30_000 });
+
+            const refreshTokenLifespan = currentTokens.refreshTokenExpirationTime - Date.now();
+
+            return ({ countdown } = {}) => {
+                const { startCountdown } = createStartCountdown({
+                    "msLeftWhenStartingCountdown": refreshTokenLifespan,
+                    "onReset": countdown?.onReset,
+                    "startTickAtSecondsLeft": countdown?.startTickAtSecondsLeft ?? 1,
+                    "tickCallback": ({ secondsLeft }) => {
+                        countdown?.tickCallback({ secondsLeft });
+
+                        if (secondsLeft === 0) {
+                            oidc.logout({ "redirectTo": "current page" });
+                        }
+                    }
+                });
+
+                let stopCountdown = startCountdown().stopCountdown;
+
+                const { unsubscribe: unsubscribeRestartCountdown } = $isUserActive.subscribe(
+                    isUserActive => {
+                        if (!isUserActive) {
+                            return;
+                        }
+
+                        stopCountdown();
+                        stopCountdown = startCountdown().stopCountdown;
+                    }
+                );
+
+                const disableAutoLogout = () => {
+                    stopCountdown();
+                    unsubscribeRestartCountdown();
+                };
+
+                return { disableAutoLogout };
+            };
+        })()
     });
 
     {
         const getMsBeforeExpiration = () => {
-            // NOTE: We refresh the token 25 seconds before it expires.
-            // If the token expiration time is less than 25 seconds we refresh the token when
-            // only 1/10 of the token time is left.
+            // NOTE: In general the access token is supposed to have a shorter
+            // lifespan than the refresh token but we don't want to make any
+            // assumption here.
             const tokenExpirationTime = Math.min(
                 currentTokens.accessTokenExpirationTime,
                 currentTokens.refreshTokenExpirationTime
@@ -614,10 +667,12 @@ export async function createOidc<
         // NOTE: We refresh the token 25 seconds before it expires.
         // If the token expiration time is less than 25 seconds we refresh the token when
         // only 1/10 of the token time is left.
-        const renewMsBeforeExpires = Math.min(25 * 1000, getMsBeforeExpiration() * 0.1);
+        const renewMsBeforeExpires = Math.min(25_000, getMsBeforeExpiration() * 0.1);
 
-        (function scheduleAutomaticRenew() {
-            setTimeout(async () => {
+        (function scheduleRenew() {
+            const timer = setTimeout(async () => {
+                tokenChangeUnsubscribe();
+
                 try {
                     await oidc.renewTokens();
                 } catch {
@@ -630,8 +685,14 @@ export async function createOidc<
                     await login({ "doesCurrentHrefRequiresAuth": false });
                 }
 
-                scheduleAutomaticRenew();
+                scheduleRenew();
             }, getMsBeforeExpiration() - renewMsBeforeExpires);
+
+            const { unsubscribe: tokenChangeUnsubscribe } = oidc.subscribeToTokensChange(() => {
+                clearTimeout(timer);
+                tokenChangeUnsubscribe();
+                scheduleRenew();
+            });
         })();
     }
 

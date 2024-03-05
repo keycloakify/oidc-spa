@@ -17,6 +17,7 @@ export namespace OidcReact {
         oidcTokens?: never;
         logout?: never;
         initializationError: OidcInitializationError | undefined;
+        enableAutoLogout?: never;
     };
 
     export type LoggedIn<DecodedIdToken extends Record<string, unknown>> = Common & {
@@ -26,6 +27,17 @@ export namespace OidcReact {
         renewTokens: Oidc.LoggedIn["renewTokens"];
         login?: never;
         initializationError?: never;
+        enableAutoLogout: (params?: {
+            countdown?: {
+                startTickAtSecondsLeft: number;
+                tickCallback: (params: { secondsLeft: number }) => void;
+                /**
+                 * Called when used moves when there was less than startTickAtSecondsLeft
+                 * seconds left before automatic logout.
+                 */
+                onReset?: () => void;
+            };
+        }) => { disableAutoLogout: () => void };
     };
 }
 
@@ -160,7 +172,8 @@ export function createReactOidc<
                       "isUserLoggedIn": true,
                       oidcTokens,
                       "logout": oidc.logout,
-                      "renewTokens": oidc.renewTokens
+                      "renewTokens": oidc.renewTokens,
+                      "enableAutoLogout": oidc.enableAutoLogout
                   })
               )
             : id<OidcReact.NotLoggedIn>({
