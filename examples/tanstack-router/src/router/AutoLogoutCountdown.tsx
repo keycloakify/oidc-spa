@@ -15,16 +15,14 @@ export function AutoLogoutCountdown() {
         const { disableAutoLogout } = enableAutoLogout({
             countdown: {
                 startTickAtSecondsLeft: 60,
-                tickCallback: ({ secondsLeft }) => {
-                    setSecondsBeforeAutoLogout(secondsLeft);
-                },
-                onReset: () => {
-                    setSecondsBeforeAutoLogout(undefined);
-                }
+                tickCallback: ({ secondsLeft }) => setSecondsBeforeAutoLogout(secondsLeft),
+                onReset: () => setSecondsBeforeAutoLogout(undefined)
             }
         });
 
-        return disableAutoLogout;
+        return () => {
+            disableAutoLogout();
+        };
     }, [isUserLoggedIn, enableAutoLogout]);
 
     if (secondsBeforeAutoLogout === undefined) {

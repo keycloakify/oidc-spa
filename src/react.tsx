@@ -37,6 +37,15 @@ export namespace OidcReact {
                  */
                 onReset?: () => void;
             };
+            /**
+             * This parameter defines after how many seconds of inactivity the user should be
+             * logged out automatically.
+             *
+             * WARNING: It should be configured on the identity server side
+             * as it's the authoritative source for security policies and not the client.
+             * If you don't provide this parameter it will be inferred from the refresh token expiration time.
+             * */
+            __unsafe_ssoSessionIdleSeconds?: number;
         }) => { disableAutoLogout: () => void };
     };
 }
