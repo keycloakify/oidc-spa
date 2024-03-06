@@ -19,7 +19,7 @@ export function create$isUserActive(params: { timeWindowMs: number }) {
     let clearScheduledSetInactive = scheduleSetInactive();
 
     const { unsubscribeFromUserInteraction } = subscribeToUserInteraction({
-        "precisionMs": 1_000,
+        "timeResolution": 1_000,
         "callback": () => {
             clearScheduledSetInactive();
             clearScheduledSetInactive = scheduleSetInactive();

@@ -1,7 +1,7 @@
 import { getPrUserInteraction } from "./getPrUserInteraction";
 
-export function subscribeToUserInteraction(params: { precisionMs: number; callback: () => void }) {
-    const { precisionMs } = params;
+export function subscribeToUserInteraction(params: { timeResolution: number; callback: () => void }) {
+    const { timeResolution } = params;
 
     let timer: ReturnType<typeof setTimeout> | undefined = undefined;
 
@@ -11,7 +11,7 @@ export function subscribeToUserInteraction(params: { precisionMs: number; callba
         params.callback();
 
         await new Promise<void>(resolve => {
-            timer = setTimeout(resolve, precisionMs);
+            timer = setTimeout(resolve, timeResolution);
         });
 
         callee();
