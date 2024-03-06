@@ -1,16 +1,18 @@
 import { createStatefulObservable } from "./StatefulObservable";
 import { subscribeToUserInteraction } from "./subscribeToUserInteraction";
+import { assert } from "tsafe/assert";
 
-export function create$isUserActive(params: { timeWindowMs: number }) {
-    const { timeWindowMs } = params;
+export function create$isUserActive(params: { theUserIsConsideredInactiveAfterMsOfInactivity: number }) {
+    const { theUserIsConsideredInactiveAfterMsOfInactivity } = params;
 
     // this should set itself to false whenever the user had performed no user interaction for a certain amount of time
     const $isUserActive = createStatefulObservable(() => true);
 
     const scheduleSetInactive = () => {
         const timer = setTimeout(() => {
+            assert($isUserActive.current);
             $isUserActive.current = false;
-        }, timeWindowMs);
+        }, theUserIsConsideredInactiveAfterMsOfInactivity);
         return () => {
             clearTimeout(timer);
         };
@@ -19,11 +21,14 @@ export function create$isUserActive(params: { timeWindowMs: number }) {
     let clearScheduledSetInactive = scheduleSetInactive();
 
     const { unsubscribeFromUserInteraction } = subscribeToUserInteraction({
-        "timeResolution": 1_000,
+        "throttleMs": 1_000,
         "callback": () => {
             clearScheduledSetInactive();
             clearScheduledSetInactive = scheduleSetInactive();
-            $isUserActive.current = true;
+
+            if (!$isUserActive.current) {
+                $isUserActive.current = true;
+            }
         }
     });
 

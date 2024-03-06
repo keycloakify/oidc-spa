@@ -1,10 +1,14 @@
 import { Deferred } from "./Deferred";
 
-export function getPrUserInteraction(): Promise<void> {
+export function getPrUserInteraction() {
     const d = new Deferred<void>();
 
     const callback = () => {
         d.resolve();
+        cleanup();
+    };
+
+    const cleanup = () => {
         window.document.removeEventListener("mousemove", callback, false);
         window.document.removeEventListener("keydown", callback, false);
     };
@@ -12,5 +16,8 @@ export function getPrUserInteraction(): Promise<void> {
     window.document.addEventListener("mousemove", callback, false);
     window.document.addEventListener("keydown", callback, false);
 
-    return d.pr;
+    return {
+        "prUserInteraction": d.pr,
+        "cancelPrUserInteraction": cleanup
+    };
 }

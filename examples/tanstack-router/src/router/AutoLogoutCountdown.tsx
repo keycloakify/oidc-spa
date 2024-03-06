@@ -2,30 +2,35 @@ import { useState, useEffect } from "react";
 import { useOidc } from "oidc";
 
 export function AutoLogoutCountdown() {
-    const { isUserLoggedIn, enableAutoLogout } = useOidc();
-    const [secondsBeforeAutoLogout, setSecondsBeforeAutoLogout] = useState<number | undefined>(
-        undefined
+    const { isUserLoggedIn, subscribeToAutoLogoutCountdown } = useOidc();
+    const [secondsLeft, setSecondsLeft] = useState<number | undefined>(undefined);
+
+    useEffect(
+        () => {
+            if (!isUserLoggedIn) {
+                return;
+            }
+
+            const { unsubscribeFromAutoLogoutCountdown } = subscribeToAutoLogoutCountdown(
+                ({ secondsLeft }) =>
+                    setSecondsLeft(
+                        secondsLeft === undefined || secondsLeft > 60 ? undefined : secondsLeft
+                    )
+            );
+
+            return () => {
+                unsubscribeFromAutoLogoutCountdown();
+            };
+        },
+        // NOTE: These dependency array could very well be empty
+        // we're just making react-hooks/exhaustive-deps happy.
+        // Unless you're hot swapping the oidc context isUserLoggedIn
+        // and subscribeToAutoLogoutCountdown never change for the
+        // lifetime of the app.
+        [isUserLoggedIn, subscribeToAutoLogoutCountdown]
     );
 
-    useEffect(() => {
-        if (!isUserLoggedIn) {
-            return;
-        }
-
-        const { disableAutoLogout } = enableAutoLogout({
-            countdown: {
-                startTickAtSecondsLeft: 60,
-                tickCallback: ({ secondsLeft }) => setSecondsBeforeAutoLogout(secondsLeft),
-                onReset: () => setSecondsBeforeAutoLogout(undefined)
-            }
-        });
-
-        return () => {
-            disableAutoLogout();
-        };
-    }, [isUserLoggedIn, enableAutoLogout]);
-
-    if (secondsBeforeAutoLogout === undefined) {
+    if (secondsLeft === undefined) {
         return null;
     }
 
@@ -48,7 +53,7 @@ export function AutoLogoutCountdown() {
         >
             <div>
                 <p>Are you still there?</p>
-                <p>{secondsBeforeAutoLogout} seconds before automatic logout</p>
+                <p>{secondsLeft} seconds before automatic logout</p>
             </div>
         </div>
     );

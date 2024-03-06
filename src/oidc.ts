@@ -43,26 +43,9 @@ export declare namespace Oidc {
                     | { redirectTo: "home" | "current page" }
                     | { redirectTo: "specific url"; url: string }
             ) => Promise<never>;
-            enableAutoLogout: (params?: {
-                countdown?: {
-                    startTickAtSecondsLeft: number;
-                    tickCallback: (params: { secondsLeft: number }) => void;
-                    /**
-                     * Called when used moves when there was less than startTickAtSecondsLeft
-                     * seconds left before automatic logout.
-                     */
-                    onReset?: () => void;
-                };
-                /**
-                 * This parameter defines after how many seconds of inactivity the user should be
-                 * logged out automatically.
-                 *
-                 * WARNING: It should be configured on the identity server side
-                 * as it's the authoritative source for security policies and not the client.
-                 * If you don't provide this parameter it will be inferred from the refresh token expiration time.
-                 * */
-                __unsafe_ssoSessionIdleSeconds?: number;
-            }) => { disableAutoLogout: () => void };
+            subscribeToAutoLogoutCountdown: (
+                tickCallback: (params: { secondsLeft: number | undefined }) => void
+            ) => { unsubscribeFromAutoLogoutCountdown: () => void };
         };
 
     export type Tokens<DecodedIdToken extends Record<string, unknown> = Record<string, unknown>> =
@@ -143,9 +126,19 @@ export type ParamsOfCreateOidc<
      */
     publicUrl?: string;
     decodedIdTokenSchema?: { parse: (data: unknown) => DecodedIdToken };
+    /**
+     * This parameter defines after how many seconds of inactivity the user should be
+     * logged out automatically.
+     *
+     * WARNING: It should be configured on the identity server side
+     * as it's the authoritative source for security policies and not the client.
+     * If you don't provide this parameter it will be inferred from the refresh token expiration time.
+     * */
+    __unsafe_ssoSessionIdleSeconds?: number;
 };
 
 let $isUserActive: StatefulObservable<boolean> | undefined = undefined;
+const hotReloadCleanups = new Map<string, Set<() => void>>();
 
 /** @see: https://github.com/garronej/oidc-spa#option-1-usage-without-involving-the-ui-framework */
 export async function createOidc<
@@ -158,12 +151,9 @@ export async function createOidc<
         transformUrlBeforeRedirect = url => url,
         extraQueryParams: extraQueryParamsOrGetter,
         publicUrl: publicUrl_params,
-        decodedIdTokenSchema
+        decodedIdTokenSchema,
+        __unsafe_ssoSessionIdleSeconds
     } = params;
-
-    if ($isUserActive === undefined) {
-        $isUserActive = create$isUserActive({ "timeWindowMs": 30_000 }).$isUserActive;
-    }
 
     const getExtraQueryParams = (() => {
         if (typeof extraQueryParamsOrGetter === "function") {
@@ -190,6 +180,12 @@ export async function createOidc<
     })();
 
     const configHash = fnv1aHashToHex(`${issuerUri} ${clientId}`);
+
+    {
+        hotReloadCleanups.get(configHash)?.forEach(cleanup => cleanup());
+        hotReloadCleanups.set(configHash, new Set());
+    }
+
     const configHashKey = "configHash";
 
     const oidcClientTsUserManager = new OidcClientTsUserManager({
@@ -572,6 +568,10 @@ export async function createOidc<
 
     let currentTokens = initialTokens;
 
+    const autoLogoutCountdownTickCallback = new Set<
+        (params: { secondsLeft: number | undefined }) => void
+    >();
+
     const onTokenChanges = new Set<() => void>();
 
     const oidc = id<Oidc.LoggedIn<DecodedIdToken>>({
@@ -625,47 +625,15 @@ export async function createOidc<
                 }
             };
         },
-        "enableAutoLogout": (() => {
-            const refreshTokenLifespan = currentTokens.refreshTokenExpirationTime - Date.now();
+        "subscribeToAutoLogoutCountdown": tickCallback => {
+            autoLogoutCountdownTickCallback.add(tickCallback);
 
-            return ({ countdown, __unsafe_ssoSessionIdleSeconds } = {}) => {
-                const { startCountdown } = createStartCountdown({
-                    "msLeftWhenStartingCountdown":
-                        __unsafe_ssoSessionIdleSeconds ?? refreshTokenLifespan,
-                    "onReset": countdown?.onReset,
-                    "startTickAtSecondsLeft": countdown?.startTickAtSecondsLeft ?? 1,
-                    "tickCallback": ({ secondsLeft }) => {
-                        countdown?.tickCallback({ secondsLeft });
-
-                        if (secondsLeft === 0) {
-                            oidc.logout({ "redirectTo": "current page" });
-                        }
-                    }
-                });
-
-                let stopCountdown = startCountdown().stopCountdown;
-
-                assert($isUserActive !== undefined);
-
-                const { unsubscribe: unsubscribeRestartCountdown } = $isUserActive.subscribe(
-                    isUserActive => {
-                        if (!isUserActive) {
-                            return;
-                        }
-
-                        stopCountdown();
-                        stopCountdown = startCountdown().stopCountdown;
-                    }
-                );
-
-                const disableAutoLogout = () => {
-                    stopCountdown();
-                    unsubscribeRestartCountdown();
-                };
-
-                return { disableAutoLogout };
+            const unsubscribeFromAutoLogoutCountdown = () => {
+                autoLogoutCountdownTickCallback.delete(tickCallback);
             };
-        })()
+
+            return { unsubscribeFromAutoLogoutCountdown };
+        }
     });
 
     {
@@ -711,6 +679,49 @@ export async function createOidc<
                 scheduleRenew();
             });
         })();
+    }
+
+    {
+        const { startCountdown } = createStartCountdown({
+            "getCountdownEndTime": () =>
+                __unsafe_ssoSessionIdleSeconds ?? currentTokens.refreshTokenExpirationTime,
+            "tickCallback": ({ secondsLeft }) => {
+                autoLogoutCountdownTickCallback.forEach(tickCallback => tickCallback({ secondsLeft }));
+
+                if (secondsLeft === 0) {
+                    oidc.logout({ "redirectTo": "current page" });
+                }
+            }
+        });
+
+        let stopCountdown: (() => void) | undefined = undefined;
+
+        if ($isUserActive === undefined) {
+            $isUserActive = create$isUserActive({
+                "theUserIsConsideredInactiveAfterMsOfInactivity": 5_000
+            }).$isUserActive;
+        }
+
+        const { unsubscribe: unsubscribeFrom$isUserActive } = $isUserActive.subscribe(isUserActive => {
+            if (isUserActive) {
+                if (stopCountdown !== undefined) {
+                    stopCountdown();
+                    stopCountdown = undefined;
+                }
+            } else {
+                assert(stopCountdown === undefined);
+                stopCountdown = startCountdown().stopCountdown;
+            }
+        });
+
+        {
+            const hotReloadCleanupsForThisConfig = hotReloadCleanups.get(configHash);
+            assert(hotReloadCleanupsForThisConfig !== undefined);
+            hotReloadCleanupsForThisConfig.add(() => {
+                unsubscribeFrom$isUserActive();
+                stopCountdown?.();
+            });
+        }
     }
 
     return oidc;

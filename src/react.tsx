@@ -14,10 +14,11 @@ export namespace OidcReact {
     export type NotLoggedIn = Common & {
         isUserLoggedIn: false;
         login: Oidc.NotLoggedIn["login"];
+        initializationError: OidcInitializationError | undefined;
+
         oidcTokens?: never;
         logout?: never;
-        initializationError: OidcInitializationError | undefined;
-        enableAutoLogout?: never;
+        subscribeToAutoLogoutCountdown?: never;
     };
 
     export type LoggedIn<DecodedIdToken extends Record<string, unknown>> = Common & {
@@ -25,28 +26,12 @@ export namespace OidcReact {
         oidcTokens: Oidc.Tokens<DecodedIdToken>;
         logout: Oidc.LoggedIn["logout"];
         renewTokens: Oidc.LoggedIn["renewTokens"];
+        subscribeToAutoLogoutCountdown: (
+            tickCallback: (params: { secondsLeft: number | undefined }) => void
+        ) => { unsubscribeFromAutoLogoutCountdown: () => void };
+
         login?: never;
         initializationError?: never;
-        enableAutoLogout: (params?: {
-            countdown?: {
-                startTickAtSecondsLeft: number;
-                tickCallback: (params: { secondsLeft: number }) => void;
-                /**
-                 * Called when used moves when there was less than startTickAtSecondsLeft
-                 * seconds left before automatic logout.
-                 */
-                onReset?: () => void;
-            };
-            /**
-             * This parameter defines after how many seconds of inactivity the user should be
-             * logged out automatically.
-             *
-             * WARNING: It should be configured on the identity server side
-             * as it's the authoritative source for security policies and not the client.
-             * If you don't provide this parameter it will be inferred from the refresh token expiration time.
-             * */
-            __unsafe_ssoSessionIdleSeconds?: number;
-        }) => { disableAutoLogout: () => void };
     };
 }
 
@@ -182,7 +167,7 @@ export function createReactOidc<
                       oidcTokens,
                       "logout": oidc.logout,
                       "renewTokens": oidc.renewTokens,
-                      "enableAutoLogout": oidc.enableAutoLogout
+                      "subscribeToAutoLogoutCountdown": oidc.subscribeToAutoLogoutCountdown
                   })
               )
             : id<OidcReact.NotLoggedIn>({

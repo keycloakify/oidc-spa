@@ -1,26 +1,32 @@
 import { getPrUserInteraction } from "./getPrUserInteraction";
 
-export function subscribeToUserInteraction(params: { timeResolution: number; callback: () => void }) {
-    const { timeResolution } = params;
+export function subscribeToUserInteraction(params: { throttleMs: number; callback: () => void }) {
+    const { throttleMs } = params;
 
-    let timer: ReturnType<typeof setTimeout> | undefined = undefined;
+    const cleanups = new Set<() => void>();
 
     (async function callee() {
-        await getPrUserInteraction();
+        const { cancelPrUserInteraction, prUserInteraction } = getPrUserInteraction();
+
+        cleanups.add(cancelPrUserInteraction);
+
+        await prUserInteraction;
 
         params.callback();
 
         await new Promise<void>(resolve => {
-            timer = setTimeout(resolve, timeResolution);
+            const timer = setTimeout(resolve, throttleMs);
+            cleanups.add(() => {
+                clearTimeout(timer);
+            });
         });
 
+        cleanups.clear();
         callee();
     })();
 
     const unsubscribeFromUserInteraction = () => {
-        if (timer !== undefined) {
-            clearTimeout(timer);
-        }
+        cleanups.forEach(cleanup => cleanup());
     };
 
     return { unsubscribeFromUserInteraction };
