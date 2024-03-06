@@ -22,11 +22,20 @@ export const {
      * when the user is logged in.
      * What is actually inside the idToken is defined by the OIDC server
      * you are using.
-     * If you are not sure, you can copy the content of oidcTokens.idToken
-     * and paste it on https://jwt.io/ to see what is inside.
-     *
      * The usage of zod here is just an example, you can use any other schema
      * validation library or write your own validation function.
+     *
+     * Note that zod will strip out all the fields that are not defined in the
+     * schema, so to know exactly what is inside the idToken you can do:
+     * decodedIdTokenSchema: {
+     *   parse: (decodedIdToken)=> {
+     *     console.log(decodedIdToken);
+     *     return z.object({
+     *       sub: z.string(),
+     *       preferred_username: z.string()
+     *     }).parse(decodedIdToken);
+     *   }
+     * }
      *
      * If you want to specify the type of the decodedIdToken but do not care
      * about validating the shape of the decoded idToken at runtime you can
