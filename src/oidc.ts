@@ -7,7 +7,7 @@ import { fnv1aHashToHex } from "./tools/fnv1aHashToHex";
 import { Deferred } from "./tools/Deferred";
 import { decodeJwt } from "./tools/decodeJwt";
 import { getDownlinkAndRtt } from "./tools/getDownlinkAndRtt";
-import { create$isUserActive } from "./tools/create$isUserActive";
+import { createIsUserActive } from "./tools/createIsUserActive";
 import { createStartCountdown } from "./tools/startCountdown";
 import type { StatefulObservable } from "./tools/StatefulObservable";
 
@@ -697,7 +697,7 @@ export async function createOidc<
         let stopCountdown: (() => void) | undefined = undefined;
 
         if ($isUserActive === undefined) {
-            $isUserActive = create$isUserActive({
+            $isUserActive = createIsUserActive({
                 "theUserIsConsideredInactiveAfterMsOfInactivity": 5_000
             }).$isUserActive;
         }

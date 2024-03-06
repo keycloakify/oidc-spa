@@ -2,7 +2,7 @@ import { createStatefulObservable } from "./StatefulObservable";
 import { subscribeToUserInteraction } from "./subscribeToUserInteraction";
 import { assert } from "tsafe/assert";
 
-export function create$isUserActive(params: { theUserIsConsideredInactiveAfterMsOfInactivity: number }) {
+export function createIsUserActive(params: { theUserIsConsideredInactiveAfterMsOfInactivity: number }) {
     const { theUserIsConsideredInactiveAfterMsOfInactivity } = params;
 
     // this should set itself to false whenever the user had performed no user interaction for a certain amount of time
