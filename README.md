@@ -30,6 +30,7 @@ In straightforward terms, this library is ideal for those seeking to enable user
 -   🎓 Accessible to all skill levels; no need to be an OIDC expert.
 -   🛠️ Easy to set up; eliminates the need for creating special `/login` `/logout` routes.
 -   🎛️ Minimal API surface for ease of use.
+-   🕣 Easy implementation of auto logout. _Are you still there? You will be logged out in 10...9..._
 -   ✨ Robust yet optional React integration.
 -   📖 Comprehensive documentation and project examples: End-to-end solutions for authenticating your app.
 -   ✅ Best in class type safety: Enhanced API response types based on usage context.
