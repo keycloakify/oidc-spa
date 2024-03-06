@@ -9,6 +9,7 @@ import { decodeJwt } from "./tools/decodeJwt";
 import { getDownlinkAndRtt } from "./tools/getDownlinkAndRtt";
 import { create$isUserActive } from "./tools/create$isUserActive";
 import { createStartCountdown } from "./tools/startCountdown";
+import type { StatefulObservable } from "./tools/StatefulObservable";
 
 export declare type Oidc<DecodedIdToken extends Record<string, unknown> = Record<string, unknown>> =
     | Oidc.LoggedIn<DecodedIdToken>
@@ -144,6 +145,8 @@ export type ParamsOfCreateOidc<
     decodedIdTokenSchema?: { parse: (data: unknown) => DecodedIdToken };
 };
 
+let $isUserActive: StatefulObservable<boolean> | undefined = undefined;
+
 /** @see: https://github.com/garronej/oidc-spa#option-1-usage-without-involving-the-ui-framework */
 export async function createOidc<
     DecodedIdToken extends Record<string, unknown> = Record<string, unknown>
@@ -157,6 +160,10 @@ export async function createOidc<
         publicUrl: publicUrl_params,
         decodedIdTokenSchema
     } = params;
+
+    if ($isUserActive === undefined) {
+        $isUserActive = create$isUserActive({ "timeWindowMs": 30_000 }).$isUserActive;
+    }
 
     const getExtraQueryParams = (() => {
         if (typeof extraQueryParamsOrGetter === "function") {
@@ -619,15 +626,9 @@ export async function createOidc<
             };
         },
         "enableAutoLogout": (() => {
-            const { $isUserActive } = create$isUserActive({ "timeWindowMs": 30_000 });
-
             const refreshTokenLifespan = currentTokens.refreshTokenExpirationTime - Date.now();
 
             return ({ countdown, __unsafe_ssoSessionIdleSeconds } = {}) => {
-                const now = Date.now();
-
-                console.log("enableAutoLogout! " + now);
-
                 const { startCountdown } = createStartCountdown({
                     "msLeftWhenStartingCountdown":
                         __unsafe_ssoSessionIdleSeconds ?? refreshTokenLifespan,
@@ -644,6 +645,8 @@ export async function createOidc<
 
                 let stopCountdown = startCountdown().stopCountdown;
 
+                assert($isUserActive !== undefined);
+
                 const { unsubscribe: unsubscribeRestartCountdown } = $isUserActive.subscribe(
                     isUserActive => {
                         if (!isUserActive) {
@@ -656,8 +659,6 @@ export async function createOidc<
                 );
 
                 const disableAutoLogout = () => {
-                    console.log("disableAutoLogout! " + now);
-
                     stopCountdown();
                     unsubscribeRestartCountdown();
                 };
