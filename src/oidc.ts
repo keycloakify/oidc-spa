@@ -46,6 +46,14 @@ export declare namespace Oidc {
             subscribeToAutoLogoutCountdown: (
                 tickCallback: (params: { secondsLeft: number | undefined }) => void
             ) => { unsubscribeFromAutoLogoutCountdown: () => void };
+
+            /**
+             *
+             * backFromLoginPages: The user has returned from the identity server's login pages. The session was established using query parameters provided by the identity server.
+             * sessionStorageRestoration: The user just reloaded the page. An OIDC token stored in the session storage was used to restore the session.
+             * silentSignin: Silent Single Sign-On (SSO) was achieved by creating an iframe to the identity server in the background. HttpOnly cookies were utilized to restore the session without redirecting the user to the login pages.
+             */
+            loginScenario: "backFromLoginPages" | "sessionStorageRestoration" | "silentSignin";
         };
 
     export type Tokens<DecodedIdToken extends Record<string, unknown> = Record<string, unknown>> =
@@ -297,7 +305,7 @@ export async function createOidc<
         return new Promise<never>(() => {});
     };
 
-    const initialTokens = await (async function getUser() {
+    const resultOfLoginProcess = await (async function getUser() {
         read_successful_login_query_params: {
             let url = window.location.href;
 
@@ -351,7 +359,10 @@ export async function createOidc<
                 return undefined;
             }
 
-            return oidcClientTsUser;
+            return {
+                "loginScenario": "backFromLoginPages" as const,
+                oidcClientTsUser
+            };
         }
 
         restore_from_session: {
@@ -374,7 +385,10 @@ export async function createOidc<
                 return undefined;
             }
 
-            return oidcClientTsUser;
+            return {
+                "loginScenario": "sessionStorageRestoration" as const,
+                oidcClientTsUser
+            };
         }
 
         restore_from_http_only_cookie: {
@@ -489,15 +503,21 @@ export async function createOidc<
                 loginSuccessUrl
             );
 
-            return oidcClientTsUser;
+            return {
+                "loginScenario": "silentSignin" as const,
+                oidcClientTsUser
+            };
         }
 
         return undefined;
     })().then(
-        oidcClientTsUser => {
-            if (oidcClientTsUser === undefined) {
+        //oidcClientTsUser => {
+        result => {
+            if (result === undefined) {
                 return undefined;
             }
+
+            const { oidcClientTsUser, loginScenario } = result;
 
             const tokens = oidcClientTsUserToTokens({
                 oidcClientTsUser,
@@ -514,7 +534,7 @@ export async function createOidc<
                 );
             }
 
-            return tokens;
+            return { tokens, loginScenario };
         },
         error => {
             assert(error instanceof Error);
@@ -529,8 +549,8 @@ export async function createOidc<
         }
     };
 
-    if (initialTokens instanceof Error) {
-        const error = initialTokens;
+    if (resultOfLoginProcess instanceof Error) {
+        const error = resultOfLoginProcess;
 
         const initializationError =
             error instanceof OidcInitializationError
@@ -555,7 +575,7 @@ export async function createOidc<
         });
     }
 
-    if (initialTokens === undefined) {
+    if (resultOfLoginProcess === undefined) {
         startTrackingLastPublicRoute();
 
         return id<Oidc.NotLoggedIn>({
@@ -566,7 +586,7 @@ export async function createOidc<
         });
     }
 
-    let currentTokens = initialTokens;
+    let currentTokens = resultOfLoginProcess.tokens;
 
     const autoLogoutCountdownTickCallback = new Set<
         (params: { secondsLeft: number | undefined }) => void
@@ -633,7 +653,8 @@ export async function createOidc<
             };
 
             return { unsubscribeFromAutoLogoutCountdown };
-        }
+        },
+        "loginScenario": resultOfLoginProcess.loginScenario
     });
 
     {
