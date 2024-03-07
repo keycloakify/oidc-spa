@@ -588,7 +588,7 @@ export async function createOidc<
 
     let currentTokens = resultOfLoginProcess.tokens;
 
-    const autoLogoutCountdownTickCallback = new Set<
+    const autoLogoutCountdownTickCallbacks = new Set<
         (params: { secondsLeft: number | undefined }) => void
     >();
 
@@ -646,10 +646,10 @@ export async function createOidc<
             };
         },
         "subscribeToAutoLogoutCountdown": tickCallback => {
-            autoLogoutCountdownTickCallback.add(tickCallback);
+            autoLogoutCountdownTickCallbacks.add(tickCallback);
 
             const unsubscribeFromAutoLogoutCountdown = () => {
-                autoLogoutCountdownTickCallback.delete(tickCallback);
+                autoLogoutCountdownTickCallbacks.delete(tickCallback);
             };
 
             return { unsubscribeFromAutoLogoutCountdown };
@@ -707,7 +707,7 @@ export async function createOidc<
             "getCountdownEndTime": () =>
                 __unsafe_ssoSessionIdleSeconds ?? currentTokens.refreshTokenExpirationTime,
             "tickCallback": ({ secondsLeft }) => {
-                autoLogoutCountdownTickCallback.forEach(tickCallback => tickCallback({ secondsLeft }));
+                autoLogoutCountdownTickCallbacks.forEach(tickCallback => tickCallback({ secondsLeft }));
 
                 if (secondsLeft === 0) {
                     oidc.logout({ "redirectTo": "current page" });
