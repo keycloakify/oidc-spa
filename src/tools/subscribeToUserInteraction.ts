@@ -26,7 +26,7 @@ export function subscribeToUserInteraction(params: { throttleMs: number; callbac
     })();
 
     const unsubscribeFromUserInteraction = () => {
-        cleanups.forEach(cleanup => cleanup());
+        Array.from(cleanups).forEach(cleanup => cleanup());
     };
 
     return { unsubscribeFromUserInteraction };

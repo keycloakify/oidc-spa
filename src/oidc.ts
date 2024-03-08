@@ -190,7 +190,12 @@ export async function createOidc<
     const configHash = fnv1aHashToHex(`${issuerUri} ${clientId}`);
 
     {
-        hotReloadCleanups.get(configHash)?.forEach(cleanup => cleanup());
+        const cleanups = hotReloadCleanups.get(configHash);
+
+        if (cleanups !== undefined) {
+            Array.from(cleanups ?? []).forEach(cleanup => cleanup());
+        }
+
         hotReloadCleanups.set(configHash, new Set());
     }
 
@@ -634,7 +639,7 @@ export async function createOidc<
             // NOTE: We do that to preserve the cache and the object reference.
             Object.defineProperty(currentTokens, "decodedIdToken", decodedIdTokenPropertyDescriptor);
 
-            onTokenChanges.forEach(onTokenChange => onTokenChange());
+            Array.from(onTokenChanges).forEach(onTokenChange => onTokenChange());
         },
         "subscribeToTokensChange": onTokenChange => {
             onTokenChanges.add(onTokenChange);
@@ -707,7 +712,9 @@ export async function createOidc<
             "getCountdownEndTime": () =>
                 __unsafe_ssoSessionIdleSeconds ?? currentTokens.refreshTokenExpirationTime,
             "tickCallback": ({ secondsLeft }) => {
-                autoLogoutCountdownTickCallbacks.forEach(tickCallback => tickCallback({ secondsLeft }));
+                Array.from(autoLogoutCountdownTickCallbacks).forEach(tickCallback =>
+                    tickCallback({ secondsLeft })
+                );
 
                 if (secondsLeft === 0) {
                     oidc.logout({ "redirectTo": "current page" });
