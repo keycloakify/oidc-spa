@@ -45,9 +45,11 @@ We utilize `oidc-client-ts` internally but abstract away most of its intricacies
 
 ### [react-oidc-context](https://github.com/authts/react-oidc-context)
 
-Our library takes a modular approach to OIDC and React, treating them as separate concerns that don't necessarily have to be intertwined.  
-At its core, `oidc-spa` is a straightforward adapter that isn't tied to any specific UI framework, making it suitable for projects that enforce a strict separation of concerns between the core logic of the application and the UI.  
-Additionally, we provide adapters for React and starter projects for integration with `react-router-dom` or `@tanstack/react-router`.
+`react-oidc-context` is a React wrapper around `oidc-client-ts`.   
+`oidc-spa` also feature a carefully crafted React API that comes with example 
+integration with:  
+- [`react-router-dom`](https://docs.oidc-spa.dev/example-setups/react-router)  
+- [`@tanstack/react-router`](https://docs.oidc-spa.dev/example-setups/tanstack-router)  
 
 ### [keycloak-js](https://www.npmjs.com/package/keycloak-js)
 
