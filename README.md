@@ -45,11 +45,12 @@ We utilize `oidc-client-ts` internally but abstract away most of its intricacies
 
 ### [react-oidc-context](https://github.com/authts/react-oidc-context)
 
-`react-oidc-context` is a React wrapper around `oidc-client-ts`.   
-`oidc-spa` also feature a carefully crafted React API that comes with example 
-integration with:  
-- [`@tanstack/react-router`](https://docs.oidc-spa.dev/example-setups/tanstack-router)  
-- [`react-router-dom`](https://docs.oidc-spa.dev/example-setups/react-router)  
+`react-oidc-context` is a React wrapper around `oidc-client-ts`.  
+`oidc-spa` also feature a carefully crafted React API that comes with example
+integration with:
+
+-   [`@tanstack/react-router`](https://docs.oidc-spa.dev/example-setups/tanstack-router)
+-   [`react-router-dom`](https://docs.oidc-spa.dev/example-setups/react-router)
 
 ### [keycloak-js](https://www.npmjs.com/package/keycloak-js)
 
