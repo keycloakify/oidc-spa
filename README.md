@@ -48,8 +48,8 @@ We utilize `oidc-client-ts` internally but abstract away most of its intricacies
 `react-oidc-context` is a React wrapper around `oidc-client-ts`.   
 `oidc-spa` also feature a carefully crafted React API that comes with example 
 integration with:  
-- [`react-router-dom`](https://docs.oidc-spa.dev/example-setups/react-router)  
 - [`@tanstack/react-router`](https://docs.oidc-spa.dev/example-setups/tanstack-router)  
+- [`react-router-dom`](https://docs.oidc-spa.dev/example-setups/react-router)  
 
 ### [keycloak-js](https://www.npmjs.com/package/keycloak-js)
 
