@@ -62,7 +62,7 @@ Heads over to [the documentation website](https://docs.oidc-spa.dev) 📘!
 
 ## Showcases
 
-This library is powers the authentication of the following platforms:
+This library powers the authentication of the following platforms:
 
 ### Onyxia
 
