@@ -1,8 +1,9 @@
 import { useEffect, useState, createContext, useContext, useReducer, type ReactNode } from "react";
-import { createOidc, type ParamsOfCreateOidc, type Oidc, type OidcInitializationError } from "./oidc";
+import { createOidc, type ParamsOfCreateOidc, type Oidc, type OidcInitializationError } from "../oidc";
 import { assert } from "tsafe/assert";
 import { id } from "tsafe/id";
-import { useGuaranteedMemo } from "./tools/powerhooks/useGuaranteedMemo";
+import { useGuaranteedMemo } from "../tools/powerhooks/useGuaranteedMemo";
+import type { PromiseOrNot } from "../tools/PromiseOrNot";
 
 export type OidcReact<DecodedIdToken extends Record<string, unknown>> =
     | OidcReact.NotLoggedIn
@@ -38,18 +39,24 @@ export namespace OidcReact {
 const oidcContext = createContext<
     | {
           oidc: Oidc;
-          decodedIdTokenSchema: ParamsOfCreateOidc["decodedIdTokenSchema"];
+          decodedIdTokenSchema: { parse: (data: unknown) => Record<string, unknown> } | undefined;
       }
     | undefined
 >(undefined);
 
-/** @see: https://github.com/garronej/oidc-spa#option-2-usage-directly-within-react */
-export function createReactOidc<
-    DecodedIdToken extends Record<string, unknown> = Record<string, unknown>
->(params: ParamsOfCreateOidc<DecodedIdToken>) {
-    const prOidc = createOidc(params);
+export function createReactOidc_dependencyInjection<
+    DecodedIdToken extends Record<string, unknown>,
+    ParamsOfCreateOidc extends
+        | { decodedIdTokenSchema: { parse: (data: unknown) => DecodedIdToken } | undefined }
+        | {}
+>(
+    params: ParamsOfCreateOidc,
+    createOidc: (params: ParamsOfCreateOidc) => PromiseOrNot<Oidc<DecodedIdToken>>
+) {
+    const prOidc = Promise.resolve(createOidc(params));
 
-    const { decodedIdTokenSchema } = params;
+    const { decodedIdTokenSchema } =
+        "decodedIdTokenSchema" in params ? params : { "decodedIdTokenSchema": undefined };
 
     function OidcProvider(props: { fallback?: ReactNode; children: ReactNode }) {
         const { children, fallback } = props;
@@ -179,4 +186,11 @@ export function createReactOidc<
     }
 
     return { OidcProvider, useOidc, prOidc };
+}
+
+/** @see: https://github.com/garronej/oidc-spa#option-2-usage-directly-within-react */
+export function createReactOidc<
+    DecodedIdToken extends Record<string, unknown> = Record<string, unknown>
+>(params: ParamsOfCreateOidc<DecodedIdToken>) {
+    return createReactOidc_dependencyInjection(params, createOidc);
 }

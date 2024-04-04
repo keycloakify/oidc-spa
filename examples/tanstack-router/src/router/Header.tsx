@@ -3,6 +3,7 @@ import { useOidc } from "oidc";
 
 export function Header() {
     const { isUserLoggedIn, login, logout, oidcTokens, initializationError } = useOidc();
+
     return (
         <div
             style={{

@@ -11,8 +11,8 @@ export const {
     useOidc,
     prOidc
 } = createReactOidc({
-    clientId: import.meta.env.VITE_OIDC_CLIENT_ID,
     issuerUri: import.meta.env.VITE_OIDC_ISSUER,
+    clientId: import.meta.env.VITE_OIDC_CLIENT_ID,
     publicUrl: import.meta.env.BASE_URL,
     /**
      * This parameter is optional.
@@ -51,3 +51,41 @@ export const {
         preferred_username: z.string()
     })
 });
+
+// Using the mock adapter:
+// To use this, just remove the code above and uncomment the code below.
+// The mock oidc adapter will be enabled if the OIDC_ISSUER environment variable is not set.
+/*
+import { createReactOidc } from "oidc-spa/react";
+import { createMockReactOidc } from "oidc-spa/mock/react";
+import { z } from "zod";
+
+const decodedIdTokenSchema = z.object({
+    sub: z.string(),
+    preferred_username: z.string()
+});
+
+export const { OidcProvider, useOidc, prOidc } = (() => {
+    if (!import.meta.env.VITE_OIDC_ISSUER) {
+
+        const decodedIdToken: z.infer<typeof decodedIdTokenSchema> = {
+            sub: "123",
+            preferred_username: "john doe"
+        };
+
+        return createMockReactOidc({
+            isUserInitiallyLoggedIn: false,
+            mockedTokens: {
+                decodedIdToken
+            }
+        });
+    }
+
+    return createReactOidc({
+        issuerUri: import.meta.env.VITE_OIDC_ISSUER,
+        clientId: import.meta.env.VITE_OIDC_CLIENT_ID,
+        publicUrl: import.meta.env.BASE_URL,
+        decodedIdTokenSchema
+    });
+})();
+*/
