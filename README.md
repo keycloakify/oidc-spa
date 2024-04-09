@@ -1,6 +1,5 @@
 
-![oidc-spa](https://github.com/keycloakify/oidc-spa/assets/6702424/cf8febeb-dfa4-4862-bb8e-5e4a302d9edb)
-
+![oidc-spa](https://github.com/keycloakify/oidc-spa/assets/6702424/3375294c-cc31-4fc1-9fb5-1fcfa00423ba)
 
 <p align="center">
     <br>
