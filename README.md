@@ -1,4 +1,3 @@
-
 ![oidc-spa](https://github.com/keycloakify/oidc-spa/assets/6702424/3375294c-cc31-4fc1-9fb5-1fcfa00423ba)
 
 <p align="center">
@@ -21,8 +20,6 @@
   -
   <a href="https://docs.oidc-spa.dev">Documentation</a>
 </p>
-
-
 
 An OIDC client tailored for Single Page Applications, particularly suitable for [Vite](https://vitejs.dev/) projects.\
 This library is intended for scenarios such as integrating your application with [Keycloak](https://www.keycloak.org/). &#x20;
