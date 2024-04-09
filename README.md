@@ -1,8 +1,8 @@
+
+![oidc-spa](https://github.com/keycloakify/oidc-spa/assets/6702424/cf8febeb-dfa4-4862-bb8e-5e4a302d9edb)
+
+
 <p align="center">
-    <img src="https://github.com/garronej/oidc-spa/assets/6702424/6adde1f7-b7b6-4b1a-b48f-bd02095b99ea">  
-</p>
-<p align="center">
-    <i>Openidconnect client for Single Page Applications</i>
     <br>
     <br>
     <a href="https://github.com/garronej/oidc-spa/actions">
@@ -19,8 +19,12 @@
     </a>
 </p>
 <p align="center">
+  <a href="https://www.oidc-spa.dev">Home</a>
+  -
   <a href="https://docs.oidc-spa.dev">Documentation</a>
 </p>
+
+
 
 An OIDC client tailored for Single Page Applications, particularly suitable for [Vite](https://vitejs.dev/) projects.\
 This library is intended for scenarios such as integrating your application with [Keycloak](https://www.keycloak.org/). &#x20;
