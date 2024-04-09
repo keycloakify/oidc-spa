@@ -4,7 +4,6 @@
 
 <p align="center">
     <br>
-    <br>
     <a href="https://github.com/garronej/oidc-spa/actions">
       <img src="https://github.com/garronej/oidc-spa/actions/workflows/ci.yaml/badge.svg?branch=main">
     </a>
