@@ -6,7 +6,7 @@ import { createFileRoute } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/protected")({
     component: ProtectedPage,
-    loader: protectedRouteLoader
+    beforeLoad: protectedRouteLoader
 });
 
 function ProtectedPage() {
