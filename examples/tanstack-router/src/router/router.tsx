@@ -3,11 +3,11 @@ import { ProtectedPage } from "../pages/ProtectedPage";
 import { PublicPage } from "../pages/PublicPage";
 import { prOidc } from "oidc";
 
-import { RootRoute, Route, Router } from "@tanstack/react-router";
+import { createRootRoute, createRoute, createRouter } from "@tanstack/react-router";
 
-const rootRoute = new RootRoute({ component: Layout });
-const indexRoute = new Route({ getParentRoute: () => rootRoute, path: "/", component: PublicPage });
-const protectedRoute = new Route({
+const rootRoute = createRootRoute({ component: Layout });
+const indexRoute = createRoute({ getParentRoute: () => rootRoute, path: "/", component: PublicPage });
+const protectedRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: "protected",
     component: ProtectedPage,
@@ -16,7 +16,7 @@ const protectedRoute = new Route({
 
 const routeTree = rootRoute.addChildren([indexRoute, protectedRoute]);
 
-export const router = new Router({ routeTree });
+export const router = createRouter({ routeTree });
 
 declare module "@tanstack/react-router" {
     interface Register {
