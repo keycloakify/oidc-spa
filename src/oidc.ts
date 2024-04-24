@@ -520,7 +520,6 @@ export async function createOidc<
 
         return undefined;
     })().then(
-        //oidcClientTsUser => {
         result => {
             if (result === undefined) {
                 return undefined;
