@@ -163,6 +163,8 @@ export async function createOidc<
         __unsafe_ssoSessionIdleSeconds
     } = params;
 
+    console.log("Creating OIDC instance");
+
     const getExtraQueryParams = (() => {
         if (typeof extraQueryParamsOrGetter === "function") {
             return extraQueryParamsOrGetter;
@@ -187,13 +189,19 @@ export async function createOidc<
         ).replace(/\/$/, "");
     })();
 
+    console.log({ publicUrl });
+
     const configHash = fnv1aHashToHex(`${issuerUri} ${clientId}`);
 
     {
         const cleanups = hotReloadCleanups.get(configHash);
 
         if (cleanups !== undefined) {
-            Array.from(cleanups ?? []).forEach(cleanup => cleanup());
+            Array.from(cleanups ?? []).forEach(cleanup => {
+                console.log("Running cleanup");
+
+                return cleanup();
+            });
         }
 
         hotReloadCleanups.set(configHash, new Set());
@@ -230,17 +238,20 @@ export async function createOidc<
         doesCurrentHrefRequiresAuth,
         extraQueryParams
     }) => {
-        //NOTE: We know there is a extraQueryParameter option but it doesn't allow
-        // to control the encoding so we have to highjack global URL Class that is
-        // used internally by oidc-client-ts. It's save to do so since this is the
-        // last thing that will be done before the redirect.
+        console.log("Login here");
 
         if (hasLoginBeenCalled) {
+            console.log("Login has already been called, returning a promise that will never resolve.");
+
             return new Promise<never>(() => {});
         }
 
         hasLoginBeenCalled = true;
 
+        //NOTE: We know there is a extraQueryParameter option but it doesn't allow
+        // to control the encoding so we have to highjack global URL Class that is
+        // used internally by oidc-client-ts. It's save to do so since this is the
+        // last thing that will be done before the redirect.
         const URL_real = window.URL;
 
         function URL(...args: ConstructorParameters<typeof URL_real>) {
@@ -298,7 +309,16 @@ export async function createOidc<
                 }
             };
             document.addEventListener("visibilitychange", callback);
+        } else {
+            const callback = () => {
+                if (document.visibilityState === "visible") {
+                    console.log("Okay! We should reload here or reset has been called");
+                }
+            };
+            document.addEventListener("visibilitychange", callback);
         }
+
+        console.log("Before signinRedirect");
 
         await oidcClientTsUserManager.signinRedirect({
             redirect_uri,
@@ -307,6 +327,9 @@ export async function createOidc<
             // We want to that to redirect to the last public page.
             "redirectMethod": doesCurrentHrefRequiresAuth ? "replace" : "assign"
         });
+
+        console.log("After signinRedirect, we die here.");
+
         return new Promise<never>(() => {});
     };
 
