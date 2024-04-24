@@ -292,6 +292,8 @@ export async function createOidc<
 
                             url = transformUrlBeforeRedirect(url);
 
+                            Object.defineProperty(window, "URL", { "value": URL_real });
+
                             return url;
                         }
 
