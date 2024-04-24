@@ -1,3 +1,5 @@
+import { setTimeout, clearTimeout } from "worker-timers";
+
 export function createStartCountdown(params: {
     tickCallback: (params: { secondsLeft: number | undefined }) => void;
     getCountdownEndTime: () => number;

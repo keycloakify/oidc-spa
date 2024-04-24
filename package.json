@@ -46,7 +46,8 @@
     "dependencies": {
         "jwt-decode": "^3.1.2",
         "oidc-client-ts": "2.4.0",
-        "tsafe": "^1.6.5"
+        "tsafe": "^1.6.5",
+        "worker-timers": "^7.1.7"
     },
     "devDependencies": {
         "@types/node": "^20.2.1",

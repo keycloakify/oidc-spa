@@ -10,6 +10,7 @@ import { getDownlinkAndRtt } from "./tools/getDownlinkAndRtt";
 import { createIsUserActive } from "./tools/createIsUserActive";
 import { createStartCountdown } from "./tools/startCountdown";
 import type { StatefulObservable } from "./tools/StatefulObservable";
+import { setTimeout, clearTimeout } from "worker-timers";
 
 export declare type Oidc<DecodedIdToken extends Record<string, unknown> = Record<string, unknown>> =
     | Oidc.LoggedIn<DecodedIdToken>

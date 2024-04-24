@@ -1,4 +1,5 @@
 import { getPrUserInteraction } from "./getPrUserInteraction";
+import { clearTimeout, setTimeout } from "worker-timers";
 
 export function subscribeToUserInteraction(params: { throttleMs: number; callback: () => void }) {
     const { throttleMs } = params;
