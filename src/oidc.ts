@@ -148,6 +148,8 @@ export type ParamsOfCreateOidc<
 let $isUserActive: StatefulObservable<boolean> | undefined = undefined;
 const hotReloadCleanups = new Map<string, Set<() => void>>();
 
+const URL_real = window.URL;
+
 /** @see: https://github.com/garronej/oidc-spa#option-1-usage-without-involving-the-ui-framework */
 export async function createOidc<
     DecodedIdToken extends Record<string, unknown> = Record<string, unknown>
@@ -212,7 +214,6 @@ export async function createOidc<
         "silent_redirect_uri": `${publicUrl}/silent-sso.html?${configHashKey}=${configHash}`
     });
 
-    // NOTE: Only useful for Firefox, see note bellow.
     let lastPublicRoute: string | undefined = undefined;
 
     // NOTE: To call only if not logged in.
@@ -230,51 +231,11 @@ export async function createOidc<
         doesCurrentHrefRequiresAuth,
         extraQueryParams
     }) => {
-        //NOTE: We know there is a extraQueryParameter option but it doesn't allow
-        // to control the encoding so we have to highjack global URL Class that is
-        // used internally by oidc-client-ts. It's save to do so since this is the
-        // last thing that will be done before the redirect.
-
         if (hasLoginBeenCalled) {
             return new Promise<never>(() => {});
         }
 
         hasLoginBeenCalled = true;
-
-        const URL_real = window.URL;
-
-        function URL(...args: ConstructorParameters<typeof URL_real>) {
-            const urlInstance = new URL_real(...args);
-
-            return new Proxy(urlInstance, {
-                "get": (target, prop) => {
-                    if (prop === "href") {
-                        let url = urlInstance.href;
-
-                        Object.entries({
-                            ...getExtraQueryParams?.(),
-                            ...extraQueryParams
-                        }).forEach(
-                            ([name, value]) =>
-                                (url = addQueryParamToUrl({
-                                    url,
-                                    name,
-                                    value
-                                }).newUrl)
-                        );
-
-                        url = transformUrlBeforeRedirect(url);
-
-                        return url;
-                    }
-
-                    //@ts-expect-error
-                    return target[prop];
-                }
-            });
-        }
-
-        Object.defineProperty(window, "URL", { "value": URL });
 
         const { newUrl: redirect_uri } = addQueryParamToUrl({
             "url": window.location.href,
@@ -282,22 +243,65 @@ export async function createOidc<
             "value": configHash
         });
 
-        if (doesCurrentHrefRequiresAuth) {
-            // NOTE: In Firefox, when the user navigate back from the login page
-            // the state of the app is restored. We don't want that to happen,
-            // we want to redirect the user to the last public page.
+        // NOTE: This is for handling cases when user press the back button on the login pages.
+        // When the app is hosted on https (so not in dev mode) the browser will restore the state of the app
+        // instead of reloading the page.
+        {
             const callback = () => {
                 if (document.visibilityState === "visible") {
                     document.removeEventListener("visibilitychange", callback);
 
-                    if (lastPublicRoute !== undefined) {
-                        window.location.href = lastPublicRoute;
+                    if (doesCurrentHrefRequiresAuth) {
+                        if (lastPublicRoute !== undefined) {
+                            window.location.href = lastPublicRoute;
+                        } else {
+                            window.history.back();
+                        }
                     } else {
-                        window.history.back();
+                        hasLoginBeenCalled = false;
                     }
                 }
             };
             document.addEventListener("visibilitychange", callback);
+        }
+
+        //NOTE: We know there is a extraQueryParameter option but it doesn't allow
+        // to control the encoding so we have to highjack global URL Class that is
+        // used internally by oidc-client-ts. It's save to do so since this is the
+        // last thing that will be done before the redirect.
+        {
+            const URL = (...args: ConstructorParameters<typeof URL_real>) => {
+                const urlInstance = new URL_real(...args);
+
+                return new Proxy(urlInstance, {
+                    "get": (target, prop) => {
+                        if (prop === "href") {
+                            let url = urlInstance.href;
+
+                            Object.entries({
+                                ...getExtraQueryParams?.(),
+                                ...extraQueryParams
+                            }).forEach(
+                                ([name, value]) =>
+                                    (url = addQueryParamToUrl({
+                                        url,
+                                        name,
+                                        value
+                                    }).newUrl)
+                            );
+
+                            url = transformUrlBeforeRedirect(url);
+
+                            return url;
+                        }
+
+                        //@ts-expect-error
+                        return target[prop];
+                    }
+                });
+            };
+
+            Object.defineProperty(window, "URL", { "value": URL });
         }
 
         await oidcClientTsUserManager.signinRedirect({
