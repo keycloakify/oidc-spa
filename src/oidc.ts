@@ -678,7 +678,13 @@ export async function createOidc<
                 currentTokens.refreshTokenExpirationTime
             );
 
-            return tokenExpirationTime - Date.now();
+            return Math.min(
+                tokenExpirationTime - Date.now(),
+                // NOTE: We want to make sure we do not overflow the setTimeout
+                // that must be a 32 bit unsigned integer.
+                // This can happen if the tokenExpirationTime is more than 24.8 days in the future.
+                Math.pow(2, 31) - 1
+            );
         };
 
         (function scheduleRenew() {
