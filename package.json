@@ -13,8 +13,8 @@
         "format:check": "yarn _format --list-different",
         "link-in-app": "ts-node --skipProject scripts/link-in-app.ts",
         "start-react-router-example": "yarn build && ts-node --skipProject scripts/link-in-examples.ts && cd examples/react-router && rm -rf node_modules/.vite && yarn dev",
-        "start-tanstack-router-example": "yarn build && ts-node --skipProject scripts/link-in-examples.ts && cd examples/tanstack-router && yarn dev",
-        "start-tanstack-router-file-based-example": "yarn build && ts-node --skipProject scripts/link-in-examples.ts && cd examples/tanstack-router-file-based && yarn dev"
+        "start-tanstack-router-example": "yarn build && ts-node --skipProject scripts/link-in-examples.ts && cd examples/tanstack-router && rm -rf node_modules/.vite && yarn dev",
+        "start-tanstack-router-file-based-example": "yarn build && ts-node --skipProject scripts/link-in-examples.ts && cd examples/tanstack-router-file-based && rm -rf node_modules/.vite && yarn dev"
     },
     "main": "dist/index.js",
     "types": "dist/index.d.ts",
