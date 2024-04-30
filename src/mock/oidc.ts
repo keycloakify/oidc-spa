@@ -2,6 +2,7 @@ import type { Oidc } from "../oidc";
 import { retrieveQueryParamFromUrl, addQueryParamToUrl } from "../tools/urlQueryParams";
 import { id } from "tsafe/id";
 import { createObjectThatThrowsIfAccessed } from "../tools/createObjectThatThrowsIfAccessed";
+import { assert, type Equals } from "tsafe/assert";
 
 export type ParamsOfCreateMockOidc<
     DecodedIdToken extends Record<string, unknown> = Record<string, unknown>
@@ -9,6 +10,7 @@ export type ParamsOfCreateMockOidc<
     isUserInitiallyLoggedIn: boolean;
     mockedParams?: Partial<Oidc["params"]>;
     mockedTokens?: Partial<Oidc.Tokens<DecodedIdToken>>;
+    publicUrl?: string;
 };
 
 const urlParamName = "isUserLoggedIn";
@@ -16,7 +18,12 @@ const urlParamName = "isUserLoggedIn";
 export function createMockOidc<DecodedIdToken extends Record<string, unknown> = Record<string, unknown>>(
     params: ParamsOfCreateMockOidc<DecodedIdToken>
 ): Oidc<DecodedIdToken> {
-    const { isUserInitiallyLoggedIn, mockedParams = {}, mockedTokens = {} } = params;
+    const {
+        isUserInitiallyLoggedIn,
+        mockedParams = {},
+        mockedTokens = {},
+        publicUrl = window.location.origin
+    } = params;
 
     const isUserLoggedIn = (() => {
         const result = retrieveQueryParamFromUrl({
@@ -85,9 +92,19 @@ export function createMockOidc<DecodedIdToken extends Record<string, unknown> = 
         "subscribeToTokensChange": () => ({
             "unsubscribe": () => {}
         }),
-        "logout": () => {
+        "logout": params => {
             const { newUrl } = addQueryParamToUrl({
-                "url": window.location.href,
+                "url": (() => {
+                    switch (params.redirectTo) {
+                        case "current page":
+                            return window.location.href;
+                        case "home":
+                            return publicUrl;
+                        case "specific url":
+                            return params.url;
+                    }
+                    assert<Equals<typeof params, never>>(false);
+                })(),
                 "name": urlParamName,
                 "value": "false"
             });
