@@ -144,6 +144,8 @@ export type ParamsOfCreateOidc<
      * If you don't provide this parameter it will be inferred from the refresh token expiration time.
      * */
     __unsafe_ssoSessionIdleSeconds?: number;
+
+    autoLogoutParams?: Parameters<Oidc.LoggedIn<any>["logout"]>[0];
 };
 
 let $isUserActive: StatefulObservable<boolean> | undefined = undefined;
@@ -163,7 +165,8 @@ export async function createOidc<
         extraQueryParams: extraQueryParamsOrGetter,
         publicUrl: publicUrl_params,
         decodedIdTokenSchema,
-        __unsafe_ssoSessionIdleSeconds
+        __unsafe_ssoSessionIdleSeconds,
+        autoLogoutParams = { "redirectTo": "current page" }
     } = params;
 
     const getExtraQueryParams = (() => {
@@ -729,7 +732,7 @@ export async function createOidc<
                 );
 
                 if (secondsLeft === 0) {
-                    oidc.logout({ "redirectTo": "current page" });
+                    oidc.logout(autoLogoutParams);
                 }
             }
         });
