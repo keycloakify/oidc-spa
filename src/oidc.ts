@@ -621,7 +621,9 @@ export async function createOidc<
                         case "home":
                             return publicUrl;
                         case "specific url":
-                            return params.url;
+                            return params.url.startsWith("/")
+                                ? `${window.location.origin}${params.url}`
+                                : params.url;
                     }
                     assert<Equals<typeof params, never>>(false);
                 })()

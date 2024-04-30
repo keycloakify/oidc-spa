@@ -50,6 +50,9 @@ export const {
         sub: z.string(),
         preferred_username: z.string()
     })
+    //autoLogoutParams: { redirectTo: "current page" } // Default
+    //autoLogoutParams: { redirectTo: "home" }
+    //autoLogoutParams: { redirectTo: "specific url", url: "/a-page" }
 });
 
 // Using the mock adapter:
@@ -65,27 +68,24 @@ const decodedIdTokenSchema = z.object({
     preferred_username: z.string()
 });
 
-export const { OidcProvider, useOidc, prOidc } = (() => {
-    if (!import.meta.env.VITE_OIDC_ISSUER) {
+const publicUrl = import.meta.env.BASE_URL;
 
-        const decodedIdToken: z.infer<typeof decodedIdTokenSchema> = {
-            sub: "123",
-            preferred_username: "john doe"
-        };
-
-        return createMockReactOidc({
+export const { OidcProvider, useOidc, prOidc } =
+    !import.meta.env.VITE_OIDC_ISSUER ?
+        createMockReactOidc({
             isUserInitiallyLoggedIn: false,
+            publicUrl,
             mockedTokens: {
-                decodedIdToken
+                decodedIdToken: {
+                    sub: "123",
+                    preferred_username: "john doe"
+                } satisfies z.infer<typeof decodedIdTokenSchema>
             }
+        }) :
+        createReactOidc({
+            issuerUri: import.meta.env.VITE_OIDC_ISSUER,
+            clientId: import.meta.env.VITE_OIDC_CLIENT_ID,
+            publicUrl,
+            decodedIdTokenSchema
         });
-    }
-
-    return createReactOidc({
-        issuerUri: import.meta.env.VITE_OIDC_ISSUER,
-        clientId: import.meta.env.VITE_OIDC_CLIENT_ID,
-        publicUrl: import.meta.env.BASE_URL,
-        decodedIdTokenSchema
-    });
-})();
 */

@@ -22,7 +22,7 @@ export function createMockOidc<DecodedIdToken extends Record<string, unknown> = 
         isUserInitiallyLoggedIn,
         mockedParams = {},
         mockedTokens = {},
-        publicUrl = window.location.origin
+        publicUrl: publicUrl_params
     } = params;
 
     const isUserLoggedIn = (() => {
@@ -38,6 +38,18 @@ export function createMockOidc<DecodedIdToken extends Record<string, unknown> = 
         window.history.replaceState({}, "", result.newUrl);
 
         return result.value === "true";
+    })();
+
+    const publicUrl = (() => {
+        if (publicUrl_params === undefined) {
+            return window.location.origin;
+        }
+
+        return (
+            publicUrl_params.startsWith("http")
+                ? publicUrl_params
+                : `${window.location.origin}${publicUrl_params}`
+        ).replace(/\/$/, "");
     })();
 
     const common: Oidc.Common = {
@@ -101,7 +113,9 @@ export function createMockOidc<DecodedIdToken extends Record<string, unknown> = 
                         case "home":
                             return publicUrl;
                         case "specific url":
-                            return params.url;
+                            return params.url.startsWith("/")
+                                ? `${window.location.origin}${params.url}`
+                                : params.url;
                     }
                     assert<Equals<typeof params, never>>(false);
                 })(),
