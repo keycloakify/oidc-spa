@@ -75,10 +75,25 @@ export class OidcInitializationError extends Error {
         params:
             | {
                   type: "server down";
+                  issuerUri: string;
               }
             | {
                   type: "bad configuration";
-                  timeoutDelayMs: number;
+                  likelyCause:
+                      | {
+                            // Most likely redirect URIs or the client does not exist.
+                            type: "misconfigured OIDC client";
+                            clientId: string;
+                            timeoutDelayMs: number;
+                        }
+                      | {
+                            type: "not in Web Origins";
+                            clientId: string;
+                        }
+                      | {
+                            type: "silent-sso.html not reachable";
+                            silentSsoHtmlUrl: string;
+                        };
               }
             | {
                   type: "unknown";
@@ -89,12 +104,38 @@ export class OidcInitializationError extends Error {
             (() => {
                 switch (params.type) {
                     case "server down":
-                        return "The OIDC server is down";
+                        return [
+                            `The OIDC server seems to be down.`,
+                            `If you know it's not the case it means that the issuerUri: ${params.issuerUri} is incorrect.`,
+                            `If you are using Keycloak makes sure that the realm exists and that the url is well formed.\n`,
+                            `https://docs.oidc-spa.dev/resources/usage-with-keycloak`
+                        ].join(" ");
                     case "bad configuration":
-                        return `Bad configuration. Timed out after ${params.timeoutDelayMs}ms`;
+                        switch (params.likelyCause.type) {
+                            case "misconfigured OIDC client":
+                                return [
+                                    `The OIDC client ${params.likelyCause.clientId} seems to be misconfigured on your OIDC server.`,
+                                    `If you are using Keycloak you likely need to add "${location.origin}/*" to the list of Valid Redirect URIs`,
+                                    `in the ${params.likelyCause.clientId} client configuration.\n`,
+                                    `https://docs.oidc-spa.dev/resources/usage-with-keycloak`,
+                                    `Silent SSO timed out after ${params.likelyCause.timeoutDelayMs}ms.`
+                                ].join(" ");
+                            case "not in Web Origins":
+                                return [
+                                    `It seems that there is a CORS issue.`,
+                                    `If you are using Keycloak check the "Web Origins" option in your ${params.likelyCause.clientId} client configuration.`,
+                                    `You should probably add "${location.origin}/*" to the list.`
+                                ].join(" ");
+                            case "silent-sso.html not reachable":
+                                return [
+                                    `${params.likelyCause.silentSsoHtmlUrl} is not reachable. Make sure you've created the silent-sso.html file`,
+                                    `in your public directory. https://docs.oidc-spa.dev/documentation/installation`
+                                ].join(" ");
+                        }
                     case "unknown":
                         return params.cause.message;
                 }
+                assert<Equals<typeof params, never>>(false);
             })(),
             // @ts-expect-error
             { "cause": params.type === "unknown" ? params.cause : undefined }
@@ -207,6 +248,8 @@ export async function createOidc<
 
     const configHashKey = "configHash";
 
+    const silentSsoHtmlUrl = `${publicUrl}/silent-sso.html`;
+
     const oidcClientTsUserManager = new OidcClientTsUserManager({
         "authority": issuerUri,
         "client_id": clientId,
@@ -215,7 +258,7 @@ export async function createOidc<
         "response_type": "code",
         "scope": "openid profile",
         "automaticSilentRenew": false,
-        "silent_redirect_uri": `${publicUrl}/silent-sso.html?${configHashKey}=${configHash}`
+        "silent_redirect_uri": `${silentSsoHtmlUrl}?${configHashKey}=${configHash}`
     });
 
     let lastPublicRoute: string | undefined = undefined;
@@ -369,8 +412,24 @@ export async function createOidc<
 
             try {
                 oidcClientTsUser = await oidcClientTsUserManager.signinRedirectCallback(loginSuccessUrl);
-            } catch {
+            } catch (error) {
+                assert(error instanceof Error);
+
+                if (error.message === "Failed to fetch") {
+                    // If it's a fetch error here we know that the web server is not down and the login was successful,
+                    // we just where redirected from the login pages.
+                    // This means it's likely a "Web origins" misconfiguration.
+                    throw new OidcInitializationError({
+                        "type": "bad configuration",
+                        "likelyCause": {
+                            "type": "not in Web Origins",
+                            clientId
+                        }
+                    });
+                }
+
                 //NOTE: The user has likely pressed the back button just after logging in.
+                //UPDATE: I don't remember how to reproduce this case and I don't know if it's still relevant.
                 return undefined;
             }
 
@@ -394,7 +453,17 @@ export async function createOidc<
                 assert(error instanceof Error);
 
                 if (error.message === "Failed to fetch") {
-                    throw new OidcInitializationError({ "type": "server down" });
+                    // Here it could be web origins as well but it's less likely because
+                    // it would mean that there was once a valid configuration and it has been
+                    // changed to an invalid one before the token expired.
+                    // but the server is not necessarily down, the issuerUri could be wrong.
+                    // So the error that we return should be either "server down" if fetching the
+                    // well known configuration endpoint failed without returning any status code
+                    // or "bad configuration" if the endpoint returned a 404 or an other status code.
+                    throw new OidcInitializationError({
+                        "type": "server down",
+                        issuerUri
+                    });
                 }
 
                 return undefined;
@@ -428,16 +497,41 @@ export async function createOidc<
                 return Math.max(baseDelay, dynamicDelay);
             })();
 
-            const timeout = setTimeout(
-                () =>
+            const timeout = setTimeout(async () => {
+                const isSilentSsoHtmlReachable = await fetch(silentSsoHtmlUrl).then(
+                    response => response.ok,
+                    () => false
+                );
+
+                if (!isSilentSsoHtmlReachable) {
                     dLoginSuccessUrl.reject(
                         new OidcInitializationError({
                             "type": "bad configuration",
-                            timeoutDelayMs
+                            "likelyCause": {
+                                "type": "silent-sso.html not reachable",
+                                silentSsoHtmlUrl
+                            }
                         })
-                    ),
-                timeoutDelayMs
-            );
+                    );
+                    return;
+                }
+
+                // Here we know that the server is not down and that the issuer_uri is correct
+                // otherwise we would have had a fetch error when loading the iframe.
+                // So this means that it's very likely a OIDC client misconfiguration.
+                // It could also be a very slow network but this risk is mitigated by the fact that we check
+                // for the network speed to adjust the timeout delay.
+                dLoginSuccessUrl.reject(
+                    new OidcInitializationError({
+                        "type": "bad configuration",
+                        "likelyCause": {
+                            "type": "misconfigured OIDC client",
+                            clientId,
+                            timeoutDelayMs
+                        }
+                    })
+                );
+            }, timeoutDelayMs);
 
             const listener = (event: MessageEvent) => {
                 if (typeof event.data !== "string") {
@@ -504,7 +598,14 @@ export async function createOidc<
                     if (error.message === "Failed to fetch") {
                         clearTimeout(timeout);
 
-                        dLoginSuccessUrl.reject(new OidcInitializationError({ "type": "server down" }));
+                        // Here we know it's not web origin because it's not the token we are fetching
+                        // but just the well known configuration endpoint that is not subject to CORS.
+                        dLoginSuccessUrl.reject(
+                            new OidcInitializationError({
+                                "type": "server down",
+                                issuerUri
+                            })
+                        );
                     }
                 });
 
@@ -514,9 +615,28 @@ export async function createOidc<
                 break restore_from_http_only_cookie;
             }
 
-            const oidcClientTsUser = await oidcClientTsUserManager.signinRedirectCallback(
-                loginSuccessUrl
-            );
+            let oidcClientTsUser: OidcClientTsUser | undefined = undefined;
+
+            try {
+                oidcClientTsUser = await oidcClientTsUserManager.signinRedirectCallback(loginSuccessUrl);
+            } catch (error) {
+                assert(error instanceof Error);
+
+                if (error.message === "Failed to fetch") {
+                    // If we have a fetch error here. We know for sure that the server isn't down,
+                    // the silent sign-in was successful. We also know that the issuer_uri is correct.
+                    // so it's very likely the web origins that are misconfigured.
+                    throw new OidcInitializationError({
+                        "type": "bad configuration",
+                        "likelyCause": {
+                            "type": "not in Web Origins",
+                            clientId
+                        }
+                    });
+                }
+
+                throw error;
+            }
 
             return {
                 "loginScenario": "silentSignin" as const,
