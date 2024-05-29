@@ -124,7 +124,8 @@ export class OidcInitializationError extends Error {
                                 return [
                                     `It seems that there is a CORS issue.`,
                                     `If you are using Keycloak check the "Web Origins" option in your ${params.likelyCause.clientId} client configuration.`,
-                                    `You should probably add "${location.origin}/*" to the list.`
+                                    `You should probably add "${location.origin}/*" to the list.`,
+                                    `More info: https://docs.oidc-spa.dev/resources/usage-with-keycloak`
                                 ].join(" ");
                             case "silent-sso.html not reachable":
                                 return [
