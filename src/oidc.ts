@@ -529,7 +529,7 @@ export async function createOidc<
 
                         return (
                             content.split("\n").length < 20 &&
-                            content.includes("parent.postMessage(location.href, location.origin);")
+                            content.includes("parent.postMessage(location.href")
                         );
                     },
                     () => false
