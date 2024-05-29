@@ -401,15 +401,6 @@ export async function createOidc<
                 url = result.newUrl;
             }
 
-            if (missingMandatoryParams.length !== 0) {
-                throw new Error(
-                    [
-                        "After the login process the following mandatory OIDC query parameters where missing:",
-                        missingMandatoryParams.join(", ")
-                    ].join(" ")
-                );
-            }
-
             window.history.pushState(null, "", url);
 
             {
@@ -431,6 +422,15 @@ export async function createOidc<
                         ].join(" ")
                     );
                 }
+            }
+
+            if (missingMandatoryParams.length !== 0) {
+                throw new Error(
+                    [
+                        "After the login process the following mandatory OIDC query parameters where missing:",
+                        missingMandatoryParams.join(", ")
+                    ].join(" ")
+                );
             }
 
             let oidcClientTsUser: OidcClientTsUser | undefined = undefined;
