@@ -377,15 +377,9 @@ export async function createOidc<
                 url = result.newUrl;
             }
 
-            {
-                const result = retrieveQueryParamFromUrl({ "name": "error", url });
-
-                if (result.wasPresent) {
-                    throw new Error(`OIDC error: ${result.value}`);
-                }
-            }
-
             let loginSuccessUrl = "https://dummy.com";
+
+            let missingMandatoryParams: string[] = [];
 
             for (const name of paramsToRetrieveFromSuccessfulLogin) {
                 const result = retrieveQueryParamFromUrl({ name, url });
@@ -394,7 +388,8 @@ export async function createOidc<
                     if (name === "iss") {
                         continue;
                     }
-                    throw new Error(`Missing query param: ${name}`);
+                    missingMandatoryParams.push(name);
+                    continue;
                 }
 
                 loginSuccessUrl = addQueryParamToUrl({
@@ -406,7 +401,37 @@ export async function createOidc<
                 url = result.newUrl;
             }
 
+            if (missingMandatoryParams.length !== 0) {
+                throw new Error(
+                    [
+                        "After the login process the following mandatory OIDC query parameters where missing:",
+                        missingMandatoryParams.join(", ")
+                    ].join(" ")
+                );
+            }
+
             window.history.pushState(null, "", url);
+
+            {
+                const result = retrieveQueryParamFromUrl({ "name": "error", url });
+
+                if (result.wasPresent) {
+                    if (window !== top && result.value === "login_required") {
+                        // Here we are in an iframe, it's a bit hacky to suspend the process here but
+                        // it's a common case when the user of the lib forgot to create the silent-sso.html file.
+                        // In this case we want to let the timeout of the parent expire to provide the correct error message.
+                        // If we go on with execution of this it would still work but the user would get a misleading error message.
+                        return new Promise<never>(() => {});
+                    }
+
+                    throw new Error(
+                        [
+                            "The OIDC server responded with an error passed as query parameter after the login process",
+                            `this error is: ${result.value}`
+                        ].join(" ")
+                    );
+                }
+            }
 
             let oidcClientTsUser: OidcClientTsUser | undefined = undefined;
 
@@ -499,7 +524,14 @@ export async function createOidc<
 
             const timeout = setTimeout(async () => {
                 const isSilentSsoHtmlReachable = await fetch(silentSsoHtmlUrl).then(
-                    response => response.ok,
+                    async response => {
+                        const content = await response.text();
+
+                        return (
+                            content.split("\n").length < 20 &&
+                            content.includes("parent.postMessage(location.href, location.origin);")
+                        );
+                    },
                     () => false
                 );
 
@@ -570,6 +602,8 @@ export async function createOidc<
 
                 let loginSuccessUrl = "https://dummy.com";
 
+                const missingMandatoryParams: string[] = [];
+
                 for (const name of paramsToRetrieveFromSuccessfulLogin) {
                     const result = retrieveQueryParamFromUrl({ name, url });
 
@@ -577,7 +611,8 @@ export async function createOidc<
                         if (name === "iss") {
                             continue;
                         }
-                        throw new Error(`Missing query param: ${name}`);
+                        missingMandatoryParams.push(name);
+                        continue;
                     }
 
                     loginSuccessUrl = addQueryParamToUrl({
@@ -585,6 +620,18 @@ export async function createOidc<
                         "name": name,
                         "value": result.value
                     }).newUrl;
+                }
+
+                if (missingMandatoryParams.length !== 0) {
+                    dLoginSuccessUrl.reject(
+                        new Error(
+                            [
+                                "After the silent signin process the following mandatory OIDC query parameters where missing:",
+                                missingMandatoryParams.join(", ")
+                            ].join(" ")
+                        )
+                    );
+                    return;
                 }
 
                 dLoginSuccessUrl.resolve(loginSuccessUrl);
@@ -694,7 +741,9 @@ export async function createOidc<
                       "cause": error
                   });
 
-        console.error(`OIDC initialization error: ${initializationError.message}`);
+        console.error(
+            `OIDC initialization error of type "${initializationError.type}": ${initializationError.message}`
+        );
 
         startTrackingLastPublicRoute();
 
