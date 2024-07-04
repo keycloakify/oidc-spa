@@ -16,6 +16,12 @@
     </a>
 </p>
 <p align="center">
+  Check out our discord server!<br/>
+  <a href="https://discord.gg/mJdYJSdcm4">
+    <img src="https://dcbadge.limes.pink/api/server/kYFZG7fQmn"/>
+  </a>
+</p>
+<p align="center">
   <a href="https://www.oidc-spa.dev">Home</a>
   -
   <a href="https://docs.oidc-spa.dev">Documentation</a>
