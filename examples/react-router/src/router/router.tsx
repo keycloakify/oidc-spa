@@ -26,12 +26,10 @@ async function protectedRouteLoader({ request }: LoaderFunctionArgs) {
     const oidc = await prOidc;
 
     if (!oidc.isUserLoggedIn) {
-        // Replace the href without reloading the page.
-        // This is a way to make oidc-spa know where to redirect the user
-        // if the authentication process is successful.
-        history.pushState({}, "", request.url);
-
-        await oidc.login({ doesCurrentHrefRequiresAuth: true });
+        await oidc.login({
+            doesCurrentHrefRequiresAuth: true,
+            successRedirectUrl: request.url
+        });
 
         // Never here, the login method redirects the user to the identity provider.
     }

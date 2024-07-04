@@ -29,6 +29,13 @@ export declare namespace Oidc {
         login: (params: {
             doesCurrentHrefRequiresAuth: boolean;
             extraQueryParams?: Record<string, string>;
+            /**
+             * Where to redirect after successful login.
+             * Default: window.location.href (here)
+             *
+             * It does not need to include the origin, eg: "/dashboard"
+             */
+            successRedirectUrl?: string;
         }) => Promise<never>;
         initializationError: OidcInitializationError | undefined;
     };
@@ -277,7 +284,8 @@ export async function createOidc<
 
     const login: Oidc.NotLoggedIn["login"] = async ({
         doesCurrentHrefRequiresAuth,
-        extraQueryParams
+        extraQueryParams,
+        successRedirectUrl
     }) => {
         if (hasLoginBeenCalled) {
             return new Promise<never>(() => {});
@@ -286,7 +294,14 @@ export async function createOidc<
         hasLoginBeenCalled = true;
 
         const { newUrl: redirect_uri } = addQueryParamToUrl({
-            "url": window.location.href,
+            "url": (() => {
+                if (successRedirectUrl === undefined) {
+                    return window.location.href;
+                }
+                return successRedirectUrl.startsWith("/")
+                    ? `${window.location.origin}${successRedirectUrl}`
+                    : successRedirectUrl;
+            })(),
             "name": configHashKey,
             "value": configHash
         });
