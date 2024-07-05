@@ -273,7 +273,12 @@ export async function createOidc<
     const silentSsoKey = "oidcSpaSilentSso";
 
     silent_sso_polyfill: {
-        if (silentSso.hasDedicatedHtmlFile) {
+        if (
+            !retrieveQueryParamFromUrl({
+                "url": window.location.href,
+                "name": silentSsoKey
+            }).wasPresent
+        ) {
             break silent_sso_polyfill;
         }
 
@@ -288,13 +293,11 @@ export async function createOidc<
             }
         }
 
-        if (
-            !retrieveQueryParamFromUrl({
-                "url": window.location.href,
-                "name": silentSsoKey
-            }).wasPresent
-        ) {
-            break silent_sso_polyfill;
+        if (silentSso.hasDedicatedHtmlFile) {
+            // Here the user forget to create the silent-sso.html file or or the web server is not serving it correctly
+            // we shouldn't fall back to the SPA page.
+            // In this case we want to let the timeout of the parent expire to provide the correct error message.
+            await new Promise<never>(() => {});
         }
 
         parent.postMessage(location.href, location.origin);
@@ -483,14 +486,6 @@ export async function createOidc<
                 const result = retrieveQueryParamFromUrl({ "name": "error", url });
 
                 if (result.wasPresent) {
-                    if (window !== top && result.value === "login_required") {
-                        // Here we are in an iframe, it's a bit hacky to suspend the process here but
-                        // it's a common case when the user of the lib forgot to create the silent-sso.html file.
-                        // In this case we want to let the timeout of the parent expire to provide the correct error message.
-                        // If we go on with execution of this it would still work but the user would get a misleading error message.
-                        return new Promise<never>(() => {});
-                    }
-
                     throw new Error(
                         [
                             "The OIDC server responded with an error passed as query parameter after the login process",
