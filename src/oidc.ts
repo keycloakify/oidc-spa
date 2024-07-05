@@ -171,18 +171,21 @@ export type ParamsOfCreateOidc<
      */
     extraQueryParams?: Record<string, string> | (() => Record<string, string>);
     /**
-     * This parameter have to be provided if your App is not hosted at the origin of the subdomain.
-     * For example if your site is hosted by navigating to `https://www.example.com`
-     * you don't have to provide this parameter.
-     * On the other end if your site is hosted by navigating to `https://www.example.com/my-app`
-     * Then you want to set publicUrl to `/my-app`.
-     * If you are using Vite: `publicUrl: import.meta.env.BASE_URL`
-     * If you using Create React App: `publicUrl: process.env.PUBLIC_URL`
+     * This parameter is used to let oidc-spa knows where to find the silent-sso.html file
+     * and also to know what is the root path of your application so it can redirect to it after logout.
+     *   - `${publicUrl}/silent-sso.html` must return the `silent-sso.html` that you are supposed to have created in your `public/` directory.
+     *   - Navigating to publicUrl should redirect to the home of your App.
      *
-     * Be mindful that `${window.location.origin}${publicUrl}/silent-sso.html` must return the `silent-sso.html` that
-     * you are supposed to have created in your `public/` directory.
+     * What should you put in this parameter?
+     *   - Vite project:             `publicUrl: import.meta.env.BASE_URL`
+     *   - Create React App project: `publicUrl: process.env.PUBLIC_URL`
+     *   - Other:                    `publicUrl: "/"` (Usually, or `/my-app-name` if your app is not at the root of the domain)
+     *
+     * If you are in the rare case where it's not possible for you to create a `silent-sso.html` file easily accessible
+     * no problem you can just set: `publicUrl: undefined` but be aware that calling `logout({ redirectTo: "home" })` will
+     * throw an error. Use `logout({ redirectTo: "specific url", url: "/..." })` or `logout({ redirectTo: "current page" })` instead.
      */
-    publicUrl?: string;
+    publicUrl: string | undefined;
     decodedIdTokenSchema?: { parse: (data: unknown) => DecodedIdToken };
     /**
      * This parameter defines after how many seconds of inactivity the user should be
@@ -232,7 +235,7 @@ export async function createOidc<
 
     const publicUrl = (() => {
         if (publicUrl_params === undefined) {
-            return window.location.origin;
+            return undefined;
         }
 
         return (
@@ -256,7 +259,48 @@ export async function createOidc<
 
     const configHashKey = "configHash";
 
-    const silentSsoHtmlUrl = `${publicUrl}/silent-sso.html`;
+    const silentSso =
+        publicUrl === undefined
+            ? {
+                  "hasDedicatedHtmlFile": false,
+                  "redirectUri": window.location.href
+              }
+            : {
+                  "hasDedicatedHtmlFile": true,
+                  "redirectUri": `${publicUrl}/silent-sso.html`
+              };
+
+    const silentSsoKey = "oidcSpaSilentSso";
+
+    silent_sso_polyfill: {
+        if (silentSso.hasDedicatedHtmlFile) {
+            break silent_sso_polyfill;
+        }
+
+        {
+            const result = retrieveQueryParamFromUrl({
+                "url": window.location.href,
+                "name": configHashKey
+            });
+
+            if (!result.wasPresent || result.value !== configHash) {
+                break silent_sso_polyfill;
+            }
+        }
+
+        if (
+            !retrieveQueryParamFromUrl({
+                "url": window.location.href,
+                "name": silentSsoKey
+            }).wasPresent
+        ) {
+            break silent_sso_polyfill;
+        }
+
+        parent.postMessage(location.href, location.origin);
+
+        await new Promise<never>(() => {});
+    }
 
     const oidcClientTsUserManager = new OidcClientTsUserManager({
         "authority": issuerUri,
@@ -266,7 +310,23 @@ export async function createOidc<
         "response_type": "code",
         "scope": "openid profile",
         "automaticSilentRenew": false,
-        "silent_redirect_uri": `${silentSsoHtmlUrl}?${configHashKey}=${configHash}`
+        "silent_redirect_uri": (() => {
+            let { redirectUri } = silentSso;
+
+            redirectUri = addQueryParamToUrl({
+                "url": redirectUri,
+                "name": configHashKey,
+                "value": configHash
+            }).newUrl;
+
+            redirectUri = addQueryParamToUrl({
+                "url": redirectUri,
+                "name": silentSsoKey,
+                "value": "true"
+            }).newUrl;
+
+            return redirectUri;
+        })()
     });
 
     let lastPublicRoute: string | undefined = undefined;
@@ -539,25 +599,33 @@ export async function createOidc<
             })();
 
             const timeout = setTimeout(async () => {
-                const isSilentSsoHtmlReachable = await fetch(silentSsoHtmlUrl).then(
-                    async response => {
-                        const content = await response.text();
+                silent_sso_html_unreachable: {
+                    if (!silentSso.hasDedicatedHtmlFile) {
+                        break silent_sso_html_unreachable;
+                    }
 
-                        return (
-                            content.split("\n").length < 20 &&
-                            content.includes("parent.postMessage(location.href")
-                        );
-                    },
-                    () => false
-                );
+                    const isSilentSsoHtmlReachable = await fetch(silentSso.redirectUri).then(
+                        async response => {
+                            const content = await response.text();
 
-                if (!isSilentSsoHtmlReachable) {
+                            return (
+                                content.length < 250 &&
+                                content.includes("parent.postMessage(location.href")
+                            );
+                        },
+                        () => false
+                    );
+
+                    if (isSilentSsoHtmlReachable) {
+                        break silent_sso_html_unreachable;
+                    }
+
                     dLoginSuccessUrl.reject(
                         new OidcInitializationError({
                             "type": "bad configuration",
                             "likelyCause": {
                                 "type": "silent-sso.html not reachable",
-                                silentSsoHtmlUrl
+                                "silentSsoHtmlUrl": silentSso.redirectUri
                             }
                         })
                     );
