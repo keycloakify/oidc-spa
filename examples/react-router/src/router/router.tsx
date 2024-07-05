@@ -28,7 +28,7 @@ async function protectedRouteLoader({ request }: LoaderFunctionArgs) {
     if (!oidc.isUserLoggedIn) {
         await oidc.login({
             doesCurrentHrefRequiresAuth: true,
-            successRedirectUrl: request.url
+            redirectUrl: request.url
         });
 
         // Never here, the login method redirects the user to the identity provider.
