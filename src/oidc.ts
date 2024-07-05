@@ -181,9 +181,9 @@ export type ParamsOfCreateOidc<
      *   - Create React App project: `publicUrl: process.env.PUBLIC_URL`
      *   - Other:                    `publicUrl: "/"` (Usually, or `/my-app-name` if your app is not at the root of the domain)
      *
-     * If you are in the rare case where it's not possible for you to create a `silent-sso.html` file easily accessible
-     * no problem you can just set: `publicUrl: undefined` but be aware that calling `logout({ redirectTo: "home" })` will
-     * throw an error. Use `logout({ redirectTo: "specific url", url: "/..." })` or `logout({ redirectTo: "current page" })` instead.
+     * If you've opted out of using the `silent-sso.html` file you can set `publicUrl` to `undefined`.
+     * Just be aware that calling `logout({ redirectTo: "home" })` will throw an error.
+     * Use `logout({ redirectTo: "specific url", url: "/..." })` or `logout({ redirectTo: "current page" })` instead.
      */
     publicUrl: string | undefined;
     decodedIdTokenSchema?: { parse: (data: unknown) => DecodedIdToken };
@@ -862,11 +862,22 @@ export async function createOidc<
         "getTokens": () => currentTokens,
         "logout": async params => {
             await oidcClientTsUserManager.signoutRedirect({
-                "post_logout_redirect_uri": (() => {
+                "post_logout_redirect_uri": ((): string => {
                     switch (params.redirectTo) {
                         case "current page":
                             return window.location.href;
                         case "home":
+                            if (publicUrl === undefined) {
+                                throw new Error(
+                                    [
+                                        "Since you've opted out of the `silent-sso.html` file you are probably in a",
+                                        "setup a bit less standard. To avoid any confusion on where the users should be",
+                                        "redirected after logout please explicitly specify the url to redirect to.",
+                                        "With `logout({ redirectTo: 'specific url', url: '/my-home' })` or use",
+                                        "`logout({ redirectTo: 'current page' })` if you want to redirect to the current page."
+                                    ].join(" ")
+                                );
+                            }
                             return publicUrl;
                         case "specific url":
                             return params.url.startsWith("/")
