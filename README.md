@@ -2,8 +2,8 @@
 
 <p align="center">
     <br>
-    <a href="https://github.com/garronej/oidc-spa/actions">
-      <img src="https://github.com/garronej/oidc-spa/actions/workflows/ci.yaml/badge.svg?branch=main">
+    <a href="https://github.com/keycloakify/oidc-spa/actions">
+      <img src="https://github.com/keycloakify/oidc-spa/actions/workflows/ci.yaml/badge.svg?branch=main">
     </a>
     <a href="https://bundlephobia.com/package/oidc-spa">
       <img src="https://img.shields.io/bundlephobia/minzip/oidc-spa">
