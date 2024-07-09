@@ -986,7 +986,9 @@ export async function createOidc<
     {
         const { startCountdown } = createStartCountdown({
             "getCountdownEndTime": () =>
-                __unsafe_ssoSessionIdleSeconds ?? currentTokens.refreshTokenExpirationTime,
+                __unsafe_ssoSessionIdleSeconds !== undefined
+                    ? Date.now() + __unsafe_ssoSessionIdleSeconds * 1000
+                    : currentTokens.refreshTokenExpirationTime,
             "tickCallback": ({ secondsLeft }) => {
                 Array.from(autoLogoutCountdownTickCallbacks).forEach(tickCallback =>
                     tickCallback({ secondsLeft })
