@@ -125,9 +125,8 @@ export function createOidcReactApi_dependencyInjection<
                 <>
                     {ErrorFallback === undefined ? (
                         <h1 style={{ "color": "red" }}>
-                            {" "}
-                            An error occurred while initializing the OIDC client:{" "}
-                            {initializationError.message}{" "}
+                            An error occurred while initializing the OIDC client:&nbsp;
+                            {initializationError.message}
                         </h1>
                     ) : (
                         <ErrorFallback initializationError={initializationError} />
