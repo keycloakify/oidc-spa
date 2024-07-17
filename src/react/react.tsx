@@ -1,5 +1,5 @@
 import { useEffect, useState, createContext, useContext, useReducer, type ReactNode } from "react";
-import { createOidc, type ParamsOfCreateOidc, type Oidc, type OidcInitializationError } from "../oidc";
+import { createOidc, type ParamsOfCreateOidc, type Oidc, OidcInitializationError } from "../oidc";
 import { assert } from "tsafe/assert";
 import { id } from "tsafe/id";
 import { useGuaranteedMemo } from "../tools/powerhooks/useGuaranteedMemo";
@@ -44,35 +44,100 @@ const oidcContext = createContext<
     | undefined
 >(undefined);
 
-export function createReactOidc_dependencyInjection<
+type OidcReactApi<
     DecodedIdToken extends Record<string, unknown>,
-    ParamsOfCreateOidc extends
-        | { decodedIdTokenSchema: { parse: (data: unknown) => DecodedIdToken } | undefined }
+    IsAuthRequiredOnEveryPages extends boolean
+> = {
+    // TODO: Error fallback when auth required on every pages.
+    OidcProvider: IsAuthRequiredOnEveryPages extends true
+        ? (props: { fallback?: ReactNode; children: ReactNode }) => JSX.Element
+        : (props: {
+              fallback?: ReactNode;
+              ErrorFallback?: (props: { initializationError: OidcInitializationError }) => ReactNode;
+              children: ReactNode;
+          }) => JSX.Element;
+    useOidc: IsAuthRequiredOnEveryPages extends true
+        ? {
+              (params?: { assertUserLoggedIn: true }): OidcReact.LoggedIn<DecodedIdToken>;
+          }
+        : {
+              (params?: { assertUserLoggedIn: false }): OidcReact<DecodedIdToken>;
+              (params: { assertUserLoggedIn: true }): OidcReact<DecodedIdToken>;
+          };
+    prOidc: Promise<
+        IsAuthRequiredOnEveryPages extends true ? Oidc.LoggedIn<DecodedIdToken> : Oidc<DecodedIdToken>
+    >;
+};
+
+export function createOidcReactApi_dependencyInjection<
+    DecodedIdToken extends Record<string, unknown>,
+    ParamsOfCreateOidc extends {
+        isAuthRequiredOnEveryPages?: boolean;
+    } & (
+        | {
+              decodedIdTokenSchema: { parse: (data: unknown) => DecodedIdToken } | undefined;
+          }
         | {}
+    )
 >(
     params: ParamsOfCreateOidc,
     createOidc: (params: ParamsOfCreateOidc) => PromiseOrNot<Oidc<DecodedIdToken>>
-) {
-    const prOidc = Promise.resolve(createOidc(params));
+): OidcReactApi<
+    DecodedIdToken,
+    ParamsOfCreateOidc extends { isAuthRequiredOnEveryPages: boolean }
+        ? ParamsOfCreateOidc["isAuthRequiredOnEveryPages"]
+        : false
+> {
+    const prOidc = Promise.resolve(createOidc(params)).catch(error => {
+        if (!(error instanceof OidcInitializationError)) {
+            throw error;
+        }
+
+        return error;
+    });
 
     const { decodedIdTokenSchema } =
         "decodedIdTokenSchema" in params ? params : { "decodedIdTokenSchema": undefined };
 
-    function OidcProvider(props: { fallback?: ReactNode; children: ReactNode }) {
-        const { children, fallback } = props;
+    function OidcProvider(props: {
+        fallback?: ReactNode;
+        ErrorFallback?: (props: { initializationError: OidcInitializationError }) => ReactNode;
+        children: ReactNode;
+    }) {
+        const { fallback, ErrorFallback, children } = props;
 
-        const [oidc, setOidc] = useState<Oidc | undefined>(undefined);
+        const [oidcOrInitializationError, setOidcOrInitializationError] = useState<
+            Oidc | OidcInitializationError | undefined
+        >(undefined);
 
         useEffect(() => {
-            prOidc.then(setOidc);
+            prOidc.then(setOidcOrInitializationError);
         }, []);
 
-        if (oidc === undefined) {
+        if (oidcOrInitializationError === undefined) {
             return <>{fallback === undefined ? null : fallback}</>;
         }
 
+        if (oidcOrInitializationError instanceof OidcInitializationError) {
+            const initializationError = oidcOrInitializationError;
+
+            return (
+                <>
+                    {ErrorFallback === undefined ? (
+                        <h1 style={{ "color": "red" }}>
+                            {" "}
+                            An error occurred while initializing the OIDC client:{" "}
+                            {initializationError.message}{" "}
+                        </h1>
+                    ) : (
+                        <ErrorFallback initializationError={initializationError} />
+                    )}
+                </>
+            );
+        }
+
         return (
-            <oidcContext.Provider value={{ oidc, decodedIdTokenSchema }}>
+            <oidcContext.Provider value={{ oidc: oidcOrInitializationError, decodedIdTokenSchema }}>
                 {children}
             </oidcContext.Provider>
         );
@@ -185,12 +250,19 @@ export function createReactOidc_dependencyInjection<
               });
     }
 
-    return { OidcProvider, useOidc, prOidc };
+    return {
+        OidcProvider,
+        // @ts-expect-error: We know what we are doing
+        useOidc,
+        // @ts-expect-error: We know what we are doing
+        prOidc
+    };
 }
 
-/** @see: https://github.com/garronej/oidc-spa#option-2-usage-directly-within-react */
+/** @see: https://docs.oidc-spa.dev/documentation/usage#react-api */
 export function createReactOidc<
-    DecodedIdToken extends Record<string, unknown> = Record<string, unknown>
->(params: ParamsOfCreateOidc<DecodedIdToken>) {
-    return createReactOidc_dependencyInjection(params, createOidc);
+    DecodedIdToken extends Record<string, unknown> = Record<string, unknown>,
+    IsAuthRequiredOnEveryPages extends boolean = false
+>(params: ParamsOfCreateOidc<DecodedIdToken, IsAuthRequiredOnEveryPages>) {
+    return createOidcReactApi_dependencyInjection(params, createOidc);
 }

@@ -156,11 +156,15 @@ export class OidcInitializationError extends Error {
 const paramsToRetrieveFromSuccessfulLogin = ["code", "state", "session_state", "iss"] as const;
 
 export type ParamsOfCreateOidc<
-    DecodedIdToken extends Record<string, unknown> = Record<string, unknown>
+    DecodedIdToken extends Record<string, unknown> = Record<string, unknown>,
+    IsAuthRequiredOnEveryPages extends boolean = false
 > = {
     issuerUri: string;
     clientId: string;
     clientSecret?: string;
+    /**
+     * Transform the url before redirecting to the login pages.
+     */
     transformUrlBeforeRedirect?: (url: string) => string;
     /**
      * Extra query params to be added on the login url.
@@ -168,8 +172,19 @@ export type ParamsOfCreateOidc<
      * when login() is called.
      *
      * Example: extraQueryParams: ()=> ({ ui_locales: "fr" })
+     *
+     * This parameter can also be passed to login() directly.
      */
     extraQueryParams?: Record<string, string> | (() => Record<string, string>);
+    /**
+     * Where to redirect after successful login.
+     * Default: window.location.href (here)
+     *
+     * It does not need to include the origin, eg: "/dashboard"
+     *
+     * This parameter can also be passed to login() directly as `redirectUrl`.
+     */
+    postLoginRedirectUrl?: string;
     /**
      * This parameter is used to let oidc-spa knows where to find the silent-sso.html file
      * and also to know what is the root path of your application so it can redirect to it after logout.
@@ -198,6 +213,7 @@ export type ParamsOfCreateOidc<
     __unsafe_ssoSessionIdleSeconds?: number;
 
     autoLogoutParams?: Parameters<Oidc.LoggedIn<any>["logout"]>[0];
+    isAuthRequiredOnEveryPages?: IsAuthRequiredOnEveryPages;
 };
 
 let $isUserActive: StatefulObservable<boolean> | undefined = undefined;
@@ -207,8 +223,13 @@ const URL_real = window.URL;
 
 /** @see: https://github.com/garronej/oidc-spa#option-1-usage-without-involving-the-ui-framework */
 export async function createOidc<
-    DecodedIdToken extends Record<string, unknown> = Record<string, unknown>
->(params: ParamsOfCreateOidc<DecodedIdToken>): Promise<Oidc<DecodedIdToken>> {
+    DecodedIdToken extends Record<string, unknown> = Record<string, unknown>,
+    IsAuthRequiredOnEveryPages extends boolean = false
+>(
+    params: ParamsOfCreateOidc<DecodedIdToken, IsAuthRequiredOnEveryPages>
+): Promise<
+    IsAuthRequiredOnEveryPages extends true ? Oidc.LoggedIn<DecodedIdToken> : Oidc<DecodedIdToken>
+> {
     const {
         issuerUri,
         clientId,
@@ -218,7 +239,9 @@ export async function createOidc<
         publicUrl: publicUrl_params,
         decodedIdTokenSchema,
         __unsafe_ssoSessionIdleSeconds,
-        autoLogoutParams = { "redirectTo": "current page" }
+        autoLogoutParams = { "redirectTo": "current page" },
+        isAuthRequiredOnEveryPages = false,
+        postLoginRedirectUrl
     } = params;
 
     const getExtraQueryParams = (() => {
@@ -820,13 +843,17 @@ export async function createOidc<
                       "cause": error
                   });
 
+        if (isAuthRequiredOnEveryPages) {
+            throw initializationError;
+        }
+
         console.error(
             `OIDC initialization error of type "${initializationError.type}": ${initializationError.message}`
         );
 
         startTrackingLastPublicRoute();
 
-        return id<Oidc.NotLoggedIn>({
+        const oidc = id<Oidc.NotLoggedIn>({
             ...common,
             "isUserLoggedIn": false,
             "login": async () => {
@@ -835,17 +862,30 @@ export async function createOidc<
             },
             initializationError
         });
+
+        // @ts-expect-error: We know what we are doing.
+        return oidc;
     }
 
     if (resultOfLoginProcess === undefined) {
+        if (isAuthRequiredOnEveryPages) {
+            await login({
+                "doesCurrentHrefRequiresAuth": true,
+                "redirectUrl": postLoginRedirectUrl
+            });
+        }
+
         startTrackingLastPublicRoute();
 
-        return id<Oidc.NotLoggedIn>({
+        const oidc = id<Oidc.NotLoggedIn>({
             ...common,
             "isUserLoggedIn": false,
             login,
             "initializationError": undefined
         });
+
+        // @ts-expect-error: We know what we are doing.
+        return oidc;
     }
 
     let currentTokens = resultOfLoginProcess.tokens;

@@ -5,24 +5,32 @@ import { createObjectThatThrowsIfAccessed } from "../tools/createObjectThatThrow
 import { assert, type Equals } from "tsafe/assert";
 
 export type ParamsOfCreateMockOidc<
-    DecodedIdToken extends Record<string, unknown> = Record<string, unknown>
+    DecodedIdToken extends Record<string, unknown> = Record<string, unknown>,
+    IsAuthRequiredOnEveryPages extends boolean = false
 > = {
     isUserInitiallyLoggedIn: boolean;
     mockedParams?: Partial<Oidc["params"]>;
     mockedTokens?: Partial<Oidc.Tokens<DecodedIdToken>>;
     publicUrl?: string;
+    isAuthRequiredOnEveryPages?: IsAuthRequiredOnEveryPages;
+    postLoginRedirectUrl?: string;
 };
 
 const urlParamName = "isUserLoggedIn";
 
-export function createMockOidc<DecodedIdToken extends Record<string, unknown> = Record<string, unknown>>(
-    params: ParamsOfCreateMockOidc<DecodedIdToken>
-): Oidc<DecodedIdToken> {
+export function createMockOidc<
+    DecodedIdToken extends Record<string, unknown> = Record<string, unknown>,
+    IsAuthRequiredOnEveryPages extends boolean = false
+>(
+    params: ParamsOfCreateMockOidc<DecodedIdToken, IsAuthRequiredOnEveryPages>
+): IsAuthRequiredOnEveryPages extends true ? Oidc.LoggedIn<DecodedIdToken> : Oidc<DecodedIdToken> {
     const {
         isUserInitiallyLoggedIn,
         mockedParams = {},
         mockedTokens = {},
-        publicUrl: publicUrl_params
+        publicUrl: publicUrl_params,
+        isAuthRequiredOnEveryPages = false,
+        postLoginRedirectUrl
     } = params;
 
     const isUserLoggedIn = (() => {
@@ -60,12 +68,19 @@ export function createMockOidc<DecodedIdToken extends Record<string, unknown> = 
     };
 
     if (!isUserLoggedIn) {
-        return id<Oidc.NotLoggedIn>({
+        const oidc = id<Oidc.NotLoggedIn>({
             ...common,
             "isUserLoggedIn": false,
-            "login": async () => {
+            "login": async ({ redirectUrl }) => {
                 const { newUrl } = addQueryParamToUrl({
-                    "url": window.location.href,
+                    "url": (() => {
+                        if (redirectUrl === undefined) {
+                            return window.location.href;
+                        }
+                        return redirectUrl.startsWith("/")
+                            ? `${window.location.origin}${redirectUrl}`
+                            : redirectUrl;
+                    })(),
                     "name": urlParamName,
                     "value": "true"
                 });
@@ -76,6 +91,15 @@ export function createMockOidc<DecodedIdToken extends Record<string, unknown> = 
             },
             "initializationError": undefined
         });
+        if (!isAuthRequiredOnEveryPages) {
+            oidc.login({
+                "redirectUrl": postLoginRedirectUrl,
+                "doesCurrentHrefRequiresAuth": true
+            });
+            assert(false);
+        }
+        // @ts-expect-error: We know what we are doing
+        return oidc;
     }
 
     return id<Oidc.LoggedIn<DecodedIdToken>>({
