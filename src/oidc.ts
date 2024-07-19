@@ -92,6 +92,7 @@ export class OidcInitializationError extends Error {
                             type: "misconfigured OIDC client";
                             clientId: string;
                             timeoutDelayMs: number;
+                            publicUrl: string | undefined;
                         }
                       | {
                             type: "not in Web Origins";
@@ -100,6 +101,13 @@ export class OidcInitializationError extends Error {
                       | {
                             type: "silent-sso.html not reachable";
                             silentSsoHtmlUrl: string;
+                        }
+                      | {
+                            type: "frame-ancestors none";
+                            silentSso: {
+                                hasDedicatedHtmlFile: boolean;
+                                redirectUri: string;
+                            };
                         };
               }
             | {
@@ -122,7 +130,9 @@ export class OidcInitializationError extends Error {
                             case "misconfigured OIDC client":
                                 return [
                                     `The OIDC client ${params.likelyCause.clientId} seems to be misconfigured on your OIDC server.`,
-                                    `If you are using Keycloak you likely need to add "${location.origin}/*" to the list of Valid Redirect URIs`,
+                                    `If you are using Keycloak you likely need to add "${
+                                        params.likelyCause.publicUrl ?? window.location.origin
+                                    }/*" to the list of Valid Redirect URIs`,
                                     `in the ${params.likelyCause.clientId} client configuration.\n`,
                                     `More info: https://docs.oidc-spa.dev/resources/usage-with-keycloak`,
                                     `Silent SSO timed out after ${params.likelyCause.timeoutDelayMs}ms.`
@@ -138,6 +148,24 @@ export class OidcInitializationError extends Error {
                                 return [
                                     `${params.likelyCause.silentSsoHtmlUrl} is not reachable. Make sure you've created the silent-sso.html file`,
                                     `in your public directory. More info: https://docs.oidc-spa.dev/documentation/installation`
+                                ].join(" ");
+                            case "frame-ancestors none":
+                                return [
+                                    params.likelyCause.silentSso.hasDedicatedHtmlFile
+                                        ? `The silent-sso.html file, `
+                                        : `The URI used for Silent SSO, `,
+                                    `${params.likelyCause.silentSso.redirectUri}, `,
+                                    "is served by your web server with the HTTP header `Content-Security-Policy: frame-ancestors none` in the response.\n",
+                                    "This header prevents the silent sign-in process from working.\n",
+                                    "To fix this issue, you should configure your web server to not send this header or to use `frame-ancestors self` instead of `frame-ancestors none`.\n",
+                                    "If you use Nginx, you can replace:\n",
+                                    `add_header Content-Security-Policy "frame-ancestors 'none'";\n`,
+                                    "with:\n",
+                                    `map $uri $add_content_security_policy {\n`,
+                                    `   "~*silent-sso\.html$" "frame-ancestors 'self'";\n`,
+                                    `   default "frame-ancestors 'none'";\n`,
+                                    `}\n`,
+                                    `add_header Content-Security-Policy $add_content_security_policy;\n`
                                 ].join(" ");
                         }
                     case "unknown":
@@ -156,11 +184,15 @@ export class OidcInitializationError extends Error {
 const paramsToRetrieveFromSuccessfulLogin = ["code", "state", "session_state", "iss"] as const;
 
 export type ParamsOfCreateOidc<
-    DecodedIdToken extends Record<string, unknown> = Record<string, unknown>
+    DecodedIdToken extends Record<string, unknown> = Record<string, unknown>,
+    IsAuthRequiredOnEveryPages extends boolean = false
 > = {
     issuerUri: string;
     clientId: string;
     clientSecret?: string;
+    /**
+     * Transform the url before redirecting to the login pages.
+     */
     transformUrlBeforeRedirect?: (url: string) => string;
     /**
      * Extra query params to be added on the login url.
@@ -168,8 +200,19 @@ export type ParamsOfCreateOidc<
      * when login() is called.
      *
      * Example: extraQueryParams: ()=> ({ ui_locales: "fr" })
+     *
+     * This parameter can also be passed to login() directly.
      */
     extraQueryParams?: Record<string, string> | (() => Record<string, string>);
+    /**
+     * Where to redirect after successful login.
+     * Default: window.location.href (here)
+     *
+     * It does not need to include the origin, eg: "/dashboard"
+     *
+     * This parameter can also be passed to login() directly as `redirectUrl`.
+     */
+    postLoginRedirectUrl?: string;
     /**
      * This parameter is used to let oidc-spa knows where to find the silent-sso.html file
      * and also to know what is the root path of your application so it can redirect to it after logout.
@@ -198,6 +241,7 @@ export type ParamsOfCreateOidc<
     __unsafe_ssoSessionIdleSeconds?: number;
 
     autoLogoutParams?: Parameters<Oidc.LoggedIn<any>["logout"]>[0];
+    isAuthRequiredOnEveryPages?: IsAuthRequiredOnEveryPages;
 };
 
 let $isUserActive: StatefulObservable<boolean> | undefined = undefined;
@@ -207,8 +251,13 @@ const URL_real = window.URL;
 
 /** @see: https://github.com/garronej/oidc-spa#option-1-usage-without-involving-the-ui-framework */
 export async function createOidc<
-    DecodedIdToken extends Record<string, unknown> = Record<string, unknown>
->(params: ParamsOfCreateOidc<DecodedIdToken>): Promise<Oidc<DecodedIdToken>> {
+    DecodedIdToken extends Record<string, unknown> = Record<string, unknown>,
+    IsAuthRequiredOnEveryPages extends boolean = false
+>(
+    params: ParamsOfCreateOidc<DecodedIdToken, IsAuthRequiredOnEveryPages>
+): Promise<
+    IsAuthRequiredOnEveryPages extends true ? Oidc.LoggedIn<DecodedIdToken> : Oidc<DecodedIdToken>
+> {
     const {
         issuerUri,
         clientId,
@@ -218,7 +267,9 @@ export async function createOidc<
         publicUrl: publicUrl_params,
         decodedIdTokenSchema,
         __unsafe_ssoSessionIdleSeconds,
-        autoLogoutParams = { "redirectTo": "current page" }
+        autoLogoutParams = { "redirectTo": "current page" },
+        isAuthRequiredOnEveryPages = false,
+        postLoginRedirectUrl
     } = params;
 
     const getExtraQueryParams = (() => {
@@ -594,6 +645,8 @@ export async function createOidc<
             })();
 
             const timeout = setTimeout(async () => {
+                let dedicatedSilentSsoHtmlFileCsp: string | null | undefined = undefined;
+
                 silent_sso_html_unreachable: {
                     if (!silentSso.hasDedicatedHtmlFile) {
                         break silent_sso_html_unreachable;
@@ -601,6 +654,9 @@ export async function createOidc<
 
                     const isSilentSsoHtmlReachable = await fetch(silentSso.redirectUri).then(
                         async response => {
+                            dedicatedSilentSsoHtmlFileCsp =
+                                response.headers.get("Content-Security-Policy");
+
                             const content = await response.text();
 
                             return (
@@ -627,6 +683,54 @@ export async function createOidc<
                     return;
                 }
 
+                frame_ancestors_none: {
+                    const csp = await (async () => {
+                        if (silentSso.hasDedicatedHtmlFile) {
+                            assert(dedicatedSilentSsoHtmlFileCsp !== undefined);
+                            return dedicatedSilentSsoHtmlFileCsp;
+                        }
+
+                        const csp = await fetch(silentSso.redirectUri).then(
+                            response => response.headers.get("Content-Security-Policy"),
+                            error => id<Error>(error)
+                        );
+
+                        if (csp instanceof Error) {
+                            dLoginSuccessUrl.reject(
+                                new Error(`Failed to fetch ${silentSso.redirectUri}: ${csp.message}`)
+                            );
+                            return new Promise<never>(() => {});
+                        }
+
+                        return csp;
+                    })();
+
+                    if (csp === null) {
+                        break frame_ancestors_none;
+                    }
+
+                    const hasFrameAncestorsNone = csp
+                        .replace(/"'/g, "")
+                        .replace(/\s+/g, " ")
+                        .toLowerCase()
+                        .includes("frame-ancestors none");
+
+                    if (!hasFrameAncestorsNone) {
+                        break frame_ancestors_none;
+                    }
+
+                    dLoginSuccessUrl.reject(
+                        new OidcInitializationError({
+                            "type": "bad configuration",
+                            "likelyCause": {
+                                "type": "frame-ancestors none",
+                                silentSso
+                            }
+                        })
+                    );
+                    return;
+                }
+
                 // Here we know that the server is not down and that the issuer_uri is correct
                 // otherwise we would have had a fetch error when loading the iframe.
                 // So this means that it's very likely a OIDC client misconfiguration.
@@ -638,7 +742,8 @@ export async function createOidc<
                         "likelyCause": {
                             "type": "misconfigured OIDC client",
                             clientId,
-                            timeoutDelayMs
+                            timeoutDelayMs,
+                            publicUrl
                         }
                     })
                 );
@@ -820,13 +925,17 @@ export async function createOidc<
                       "cause": error
                   });
 
+        if (isAuthRequiredOnEveryPages) {
+            throw initializationError;
+        }
+
         console.error(
             `OIDC initialization error of type "${initializationError.type}": ${initializationError.message}`
         );
 
         startTrackingLastPublicRoute();
 
-        return id<Oidc.NotLoggedIn>({
+        const oidc = id<Oidc.NotLoggedIn>({
             ...common,
             "isUserLoggedIn": false,
             "login": async () => {
@@ -835,17 +944,30 @@ export async function createOidc<
             },
             initializationError
         });
+
+        // @ts-expect-error: We know what we are doing.
+        return oidc;
     }
 
     if (resultOfLoginProcess === undefined) {
+        if (isAuthRequiredOnEveryPages) {
+            await login({
+                "doesCurrentHrefRequiresAuth": true,
+                "redirectUrl": postLoginRedirectUrl
+            });
+        }
+
         startTrackingLastPublicRoute();
 
-        return id<Oidc.NotLoggedIn>({
+        const oidc = id<Oidc.NotLoggedIn>({
             ...common,
             "isUserLoggedIn": false,
             login,
             "initializationError": undefined
         });
+
+        // @ts-expect-error: We know what we are doing.
+        return oidc;
     }
 
     let currentTokens = resultOfLoginProcess.tokens;
