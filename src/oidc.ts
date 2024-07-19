@@ -683,6 +683,8 @@ export async function createOidc<
                     return;
                 }
 
+                console.log({ dedicatedSilentSsoHtmlFileCsp });
+
                 frame_ancestors_none: {
                     const csp = await (async () => {
                         if (silentSso.hasDedicatedHtmlFile) {
@@ -705,6 +707,8 @@ export async function createOidc<
                         return csp;
                     })();
 
+                    console.log({ csp });
+
                     if (csp === null) {
                         break frame_ancestors_none;
                     }
@@ -715,9 +719,13 @@ export async function createOidc<
                         .toLowerCase()
                         .includes("frame-ancestors none");
 
+                    console.log({ hasFrameAncestorsNone });
+
                     if (!hasFrameAncestorsNone) {
                         break frame_ancestors_none;
                     }
+
+                    console.log("Frame ancestors none detected");
 
                     dLoginSuccessUrl.reject(
                         new OidcInitializationError({
