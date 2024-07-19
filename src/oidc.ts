@@ -92,6 +92,7 @@ export class OidcInitializationError extends Error {
                             type: "misconfigured OIDC client";
                             clientId: string;
                             timeoutDelayMs: number;
+                            publicUrl: string | undefined;
                         }
                       | {
                             type: "not in Web Origins";
@@ -122,7 +123,9 @@ export class OidcInitializationError extends Error {
                             case "misconfigured OIDC client":
                                 return [
                                     `The OIDC client ${params.likelyCause.clientId} seems to be misconfigured on your OIDC server.`,
-                                    `If you are using Keycloak you likely need to add "${location.origin}/*" to the list of Valid Redirect URIs`,
+                                    `If you are using Keycloak you likely need to add "${
+                                        params.likelyCause.publicUrl ?? window.location.origin
+                                    }/*" to the list of Valid Redirect URIs`,
                                     `in the ${params.likelyCause.clientId} client configuration.\n`,
                                     `More info: https://docs.oidc-spa.dev/resources/usage-with-keycloak`,
                                     `Silent SSO timed out after ${params.likelyCause.timeoutDelayMs}ms.`
@@ -661,7 +664,8 @@ export async function createOidc<
                         "likelyCause": {
                             "type": "misconfigured OIDC client",
                             clientId,
-                            timeoutDelayMs
+                            timeoutDelayMs,
+                            publicUrl
                         }
                     })
                 );
