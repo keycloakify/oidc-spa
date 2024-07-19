@@ -101,6 +101,13 @@ export class OidcInitializationError extends Error {
                       | {
                             type: "silent-sso.html not reachable";
                             silentSsoHtmlUrl: string;
+                        }
+                      | {
+                            type: "frame-ancestors none";
+                            silentSso: {
+                                hasDedicatedHtmlFile: boolean;
+                                redirectUri: string;
+                            };
                         };
               }
             | {
@@ -141,6 +148,24 @@ export class OidcInitializationError extends Error {
                                 return [
                                     `${params.likelyCause.silentSsoHtmlUrl} is not reachable. Make sure you've created the silent-sso.html file`,
                                     `in your public directory. More info: https://docs.oidc-spa.dev/documentation/installation`
+                                ].join(" ");
+                            case "frame-ancestors none":
+                                return [
+                                    params.likelyCause.silentSso.hasDedicatedHtmlFile
+                                        ? `The silent-sso.html file, `
+                                        : `The URI used for Silent SSO, `,
+                                    `${params.likelyCause.silentSso.redirectUri}, `,
+                                    "is served by your web server with the HTTP header `Content-Security-Policy: frame-ancestors none` in the response.\n",
+                                    "This header prevents the silent sign-in process from working.\n",
+                                    "To fix this issue, you should configure your web server to not send this header or to use `frame-ancestors self` instead of `frame-ancestors none`.\n",
+                                    "If you use Nginx, you can replace:\n",
+                                    `add_header Content-Security-Policy "frame-ancestors 'none'";\n`,
+                                    "with:\n",
+                                    `map $uri $add_content_security_policy {\n`,
+                                    `   "~*silent-sso\.html$" "frame-ancestors 'self'";\n`,
+                                    `   default "frame-ancestors 'none'";\n`,
+                                    `}\n`,
+                                    `add_header Content-Security-Policy $add_content_security_policy;\n`
                                 ].join(" ");
                         }
                     case "unknown":
@@ -620,6 +645,8 @@ export async function createOidc<
             })();
 
             const timeout = setTimeout(async () => {
+                let dedicatedSilentSsoHtmlFileCsp: string | null | undefined = undefined;
+
                 silent_sso_html_unreachable: {
                     if (!silentSso.hasDedicatedHtmlFile) {
                         break silent_sso_html_unreachable;
@@ -627,6 +654,9 @@ export async function createOidc<
 
                     const isSilentSsoHtmlReachable = await fetch(silentSso.redirectUri).then(
                         async response => {
+                            dedicatedSilentSsoHtmlFileCsp =
+                                response.headers.get("Content-Security-Policy");
+
                             const content = await response.text();
 
                             return (
@@ -647,6 +677,54 @@ export async function createOidc<
                             "likelyCause": {
                                 "type": "silent-sso.html not reachable",
                                 "silentSsoHtmlUrl": silentSso.redirectUri
+                            }
+                        })
+                    );
+                    return;
+                }
+
+                frame_ancestors_none: {
+                    const csp = await (async () => {
+                        if (silentSso.hasDedicatedHtmlFile) {
+                            assert(dedicatedSilentSsoHtmlFileCsp !== undefined);
+                            return dedicatedSilentSsoHtmlFileCsp;
+                        }
+
+                        const csp = await fetch(silentSso.redirectUri).then(
+                            response => response.headers.get("Content-Security-Policy"),
+                            error => id<Error>(error)
+                        );
+
+                        if (csp instanceof Error) {
+                            dLoginSuccessUrl.reject(
+                                new Error(`Failed to fetch ${silentSso.redirectUri}: ${csp.message}`)
+                            );
+                            return new Promise<never>(() => {});
+                        }
+
+                        return csp;
+                    })();
+
+                    if (csp === null) {
+                        break frame_ancestors_none;
+                    }
+
+                    const hasFrameAncestorsNone = csp
+                        .replace(/"'/g, "")
+                        .replace(/\s+/g, " ")
+                        .toLowerCase()
+                        .includes("frame-ancestors none");
+
+                    if (!hasFrameAncestorsNone) {
+                        break frame_ancestors_none;
+                    }
+
+                    dLoginSuccessUrl.reject(
+                        new OidcInitializationError({
+                            "type": "bad configuration",
+                            "likelyCause": {
+                                "type": "frame-ancestors none",
+                                silentSso
                             }
                         })
                     );
