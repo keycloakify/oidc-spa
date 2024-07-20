@@ -27,7 +27,7 @@
   <a href="https://docs.oidc-spa.dev">Documentation</a>
 </p>
 
-An OIDC client tailored for Single Page Applications, particularly suitable for [Vite](https://vitejs.dev/) projects.\
+An Open ID Connect client tailored for Single Page Applications, particularly suitable for [Vite](https://vitejs.dev/) projects.\
 This library is intended for scenarios such as integrating your application with [Keycloak](https://www.keycloak.org/). &#x20;
 
 In straightforward terms, this library is ideal for those seeking to enable user login/registration in their web application. When used in conjunction with Keycloak (for example), it enables you to offer a modern and secure authentication experience with minimal coding effort. This includes options for signing in via Google, X, GitHub, or other social media platforms. We provide comprehensive guidance from beginning to end.
@@ -62,9 +62,42 @@ integration with:
 
 The official OIDC Client for Keycloak. It only works with Keycloak and [will eventually be deprecated](https://www.keycloak.org/2023/03/adapter-deprecation-update).
 
+### [NextAuth.js](https://next-auth.js.org/)
+
+NextAuth.js is a authentication solution for Next.js and features a [Keycloak adapter](https://next-auth.js.org/providers/keycloak).  
+`oidc-spa` is specifically designed for Single Page Applications, Next.js projects do not call in this category, so NextAuth.js is what you should use if you're using Next.js.
+
+> _NOTE: We might create in the future a `oidc-mpa` library for Multi Page Applications that would aim at supporting Next.js projects._
+
 ## 🚀 Quick start
 
 Heads over to [the documentation website](https://docs.oidc-spa.dev) 📘!
+
+## Sponsor
+
+<br/>
+
+<div align="center">
+
+![Logo Dark](https://github.com/user-attachments/assets/935c0f10-6f7b-41f4-94cc-4540d0985569#gh-dark-mode-only)
+
+</div>
+
+<div align="center">
+
+![Logo Light](https://github.com/user-attachments/assets/2e5bce29-4149-44fc-9d17-789e17e9642b#gh-light-mode-only)
+
+</div>
+
+<br/>
+
+<p align="center">
+  <a href="https://www.zone2.tech/services/keycloak-consulting">
+    <i><strong>Keycloak Consulting Services</strong> - Your partner in Keycloak deployment, configuration, and extension development for optimized identity management solutions.</i>
+  </a>
+</p>
+
+Thank you, [Zone2](https://www.zone2.tech/), backing the project!
 
 ## Showcases
 
