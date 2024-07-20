@@ -16,7 +16,7 @@
     </a>
 </p>
 <p align="center">
-  Check out our discord server!<br/>
+  We're here to help!<br/>
   <a href="https://discord.gg/mJdYJSdcm4">
     <img src="https://dcbadge.limes.pink/api/server/kYFZG7fQmn"/>
   </a>
@@ -32,8 +32,9 @@ This library is intended for scenarios such as integrating your application with
 
 In straightforward terms, this library is ideal for those seeking to enable user login/registration in their web application. When used in conjunction with Keycloak (for example), it enables you to offer a modern and secure authentication experience with minimal coding effort. This includes options for signing in via Google, X, GitHub, or other social media platforms. We provide comprehensive guidance from beginning to end.
 
--   🎓 Accessible to all skill levels; no need to be an OIDC expert.
+-   🎓 Accessible to all skill levels; no need to be an OIDC expert. And we are here to help [on Discord](https://discord.gg/mJdYJSdcm4).
 -   🛠️ Easy to set up; eliminates the need for creating special `/login` `/logout` routes.
+-   💬 Helpful debug message telling you what's wrong in your configuration and how to fix it.
 -   🎛️ Minimal API surface for ease of use.
 -   🕣 Easy implementation of auto logout. _Are you still there? You will be logged out in 10...9..._
 -   ✨ Robust yet optional React integration.
@@ -59,7 +60,7 @@ integration with:
 
 ### [keycloak-js](https://www.npmjs.com/package/keycloak-js)
 
-Beside the fact that this lib only works with Keycloak [it is also likely to be deprecated](https://www.keycloak.org/2023/03/adapter-deprecation-update).
+The official OIDC Client for Keycloak. It only works with Keycloak and [will eventually be deprecated](https://www.keycloak.org/2023/03/adapter-deprecation-update).
 
 ## 🚀 Quick start
 
