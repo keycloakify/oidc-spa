@@ -48,14 +48,13 @@ type OidcReactApi<
     DecodedIdToken extends Record<string, unknown>,
     IsAuthRequiredOnEveryPages extends boolean
 > = {
-    // TODO: Error fallback when auth required on every pages.
     OidcProvider: IsAuthRequiredOnEveryPages extends true
-        ? (props: { fallback?: ReactNode; children: ReactNode }) => JSX.Element
-        : (props: {
+        ? (props: {
               fallback?: ReactNode;
               ErrorFallback?: (props: { initializationError: OidcInitializationError }) => ReactNode;
               children: ReactNode;
-          }) => JSX.Element;
+          }) => JSX.Element
+        : (props: { fallback?: ReactNode; children: ReactNode }) => JSX.Element;
     useOidc: IsAuthRequiredOnEveryPages extends true
         ? {
               (params?: { assertUserLoggedIn: true }): OidcReact.LoggedIn<DecodedIdToken>;
@@ -84,9 +83,7 @@ export function createOidcReactApi_dependencyInjection<
     createOidc: (params: ParamsOfCreateOidc) => PromiseOrNot<Oidc<DecodedIdToken>>
 ): OidcReactApi<
     DecodedIdToken,
-    ParamsOfCreateOidc extends { isAuthRequiredOnEveryPages: boolean }
-        ? ParamsOfCreateOidc["isAuthRequiredOnEveryPages"]
-        : false
+    ParamsOfCreateOidc extends { isAuthRequiredOnEveryPages?: true | undefined } ? true : false
 > {
     const prOidc = Promise.resolve(createOidc(params)).catch(error => {
         if (!(error instanceof OidcInitializationError)) {
