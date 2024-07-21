@@ -185,7 +185,7 @@ const paramsToRetrieveFromSuccessfulLogin = ["code", "state", "session_state", "
 
 export type ParamsOfCreateOidc<
     DecodedIdToken extends Record<string, unknown> = Record<string, unknown>,
-    IsAuthRequiredOnEveryPages extends boolean = false
+    IsAuthGloballyRequired extends boolean = false
 > = {
     issuerUri: string;
     clientId: string;
@@ -241,7 +241,7 @@ export type ParamsOfCreateOidc<
     __unsafe_ssoSessionIdleSeconds?: number;
 
     autoLogoutParams?: Parameters<Oidc.LoggedIn<any>["logout"]>[0];
-    isAuthRequiredOnEveryPages?: IsAuthRequiredOnEveryPages;
+    isAuthGloballyRequired?: IsAuthGloballyRequired;
 };
 
 let $isUserActive: StatefulObservable<boolean> | undefined = undefined;
@@ -252,12 +252,10 @@ const URL_real = window.URL;
 /** @see: https://github.com/garronej/oidc-spa#option-1-usage-without-involving-the-ui-framework */
 export async function createOidc<
     DecodedIdToken extends Record<string, unknown> = Record<string, unknown>,
-    IsAuthRequiredOnEveryPages extends boolean = false
+    IsAuthGloballyRequired extends boolean = false
 >(
-    params: ParamsOfCreateOidc<DecodedIdToken, IsAuthRequiredOnEveryPages>
-): Promise<
-    IsAuthRequiredOnEveryPages extends true ? Oidc.LoggedIn<DecodedIdToken> : Oidc<DecodedIdToken>
-> {
+    params: ParamsOfCreateOidc<DecodedIdToken, IsAuthGloballyRequired>
+): Promise<IsAuthGloballyRequired extends true ? Oidc.LoggedIn<DecodedIdToken> : Oidc<DecodedIdToken>> {
     const {
         issuerUri,
         clientId,
@@ -268,7 +266,7 @@ export async function createOidc<
         decodedIdTokenSchema,
         __unsafe_ssoSessionIdleSeconds,
         autoLogoutParams = { "redirectTo": "current page" },
-        isAuthRequiredOnEveryPages = false,
+        isAuthGloballyRequired = false,
         postLoginRedirectUrl
     } = params;
 
@@ -925,7 +923,7 @@ export async function createOidc<
                       "cause": error
                   });
 
-        if (isAuthRequiredOnEveryPages) {
+        if (isAuthGloballyRequired) {
             throw initializationError;
         }
 
@@ -950,7 +948,7 @@ export async function createOidc<
     }
 
     if (resultOfLoginProcess === undefined) {
-        if (isAuthRequiredOnEveryPages) {
+        if (isAuthGloballyRequired) {
             await login({
                 "doesCurrentHrefRequiresAuth": true,
                 "redirectUrl": postLoginRedirectUrl

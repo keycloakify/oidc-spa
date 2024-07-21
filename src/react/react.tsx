@@ -46,16 +46,16 @@ const oidcContext = createContext<
 
 type OidcReactApi<
     DecodedIdToken extends Record<string, unknown>,
-    IsAuthRequiredOnEveryPages extends boolean
+    IsAuthGloballyRequired extends boolean
 > = {
-    OidcProvider: IsAuthRequiredOnEveryPages extends true
+    OidcProvider: IsAuthGloballyRequired extends true
         ? (props: {
               fallback?: ReactNode;
               ErrorFallback?: (props: { initializationError: OidcInitializationError }) => ReactNode;
               children: ReactNode;
           }) => JSX.Element
         : (props: { fallback?: ReactNode; children: ReactNode }) => JSX.Element;
-    useOidc: IsAuthRequiredOnEveryPages extends true
+    useOidc: IsAuthGloballyRequired extends true
         ? {
               (params?: { assertUserLoggedIn: true }): OidcReact.LoggedIn<DecodedIdToken>;
           }
@@ -64,14 +64,14 @@ type OidcReactApi<
               (params: { assertUserLoggedIn: true }): OidcReact.LoggedIn<DecodedIdToken>;
           };
     prOidc: Promise<
-        IsAuthRequiredOnEveryPages extends true ? Oidc.LoggedIn<DecodedIdToken> : Oidc<DecodedIdToken>
+        IsAuthGloballyRequired extends true ? Oidc.LoggedIn<DecodedIdToken> : Oidc<DecodedIdToken>
     >;
 };
 
 export function createOidcReactApi_dependencyInjection<
     DecodedIdToken extends Record<string, unknown>,
     ParamsOfCreateOidc extends {
-        isAuthRequiredOnEveryPages?: boolean;
+        isAuthGloballyRequired?: boolean;
     } & (
         | {
               decodedIdTokenSchema: { parse: (data: unknown) => DecodedIdToken } | undefined;
@@ -83,7 +83,7 @@ export function createOidcReactApi_dependencyInjection<
     createOidc: (params: ParamsOfCreateOidc) => PromiseOrNot<Oidc<DecodedIdToken>>
 ): OidcReactApi<
     DecodedIdToken,
-    ParamsOfCreateOidc extends { isAuthRequiredOnEveryPages?: true | undefined } ? true : false
+    ParamsOfCreateOidc extends { isAuthGloballyRequired?: true | undefined } ? true : false
 > {
     const prOidc = Promise.resolve(createOidc(params)).catch(error => {
         if (!(error instanceof OidcInitializationError)) {
@@ -258,7 +258,7 @@ export function createOidcReactApi_dependencyInjection<
 /** @see: https://docs.oidc-spa.dev/documentation/usage#react-api */
 export function createReactOidc<
     DecodedIdToken extends Record<string, unknown> = Record<string, unknown>,
-    IsAuthRequiredOnEveryPages extends boolean = false
->(params: ParamsOfCreateOidc<DecodedIdToken, IsAuthRequiredOnEveryPages>) {
+    IsAuthGloballyRequired extends boolean = false
+>(params: ParamsOfCreateOidc<DecodedIdToken, IsAuthGloballyRequired>) {
     return createOidcReactApi_dependencyInjection(params, createOidc);
 }

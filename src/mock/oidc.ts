@@ -6,13 +6,13 @@ import { assert, type Equals } from "tsafe/assert";
 
 export type ParamsOfCreateMockOidc<
     DecodedIdToken extends Record<string, unknown> = Record<string, unknown>,
-    IsAuthRequiredOnEveryPages extends boolean = false
+    IsAuthGloballyRequired extends boolean = false
 > = {
     isUserInitiallyLoggedIn: boolean;
     mockedParams?: Partial<Oidc["params"]>;
     mockedTokens?: Partial<Oidc.Tokens<DecodedIdToken>>;
     publicUrl?: string;
-    isAuthRequiredOnEveryPages?: IsAuthRequiredOnEveryPages;
+    isAuthGloballyRequired?: IsAuthGloballyRequired;
     postLoginRedirectUrl?: string;
 };
 
@@ -20,16 +20,16 @@ const urlParamName = "isUserLoggedIn";
 
 export function createMockOidc<
     DecodedIdToken extends Record<string, unknown> = Record<string, unknown>,
-    IsAuthRequiredOnEveryPages extends boolean = false
+    IsAuthGloballyRequired extends boolean = false
 >(
-    params: ParamsOfCreateMockOidc<DecodedIdToken, IsAuthRequiredOnEveryPages>
-): IsAuthRequiredOnEveryPages extends true ? Oidc.LoggedIn<DecodedIdToken> : Oidc<DecodedIdToken> {
+    params: ParamsOfCreateMockOidc<DecodedIdToken, IsAuthGloballyRequired>
+): IsAuthGloballyRequired extends true ? Oidc.LoggedIn<DecodedIdToken> : Oidc<DecodedIdToken> {
     const {
         isUserInitiallyLoggedIn,
         mockedParams = {},
         mockedTokens = {},
         publicUrl: publicUrl_params,
-        isAuthRequiredOnEveryPages = false,
+        isAuthGloballyRequired = false,
         postLoginRedirectUrl
     } = params;
 
@@ -91,7 +91,7 @@ export function createMockOidc<
             },
             "initializationError": undefined
         });
-        if (!isAuthRequiredOnEveryPages) {
+        if (!isAuthGloballyRequired) {
             oidc.login({
                 "redirectUrl": postLoginRedirectUrl,
                 "doesCurrentHrefRequiresAuth": true
