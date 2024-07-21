@@ -61,7 +61,7 @@ type OidcReactApi<
           }
         : {
               (params?: { assertUserLoggedIn: false }): OidcReact<DecodedIdToken>;
-              (params: { assertUserLoggedIn: true }): OidcReact<DecodedIdToken>;
+              (params: { assertUserLoggedIn: true }): OidcReact.LoggedIn<DecodedIdToken>;
           };
     prOidc: Promise<
         IsAuthRequiredOnEveryPages extends true ? Oidc.LoggedIn<DecodedIdToken> : Oidc<DecodedIdToken>
