@@ -62,6 +62,8 @@ export declare namespace Oidc {
              * silentSignin: Silent Single Sign-On (SSO) was achieved by creating an iframe to the identity server in the background. HttpOnly cookies were utilized to restore the session without redirecting the user to the login pages.
              */
             loginScenario: "backFromLoginPages" | "sessionStorageRestoration" | "silentSignin";
+
+            login: NotLoggedIn["login"];
         };
 
     export type Tokens<DecodedIdToken extends Record<string, unknown> = Record<string, unknown>> =
@@ -1049,7 +1051,8 @@ export async function createOidc<
 
             return { unsubscribeFromAutoLogoutCountdown };
         },
-        "loginScenario": resultOfLoginProcess.loginScenario
+        "loginScenario": resultOfLoginProcess.loginScenario,
+        login
     });
 
     {

@@ -67,28 +67,30 @@ export function createMockOidc<
         }
     };
 
+    const login: Oidc.NotLoggedIn["login"] = async ({ redirectUrl }) => {
+        const { newUrl } = addQueryParamToUrl({
+            "url": (() => {
+                if (redirectUrl === undefined) {
+                    return window.location.href;
+                }
+                return redirectUrl.startsWith("/")
+                    ? `${window.location.origin}${redirectUrl}`
+                    : redirectUrl;
+            })(),
+            "name": urlParamName,
+            "value": "true"
+        });
+
+        window.location.href = newUrl;
+
+        return new Promise<never>(() => {});
+    };
+
     if (!isUserLoggedIn) {
         const oidc = id<Oidc.NotLoggedIn>({
             ...common,
             "isUserLoggedIn": false,
-            "login": async ({ redirectUrl }) => {
-                const { newUrl } = addQueryParamToUrl({
-                    "url": (() => {
-                        if (redirectUrl === undefined) {
-                            return window.location.href;
-                        }
-                        return redirectUrl.startsWith("/")
-                            ? `${window.location.origin}${redirectUrl}`
-                            : redirectUrl;
-                    })(),
-                    "name": urlParamName,
-                    "value": "true"
-                });
-
-                window.location.href = newUrl;
-
-                return new Promise<never>(() => {});
-            },
+            login,
             "initializationError": undefined
         });
         if (!isAuthGloballyRequired) {
@@ -154,6 +156,7 @@ export function createMockOidc<
         "subscribeToAutoLogoutCountdown": () => ({
             "unsubscribeFromAutoLogoutCountdown": () => {}
         }),
-        "loginScenario": isUserInitiallyLoggedIn ? "silentSignin" : "backFromLoginPages"
+        "loginScenario": isUserInitiallyLoggedIn ? "silentSignin" : "backFromLoginPages",
+        login
     });
 }
