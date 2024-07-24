@@ -94,7 +94,7 @@ export declare namespace Oidc {
         }>;
 }
 
-const paramsToRetrieveFromSuccessfulLogin = ["code", "state", "session_state", "iss"] as const;
+const PARAMS_TO_RETRIEVE_FROM_SUCCESSFUL_LOGIN = ["code", "state", "session_state", "iss"] as const;
 
 export type ParamsOfCreateOidc<
     DecodedIdToken extends Record<string, unknown> = Record<string, unknown>,
@@ -219,8 +219,6 @@ export async function createOidc<
         hotReloadCleanups.set(configHash, new Set());
     }
 
-    const configHashKey = "configHash";
-
     const silentSso =
         publicUrl === undefined
             ? {
@@ -232,13 +230,14 @@ export async function createOidc<
                   "redirectUri": `${publicUrl}/silent-sso.html`
               };
 
-    const silentSsoKey = "oidcSpaSilentSso";
+    const SILENT_SSO_KEY = "oidcSpaSilentSso";
+    const CONFIG_HASH_KEY = "configHash";
 
     silent_sso_polyfill: {
         if (
             !retrieveQueryParamFromUrl({
                 "url": window.location.href,
-                "name": silentSsoKey
+                "name": SILENT_SSO_KEY
             }).wasPresent
         ) {
             break silent_sso_polyfill;
@@ -247,7 +246,7 @@ export async function createOidc<
         {
             const result = retrieveQueryParamFromUrl({
                 "url": window.location.href,
-                "name": configHashKey
+                "name": CONFIG_HASH_KEY
             });
 
             if (!result.wasPresent || result.value !== configHash) {
@@ -280,13 +279,13 @@ export async function createOidc<
 
             redirectUri = addQueryParamToUrl({
                 "url": redirectUri,
-                "name": configHashKey,
+                "name": CONFIG_HASH_KEY,
                 "value": configHash
             }).newUrl;
 
             redirectUri = addQueryParamToUrl({
                 "url": redirectUri,
-                "name": silentSsoKey,
+                "name": SILENT_SSO_KEY,
                 "value": "true"
             }).newUrl;
 
@@ -342,7 +341,7 @@ export async function createOidc<
                     ? `${window.location.origin}${redirectUrl}`
                     : redirectUrl;
             })(),
-            "name": configHashKey,
+            "name": CONFIG_HASH_KEY,
             "value": configHash
         });
 
@@ -447,7 +446,7 @@ export async function createOidc<
             let url = window.location.href;
 
             {
-                const result = retrieveQueryParamFromUrl({ "name": configHashKey, url });
+                const result = retrieveQueryParamFromUrl({ "name": CONFIG_HASH_KEY, url });
 
                 if (!result.wasPresent || result.value !== configHash) {
                     break read_successful_login_query_params;
@@ -460,7 +459,7 @@ export async function createOidc<
 
             let missingMandatoryParams: string[] = [];
 
-            for (const name of paramsToRetrieveFromSuccessfulLogin) {
+            for (const name of PARAMS_TO_RETRIEVE_FROM_SUCCESSFUL_LOGIN) {
                 const result = retrieveQueryParamFromUrl({ name, url });
 
                 if (!result.wasPresent) {
@@ -709,7 +708,7 @@ export async function createOidc<
                     let result: ReturnType<typeof retrieveQueryParamFromUrl>;
 
                     try {
-                        result = retrieveQueryParamFromUrl({ "name": configHashKey, url });
+                        result = retrieveQueryParamFromUrl({ "name": CONFIG_HASH_KEY, url });
                     } catch {
                         // This could possibly happen if url is not a valid url.
                         return;
@@ -737,7 +736,7 @@ export async function createOidc<
 
                 const missingMandatoryParams: string[] = [];
 
-                for (const name of paramsToRetrieveFromSuccessfulLogin) {
+                for (const name of PARAMS_TO_RETRIEVE_FROM_SUCCESSFUL_LOGIN) {
                     const result = retrieveQueryParamFromUrl({ name, url });
 
                     if (!result.wasPresent) {
