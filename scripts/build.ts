@@ -1,6 +1,6 @@
 import * as child_process from "child_process";
 import * as fs from "fs";
-import { join as pathJoin, relative as pathRelative } from "path";
+import { join as pathJoin, relative as pathRelative, basename as pathBasename } from "path";
 import { assert } from "tsafe/assert";
 
 const startTime = Date.now();
@@ -21,46 +21,62 @@ fs.readdirSync(vendorDistDirName)
             }
         }
 
-        const RESERVED_PROPERTY_NAME = "__oidcSpaBundle";
-
-        const isBundledFile = fs
-            .readFileSync(filePath)
-            .toString("utf8")
-            .includes(RESERVED_PROPERTY_NAME);
+        const isBundledFile = fs.readFileSync(filePath).toString("utf8").includes("webpack");
 
         if (isBundledFile) {
             return;
         }
 
-        const esbuildOutputDirPath = pathJoin(vendorDistDirName, "esbuild_output");
-        const esbuildOutputFilePath = pathJoin(esbuildOutputDirPath, "index.js");
+        const cacheDirPath = pathJoin(__dirname, "node_modules", ".cache", "scripts");
 
-        run(
-            [
-                `esbuild ${pathRelative(process.cwd(), filePath)}`,
-                `--bundle`,
-                `--platform=browser`,
-                `--format=cjs`,
-                `--outfile=${pathRelative(process.cwd(), esbuildOutputFilePath)}`
-            ].join(" ")
-        );
+        if (!fs.existsSync(cacheDirPath)) {
+            fs.mkdirSync(cacheDirPath, { "recursive": true });
+        }
 
-        assert(fs.readdirSync(esbuildOutputDirPath).length === 1);
-
-        fs.renameSync(esbuildOutputFilePath, filePath);
-
-        fs.rmdirSync(esbuildOutputDirPath, { "recursive": true });
+        const webpackConfigJsFilePath = pathJoin(cacheDirPath, "webpack.config.js");
+        const webpackOutputDirPath = pathJoin(cacheDirPath, "webpack_output");
+        const webpackOutputFilePath = pathJoin(webpackOutputDirPath, "index.js");
 
         fs.writeFileSync(
-            filePath,
+            webpackConfigJsFilePath,
             Buffer.from(
                 [
-                    fs.readFileSync(filePath).toString("utf8"),
-                    `exports.${RESERVED_PROPERTY_NAME} = true;`
-                ].join("\n"),
-                "utf8"
+                    `const path = require('path');`,
+                    ``,
+                    `module.exports = {`,
+                    `   mode: 'production',`,
+                    `  entry: '${filePath}',`,
+                    `  output: {`,
+                    `    path: '${webpackOutputDirPath}',`,
+                    `    filename: '${pathBasename(webpackOutputFilePath)}',`,
+                    `    libraryTarget: 'commonjs2',`,
+                    `  },`,
+                    `  target: 'web',`,
+                    `  module: {`,
+                    `    rules: [`,
+                    `      {`,
+                    `        test: /\.js$/,`,
+                    `        use: {`,
+                    `          loader: 'babel-loader',`,
+                    `          options: {`,
+                    `            presets: ['@babel/preset-env'],`,
+                    `          },`,
+                    `        },`,
+                    `      },`,
+                    `    ],`,
+                    `  },`,
+                    `};`
+                ].join("\n")
             )
         );
+
+        run(`npx webpack --config ${pathRelative(process.cwd(), webpackConfigJsFilePath)}`);
+
+        assert(fs.readdirSync(webpackOutputDirPath).filter(p => !p.endsWith(".txt")).length === 1);
+
+        fs.renameSync(webpackOutputFilePath, filePath);
+
+        fs.rmSync(webpackOutputDirPath, { "recursive": true });
     });
 
 console.log(`✓ built in ${((Date.now() - startTime) / 1000).toFixed(2)}s`);
