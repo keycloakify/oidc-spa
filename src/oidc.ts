@@ -32,6 +32,9 @@ export declare namespace Oidc {
         isUserLoggedIn: false;
         login: (params: {
             doesCurrentHrefRequiresAuth: boolean;
+            /**
+             * Add extra query parameters to the url before redirecting to the login pages.
+             */
             extraQueryParams?: Record<string, string>;
             /**
              * Where to redirect after successful login.
@@ -40,6 +43,12 @@ export declare namespace Oidc {
              * It does not need to include the origin, eg: "/dashboard"
              */
             redirectUrl?: string;
+
+            /**
+             * Transform the url before redirecting to the login pages.
+             * Prefer using the extraQueryParams parameter if you're only adding query parameters.
+             */
+            transformUrlBeforeRedirect?: (url: string) => string;
         }) => Promise<never>;
         initializationError: OidcInitializationError | undefined;
     };
@@ -294,8 +303,9 @@ export async function createOidc<
 
     const login: Oidc.NotLoggedIn["login"] = async ({
         doesCurrentHrefRequiresAuth,
-        extraQueryParams,
-        redirectUrl
+        extraQueryParams: extraQueryParams_fromLoginFn,
+        redirectUrl,
+        transformUrlBeforeRedirect: transformUrlBeforeRedirect_fromLoginFn = url => url
     }) => {
         if (hasLoginBeenCalled) {
             return new Promise<never>(() => {});
@@ -351,19 +361,31 @@ export async function createOidc<
                         if (prop === "href") {
                             let url = urlInstance.href;
 
-                            Object.entries({
-                                ...getExtraQueryParams?.(),
-                                ...extraQueryParams
-                            }).forEach(
-                                ([name, value]) =>
-                                    (url = addQueryParamToUrl({
-                                        url,
-                                        name,
-                                        value
-                                    }).newUrl)
-                            );
+                            (
+                                [
+                                    [getExtraQueryParams?.(), transformUrlBeforeRedirect],
+                                    [
+                                        extraQueryParams_fromLoginFn,
+                                        transformUrlBeforeRedirect_fromLoginFn
+                                    ]
+                                ] as const
+                            ).forEach(([extraQueryParams, transformUrlBeforeRedirect]) => {
+                                add_extra_query_params: {
+                                    if (extraQueryParams === undefined) {
+                                        break add_extra_query_params;
+                                    }
 
-                            url = transformUrlBeforeRedirect(url);
+                                    Object.entries(extraQueryParams).forEach(
+                                        ([name, value]) =>
+                                            (url = addQueryParamToUrl({
+                                                url,
+                                                name,
+                                                value
+                                            }).newUrl)
+                                    );
+                                }
+                                url = transformUrlBeforeRedirect(url);
+                            });
 
                             Object.defineProperty(window, "URL", { "value": URL_real });
 
