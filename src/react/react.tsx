@@ -31,7 +31,7 @@ export namespace OidcReact {
             tickCallback: (params: { secondsLeft: number | undefined }) => void
         ) => { unsubscribeFromAutoLogoutCountdown: () => void };
 
-        login?: never;
+        login: Oidc.NotLoggedIn["login"];
         initializationError?: never;
     };
 }
@@ -235,7 +235,8 @@ export function createOidcReactApi_dependencyInjection<
                       oidcTokens,
                       "logout": oidc.logout,
                       "renewTokens": oidc.renewTokens,
-                      "subscribeToAutoLogoutCountdown": oidc.subscribeToAutoLogoutCountdown
+                      "subscribeToAutoLogoutCountdown": oidc.subscribeToAutoLogoutCountdown,
+                      "login": oidc.login
                   })
               )
             : id<OidcReact.NotLoggedIn>({
