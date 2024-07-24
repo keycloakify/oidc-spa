@@ -1,20 +1,20 @@
 {
     "name": "oidc-spa",
-    "version": "4.10.0-rc.1",
+    "version": "4.9.4",
     "description": "Openidconnect client for Single Page Applications",
     "repository": {
         "type": "git",
         "url": "git://github.com/keycloakify/oidc-spa.git"
     },
     "scripts": {
-        "build": "tsc",
+        "build": "tsx scripts/build.ts",
         "_format": "prettier '**/*.{ts,tsx,json,md}'",
         "format": "yarn _format --write",
         "format:check": "yarn _format --list-different",
-        "link-in-app": "ts-node --skipProject scripts/link-in-app.ts",
-        "start-react-router-example": "yarn build && ts-node --skipProject scripts/link-in-examples.ts && cd examples/react-router && rm -rf node_modules/.vite && yarn dev",
-        "start-tanstack-router-example": "yarn build && ts-node --skipProject scripts/link-in-examples.ts && cd examples/tanstack-router && rm -rf node_modules/.vite && yarn dev",
-        "start-tanstack-router-file-based-example": "yarn build && ts-node --skipProject scripts/link-in-examples.ts && cd examples/tanstack-router-file-based && rm -rf node_modules/.vite && yarn dev"
+        "link-in-app": "tsx scripts/link-in-app.ts",
+        "start-react-router-example": "yarn build && tsx scripts/link-in-examples.ts && cd examples/react-router && rm -rf node_modules/.vite && yarn dev",
+        "start-tanstack-router-example": "yarn build && tsx scripts/link-in-examples.ts && cd examples/tanstack-router && rm -rf node_modules/.vite && yarn dev",
+        "start-tanstack-router-file-based-example": "yarn build && tsx scripts/link-in-examples.ts && cd examples/tanstack-router-file-based && rm -rf node_modules/.vite && yarn dev"
     },
     "main": "dist/index.js",
     "types": "dist/index.d.ts",
@@ -43,13 +43,12 @@
     ],
     "keywords": [],
     "homepage": "https://docs.oidc-spa.dev/",
-    "dependencies": {
-        "jwt-decode": "^3.1.2",
-        "oidc-client-ts": "2.4.0",
-        "tsafe": "^1.6.5",
-        "worker-timers": "^7.1.7"
-    },
+    "dependencies": {},
     "devDependencies": {
+        "jwt-decode": "3.1.2",
+        "oidc-client-ts": "2.4.0",
+        "worker-timers": "7.1.7",
+        "tsafe": "^1.6.5",
         "@types/node": "^20.2.1",
         "@types/react": "^18.2.6",
         "husky": "^4.3.8",
@@ -58,7 +57,9 @@
         "react": "^18.2.0",
         "ts-node": "^10.9.1",
         "typescript": "^5.0.4",
-        "zod": "^3.22.4"
+        "zod": "^3.22.4",
+        "tsx": "^4.15.5",
+        "esbuild": "^0.23.0"
     },
     "publishConfig": {
         "access": "public"

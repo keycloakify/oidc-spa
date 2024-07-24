@@ -1,7 +1,10 @@
-import { UserManager as OidcClientTsUserManager, type User as OidcClientTsUser } from "oidc-client-ts";
-import { id } from "tsafe/id";
+import {
+    UserManager as OidcClientTsUserManager,
+    type User as OidcClientTsUser
+} from "./vendor/oidc-client-ts-and-jwt-decode";
+import { id } from "./vendor/tsafe";
 import { readExpirationTimeInJwt } from "./tools/readExpirationTimeInJwt";
-import { assert, type Equals } from "tsafe/assert";
+import { assert, type Equals } from "./vendor/tsafe";
 import { addQueryParamToUrl, retrieveQueryParamFromUrl } from "./tools/urlQueryParams";
 import { fnv1aHashToHex } from "./tools/fnv1aHashToHex";
 import { Deferred } from "./tools/Deferred";
@@ -10,7 +13,7 @@ import { getDownlinkAndRtt } from "./tools/getDownlinkAndRtt";
 import { createIsUserActive } from "./tools/createIsUserActive";
 import { createStartCountdown } from "./tools/startCountdown";
 import type { StatefulObservable } from "./tools/StatefulObservable";
-import { setTimeout, clearTimeout } from "worker-timers";
+import { setTimeout, clearTimeout } from "./vendor/worker-timers";
 
 export declare type Oidc<DecodedIdToken extends Record<string, unknown> = Record<string, unknown>> =
     | Oidc.LoggedIn<DecodedIdToken>
@@ -62,8 +65,6 @@ export declare namespace Oidc {
              * silentSignin: Silent Single Sign-On (SSO) was achieved by creating an iframe to the identity server in the background. HttpOnly cookies were utilized to restore the session without redirecting the user to the login pages.
              */
             loginScenario: "backFromLoginPages" | "sessionStorageRestoration" | "silentSignin";
-
-            login: NotLoggedIn["login"];
         };
 
     export type Tokens<DecodedIdToken extends Record<string, unknown> = Record<string, unknown>> =
@@ -1051,8 +1052,7 @@ export async function createOidc<
 
             return { unsubscribeFromAutoLogoutCountdown };
         },
-        "loginScenario": resultOfLoginProcess.loginScenario,
-        login
+        "loginScenario": resultOfLoginProcess.loginScenario
     });
 
     {

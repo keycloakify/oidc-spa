@@ -1,4 +1,4 @@
-import decodeJwt from "jwt-decode";
+import { decodeJwt } from "./decodeJwt";
 import { assert } from "tsafe/assert";
 
 // Return undefined if token provided wasn't a JWT or if it hasn't an exp claim number

@@ -1,8 +1,8 @@
 import type { Oidc } from "../oidc";
 import { retrieveQueryParamFromUrl, addQueryParamToUrl } from "../tools/urlQueryParams";
-import { id } from "tsafe/id";
 import { createObjectThatThrowsIfAccessed } from "../tools/createObjectThatThrowsIfAccessed";
-import { assert, type Equals } from "tsafe/assert";
+import { id } from "../vendor/tsafe";
+import { assert, type Equals } from "../vendor/tsafe";
 
 export type ParamsOfCreateMockOidc<
     DecodedIdToken extends Record<string, unknown> = Record<string, unknown>,
@@ -67,30 +67,28 @@ export function createMockOidc<
         }
     };
 
-    const login: Oidc.NotLoggedIn["login"] = async ({ redirectUrl }) => {
-        const { newUrl } = addQueryParamToUrl({
-            "url": (() => {
-                if (redirectUrl === undefined) {
-                    return window.location.href;
-                }
-                return redirectUrl.startsWith("/")
-                    ? `${window.location.origin}${redirectUrl}`
-                    : redirectUrl;
-            })(),
-            "name": urlParamName,
-            "value": "true"
-        });
-
-        window.location.href = newUrl;
-
-        return new Promise<never>(() => {});
-    };
-
     if (!isUserLoggedIn) {
         const oidc = id<Oidc.NotLoggedIn>({
             ...common,
             "isUserLoggedIn": false,
-            login,
+            "login": async ({ redirectUrl }) => {
+                const { newUrl } = addQueryParamToUrl({
+                    "url": (() => {
+                        if (redirectUrl === undefined) {
+                            return window.location.href;
+                        }
+                        return redirectUrl.startsWith("/")
+                            ? `${window.location.origin}${redirectUrl}`
+                            : redirectUrl;
+                    })(),
+                    "name": urlParamName,
+                    "value": "true"
+                });
+
+                window.location.href = newUrl;
+
+                return new Promise<never>(() => {});
+            },
             "initializationError": undefined
         });
         if (!isAuthGloballyRequired) {
@@ -156,7 +154,6 @@ export function createMockOidc<
         "subscribeToAutoLogoutCountdown": () => ({
             "unsubscribeFromAutoLogoutCountdown": () => {}
         }),
-        "loginScenario": isUserInitiallyLoggedIn ? "silentSignin" : "backFromLoginPages",
-        login
+        "loginScenario": isUserInitiallyLoggedIn ? "silentSignin" : "backFromLoginPages"
     });
 }

@@ -1,7 +1,7 @@
 import { useEffect, useState, createContext, useContext, useReducer, type ReactNode } from "react";
 import { createOidc, type ParamsOfCreateOidc, type Oidc, OidcInitializationError } from "../oidc";
-import { assert } from "tsafe/assert";
-import { id } from "tsafe/id";
+import { assert } from "../vendor/tsafe";
+import { id } from "../vendor/tsafe";
 import { useGuaranteedMemo } from "../tools/powerhooks/useGuaranteedMemo";
 import type { PromiseOrNot } from "../tools/PromiseOrNot";
 
@@ -31,7 +31,7 @@ export namespace OidcReact {
             tickCallback: (params: { secondsLeft: number | undefined }) => void
         ) => { unsubscribeFromAutoLogoutCountdown: () => void };
 
-        login: Oidc.NotLoggedIn["login"];
+        login?: never;
         initializationError?: never;
     };
 }
@@ -235,8 +235,7 @@ export function createOidcReactApi_dependencyInjection<
                       oidcTokens,
                       "logout": oidc.logout,
                       "renewTokens": oidc.renewTokens,
-                      "subscribeToAutoLogoutCountdown": oidc.subscribeToAutoLogoutCountdown,
-                      "login": oidc.login
+                      "subscribeToAutoLogoutCountdown": oidc.subscribeToAutoLogoutCountdown
                   })
               )
             : id<OidcReact.NotLoggedIn>({
