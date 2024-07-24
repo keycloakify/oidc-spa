@@ -21,6 +21,7 @@ export namespace OidcReact {
         oidcTokens?: never;
         logout?: never;
         subscribeToAutoLogoutCountdown?: never;
+        goToAuthServer?: never;
     };
 
     export type LoggedIn<DecodedIdToken extends Record<string, unknown>> = Common & {
@@ -34,6 +35,11 @@ export namespace OidcReact {
 
         login?: never;
         initializationError?: never;
+        goToAuthServer: (params: {
+            extraQueryParams?: Record<string, string>;
+            redirectUrl?: string;
+            transformUrlBeforeRedirect?: (url: string) => string;
+        }) => Promise<never>;
     };
 }
 
@@ -236,7 +242,8 @@ export function createOidcReactApi_dependencyInjection<
                       oidcTokens,
                       "logout": oidc.logout,
                       "renewTokens": oidc.renewTokens,
-                      "subscribeToAutoLogoutCountdown": oidc.subscribeToAutoLogoutCountdown
+                      "subscribeToAutoLogoutCountdown": oidc.subscribeToAutoLogoutCountdown,
+                      "goToAuthServer": oidc.goToAuthServer
                   })
               )
             : id<OidcReact.NotLoggedIn>({

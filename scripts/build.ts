@@ -77,6 +77,15 @@ fs.readdirSync(vendorDistDirName)
         fs.renameSync(webpackOutputFilePath, filePath);
 
         fs.rmSync(webpackOutputDirPath, { "recursive": true });
+
+        fs.writeFileSync(
+            filePath,
+            Buffer.from(
+                [fs.readFileSync(filePath).toString("utf8"), `exports.__oidcSpaBundle = true;`].join(
+                    "\n"
+                )
+            )
+        );
     });
 
 console.log(`✓ built in ${((Date.now() - startTime) / 1000).toFixed(2)}s`);

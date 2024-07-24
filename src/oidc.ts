@@ -3,6 +3,7 @@ import {
     type User as OidcClientTsUser
 } from "./vendor/oidc-client-ts-and-jwt-decode";
 import { id } from "./vendor/tsafe";
+import type { Param0 } from "./vendor/tsafe";
 import { readExpirationTimeInJwt } from "./tools/readExpirationTimeInJwt";
 import { assert, type Equals } from "./vendor/tsafe";
 import { addQueryParamToUrl, retrieveQueryParamFromUrl } from "./tools/urlQueryParams";
@@ -64,6 +65,11 @@ export declare namespace Oidc {
                     | { redirectTo: "home" | "current page" }
                     | { redirectTo: "specific url"; url: string }
             ) => Promise<never>;
+            goToAuthServer: (params: {
+                extraQueryParams?: Record<string, string>;
+                redirectUrl?: string;
+                transformUrlBeforeRedirect?: (url: string) => string;
+            }) => Promise<never>;
             subscribeToAutoLogoutCountdown: (
                 tickCallback: (params: { secondsLeft: number | undefined }) => void
             ) => { unsubscribeFromAutoLogoutCountdown: () => void };
@@ -301,17 +307,31 @@ export async function createOidc<
 
     let hasLoginBeenCalled = false;
 
-    const login: Oidc.NotLoggedIn["login"] = async ({
-        doesCurrentHrefRequiresAuth,
-        extraQueryParams: extraQueryParams_fromLoginFn,
-        redirectUrl,
-        transformUrlBeforeRedirect: transformUrlBeforeRedirect_fromLoginFn = url => url
-    }) => {
-        if (hasLoginBeenCalled) {
-            return new Promise<never>(() => {});
-        }
+    type ParamsOfLoginOrGoToAuthServer = Omit<
+        Param0<Oidc.NotLoggedIn["login"]>,
+        "doesCurrentHrefRequiresAuth"
+    > &
+        ({ action: "login"; doesCurrentHrefRequiresAuth: boolean } | { action: "go to auth server" });
 
-        hasLoginBeenCalled = true;
+    const loginOrGoToAuthServer = async (params: ParamsOfLoginOrGoToAuthServer): Promise<never> => {
+        const {
+            extraQueryParams: extraQueryParams_fromLoginFn,
+            redirectUrl,
+            transformUrlBeforeRedirect: transformUrlBeforeRedirect_fromLoginFn = url => url,
+            ...rest
+        } = params;
+
+        login_only: {
+            if (rest.action !== "login") {
+                break login_only;
+            }
+
+            if (hasLoginBeenCalled) {
+                return new Promise<never>(() => {});
+            }
+
+            hasLoginBeenCalled = true;
+        }
 
         const { newUrl: redirect_uri } = addQueryParamToUrl({
             "url": (() => {
@@ -329,12 +349,16 @@ export async function createOidc<
         // NOTE: This is for handling cases when user press the back button on the login pages.
         // When the app is hosted on https (so not in dev mode) the browser will restore the state of the app
         // instead of reloading the page.
-        {
+        login_only: {
+            if (rest.action !== "login") {
+                break login_only;
+            }
+
             const callback = () => {
                 if (document.visibilityState === "visible") {
                     document.removeEventListener("visibilitychange", callback);
 
-                    if (doesCurrentHrefRequiresAuth) {
+                    if (rest.doesCurrentHrefRequiresAuth) {
                         if (lastPublicRoute !== undefined) {
                             window.location.href = lastPublicRoute;
                         } else {
@@ -406,7 +430,14 @@ export async function createOidc<
             // NOTE: This is for the behavior when the use presses the back button on the login pages.
             // This is what happens when the user gave up the login process.
             // We want to that to redirect to the last public page.
-            "redirectMethod": doesCurrentHrefRequiresAuth ? "replace" : "assign"
+            "redirectMethod": (() => {
+                switch (rest.action) {
+                    case "login":
+                        return rest.doesCurrentHrefRequiresAuth ? "replace" : "assign";
+                    case "go to auth server":
+                        return "assign";
+                }
+            })()
         });
         return new Promise<never>(() => {});
     };
@@ -869,7 +900,8 @@ export async function createOidc<
 
     if (resultOfLoginProcess === undefined) {
         if (isAuthGloballyRequired) {
-            await login({
+            await loginOrGoToAuthServer({
+                "action": "login",
                 "doesCurrentHrefRequiresAuth": true,
                 "redirectUrl": postLoginRedirectUrl
             });
@@ -880,7 +912,7 @@ export async function createOidc<
         const oidc = id<Oidc.NotLoggedIn>({
             ...common,
             "isUserLoggedIn": false,
-            login,
+            "login": params => loginOrGoToAuthServer({ "action": "login", ...params }),
             "initializationError": undefined
         });
 
@@ -969,7 +1001,8 @@ export async function createOidc<
 
             return { unsubscribeFromAutoLogoutCountdown };
         },
-        "loginScenario": resultOfLoginProcess.loginScenario
+        "loginScenario": resultOfLoginProcess.loginScenario,
+        "goToAuthServer": params => loginOrGoToAuthServer({ "action": "go to auth server", ...params })
     });
 
     {
@@ -1003,13 +1036,16 @@ export async function createOidc<
                 try {
                     await oidc.renewTokens();
                 } catch {
-                    // NOTE: Here semantically it's wrong. The user may very well be
-                    // on a page that require auth.
+                    // NOTE: Here semantically `"doesCurrentHrefRequiresAuth": false` is wrong.
+                    // The user may very well be on a page that require auth.
                     // However there's no way to enforce the browser to redirect back to
                     // the last public route if the user press back on the login page.
                     // This is due to the fact that pushing to history only works if it's
                     // triggered by a user interaction.
-                    await login({ "doesCurrentHrefRequiresAuth": false });
+                    await loginOrGoToAuthServer({
+                        "action": "login",
+                        "doesCurrentHrefRequiresAuth": false
+                    });
                 }
 
                 scheduleRenew();
