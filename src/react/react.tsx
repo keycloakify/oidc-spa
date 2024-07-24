@@ -1,5 +1,6 @@
 import { useEffect, useState, createContext, useContext, useReducer, type ReactNode } from "react";
-import { createOidc, type ParamsOfCreateOidc, type Oidc, OidcInitializationError } from "../oidc";
+import { createOidc, type ParamsOfCreateOidc, type Oidc } from "../oidc";
+import { OidcInitializationError } from "../OidcInitializationError";
 import { assert } from "../vendor/tsafe";
 import { id } from "../vendor/tsafe";
 import { useGuaranteedMemo } from "../tools/powerhooks/useGuaranteedMemo";
