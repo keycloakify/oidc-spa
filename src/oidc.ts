@@ -104,6 +104,11 @@ export type ParamsOfCreateOidc<
     clientId: string;
     clientSecret?: string;
     /**
+     * The scopes being requested from the OIDC/OAuth2 provider (default: `["profile"]`
+     * (the scope "openid" is added automatically as it's mandatory)
+     **/
+    scopes?: string[];
+    /**
      * Transform the url before redirecting to the login pages.
      */
     transformUrlBeforeRedirect?: (url: string) => string;
@@ -173,6 +178,7 @@ export async function createOidc<
         issuerUri,
         clientId,
         clientSecret,
+        scopes = ["profile"],
         transformUrlBeforeRedirect = url => url,
         extraQueryParams: extraQueryParamsOrGetter,
         publicUrl: publicUrl_params,
@@ -207,7 +213,9 @@ export async function createOidc<
         ).replace(/\/$/, "");
     })();
 
-    const configHash = fnv1aHashToHex(`${issuerUri} ${clientId}`);
+    const configHash = fnv1aHashToHex(
+        `${issuerUri} ${clientId} ${clientSecret ?? ""} ${scopes.join(" ")}`
+    );
 
     {
         const cleanups = hotReloadCleanups.get(configHash);
@@ -272,7 +280,7 @@ export async function createOidc<
         "client_secret": clientSecret,
         "redirect_uri": "" /* provided when calling login */,
         "response_type": "code",
-        "scope": "openid profile",
+        "scope": Array.from(new Set(["openid", ...scopes])).join(" "),
         "automaticSilentRenew": false,
         "silent_redirect_uri": (() => {
             let { redirectUri } = silentSso;
