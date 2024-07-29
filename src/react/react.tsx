@@ -86,19 +86,21 @@ export function createOidcReactApi_dependencyInjection<
         | {}
     )
 >(
-    params: ParamsOfCreateOidc,
+    params: PromiseOrNot<ParamsOfCreateOidc>,
     createOidc: (params: ParamsOfCreateOidc) => PromiseOrNot<Oidc<DecodedIdToken>>
 ): OidcReactApi<
     DecodedIdToken,
     ParamsOfCreateOidc extends { isAuthGloballyRequired?: true | undefined } ? true : false
 > {
-    const prOidc = Promise.resolve(createOidc(params)).catch(error => {
-        if (!(error instanceof OidcInitializationError)) {
-            throw error;
-        }
+    const prOidc = Promise.resolve(params)
+        .then(params => createOidc(params))
+        .catch(error => {
+            if (!(error instanceof OidcInitializationError)) {
+                throw error;
+            }
 
-        return error;
-    });
+            return error;
+        });
 
     const { decodedIdTokenSchema } =
         "decodedIdTokenSchema" in params ? params : { "decodedIdTokenSchema": undefined };
@@ -267,6 +269,6 @@ export function createOidcReactApi_dependencyInjection<
 export function createReactOidc<
     DecodedIdToken extends Record<string, unknown> = Record<string, unknown>,
     IsAuthGloballyRequired extends boolean = false
->(params: ParamsOfCreateOidc<DecodedIdToken, IsAuthGloballyRequired>) {
+>(params: PromiseOrNot<ParamsOfCreateOidc<DecodedIdToken, IsAuthGloballyRequired>>) {
     return createOidcReactApi_dependencyInjection(params, createOidc);
 }
