@@ -941,6 +941,7 @@ export async function createOidc<
         "getTokens": () => currentTokens,
         "logout": async params => {
             await oidcClientTsUserManager.signoutRedirect({
+                "id_token_hint": currentTokens.idToken,
                 "post_logout_redirect_uri": ((): string => {
                     switch (params.redirectTo) {
                         case "current page":
