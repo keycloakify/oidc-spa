@@ -163,7 +163,7 @@ export type ParamsOfCreateOidc<
 };
 
 let $isUserActive: StatefulObservable<boolean> | undefined = undefined;
-const hotReloadCleanups = new Map<string, Set<() => void>>();
+const prOidcByConfigHash = new Map<string, Promise<Oidc<any>>>();
 
 const URL_real = window.URL;
 
@@ -217,15 +217,27 @@ export async function createOidc<
         `${issuerUri} ${clientId} ${clientSecret ?? ""} ${scopes.join(" ")}`
     );
 
-    {
-        const cleanups = hotReloadCleanups.get(configHash);
+    use_previous_instance: {
+        const prOidc = prOidcByConfigHash.get(configHash);
 
-        if (cleanups !== undefined) {
-            Array.from(cleanups ?? []).forEach(cleanup => cleanup());
+        if (prOidc === undefined) {
+            break use_previous_instance;
         }
 
-        hotReloadCleanups.set(configHash, new Set());
+        console.warn(
+            [
+                `oidc-spa has been instantiated more than once with the same configuration.`,
+                `If you are in development mode with hot module replacement this is expected you can ignore this warning.`,
+                `In production however this is something that should be addressed.`
+            ].join(" ")
+        );
+
+        return prOidc as any;
     }
+
+    const dOidc = new Deferred<Oidc<any>>();
+
+    prOidcByConfigHash.set(configHash, dOidc.pr);
 
     const silentSso =
         publicUrl === undefined
@@ -901,6 +913,7 @@ export async function createOidc<
             initializationError
         });
 
+        dOidc.resolve(oidc);
         // @ts-expect-error: We know what we are doing.
         return oidc;
     }
@@ -922,6 +935,8 @@ export async function createOidc<
             "login": params => loginOrGoToAuthServer({ "action": "login", ...params }),
             "initializationError": undefined
         });
+
+        dOidc.resolve(oidc);
 
         // @ts-expect-error: We know what we are doing.
         return oidc;
@@ -1055,8 +1070,6 @@ export async function createOidc<
                         "doesCurrentHrefRequiresAuth": false
                     });
                 }
-
-                scheduleRenew();
             }, getMsBeforeExpiration() - renewMsBeforeExpires);
 
             const { unsubscribe: tokenChangeUnsubscribe } = oidc.subscribeToTokensChange(() => {
@@ -1092,7 +1105,7 @@ export async function createOidc<
             }).$isUserActive;
         }
 
-        const { unsubscribe: unsubscribeFrom$isUserActive } = $isUserActive.subscribe(isUserActive => {
+        $isUserActive.subscribe(isUserActive => {
             if (isUserActive) {
                 if (stopCountdown !== undefined) {
                     stopCountdown();
@@ -1103,15 +1116,6 @@ export async function createOidc<
                 stopCountdown = startCountdown().stopCountdown;
             }
         });
-
-        {
-            const hotReloadCleanupsForThisConfig = hotReloadCleanups.get(configHash);
-            assert(hotReloadCleanupsForThisConfig !== undefined);
-            hotReloadCleanupsForThisConfig.add(() => {
-                unsubscribeFrom$isUserActive();
-                stopCountdown?.();
-            });
-        }
     }
 
     return oidc;
