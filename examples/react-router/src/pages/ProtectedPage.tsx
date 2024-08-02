@@ -9,7 +9,7 @@ export function ProtectedPage() {
 
     return (
         <h4>
-            Hello {oidcTokens.decodedIdToken.preferred_username}!
+            Hello {oidcTokens.decodedIdToken.preferred_username}
             <br />
             The page you are currently viewing can only be accessed when you are authenticated.
             <br />
@@ -17,11 +17,22 @@ export function ProtectedPage() {
             <button
                 onClick={() =>
                     goToAuthServer({
-                        extraQueryParams: { "kc_action": "UPDATE_PASSWORD" }
+                        extraQueryParams: { kc_action: "UPDATE_PASSWORD" }
                     })
                 }
             >
                 Change password
+            </button>
+            <br />
+            <br />
+            <button
+                onClick={() =>
+                    goToAuthServer({
+                        extraQueryParams: { kc_action: "UPDATE_PROFILE" }
+                    })
+                }
+            >
+                Update profile
             </button>
         </h4>
     );

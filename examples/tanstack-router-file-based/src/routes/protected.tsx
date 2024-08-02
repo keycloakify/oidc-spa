@@ -23,11 +23,22 @@ function ProtectedPage() {
             <button
                 onClick={() =>
                     goToAuthServer({
-                        extraQueryParams: { "kc_action": "UPDATE_PASSWORD" }
+                        extraQueryParams: { kc_action: "UPDATE_PASSWORD" }
                     })
                 }
             >
                 Change password
+            </button>
+            <br />
+            <br />
+            <button
+                onClick={() =>
+                    goToAuthServer({
+                        extraQueryParams: { kc_action: "UPDATE_PROFILE" }
+                    })
+                }
+            >
+                Update profile
             </button>
         </h4>
     );
