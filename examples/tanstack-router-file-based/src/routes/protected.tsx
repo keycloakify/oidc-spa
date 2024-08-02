@@ -1,7 +1,7 @@
 // NOTE: Absolute imports are possible due to the following configuration:
 // - tsconfig.json: "baseUrl": "./src"
 // - vite.config.ts: usage of the "vite-tsconfig-paths" plugin
-import { prOidc, useOidc } from "oidc";
+import { getOidc, useOidc } from "oidc";
 import { createFileRoute } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/protected")({
@@ -40,12 +40,25 @@ function ProtectedPage() {
             >
                 Update profile
             </button>
+            {/*
+            <br />
+            <br />
+            <button
+                onClick={() =>
+                    goToAuthServer({
+                        extraQueryParams: { kc_action: "delete_account" }
+                    })
+                }
+            >
+                Delete account
+            </button>
+            */}
         </h4>
     );
 }
 
 async function protectedRouteLoader() {
-    const oidc = await prOidc;
+    const oidc = await getOidc();
 
     if (oidc.isUserLoggedIn) {
         return null;

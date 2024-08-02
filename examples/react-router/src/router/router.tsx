@@ -2,7 +2,7 @@ import { createBrowserRouter, type LoaderFunctionArgs } from "react-router-dom";
 import { Layout } from "./Layout";
 import { ProtectedPage } from "../pages/ProtectedPage";
 import { PublicPage } from "../pages/PublicPage";
-import { prOidc } from "oidc";
+import { getOidc } from "oidc";
 
 export const router = createBrowserRouter([
     {
@@ -23,7 +23,7 @@ export const router = createBrowserRouter([
 ]);
 
 async function protectedRouteLoader({ request }: LoaderFunctionArgs) {
-    const oidc = await prOidc;
+    const oidc = await getOidc();
 
     if (!oidc.isUserLoggedIn) {
         // Replace the href without reloading the page.

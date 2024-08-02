@@ -1,7 +1,7 @@
 import { Layout } from "./Layout";
 import { ProtectedPage } from "../pages/ProtectedPage";
 import { PublicPage } from "../pages/PublicPage";
-import { prOidc } from "oidc";
+import { getOidc } from "oidc";
 
 import { createRootRoute, createRoute, createRouter } from "@tanstack/react-router";
 
@@ -25,7 +25,7 @@ declare module "@tanstack/react-router" {
 }
 
 async function protectedRouteLoader() {
-    const oidc = await prOidc;
+    const oidc = await getOidc();
 
     if (oidc.isUserLoggedIn) {
         return null;

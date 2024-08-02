@@ -9,11 +9,17 @@ export const {
      * to the above OidcProvider.
      */
     useOidc,
-    prOidc
+    /**
+     * This is useful to use the oidc API outside of React.
+     */
+    getOidc
 } = createReactOidc({
     // If you don't have the parameters right away, it's the case for example
     // if you get the oidc parameters from an API you can pass a promise that
     // resolves to the parameters. `createReactOidc(prParams)`.
+    // You can also pass an async function that returns the parameters.
+    // `createReactOidc(async () => params)`. It will be called when the <OidcProvider />
+    // is first mounted or when getOidc() is called.
 
     issuerUri: import.meta.env.VITE_OIDC_ISSUER,
     clientId: import.meta.env.VITE_OIDC_CLIENT_ID,
