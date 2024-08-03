@@ -29,12 +29,17 @@ export namespace ResultOfAccessTokenVerify {
     export type Valid<DecodedAccessToken> = {
         isValid: true;
         decodedAccessToken: DecodedAccessToken;
+
+        errorCase?: never;
+        errorMessage?: never;
     };
 
     export type Invalid = {
         isValid: false;
         errorCase: "expired" | "invalid signature" | "does not respect schema";
         errorMessage: string;
+
+        decodedAccessToken?: never;
     };
 }
 
@@ -89,9 +94,7 @@ export async function createOidcBackend<DecodedAccessToken extends Record<string
     });
 
     return {
-        "verifyAndDecodeAccessToken": ({ accessToken: accessTokenOrAuthorizationHeader }) => {
-            const accessToken = accessTokenOrAuthorizationHeader.replace(/^Bearer[\s\r\n]+/, "");
-
+        "verifyAndDecodeAccessToken": ({ accessToken }) => {
             let result = id<ResultOfAccessTokenVerify<DecodedAccessToken> | undefined>(undefined);
 
             jwt.verify(accessToken, publicKey, { algorithms: [signingAlgorithm] }, (err, decoded) => {
