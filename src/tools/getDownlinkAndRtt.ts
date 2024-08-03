@@ -1,4 +1,4 @@
-import { assert } from "../vendor/tsafe";
+import { assert } from "../vendor/frontend/tsafe";
 
 export function getDownlinkAndRtt(): { downlink: number; rtt: number } | undefined {
     if (!(window.navigator instanceof Object)) {

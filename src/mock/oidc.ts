@@ -1,8 +1,8 @@
 import type { Oidc } from "../oidc";
 import { retrieveQueryParamFromUrl, addQueryParamToUrl } from "../tools/urlQueryParams";
 import { createObjectThatThrowsIfAccessed } from "../tools/createObjectThatThrowsIfAccessed";
-import { id } from "../vendor/tsafe";
-import { assert, type Equals } from "../vendor/tsafe";
+import { id } from "../vendor/frontend/tsafe";
+import { assert, type Equals } from "../vendor/frontend/tsafe";
 
 export type ParamsOfCreateMockOidc<
     DecodedIdToken extends Record<string, unknown> = Record<string, unknown>,

@@ -1,8 +1,8 @@
 import { useEffect, useState, createContext, useContext, useReducer, type ReactNode } from "react";
 import { createOidc, type ParamsOfCreateOidc, type Oidc } from "../oidc";
 import { OidcInitializationError } from "../OidcInitializationError";
-import { assert } from "../vendor/tsafe";
-import { id } from "../vendor/tsafe";
+import { assert } from "../vendor/frontend/tsafe";
+import { id } from "../vendor/frontend/tsafe";
 import { useGuaranteedMemo } from "../tools/powerhooks/useGuaranteedMemo";
 import type { PromiseOrNot } from "../tools/PromiseOrNot";
 import type { ValueOrPromiseOrAsyncGetter } from "../tools/ValueOrPromiseOrAsyncGetter";
