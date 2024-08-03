@@ -2,6 +2,8 @@ import { fetch } from "./vendor/backend/node-fetch";
 import { assert, isAmong, id } from "./vendor/backend/tsafe";
 import * as jwt from "./vendor/backend/jsonwebtoken";
 import { z } from "./vendor/backend/zod";
+import { Evt } from "./vendor/backend/evt";
+import { throttleTime } from "./vendor/backend/evt";
 
 export type KeycloakParams = {
     url: string;
@@ -41,7 +43,50 @@ export async function createOidcBackend<DecodedAccessToken extends Record<string
 ): Promise<OidcBackend<DecodedAccessToken>> {
     const { issuerUri, decodedAccessTokenSchema = z.record(z.unknown()) } = params;
 
-    const { publicKey, signingAlgorithm } = await fetchPublicKeyAndSigningAlgorithm({ issuerUri });
+    let { publicKey, signingAlgorithm } = await fetchPublicKeyAndSigningAlgorithm({ issuerUri });
+
+    const evtInvalidSignature = Evt.create<void>();
+
+    evtInvalidSignature.pipe(throttleTime(3600_000)).attach(async () => {
+        const wrap = await (async function callee(
+            count: number
+        ): Promise<ReturnType<typeof fetchPublicKeyAndSigningAlgorithm> | undefined> {
+            let wrap;
+
+            try {
+                wrap = await fetchPublicKeyAndSigningAlgorithm({ issuerUri });
+            } catch (error) {
+                if (count === 9) {
+                    console.warn(
+                        `Failed to refresh public key and signing algorithm after ${count + 1} attempts`
+                    );
+
+                    return undefined;
+                }
+
+                const delayMs = 1000 * Math.pow(2, count);
+
+                console.warn(
+                    `Failed to refresh public key and signing algorithm: ${String(
+                        error
+                    )}, retrying in ${delayMs}ms`
+                );
+
+                await new Promise(resolve => setTimeout(resolve, delayMs));
+
+                return callee(count + 1);
+            }
+
+            return wrap;
+        })(0);
+
+        if (wrap === undefined) {
+            return;
+        }
+
+        publicKey = wrap.publicKey;
+        signingAlgorithm = wrap.signingAlgorithm;
+    });
 
     return {
         "verifyAndDecodeAccessToken": ({ accessToken: accessTokenOrAuthorizationHeader }) => {
@@ -63,6 +108,8 @@ export async function createOidcBackend<DecodedAccessToken extends Record<string
                         });
                         return;
                     }
+
+                    evtInvalidSignature.post();
 
                     result = id<ResultOfAccessTokenVerify.Invalid>({
                         "isValid": false,
