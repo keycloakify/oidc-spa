@@ -1,11 +1,11 @@
 import {
     UserManager as OidcClientTsUserManager,
     type User as OidcClientTsUser
-} from "./vendor/oidc-client-ts-and-jwt-decode";
-import { id } from "./vendor/tsafe";
-import type { Param0 } from "./vendor/tsafe";
+} from "./vendor/frontend/oidc-client-ts-and-jwt-decode";
+import { id } from "./vendor/frontend/tsafe";
+import type { Param0 } from "./vendor/frontend/tsafe";
 import { readExpirationTimeInJwt } from "./tools/readExpirationTimeInJwt";
-import { assert, type Equals } from "./vendor/tsafe";
+import { assert, type Equals } from "./vendor/frontend/tsafe";
 import { addQueryParamToUrl, retrieveQueryParamFromUrl } from "./tools/urlQueryParams";
 import { fnv1aHashToHex } from "./tools/fnv1aHashToHex";
 import { Deferred } from "./tools/Deferred";
@@ -14,7 +14,7 @@ import { getDownlinkAndRtt } from "./tools/getDownlinkAndRtt";
 import { createIsUserActive } from "./tools/createIsUserActive";
 import { createStartCountdown } from "./tools/startCountdown";
 import type { StatefulObservable } from "./tools/StatefulObservable";
-import { setTimeout, clearTimeout } from "./vendor/worker-timers";
+import { setTimeout, clearTimeout } from "./vendor/frontend/worker-timers";
 import { OidcInitializationError } from "./OidcInitializationError";
 
 export declare type Oidc<DecodedIdToken extends Record<string, unknown> = Record<string, unknown>> =

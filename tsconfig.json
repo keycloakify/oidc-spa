@@ -1,7 +1,7 @@
 {
     "compilerOptions": {
         "module": "CommonJS",
-        "target": "es5",
+        "target": "ES2018",
         "moduleResolution": "node",
         "lib": ["es2015", "DOM", "ES2019.Object"],
         "esModuleInterop": true,

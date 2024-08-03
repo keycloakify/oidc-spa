@@ -1,5 +1,5 @@
 import { decodeJwt } from "./decodeJwt";
-import { assert } from "../vendor/tsafe";
+import { assert } from "../vendor/frontend/tsafe";
 
 // Return undefined if token provided wasn't a JWT or if it hasn't an exp claim number
 export function readExpirationTimeInJwt(token: string): number | undefined {

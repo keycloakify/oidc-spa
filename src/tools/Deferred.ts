@@ -1,4 +1,4 @@
-import { overwriteReadonlyProp } from "../vendor/tsafe";
+import { overwriteReadonlyProp } from "../vendor/frontend/tsafe";
 
 export class Deferred<T> {
     public readonly pr: Promise<T>;
