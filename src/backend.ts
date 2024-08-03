@@ -5,11 +5,6 @@ import { z } from "./vendor/backend/zod";
 import { Evt } from "./vendor/backend/evt";
 import { throttleTime } from "./vendor/backend/evt";
 
-export type KeycloakParams = {
-    url: string;
-    realm: string;
-};
-
 export type ParamsOfCreateOidcBackend<DecodedAccessToken extends Record<string, unknown>> = {
     issuerUri: string;
     decodedAccessTokenSchema?: { parse: (data: unknown) => DecodedAccessToken };
