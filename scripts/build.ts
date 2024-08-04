@@ -10,13 +10,19 @@ import { assert } from "tsafe/assert";
 
 const startTime = Date.now();
 
+const distDirPath = pathJoin(__dirname, "..", "dist");
+
+if (fs.existsSync(distDirPath)) {
+    fs.rmSync(distDirPath, { "recursive": true });
+}
+
 run("npx tsc");
 
 const extraBundleFileBasenames = new Set<string>();
 
 (["backend", "frontend"] as const)
     .map(backendOrFrontend => ({
-        "vendorDirPath": pathJoin(__dirname, "..", "dist", "vendor", backendOrFrontend),
+        "vendorDirPath": pathJoin(distDirPath, "vendor", backendOrFrontend),
         backendOrFrontend
     }))
     .forEach(({ backendOrFrontend, vendorDirPath }) =>
@@ -31,12 +37,6 @@ const extraBundleFileBasenames = new Set<string>();
                     if (fs.existsSync(mapFilePath)) {
                         fs.unlinkSync(mapFilePath);
                     }
-                }
-
-                const isBundledFile = fs.readFileSync(filePath).toString("utf8").includes("webpack");
-
-                if (isBundledFile) {
-                    return;
                 }
 
                 const cacheDirPath = pathJoin(__dirname, "..", "node_modules", ".cache", "scripts");
