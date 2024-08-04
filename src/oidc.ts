@@ -6,7 +6,11 @@ import { id } from "./vendor/frontend/tsafe";
 import type { Param0 } from "./vendor/frontend/tsafe";
 import { readExpirationTimeInJwt } from "./tools/readExpirationTimeInJwt";
 import { assert, type Equals } from "./vendor/frontend/tsafe";
-import { addQueryParamToUrl, retrieveQueryParamFromUrl } from "./tools/urlQueryParams";
+import {
+    addQueryParamToUrl,
+    retrieveQueryParamFromUrl,
+    retrieveAllQueryParamFromUrl
+} from "./tools/urlQueryParams";
 import { fnv1aHashToHex } from "./tools/fnv1aHashToHex";
 import { Deferred } from "./tools/Deferred";
 import { decodeJwt } from "./tools/decodeJwt";
@@ -16,6 +20,7 @@ import { createStartCountdown } from "./tools/startCountdown";
 import type { StatefulObservable } from "./tools/StatefulObservable";
 import { setTimeout, clearTimeout } from "./vendor/frontend/worker-timers";
 import { OidcInitializationError } from "./OidcInitializationError";
+import { encodeBase64, decodeBase64 } from "./tools/base64";
 
 export declare type Oidc<DecodedIdToken extends Record<string, unknown> = Record<string, unknown>> =
     | Oidc.LoggedIn<DecodedIdToken>
@@ -73,15 +78,34 @@ export declare namespace Oidc {
             subscribeToAutoLogoutCountdown: (
                 tickCallback: (params: { secondsLeft: number | undefined }) => void
             ) => { unsubscribeFromAutoLogoutCountdown: () => void };
-
-            /**
-             *
-             * backFromLoginPages: The user has returned from the identity server's login pages. The session was established using query parameters provided by the identity server.
-             * sessionStorageRestoration: The user just reloaded the page. An OIDC token stored in the session storage was used to restore the session.
-             * silentSignin: Silent Single Sign-On (SSO) was achieved by creating an iframe to the identity server in the background. HttpOnly cookies were utilized to restore the session without redirecting the user to the login pages.
-             */
-            loginScenario: "backFromLoginPages" | "sessionStorageRestoration" | "silentSignin";
-        };
+        } & (
+                | {
+                      /**
+                       * "back from auth server":
+                       *      The user was redirected to the authentication server login/registration page and then redirected back to the application.
+                       * "session storage":
+                       *    The user's authentication was restored from the browser session storage, typically after a page refresh.
+                       * "silent signin":
+                       *   The user was authenticated silently using an iframe to check the session with the authentication server.
+                       */
+                      authMethod: "back from auth server";
+                      /**
+                       * Defined when authMethod is "back from auth server".
+                       * If you called `goToAuthServer` or `login` with extraQueryParams, this object let you know the outcome of the
+                       * of the action that was intended.
+                       *
+                       * For example, on a Keycloak server, if you called `goToAuthServer({ extraQueryParams: { kc_action: "UPDATE_PASSWORD" } })`
+                       * you'll get back: `{ extraQueryParams: { kc_action: "UPDATE_PASSWORD" }, result: { kc_action_status: "success" } }` (or "cancelled")
+                       */
+                      backFromAuthServer: {
+                          extraQueryParams: Record<string, string>;
+                          result: Record<string, string>;
+                      };
+                  }
+                | {
+                      authMethod: "session storage" | "silent signin";
+                  }
+            );
 
     export type Tokens<DecodedIdToken extends Record<string, unknown> = Record<string, unknown>> =
         Readonly<{
@@ -179,7 +203,7 @@ export async function createOidc<
         clientId,
         clientSecret,
         scopes = ["profile"],
-        transformUrlBeforeRedirect = url => url,
+        transformUrlBeforeRedirect,
         extraQueryParams: extraQueryParamsOrGetter,
         publicUrl: publicUrl_params,
         decodedIdTokenSchema,
@@ -326,6 +350,9 @@ export async function createOidc<
 
     let hasLoginBeenCalled = false;
 
+    const RESULT_OMIT_RESERVED_QUERY_PARAM_NAME = "oidc-spa_result_omit";
+    const EXTRA_QUERY_PARAMS_BACK_FROM_AUTH_SERVER_RESERVED_QUERY_PARAM_NAME = "oidc-spa_intent";
+
     type ParamsOfLoginOrGoToAuthServer = Omit<
         Param0<Oidc.NotLoggedIn["login"]>,
         "doesCurrentHrefRequiresAuth"
@@ -336,7 +363,7 @@ export async function createOidc<
         const {
             extraQueryParams: extraQueryParams_fromLoginFn,
             redirectUrl,
-            transformUrlBeforeRedirect: transformUrlBeforeRedirect_fromLoginFn = url => url,
+            transformUrlBeforeRedirect: transformUrlBeforeRedirect_fromLoginFn,
             ...rest
         } = params;
 
@@ -351,19 +378,6 @@ export async function createOidc<
 
             hasLoginBeenCalled = true;
         }
-
-        const { newUrl: redirect_uri } = addQueryParamToUrl({
-            "url": (() => {
-                if (redirectUrl === undefined) {
-                    return window.location.href;
-                }
-                return redirectUrl.startsWith("/")
-                    ? `${window.location.origin}${redirectUrl}`
-                    : redirectUrl;
-            })(),
-            "name": CONFIG_HASH_RESERVED_QUERY_PARAM_NAME,
-            "value": configHash
-        });
 
         // NOTE: This is for handling cases when user press the back button on the login pages.
         // When the app is hosted on https (so not in dev mode) the browser will restore the state of the app
@@ -390,6 +404,72 @@ export async function createOidc<
             };
             document.addEventListener("visibilitychange", callback);
         }
+
+        const redirect_uri = (() => {
+            let url = (() => {
+                if (redirectUrl === undefined) {
+                    return window.location.href;
+                }
+                return redirectUrl.startsWith("/")
+                    ? `${window.location.origin}${redirectUrl}`
+                    : redirectUrl;
+            })();
+
+            url = addQueryParamToUrl({
+                url,
+                "name": CONFIG_HASH_RESERVED_QUERY_PARAM_NAME,
+                "value": configHash
+            }).newUrl;
+
+            {
+                const { values: queryParamsNamesToOmit_backFromAuthServer } =
+                    retrieveAllQueryParamFromUrl({ url });
+
+                url = addQueryParamToUrl({
+                    url,
+                    "name": RESULT_OMIT_RESERVED_QUERY_PARAM_NAME,
+                    "value": encodeBase64(
+                        JSON.stringify(Object.keys(queryParamsNamesToOmit_backFromAuthServer))
+                    )
+                }).newUrl;
+            }
+
+            {
+                const extraQueryParams_backFromAuthServer: Record<string, string> =
+                    extraQueryParams_fromLoginFn ?? {};
+
+                read_query_params_added_by_transform_before_redirect: {
+                    if (transformUrlBeforeRedirect_fromLoginFn === undefined) {
+                        break read_query_params_added_by_transform_before_redirect;
+                    }
+
+                    let url_afterTransform;
+
+                    try {
+                        url_afterTransform = transformUrlBeforeRedirect_fromLoginFn("https://dummy.com");
+                    } catch {
+                        break read_query_params_added_by_transform_before_redirect;
+                    }
+
+                    const { values: queryParamsAddedByTransformBeforeRedirect } =
+                        retrieveAllQueryParamFromUrl({ "url": url_afterTransform });
+
+                    for (const [name, value] of Object.entries(
+                        queryParamsAddedByTransformBeforeRedirect
+                    )) {
+                        extraQueryParams_backFromAuthServer[name] = value;
+                    }
+                }
+
+                url = addQueryParamToUrl({
+                    url,
+                    "name": EXTRA_QUERY_PARAMS_BACK_FROM_AUTH_SERVER_RESERVED_QUERY_PARAM_NAME,
+                    "value": encodeBase64(JSON.stringify(extraQueryParams_backFromAuthServer))
+                }).newUrl;
+            }
+
+            return url;
+        })();
 
         //NOTE: We know there is a extraQueryParameter option but it doesn't allow
         // to control the encoding so we have to highjack global URL Class that is
@@ -429,7 +509,13 @@ export async function createOidc<
                                             }).newUrl)
                                     );
                                 }
-                                url = transformUrlBeforeRedirect(url);
+
+                                apply_transform_before_redirect: {
+                                    if (transformUrlBeforeRedirect === undefined) {
+                                        break apply_transform_before_redirect;
+                                    }
+                                    url = transformUrlBeforeRedirect(url);
+                                }
                             });
 
                             // NOTE: Put the redirect_uri at the end of the url to avoid
@@ -524,8 +610,6 @@ export async function createOidc<
                 url = result.newUrl;
             }
 
-            window.history.pushState(null, "", url);
-
             {
                 const result = retrieveQueryParamFromUrl({ "name": "error", url });
 
@@ -538,6 +622,65 @@ export async function createOidc<
                     );
                 }
             }
+
+            let extraQueryParams_backFromAuthServer;
+
+            {
+                const result = retrieveQueryParamFromUrl({
+                    "name": EXTRA_QUERY_PARAMS_BACK_FROM_AUTH_SERVER_RESERVED_QUERY_PARAM_NAME,
+                    url
+                });
+
+                assert(result.wasPresent);
+
+                url = result.newUrl;
+
+                extraQueryParams_backFromAuthServer = JSON.parse(decodeBase64(result.value)) as Record<
+                    string,
+                    string
+                >;
+            }
+
+            let queryParamsNamesToOmit_backFromAuthServer;
+
+            {
+                const result = retrieveQueryParamFromUrl({
+                    "name": RESULT_OMIT_RESERVED_QUERY_PARAM_NAME,
+                    url
+                });
+
+                assert(result.wasPresent);
+
+                url = result.newUrl;
+
+                queryParamsNamesToOmit_backFromAuthServer = JSON.parse(
+                    decodeBase64(result.value)
+                ) as string[];
+            }
+
+            let result_backFromAuthServer: Record<string, string> = {};
+
+            {
+                const { values } = retrieveAllQueryParamFromUrl({ url });
+
+                for (const [name, value] of Object.entries(values)) {
+                    if (queryParamsNamesToOmit_backFromAuthServer.includes(name)) {
+                        continue;
+                    }
+                    result_backFromAuthServer[name] = value;
+
+                    const result = retrieveQueryParamFromUrl({
+                        name,
+                        url
+                    });
+
+                    assert(result.wasPresent);
+
+                    url = result.newUrl;
+                }
+            }
+
+            window.history.pushState(null, "", url);
 
             if (missingMandatoryParams.length !== 0) {
                 throw new Error(
@@ -574,8 +717,12 @@ export async function createOidc<
             }
 
             return {
-                "loginScenario": "backFromLoginPages" as const,
-                oidcClientTsUser
+                "authMethod": "back from auth server" as const,
+                oidcClientTsUser,
+                "backFromAuthServer": {
+                    "extraQueryParams": extraQueryParams_backFromAuthServer,
+                    "result": result_backFromAuthServer
+                }
             };
         }
 
@@ -610,7 +757,7 @@ export async function createOidc<
             }
 
             return {
-                "loginScenario": "sessionStorageRestoration" as const,
+                "authMethod": "session storage" as const,
                 oidcClientTsUser
             };
         }
@@ -866,7 +1013,7 @@ export async function createOidc<
             }
 
             return {
-                "loginScenario": "silentSignin" as const,
+                "authMethod": "silent signin" as const,
                 oidcClientTsUser
             };
         }
@@ -878,7 +1025,7 @@ export async function createOidc<
                 return undefined;
             }
 
-            const { oidcClientTsUser, loginScenario } = result;
+            const { oidcClientTsUser, authMethod, backFromAuthServer } = result;
 
             const tokens = oidcClientTsUserToTokens({
                 oidcClientTsUser,
@@ -895,7 +1042,7 @@ export async function createOidc<
                 );
             }
 
-            return { tokens, loginScenario };
+            return { tokens, authMethod, backFromAuthServer };
         },
         error => {
             assert(error instanceof Error);
@@ -1052,8 +1199,17 @@ export async function createOidc<
 
             return { unsubscribeFromAutoLogoutCountdown };
         },
-        "loginScenario": resultOfLoginProcess.loginScenario,
-        "goToAuthServer": params => loginOrGoToAuthServer({ "action": "go to auth server", ...params })
+        //"loginScenario": resultOfLoginProcess.loginScenario,
+        "goToAuthServer": params => loginOrGoToAuthServer({ "action": "go to auth server", ...params }),
+        ...(resultOfLoginProcess.authMethod === "back from auth server"
+            ? (assert(resultOfLoginProcess.backFromAuthServer !== undefined),
+              {
+                  "authMethod": "back from auth server",
+                  "backFromAuthServer": resultOfLoginProcess.backFromAuthServer
+              })
+            : {
+                  "authMethod": resultOfLoginProcess.authMethod
+              })
     });
 
     {

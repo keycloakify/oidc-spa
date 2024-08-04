@@ -31,14 +31,21 @@ export function retrieveAllQueryParamStartingWithPrefixFromUrl<
 }): { newUrl: string; values: Record<DoLeave extends true ? `${Prefix}${string}` : string, string> } {
     const { url, prefix, doLeavePrefixInResults } = params;
 
-    const [baseUrl, locationSearch = ""] = url.split("?");
+    const { baseUrl, locationSearch } = (() => {
+        const [baseUrl, ...rest] = url.split("?");
+
+        return {
+            baseUrl,
+            "locationSearch": rest.join("?").trim()
+        };
+    })();
 
     const values: Record<string, string> = {};
 
     const { newLocationSearch } = (() => {
         let newLocationSearch = locationSearch
-            .replace(/^\?/, "")
             .split("&")
+            .filter(part => part !== "")
             .map(part => part.split("=") as [string, string])
             .filter(([key, value_i]) =>
                 !key.startsWith(prefix)
@@ -58,6 +65,17 @@ export function retrieveAllQueryParamStartingWithPrefixFromUrl<
         "newUrl": `${baseUrl}${newLocationSearch}`,
         values
     };
+}
+
+export function retrieveAllQueryParamFromUrl(params: { url: string }): {
+    newUrl: string;
+    values: Record<string, string>;
+} {
+    return retrieveAllQueryParamStartingWithPrefixFromUrl({
+        "url": params.url,
+        "prefix": "",
+        "doLeavePrefixInResults": true
+    });
 }
 
 export function retrieveQueryParamFromUrl(params: {
