@@ -402,6 +402,8 @@ export async function createOidc<
                 return new Proxy(urlInstance, {
                     "get": (target, prop) => {
                         if (prop === "href") {
+                            Object.defineProperty(window, "URL", { "value": URL_real });
+
                             let url = urlInstance.href;
 
                             (
@@ -430,7 +432,27 @@ export async function createOidc<
                                 url = transformUrlBeforeRedirect(url);
                             });
 
-                            Object.defineProperty(window, "URL", { "value": URL_real });
+                            // NOTE: Put the redirect_uri at the end of the url to avoid
+                            // for aesthetic reasons, to avoid having the oidc-spa specific query parameters
+                            // being directly visible in the browser's address bar.
+                            {
+                                const name = "redirect_uri";
+
+                                const result = retrieveQueryParamFromUrl({
+                                    url,
+                                    name
+                                });
+
+                                assert(result.wasPresent);
+
+                                url = result.newUrl;
+
+                                url = addQueryParamToUrl({
+                                    url,
+                                    name,
+                                    "value": result.value
+                                }).newUrl;
+                            }
 
                             return url;
                         }
