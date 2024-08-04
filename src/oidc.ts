@@ -250,14 +250,14 @@ export async function createOidc<
                   "redirectUri": `${publicUrl}/silent-sso.html`
               };
 
-    const SILENT_SSO_KEY = "oidcSpaSilentSso";
-    const CONFIG_HASH_KEY = "configHash";
+    const IS_SILENT_SSO_RESERVED_QUERY_PARAM_NAME = "oidc-spa_silent_sso";
+    const CONFIG_HASH_RESERVED_QUERY_PARAM_NAME = "oidc-spa_config_hash";
 
     silent_sso_polyfill: {
         if (
             !retrieveQueryParamFromUrl({
                 "url": window.location.href,
-                "name": SILENT_SSO_KEY
+                "name": IS_SILENT_SSO_RESERVED_QUERY_PARAM_NAME
             }).wasPresent
         ) {
             break silent_sso_polyfill;
@@ -266,7 +266,7 @@ export async function createOidc<
         {
             const result = retrieveQueryParamFromUrl({
                 "url": window.location.href,
-                "name": CONFIG_HASH_KEY
+                "name": CONFIG_HASH_RESERVED_QUERY_PARAM_NAME
             });
 
             if (!result.wasPresent || result.value !== configHash) {
@@ -299,13 +299,13 @@ export async function createOidc<
 
             redirectUri = addQueryParamToUrl({
                 "url": redirectUri,
-                "name": CONFIG_HASH_KEY,
+                "name": CONFIG_HASH_RESERVED_QUERY_PARAM_NAME,
                 "value": configHash
             }).newUrl;
 
             redirectUri = addQueryParamToUrl({
                 "url": redirectUri,
-                "name": SILENT_SSO_KEY,
+                "name": IS_SILENT_SSO_RESERVED_QUERY_PARAM_NAME,
                 "value": "true"
             }).newUrl;
 
@@ -361,7 +361,7 @@ export async function createOidc<
                     ? `${window.location.origin}${redirectUrl}`
                     : redirectUrl;
             })(),
-            "name": CONFIG_HASH_KEY,
+            "name": CONFIG_HASH_RESERVED_QUERY_PARAM_NAME,
             "value": configHash
         });
 
@@ -488,7 +488,10 @@ export async function createOidc<
             let url = window.location.href;
 
             {
-                const result = retrieveQueryParamFromUrl({ "name": CONFIG_HASH_KEY, url });
+                const result = retrieveQueryParamFromUrl({
+                    "name": CONFIG_HASH_RESERVED_QUERY_PARAM_NAME,
+                    url
+                });
 
                 if (!result.wasPresent || result.value !== configHash) {
                     break read_successful_login_query_params;
@@ -750,7 +753,10 @@ export async function createOidc<
                     let result: ReturnType<typeof retrieveQueryParamFromUrl>;
 
                     try {
-                        result = retrieveQueryParamFromUrl({ "name": CONFIG_HASH_KEY, url });
+                        result = retrieveQueryParamFromUrl({
+                            "name": CONFIG_HASH_RESERVED_QUERY_PARAM_NAME,
+                            url
+                        });
                     } catch {
                         // This could possibly happen if url is not a valid url.
                         return;
