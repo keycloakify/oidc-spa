@@ -5,7 +5,7 @@ import { assert } from "../vendor/frontend/tsafe";
 import { id } from "../vendor/frontend/tsafe";
 import { useGuaranteedMemo } from "../tools/powerhooks/useGuaranteedMemo";
 import type { PromiseOrNot } from "../tools/PromiseOrNot";
-import type { ValueOrPromiseOrAsyncGetter } from "../tools/ValueOrPromiseOrAsyncGetter";
+import type { ValueOrAsyncGetter } from "../tools/ValueOrAsyncGetter";
 import { Deferred } from "../tools/Deferred";
 
 export type OidcReact<DecodedIdToken extends Record<string, unknown>> =
@@ -120,7 +120,7 @@ export function createOidcReactApi_dependencyInjection<
         | {}
     )
 >(
-    params: ValueOrPromiseOrAsyncGetter<ParamsOfCreateOidc>,
+    paramsOrGetParams: ValueOrAsyncGetter<ParamsOfCreateOidc>,
     createOidc: (params: ParamsOfCreateOidc) => PromiseOrNot<Oidc<DecodedIdToken>>
 ): OidcReactApi<
     DecodedIdToken,
@@ -128,35 +128,42 @@ export function createOidcReactApi_dependencyInjection<
 > {
     const dReadyToCreate = new Deferred<void>();
 
+    let decodedIdTokenSchema: { parse: (data: unknown) => DecodedIdToken } | undefined = undefined;
+
     // NOTE: It can be InitializationError only if isAuthGloballyRequired is true
-    const prOidcOrInitializationError = Promise.resolve(params)
-        .then(async paramsOrGetParams => {
-            const params = await (async () => {
-                if (typeof paramsOrGetParams === "function") {
-                    const getParams = paramsOrGetParams;
+    const prOidcOrInitializationError = (async () => {
+        const params = await (async () => {
+            if (typeof paramsOrGetParams === "function") {
+                const getParams = paramsOrGetParams;
 
-                    await dReadyToCreate.pr;
+                await dReadyToCreate.pr;
 
-                    const params = getParams();
+                const params = await getParams();
 
-                    return params;
-                }
-
-                return paramsOrGetParams;
-            })();
-
-            return createOidc(params);
-        })
-        .catch(error => {
-            if (!(error instanceof OidcInitializationError)) {
-                throw error;
+                return params;
             }
 
-            return error;
-        });
+            const params = paramsOrGetParams;
 
-    const { decodedIdTokenSchema } =
-        "decodedIdTokenSchema" in params ? params : { "decodedIdTokenSchema": undefined };
+            return params;
+        })();
+
+        if ("decodedIdTokenSchema" in params) {
+            decodedIdTokenSchema = params.decodedIdTokenSchema;
+        }
+
+        let oidc;
+
+        try {
+            oidc = await createOidc(params);
+        } catch (error) {
+            assert(error instanceof OidcInitializationError);
+
+            return error;
+        }
+
+        return oidc;
+    })();
 
     function OidcProvider(props: {
         fallback?: ReactNode;
@@ -346,6 +353,6 @@ export function createOidcReactApi_dependencyInjection<
 export function createReactOidc<
     DecodedIdToken extends Record<string, unknown> = Record<string, unknown>,
     IsAuthGloballyRequired extends boolean = false
->(params: ValueOrPromiseOrAsyncGetter<ParamsOfCreateOidc<DecodedIdToken, IsAuthGloballyRequired>>) {
+>(params: ValueOrAsyncGetter<ParamsOfCreateOidc<DecodedIdToken, IsAuthGloballyRequired>>) {
     return createOidcReactApi_dependencyInjection(params, createOidc);
 }
