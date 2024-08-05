@@ -160,7 +160,18 @@ export function createMockOidc<
         "subscribeToAutoLogoutCountdown": () => ({
             "unsubscribeFromAutoLogoutCountdown": () => {}
         }),
-        "loginScenario": isUserInitiallyLoggedIn ? "silentSignin" : "backFromLoginPages",
-        "goToAuthServer": async ({ redirectUrl }) => loginOrGoToAuthServer({ redirectUrl })
+        //"loginScenario": isUserInitiallyLoggedIn ? "silentSignin" : "backFromLoginPages",
+        "goToAuthServer": async ({ redirectUrl }) => loginOrGoToAuthServer({ redirectUrl }),
+        ...(isUserInitiallyLoggedIn
+            ? {
+                  "authMethod": "back from auth server",
+                  "backFromAuthServer": {
+                      "extraQueryParams": {},
+                      "result": {}
+                  }
+              }
+            : {
+                  "authMethod": "silent signin"
+              })
     });
 }

@@ -5,7 +5,7 @@ import { useOidc } from "oidc";
 
 export function ProtectedPage() {
     // Here we can safely assume that the user is logged in.
-    const { oidcTokens, goToAuthServer } = useOidc({ assertUserLoggedIn: true });
+    const { oidcTokens, goToAuthServer, backFromAuthServer } = useOidc({ assertUserLoggedIn: true });
 
     return (
         <h4>
@@ -23,6 +23,9 @@ export function ProtectedPage() {
             >
                 Change password
             </button>
+            {backFromAuthServer?.extraQueryParams.kc_action === "UPDATE_PASSWORD" && (
+                <p>Result: {backFromAuthServer.result.kc_action_status}</p>
+            )}
             <br />
             <br />
             <button
@@ -33,6 +36,20 @@ export function ProtectedPage() {
                 }
             >
                 Update profile
+            </button>
+            {backFromAuthServer?.extraQueryParams.kc_action === "UPDATE_PROFILE" && (
+                <p>Result: {backFromAuthServer.result.kc_action_status}</p>
+            )}
+            <br />
+            <br />
+            <button
+                onClick={() =>
+                    goToAuthServer({
+                        extraQueryParams: { kc_action: "delete_account" }
+                    })
+                }
+            >
+                Delete account
             </button>
         </h4>
     );

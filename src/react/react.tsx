@@ -42,7 +42,35 @@ export namespace OidcReact {
             redirectUrl?: string;
             transformUrlBeforeRedirect?: (url: string) => string;
         }) => Promise<never>;
-    };
+    } & (
+            | {
+                  /**
+                   * "back from auth server":
+                   *      The user was redirected to the authentication server login/registration page and then redirected back to the application.
+                   * "session storage":
+                   *    The user's authentication was restored from the browser session storage, typically after a page refresh.
+                   * "silent signin":
+                   *   The user was authenticated silently using an iframe to check the session with the authentication server.
+                   */
+                  authMethod: "back from auth server";
+                  /**
+                   * Defined when authMethod is "back from auth server".
+                   * If you called `goToAuthServer` or `login` with extraQueryParams, this object let you know the outcome of the
+                   * of the action that was intended.
+                   *
+                   * For example, on a Keycloak server, if you called `goToAuthServer({ extraQueryParams: { kc_action: "UPDATE_PASSWORD" } })`
+                   * you'll get back: `{ extraQueryParams: { kc_action: "UPDATE_PASSWORD" }, result: { kc_action_status: "success" } }` (or "cancelled")
+                   */
+                  backFromAuthServer: {
+                      extraQueryParams: Record<string, string>;
+                      result: Record<string, string>;
+                  };
+              }
+            | {
+                  authMethod: "session storage" | "silent signin";
+                  backFromAuthServer?: never;
+              }
+        );
 }
 
 const oidcContext = createContext<
@@ -271,7 +299,15 @@ export function createOidcReactApi_dependencyInjection<
                       "logout": oidc.logout,
                       "renewTokens": oidc.renewTokens,
                       "subscribeToAutoLogoutCountdown": oidc.subscribeToAutoLogoutCountdown,
-                      "goToAuthServer": oidc.goToAuthServer
+                      "goToAuthServer": oidc.goToAuthServer,
+                      ...(oidc.authMethod === "back from auth server"
+                          ? {
+                                "authMethod": "back from auth server",
+                                "backFromAuthServer": oidc.backFromAuthServer
+                            }
+                          : {
+                                "authMethod": oidc.authMethod
+                            })
                   })
               )
             : id<OidcReact.NotLoggedIn>({
