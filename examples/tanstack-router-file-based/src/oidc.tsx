@@ -59,10 +59,16 @@ export const {
     decodedIdTokenSchema: z.object({
         sub: z.string(),
         preferred_username: z.string()
-    })
+    }),
     //autoLogoutParams: { redirectTo: "current page" } // Default
     //autoLogoutParams: { redirectTo: "home" }
     //autoLogoutParams: { redirectTo: "specific url", url: "/a-page" }
+
+    // This parameter is optional.
+    // It allows you to pass extra query params before redirecting to the OIDC server.
+    extraQueryParams: () => ({
+        ui_locales: "en" // Gere you would dynamically get the current language at the time of redirecting to the OIDC server
+    })
 });
 
 // Using the mock adapter:
