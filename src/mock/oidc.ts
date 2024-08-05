@@ -8,13 +8,16 @@ export type ParamsOfCreateMockOidc<
     DecodedIdToken extends Record<string, unknown> = Record<string, unknown>,
     IsAuthGloballyRequired extends boolean = false
 > = {
-    isUserInitiallyLoggedIn: boolean;
     mockedParams?: Partial<Oidc["params"]>;
     mockedTokens?: Partial<Oidc.Tokens<DecodedIdToken>>;
     publicUrl?: string;
     isAuthGloballyRequired?: IsAuthGloballyRequired;
     postLoginRedirectUrl?: string;
-};
+} & (IsAuthGloballyRequired extends true
+    ? { isUserInitiallyLoggedIn?: true }
+    : {
+          isUserInitiallyLoggedIn: boolean;
+      });
 
 const urlParamName = "isUserLoggedIn";
 
