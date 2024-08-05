@@ -80,7 +80,7 @@ const decodedIdTokenSchema = z.object({
 
 const publicUrl = import.meta.env.BASE_URL;
 
-export const { OidcProvider, useOidc, prOidc } =
+export const { OidcProvider, useOidc, getOidc } =
     !import.meta.env.VITE_OIDC_ISSUER ?
         createMockReactOidc({
             isUserInitiallyLoggedIn: false,
