@@ -28,7 +28,7 @@ export function createMockOidc<
     params: ParamsOfCreateMockOidc<DecodedIdToken, IsAuthGloballyRequired>
 ): IsAuthGloballyRequired extends true ? Oidc.LoggedIn<DecodedIdToken> : Oidc<DecodedIdToken> {
     const {
-        isUserInitiallyLoggedIn,
+        isUserInitiallyLoggedIn = true,
         mockedParams = {},
         mockedTokens = {},
         publicUrl: publicUrl_params,
