@@ -40,7 +40,26 @@ export function Header() {
                 </div>
             ) : (
                 <div>
-                    <button onClick={() => login({ doesCurrentHrefRequiresAuth: false })}>Login</button>
+                    <button onClick={() => login({ doesCurrentHrefRequiresAuth: false })}>Login</button>{" "}
+                    <button
+                        onClick={() =>
+                            login({
+                                doesCurrentHrefRequiresAuth: false,
+                                transformUrlBeforeRedirect: url => {
+                                    const urlObj = new URL(url);
+
+                                    urlObj.pathname = urlObj.pathname.replace(
+                                        /\/auth$/,
+                                        "/registrations"
+                                    );
+
+                                    return urlObj.href;
+                                }
+                            })
+                        }
+                    >
+                        Register
+                    </button>
                 </div>
             )}
         </div>
