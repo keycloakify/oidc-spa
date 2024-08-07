@@ -213,6 +213,9 @@ export async function createOidc<
         postLoginRedirectUrl
     } = params;
 
+    console.log("init oidc-spa");
+    console.log(JSON.stringify(params, null, 2));
+
     const getExtraQueryParams = (() => {
         if (typeof extraQueryParamsOrGetter === "function") {
             return extraQueryParamsOrGetter;
@@ -237,9 +240,13 @@ export async function createOidc<
         ).replace(/\/$/, "");
     })();
 
+    console.log(`publicUrl: ${publicUrl}`);
+
     const configHash = fnv1aHashToHex(
         `${issuerUri} ${clientId} ${clientSecret ?? ""} ${scopes.join(" ")}`
     );
+
+    console.log(`configHash: ${configHash}`);
 
     use_previous_instance: {
         const prOidc = prOidcByConfigHash.get(configHash);
@@ -274,6 +281,8 @@ export async function createOidc<
                   "redirectUri": `${publicUrl}/silent-sso.html`
               };
 
+    console.log(`silentSso: ${JSON.stringify(silentSso, null, 2)}`);
+
     const IS_SILENT_SSO_RESERVED_QUERY_PARAM_NAME = "oidc-spa_silent_sso";
     const CONFIG_HASH_RESERVED_QUERY_PARAM_NAME = "oidc-spa_config_hash";
 
@@ -286,6 +295,8 @@ export async function createOidc<
         ) {
             break silent_sso_polyfill;
         }
+
+        console.log("We are in silent-sso polyfill!!!!");
 
         {
             const result = retrieveQueryParamFromUrl({
@@ -1060,6 +1071,8 @@ export async function createOidc<
     if (resultOfLoginProcess instanceof Error) {
         const error = resultOfLoginProcess;
 
+        console.log("Result of login process was error");
+
         const initializationError =
             error instanceof OidcInitializationError
                 ? error
@@ -1094,6 +1107,8 @@ export async function createOidc<
     }
 
     if (resultOfLoginProcess === undefined) {
+        console.log("User is not logged in");
+
         if (isAuthGloballyRequired) {
             await loginOrGoToAuthServer({
                 "action": "login",
@@ -1199,7 +1214,6 @@ export async function createOidc<
 
             return { unsubscribeFromAutoLogoutCountdown };
         },
-        //"loginScenario": resultOfLoginProcess.loginScenario,
         "goToAuthServer": params => loginOrGoToAuthServer({ "action": "go to auth server", ...params }),
         ...(resultOfLoginProcess.authMethod === "back from auth server"
             ? (assert(resultOfLoginProcess.backFromAuthServer !== undefined),
@@ -1212,6 +1226,8 @@ export async function createOidc<
               })
     });
 
+    console.log("Auth method: " + oidc.authMethod);
+
     {
         const getMsBeforeExpiration = () => {
             // NOTE: In general the access token is supposed to have a shorter
@@ -1222,6 +1238,17 @@ export async function createOidc<
                 currentTokens.refreshTokenExpirationTime
             );
 
+            console.log(
+                `Seconds before expiration of the Access Token: ${Math.round(
+                    (tokenExpirationTime - Date.now()) / 1000
+                )}`
+            );
+            console.log(
+                `Seconds before expiration of the Refresh Token: ${Math.round(
+                    (currentTokens.refreshTokenExpirationTime - Date.now()) / 1000
+                )}`
+            );
+
             const msBeforeExpiration = Math.min(
                 tokenExpirationTime - Date.now(),
                 // NOTE: We want to make sure we do not overflow the setTimeout
@@ -1229,6 +1256,8 @@ export async function createOidc<
                 // This can happen if the tokenExpirationTime is more than 24.8 days in the future.
                 Math.pow(2, 31) - 1
             );
+
+            console.log(`Seconds before expiration: ${Math.round(msBeforeExpiration / 1000)}`);
 
             if (msBeforeExpiration < 0) {
                 return 0;
@@ -1238,12 +1267,16 @@ export async function createOidc<
         };
 
         (function scheduleRenew() {
+            const msBeforeExpiration = getMsBeforeExpiration();
+
             // NOTE: We refresh the token 25 seconds before it expires.
             // If the token expiration time is less than 25 seconds we refresh the token when
             // only 1/10 of the token time is left.
-            const renewMsBeforeExpires = Math.min(25_000, getMsBeforeExpiration() * 0.1);
+            const renewMsBeforeExpires = Math.min(25_000, msBeforeExpiration * 0.1);
 
             const timer = setTimeout(async () => {
+                console.log("Renewing tokens now");
+
                 try {
                     await oidc.renewTokens();
                 } catch {
@@ -1258,7 +1291,7 @@ export async function createOidc<
                         "doesCurrentHrefRequiresAuth": false
                     });
                 }
-            }, getMsBeforeExpiration() - renewMsBeforeExpires);
+            }, msBeforeExpiration - renewMsBeforeExpires);
 
             const { unsubscribe: tokenChangeUnsubscribe } = oidc.subscribeToTokensChange(() => {
                 clearTimeout(timer);
@@ -1322,6 +1355,7 @@ function oidcClientTsUserToTokens<DecodedIdToken extends Record<string, unknown>
             const { expires_at } = oidcClientTsUser;
 
             if (expires_at === undefined) {
+                console.log("Can't find expires_at in oidcClientTsUser");
                 break read_from_metadata;
             }
 
@@ -1378,6 +1412,9 @@ function oidcClientTsUserToTokens<DecodedIdToken extends Record<string, unknown>
               decodedIdToken: DecodedIdToken;
           }
         | undefined = undefined;
+
+    console.log("Decoding id token:");
+    console.log(JSON.stringify(decodeJwt(tokens.idToken), null, 2));
 
     Object.defineProperty(tokens, "decodedIdToken", {
         "get": function (this: Oidc.Tokens<DecodedIdToken>) {
