@@ -127,7 +127,7 @@ export function createMockOidc<
                     createObjectThatThrowsIfAccessed<DecodedIdToken>({
                         "debugMessage": [
                             "You haven't provided a mocked decodedIdToken",
-                            "See https://docs.oidc-spa.dev/v/v4/documentation/mock"
+                            "See https://docs.oidc-spa.dev/v/v5/documentation/mock"
                         ].join("\n")
                     })
             };

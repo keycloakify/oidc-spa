@@ -349,7 +349,7 @@ export function createOidcReactApi_dependencyInjection<
     };
 }
 
-/** @see: https://docs.oidc-spa.dev/v/v4/documentation/usage#react-api */
+/** @see: https://docs.oidc-spa.dev/v/v5/documentation/usage#react-api */
 export function createReactOidc<
     DecodedIdToken extends Record<string, unknown> = Record<string, unknown>,
     IsAuthGloballyRequired extends boolean = false

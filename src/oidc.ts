@@ -156,9 +156,9 @@ export type ParamsOfCreateOidc<
      */
     postLoginRedirectUrl?: string;
     /**
-     * This parameter is used to let oidc-spa knows where to find the silent-sso.html file
+     * This parameter is used to let oidc-spa knows where to find the silent-sso.htm file
      * and also to know what is the root path of your application so it can redirect to it after logout.
-     *   - `${publicUrl}/silent-sso.html` must return the `silent-sso.html` that you are supposed to have created in your `public/` directory.
+     *   - `${publicUrl}/silent-sso.htm` must return the `silent-sso.htm` that you are supposed to have created in your `public/` directory.
      *   - Navigating to publicUrl should redirect to the home of your App.
      *
      * What should you put in this parameter?
@@ -166,7 +166,7 @@ export type ParamsOfCreateOidc<
      *   - Create React App project: `publicUrl: process.env.PUBLIC_URL`
      *   - Other:                    `publicUrl: "/"` (Usually, or `/my-app-name` if your app is not at the root of the domain)
      *
-     * If you've opted out of using the `silent-sso.html` file you can set `publicUrl` to `undefined`.
+     * If you've opted out of using the `silent-sso.htm` file you can set `publicUrl` to `undefined`.
      * Just be aware that calling `logout({ redirectTo: "home" })` will throw an error.
      * Use `logout({ redirectTo: "specific url", url: "/..." })` or `logout({ redirectTo: "current page" })` instead.
      */
@@ -191,7 +191,7 @@ const prOidcByConfigHash = new Map<string, Promise<Oidc<any>>>();
 
 const URL_real = window.URL;
 
-/** @see: https://github.com/garronej/oidc-spa#option-1-usage-without-involving-the-ui-framework */
+/** @see: https://docs.oidc-spa.dev/v/v5/documentation/usage */
 export async function createOidc<
     DecodedIdToken extends Record<string, unknown> = Record<string, unknown>,
     IsAuthGloballyRequired extends boolean = false
@@ -271,7 +271,7 @@ export async function createOidc<
               }
             : {
                   "hasDedicatedHtmlFile": true,
-                  "redirectUri": `${publicUrl}/silent-sso.html`
+                  "redirectUri": `${publicUrl}/silent-sso.htm`
               };
 
     const IS_SILENT_SSO_RESERVED_QUERY_PARAM_NAME = "oidc-spa_silent_sso";
@@ -299,7 +299,7 @@ export async function createOidc<
         }
 
         if (silentSso.hasDedicatedHtmlFile) {
-            // Here the user forget to create the silent-sso.html file or or the web server is not serving it correctly
+            // Here the user forget to create the silent-sso.htm file or or the web server is not serving it correctly
             // we shouldn't fall back to the SPA page.
             // In this case we want to let the timeout of the parent expire to provide the correct error message.
             await new Promise<never>(() => {});
@@ -792,22 +792,25 @@ export async function createOidc<
                         break silent_sso_html_unreachable;
                     }
 
-                    const isSilentSsoHtmlReachable = await fetch(silentSso.redirectUri).then(
-                        async response => {
-                            dedicatedSilentSsoHtmlFileCsp =
-                                response.headers.get("Content-Security-Policy");
+                    const getSilentSsoReachabilityStatus = async (ext?: "html") =>
+                        fetch(`${silentSso.redirectUri}${ext === "html" ? "l" : ""}`).then(
+                            async response => {
+                                dedicatedSilentSsoHtmlFileCsp =
+                                    response.headers.get("Content-Security-Policy");
 
-                            const content = await response.text();
+                                const content = await response.text();
 
-                            return (
-                                content.length < 250 &&
-                                content.includes("parent.postMessage(location.href")
-                            );
-                        },
-                        () => false
-                    );
+                                return content.length < 250 &&
+                                    content.includes("parent.postMessage(location.href")
+                                    ? "ok"
+                                    : "reachable but wrong content";
+                            },
+                            () => "not reachable" as const
+                        );
 
-                    if (isSilentSsoHtmlReachable) {
+                    const silentSsoHtmReachabilityStatus = await getSilentSsoReachabilityStatus();
+
+                    if (silentSsoHtmReachabilityStatus === "ok") {
                         break silent_sso_html_unreachable;
                     }
 
@@ -815,8 +818,20 @@ export async function createOidc<
                         new OidcInitializationError({
                             "type": "bad configuration",
                             "likelyCause": {
-                                "type": "silent-sso.html not reachable",
-                                "silentSsoHtmlUrl": silentSso.redirectUri
+                                "type": "silent-sso.htm not properly served",
+                                "silentSsoHtmlUrl": silentSso.redirectUri,
+                                "likelyCause": await (async () => {
+                                    if ((await getSilentSsoReachabilityStatus("html")) === "ok") {
+                                        return "using .html instead of .htm extension";
+                                    }
+
+                                    switch (silentSsoHtmReachabilityStatus) {
+                                        case "not reachable":
+                                            return "the file hasn't been created";
+                                        case "reachable but wrong content":
+                                            return "serving another file";
+                                    }
+                                })()
                             }
                         })
                     );
@@ -1169,7 +1184,7 @@ export async function createOidc<
                             if (publicUrl === undefined) {
                                 throw new Error(
                                     [
-                                        "Since you've opted out of the `silent-sso.html` file you are probably in a",
+                                        "Since you've opted out of the `silent-sso.htm` file you are probably in a",
                                         "setup a bit less standard. To avoid any confusion on where the users should be",
                                         "redirected after logout please explicitly specify the url to redirect to.",
                                         "With `logout({ redirectTo: 'specific url', url: '/my-home' })` or use",

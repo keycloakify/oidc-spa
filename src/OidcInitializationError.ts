@@ -24,8 +24,12 @@ export class OidcInitializationError extends Error {
                             clientId: string;
                         }
                       | {
-                            type: "silent-sso.html not reachable";
+                            type: "silent-sso.htm not properly served";
                             silentSsoHtmlUrl: string;
+                            likelyCause:
+                                | "serving another file"
+                                | "the file hasn't been created"
+                                | "using .html instead of .htm extension";
                         }
                       | {
                             type: "frame-ancestors none";
@@ -48,7 +52,7 @@ export class OidcInitializationError extends Error {
                             `The OIDC server seems to be down.`,
                             `If you know it's not the case it means that the issuerUri: ${params.issuerUri} is incorrect.`,
                             `If you are using Keycloak makes sure that the realm exists and that the url is well formed.\n`,
-                            `More info: https://docs.oidc-spa.dev/v/v4/resources/usage-with-keycloak`
+                            `More info: https://docs.oidc-spa.dev/v/v5/resources/usage-with-keycloak`
                         ].join(" ");
                     case "bad configuration":
                         switch (params.likelyCause.type) {
@@ -59,7 +63,7 @@ export class OidcInitializationError extends Error {
                                         params.likelyCause.publicUrl ?? window.location.origin
                                     }/*" to the list of Valid Redirect URIs`,
                                     `in the ${params.likelyCause.clientId} client configuration.\n`,
-                                    `More info: https://docs.oidc-spa.dev/v/v4/resources/usage-with-keycloak`,
+                                    `More info: https://docs.oidc-spa.dev/v/v5/resources/usage-with-keycloak`,
                                     `Silent SSO timed out after ${params.likelyCause.timeoutDelayMs}ms.`
                                 ].join(" ");
                             case "not in Web Origins":
@@ -67,17 +71,27 @@ export class OidcInitializationError extends Error {
                                     `It seems that there is a CORS issue.`,
                                     `If you are using Keycloak check the "Web Origins" option in your ${params.likelyCause.clientId} client configuration.`,
                                     `You should probably add "${location.origin}/*" to the list.`,
-                                    `More info: https://docs.oidc-spa.dev/v/v4/resources/usage-with-keycloak`
+                                    `More info: https://docs.oidc-spa.dev/v/v5/resources/usage-with-keycloak`
                                 ].join(" ");
-                            case "silent-sso.html not reachable":
+                            case "silent-sso.htm not properly served":
                                 return [
-                                    `${params.likelyCause.silentSsoHtmlUrl} is not reachable. Make sure you've created the silent-sso.html file`,
-                                    `in your public directory. More info: https://docs.oidc-spa.dev/v/v4/documentation/installation`
+                                    `${params.likelyCause.silentSsoHtmlUrl} not properly served by your web server.`,
+                                    (() => {
+                                        switch (params.likelyCause.likelyCause) {
+                                            case "the file hasn't been created":
+                                                return "You probably forgot to create the `silent-sso.htm` file in the public directory.";
+                                            case "serving another file":
+                                                return "Your webserver is probably re-routing the request to another file. Likely your index.html";
+                                            case "using .html instead of .htm extension":
+                                                return "You have probably upgraded from oidc-spa v4 to v5, in oidc-spa v5 the silent-sso file should have a .htm extension instead of .html";
+                                        }
+                                    })(),
+                                    `Documentation: https://docs.oidc-spa.dev/v/v5/documentation/installation`
                                 ].join(" ");
                             case "frame-ancestors none":
                                 return [
                                     params.likelyCause.silentSso.hasDedicatedHtmlFile
-                                        ? `The silent-sso.html file, `
+                                        ? `The silent-sso.htm file, `
                                         : `The URI used for Silent SSO, `,
                                     `${params.likelyCause.silentSso.redirectUri}, `,
                                     "is served by your web server with the HTTP header `Content-Security-Policy: frame-ancestors none` in the response.\n",
