@@ -48,7 +48,7 @@ export class OidcInitializationError extends Error {
                             `The OIDC server seems to be down.`,
                             `If you know it's not the case it means that the issuerUri: ${params.issuerUri} is incorrect.`,
                             `If you are using Keycloak makes sure that the realm exists and that the url is well formed.\n`,
-                            `More info: https://docs.oidc-spa.dev/resources/usage-with-keycloak`
+                            `More info: https://docs.oidc-spa.dev/v/v4/resources/usage-with-keycloak`
                         ].join(" ");
                     case "bad configuration":
                         switch (params.likelyCause.type) {
@@ -59,7 +59,7 @@ export class OidcInitializationError extends Error {
                                         params.likelyCause.publicUrl ?? window.location.origin
                                     }/*" to the list of Valid Redirect URIs`,
                                     `in the ${params.likelyCause.clientId} client configuration.\n`,
-                                    `More info: https://docs.oidc-spa.dev/resources/usage-with-keycloak`,
+                                    `More info: https://docs.oidc-spa.dev/v/v4/resources/usage-with-keycloak`,
                                     `Silent SSO timed out after ${params.likelyCause.timeoutDelayMs}ms.`
                                 ].join(" ");
                             case "not in Web Origins":
@@ -67,12 +67,12 @@ export class OidcInitializationError extends Error {
                                     `It seems that there is a CORS issue.`,
                                     `If you are using Keycloak check the "Web Origins" option in your ${params.likelyCause.clientId} client configuration.`,
                                     `You should probably add "${location.origin}/*" to the list.`,
-                                    `More info: https://docs.oidc-spa.dev/resources/usage-with-keycloak`
+                                    `More info: https://docs.oidc-spa.dev/v/v4/resources/usage-with-keycloak`
                                 ].join(" ");
                             case "silent-sso.html not reachable":
                                 return [
                                     `${params.likelyCause.silentSsoHtmlUrl} is not reachable. Make sure you've created the silent-sso.html file`,
-                                    `in your public directory. More info: https://docs.oidc-spa.dev/documentation/installation`
+                                    `in your public directory. More info: https://docs.oidc-spa.dev/v/v4/documentation/installation`
                                 ].join(" ");
                             case "frame-ancestors none":
                                 return [
