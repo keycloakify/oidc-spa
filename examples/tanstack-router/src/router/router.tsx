@@ -11,7 +11,7 @@ const protectedRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: "protected",
     component: ProtectedPage,
-    beforeLoad: protectedRouteLoader
+    beforeLoad: beforeLoadProtectedRoute
 });
 
 const routeTree = rootRoute.addChildren([indexRoute, protectedRoute]);
@@ -24,11 +24,11 @@ declare module "@tanstack/react-router" {
     }
 }
 
-async function protectedRouteLoader() {
+async function beforeLoadProtectedRoute() {
     const oidc = await getOidc();
 
     if (oidc.isUserLoggedIn) {
-        return null;
+        return;
     }
 
     await oidc.login({

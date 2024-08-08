@@ -6,7 +6,17 @@ import { createFileRoute } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/protected")({
     component: ProtectedPage,
-    beforeLoad: protectedRouteLoader
+    beforeLoad: async () => {
+        const oidc = await getOidc();
+
+        if (oidc.isUserLoggedIn) {
+            return;
+        }
+
+        await oidc.login({
+            doesCurrentHrefRequiresAuth: true
+        });
+    }
 });
 
 function ProtectedPage() {
@@ -59,16 +69,4 @@ function ProtectedPage() {
             </button>
         </h4>
     );
-}
-
-async function protectedRouteLoader() {
-    const oidc = await getOidc();
-
-    if (oidc.isUserLoggedIn) {
-        return null;
-    }
-
-    await oidc.login({
-        doesCurrentHrefRequiresAuth: true
-    });
 }
