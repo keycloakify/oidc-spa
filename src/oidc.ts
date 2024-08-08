@@ -1125,13 +1125,42 @@ export async function createOidc<
 
     const onTokenChanges = new Set<() => void>();
 
+    const assertSessionStorageNotCleared = () => {
+        const hasOidcSessionStorageEntry = (() => {
+            for (let i = 0; i < sessionStorage.length; i++) {
+                const key = sessionStorage.key(i);
+                assert(key !== null);
+
+                if (!key.startsWith("oidc.")) {
+                    continue;
+                }
+
+                return true;
+            }
+
+            return false;
+        })();
+
+        if (hasOidcSessionStorageEntry) {
+            return;
+        }
+
+        throw new Error(
+            [
+                `You have manually cleared the sessionStorage. oidc-spa can't operate in this condition.`,
+                `Make sure you do not delete the "oidc." prefixed entries in the sessionStorage.`
+            ].join(" ")
+        );
+    };
+
     const oidc = id<Oidc.LoggedIn<DecodedIdToken>>({
         ...common,
         "isUserLoggedIn": true,
         "getTokens": () => currentTokens,
         "logout": async params => {
+            assertSessionStorageNotCleared();
+
             await oidcClientTsUserManager.signoutRedirect({
-                "id_token_hint": currentTokens.idToken,
                 "post_logout_redirect_uri": ((): string => {
                     switch (params.redirectTo) {
                         case "current page":
@@ -1160,6 +1189,8 @@ export async function createOidc<
             return new Promise<never>(() => {});
         },
         "renewTokens": async () => {
+            assertSessionStorageNotCleared();
+
             const oidcClientTsUser = await oidcClientTsUserManager.signinSilent();
 
             assert(oidcClientTsUser !== null);
