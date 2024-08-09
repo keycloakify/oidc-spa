@@ -100,10 +100,6 @@ type OidcReactApi<
               (params?: { assertUserLoggedIn: false }): OidcReact<DecodedIdToken>;
               (params: { assertUserLoggedIn: true }): OidcReact.LoggedIn<DecodedIdToken>;
           };
-    /** @deprecated: Use getOidc instead */
-    prOidc: Promise<
-        IsAuthGloballyRequired extends true ? Oidc.LoggedIn<DecodedIdToken> : Oidc<DecodedIdToken>
-    >;
     getOidc: () => Promise<
         IsAuthGloballyRequired extends true ? Oidc.LoggedIn<DecodedIdToken> : Oidc<DecodedIdToken>
     >;
@@ -339,8 +335,6 @@ export function createOidcReactApi_dependencyInjection<
         OidcProvider,
         // @ts-expect-error: We know what we are doing
         useOidc,
-        // @ts-expect-error: We know what we are doing
-        prOidc,
         // @ts-expect-error: We know what we are doing
         getOidc: () => {
             dReadyToCreate.resolve();
