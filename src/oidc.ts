@@ -184,6 +184,7 @@ export type ParamsOfCreateOidc<
 
     autoLogoutParams?: Parameters<Oidc.LoggedIn<any>["logout"]>[0];
     isAuthGloballyRequired?: IsAuthGloballyRequired;
+    doEnableDebugLogs?: boolean;
 };
 
 let $isUserActive: StatefulObservable<boolean> | undefined = undefined;
@@ -210,8 +211,25 @@ export async function createOidc<
         __unsafe_ssoSessionIdleSeconds,
         autoLogoutParams = { "redirectTo": "current page" },
         isAuthGloballyRequired = false,
-        postLoginRedirectUrl
+        postLoginRedirectUrl,
+        doEnableDebugLogs = false
     } = params;
+
+    const log = (() => {
+        if (!doEnableDebugLogs) {
+            return undefined;
+        }
+
+        return id<typeof console.log>((...[first, ...rest]) => {
+            const label = "oidc-spa";
+
+            if (typeof first === "string") {
+                console.log(...[`${label}: ${first}`, ...rest]);
+            } else {
+                console.log(...[`${label}:`, first, ...rest]);
+            }
+        });
+    })();
 
     const getExtraQueryParams = (() => {
         if (typeof extraQueryParamsOrGetter === "function") {
@@ -241,12 +259,16 @@ export async function createOidc<
         `${issuerUri} ${clientId} ${clientSecret ?? ""} ${scopes.join(" ")}`
     );
 
+    log?.("Calling createOidc", { params, publicUrl, configHash });
+
     use_previous_instance: {
         const prOidc = prOidcByConfigHash.get(configHash);
 
         if (prOidc === undefined) {
             break use_previous_instance;
         }
+
+        log?.("Using previous instance of oidc-spa");
 
         console.warn(
             [
@@ -274,6 +296,8 @@ export async function createOidc<
                   "redirectUri": `${publicUrl}/silent-sso.htm`
               };
 
+    log?.("Wether we use a dedicated silent-sso.htm file or not", silentSso);
+
     const IS_SILENT_SSO_RESERVED_QUERY_PARAM_NAME = "oidc-spa_silent_sso";
     const CONFIG_HASH_RESERVED_QUERY_PARAM_NAME = "oidc-spa_config_hash";
 
@@ -299,11 +323,21 @@ export async function createOidc<
         }
 
         if (silentSso.hasDedicatedHtmlFile) {
+            log?.(
+                [
+                    "User forgot to create the silent-sso.htm file or the web server is not serving it correctly",
+                    "suspending forever"
+                ].join(" ")
+            );
             // Here the user forget to create the silent-sso.htm file or or the web server is not serving it correctly
             // we shouldn't fall back to the SPA page.
             // In this case we want to let the timeout of the parent expire to provide the correct error message.
             await new Promise<never>(() => {});
         }
+
+        log?.(
+            "Silent SSO dedicated html file is not used, polyfilling the behavior by sending a message to the parent"
+        );
 
         parent.postMessage(location.href, location.origin);
 
@@ -367,12 +401,15 @@ export async function createOidc<
             ...rest
         } = params;
 
+        log?.("Calling loginOrGoToAuthServer", { params });
+
         login_only: {
             if (rest.action !== "login") {
                 break login_only;
             }
 
             if (hasLoginBeenCalled) {
+                log?.("login() has already been called, ignoring the call");
                 return new Promise<never>(() => {});
             }
 
@@ -391,17 +428,27 @@ export async function createOidc<
                 if (document.visibilityState === "visible") {
                     document.removeEventListener("visibilitychange", callback);
 
+                    log?.(
+                        "We came back from the login pages and the state of the app has been restored"
+                    );
+
                     if (rest.doesCurrentHrefRequiresAuth) {
                         if (lastPublicRoute !== undefined) {
+                            log?.(`Loading last public route: ${lastPublicRoute}`);
                             window.location.href = lastPublicRoute;
                         } else {
+                            log?.("We don't know the last public route, navigating back in history");
                             window.history.back();
                         }
                     } else {
+                        log?.("The current page doesn't require auth, we don't need to reload");
                         hasLoginBeenCalled = false;
                     }
                 }
             };
+
+            log?.("Start listening to visibility change event");
+
             document.addEventListener("visibilitychange", callback);
         }
 
@@ -470,6 +517,8 @@ export async function createOidc<
 
             return url;
         })();
+
+        log?.(`redirect_uri: ${redirect_uri}`);
 
         //NOTE: We know there is a extraQueryParameter option but it doesn't allow
         // to control the encoding so we have to highjack global URL Class that is
@@ -552,19 +601,23 @@ export async function createOidc<
             Object.defineProperty(window, "URL", { "value": URL });
         }
 
+        // NOTE: This is for the behavior when the use presses the back button on the login pages.
+        // This is what happens when the user gave up the login process.
+        // We want to that to redirect to the last public page.
+        const redirectMethod = (() => {
+            switch (rest.action) {
+                case "login":
+                    return rest.doesCurrentHrefRequiresAuth ? "replace" : "assign";
+                case "go to auth server":
+                    return "assign";
+            }
+        })();
+
+        log?.(`redirectMethod: ${redirectMethod}`);
+
         await oidcClientTsUserManager.signinRedirect({
             redirect_uri,
-            // NOTE: This is for the behavior when the use presses the back button on the login pages.
-            // This is what happens when the user gave up the login process.
-            // We want to that to redirect to the last public page.
-            "redirectMethod": (() => {
-                switch (rest.action) {
-                    case "login":
-                        return rest.doesCurrentHrefRequiresAuth ? "replace" : "assign";
-                    case "go to auth server":
-                        return "assign";
-                }
-            })()
+            redirectMethod
         });
         return new Promise<never>(() => {});
     };
@@ -585,6 +638,8 @@ export async function createOidc<
 
                 url = result.newUrl;
             }
+
+            log?.("Back from the auth server, reading the query params to initialize the auth");
 
             let loginSuccessUrl = "https://dummy.com";
 
@@ -733,7 +788,11 @@ export async function createOidc<
                 break restore_from_session;
             }
 
-            // The server might have restarted and the session might have been lost.
+            log?.("Restoring the auth from the session storage");
+
+            // Here the access token could be still valid but the session might have been invalidated
+            // on the server. For example if the logout failed to redirect to the app.
+            // We want to make sure that the session is still valid on the server side.
             try {
                 await oidcClientTsUserManager.signinSilent();
             } catch (error) {
@@ -763,6 +822,8 @@ export async function createOidc<
         }
 
         restore_from_http_only_cookie: {
+            log?.("Trying to restore the auth from the httpOnly cookie (silent signin with iframe)");
+
             const dLoginSuccessUrl = new Deferred<string | undefined>();
 
             const timeoutDelayMs = (() => {
@@ -937,6 +998,7 @@ export async function createOidc<
                     const result = retrieveQueryParamFromUrl({ "name": "error", url });
 
                     if (result.wasPresent) {
+                        log?.(`The auth server responded with: ${result.value}`);
                         dLoginSuccessUrl.resolve(undefined);
                         return;
                     }
@@ -1001,6 +1063,7 @@ export async function createOidc<
             const loginSuccessUrl = await dLoginSuccessUrl.pr;
 
             if (loginSuccessUrl === undefined) {
+                log?.("There is no active session");
                 break restore_from_http_only_cookie;
             }
 
@@ -1026,6 +1089,8 @@ export async function createOidc<
 
                 throw error;
             }
+
+            log?.("Successful silent signed in");
 
             return {
                 "authMethod": "silent signin" as const,
@@ -1073,6 +1138,8 @@ export async function createOidc<
     };
 
     if (resultOfLoginProcess instanceof Error) {
+        log?.("User not logged in and there was an initialization error");
+
         const error = resultOfLoginProcess;
 
         const initializationError =
@@ -1109,7 +1176,10 @@ export async function createOidc<
     }
 
     if (resultOfLoginProcess === undefined) {
+        log?.("User not logged in");
+
         if (isAuthGloballyRequired) {
+            log?.("Authentication is required everywhere on this app, redirecting to the login page");
             await loginOrGoToAuthServer({
                 "action": "login",
                 "doesCurrentHrefRequiresAuth": true,
@@ -1131,6 +1201,8 @@ export async function createOidc<
         // @ts-expect-error: We know what we are doing.
         return oidc;
     }
+
+    log?.("User logged in");
 
     let currentTokens = resultOfLoginProcess.tokens;
 
@@ -1277,19 +1349,34 @@ export async function createOidc<
             );
 
             if (msBeforeExpiration < 0) {
+                log?.("Token has already expired");
                 return 0;
             }
+
+            log?.(
+                `${Math.round(
+                    msBeforeExpiration / 1000
+                )} seconds before token expiration of the access token`
+            );
 
             return msBeforeExpiration;
         };
 
         (function scheduleRenew() {
+            const msBeforeExpiration = getMsBeforeExpiration();
+
             // NOTE: We refresh the token 25 seconds before it expires.
             // If the token expiration time is less than 25 seconds we refresh the token when
             // only 1/10 of the token time is left.
-            const renewMsBeforeExpires = Math.min(25_000, getMsBeforeExpiration() * 0.1);
+            const renewMsBeforeExpires = Math.min(25_000, msBeforeExpiration * 0.1);
 
             const timer = setTimeout(async () => {
+                log?.(
+                    `Renewing the access token now as it will expires in ${Math.round(
+                        renewMsBeforeExpires / 1000
+                    )} seconds`
+                );
+
                 try {
                     await oidc.renewTokens();
                 } catch {
@@ -1304,7 +1391,7 @@ export async function createOidc<
                         "doesCurrentHrefRequiresAuth": false
                     });
                 }
-            }, getMsBeforeExpiration() - renewMsBeforeExpires);
+            }, msBeforeExpiration - renewMsBeforeExpires);
 
             const { unsubscribe: tokenChangeUnsubscribe } = oidc.subscribeToTokensChange(() => {
                 clearTimeout(timer);
