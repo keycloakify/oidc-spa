@@ -626,9 +626,15 @@ export async function createOidc<
         read_successful_login_query_params: {
             let url = window.location.href;
 
+            const queryParameterNames_toCleanFromHref = new Set<string>();
+
             {
+                const name = CONFIG_HASH_RESERVED_QUERY_PARAM_NAME;
+
+                queryParameterNames_toCleanFromHref.add(name);
+
                 const result = retrieveQueryParamFromUrl({
-                    "name": CONFIG_HASH_RESERVED_QUERY_PARAM_NAME,
+                    name,
                     url
                 });
 
@@ -646,6 +652,8 @@ export async function createOidc<
             let missingMandatoryParams: string[] = [];
 
             for (const name of PARAMS_TO_RETRIEVE_FROM_SUCCESSFUL_LOGIN) {
+                queryParameterNames_toCleanFromHref.add(name);
+
                 const result = retrieveQueryParamFromUrl({ name, url });
 
                 if (!result.wasPresent) {
@@ -681,8 +689,12 @@ export async function createOidc<
             let extraQueryParams_backFromAuthServer;
 
             {
+                const name = EXTRA_QUERY_PARAMS_BACK_FROM_AUTH_SERVER_RESERVED_QUERY_PARAM_NAME;
+
+                queryParameterNames_toCleanFromHref.add(name);
+
                 const result = retrieveQueryParamFromUrl({
-                    "name": EXTRA_QUERY_PARAMS_BACK_FROM_AUTH_SERVER_RESERVED_QUERY_PARAM_NAME,
+                    name,
                     url
                 });
 
@@ -699,8 +711,12 @@ export async function createOidc<
             let queryParamsNamesToOmit_backFromAuthServer;
 
             {
+                const name = RESULT_OMIT_RESERVED_QUERY_PARAM_NAME;
+
+                queryParameterNames_toCleanFromHref.add(name);
+
                 const result = retrieveQueryParamFromUrl({
-                    "name": RESULT_OMIT_RESERVED_QUERY_PARAM_NAME,
+                    name,
                     url
                 });
 
@@ -722,6 +738,9 @@ export async function createOidc<
                     if (queryParamsNamesToOmit_backFromAuthServer.includes(name)) {
                         continue;
                     }
+
+                    queryParameterNames_toCleanFromHref.add(name);
+
                     result_backFromAuthServer[name] = value;
 
                     const result = retrieveQueryParamFromUrl({
@@ -735,7 +754,57 @@ export async function createOidc<
                 }
             }
 
-            window.history.pushState(null, "", url);
+            log?.("Cleaning the url from the OIDC query parameters");
+
+            {
+                let count = 0;
+
+                while (true) {
+                    window.history.pushState(null, "", url);
+
+                    await new Promise(resolve => setTimeout(resolve, 0));
+
+                    const queryParameterNames_stillOnHref = Object.keys(
+                        retrieveAllQueryParamFromUrl({ "url": window.location.href }).values
+                    ).filter(name => queryParameterNames_toCleanFromHref.has(name));
+
+                    if (queryParameterNames_stillOnHref.length === 0) {
+                        break;
+                    }
+
+                    if (count === 5) {
+                        throw new Error(
+                            [
+                                `Failed to clean the OIDC query parameters from the`,
+                                `url with history.pushState after ${count} attempts`
+                            ].join(" ")
+                        );
+                    }
+
+                    log?.(
+                        [
+                            `Some oidc query params are still on the location.href after being cleaned`,
+                            `They where probably added back by an external library. Retrying to remove them...\n`,
+                            `Params still present: ${queryParameterNames_stillOnHref.join(", ")}`
+                        ].join(" ")
+                    );
+
+                    url = window.location.href;
+
+                    queryParameterNames_stillOnHref.forEach(name => {
+                        const result = retrieveQueryParamFromUrl({
+                            name,
+                            url
+                        });
+
+                        assert(result.wasPresent);
+
+                        url = result.newUrl;
+                    });
+
+                    count++;
+                }
+            }
 
             if (missingMandatoryParams.length !== 0) {
                 throw new Error(
@@ -1353,12 +1422,6 @@ export async function createOidc<
                 return 0;
             }
 
-            log?.(
-                `${Math.round(
-                    msBeforeExpiration / 1000
-                )} seconds before token expiration of the access token`
-            );
-
             return msBeforeExpiration;
         };
 
@@ -1369,6 +1432,16 @@ export async function createOidc<
             // If the token expiration time is less than 25 seconds we refresh the token when
             // only 1/10 of the token time is left.
             const renewMsBeforeExpires = Math.min(25_000, msBeforeExpiration * 0.1);
+
+            log?.(
+                [
+                    `${Math.round(msBeforeExpiration / 1000)} seconds`,
+                    `before expiration of the access token.`,
+                    `Scheduling renewal ${Math.round(
+                        renewMsBeforeExpires / 1000
+                    )} seconds before expiration`
+                ].join(" ")
+            );
 
             const timer = setTimeout(async () => {
                 log?.(
