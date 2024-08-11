@@ -18,6 +18,24 @@ if (fs.existsSync(distDirPath)) {
 
 run("npx tsc");
 
+{
+    const version: string = JSON.parse(
+        fs.readFileSync(pathJoin(process.cwd(), "package.json")).toString("utf8")
+    ).version;
+
+    assert(typeof version === "string");
+
+    const filePath = pathJoin(distDirPath, "oidc.js");
+
+    const content = fs.readFileSync(filePath).toString("utf8");
+
+    const content_modified = content.replace("{{OIDC_SPA_VERSION}}", version);
+
+    assert(content !== content_modified);
+
+    fs.writeFileSync(filePath, content_modified);
+}
+
 const extraBundleFileBasenames = new Set<string>();
 
 (["backend", "frontend"] as const)

@@ -22,6 +22,9 @@ import { setTimeout, clearTimeout } from "./vendor/frontend/worker-timers";
 import { OidcInitializationError } from "./OidcInitializationError";
 import { encodeBase64, decodeBase64 } from "./tools/base64";
 
+// NOTE: Replaced at build time
+const VERSION = "{{OIDC_SPA_VERSION}}";
+
 export declare type Oidc<DecodedIdToken extends Record<string, unknown> = Record<string, unknown>> =
     | Oidc.LoggedIn<DecodedIdToken>
     | Oidc.NotLoggedIn;
@@ -259,7 +262,7 @@ export async function createOidc<
         `${issuerUri} ${clientId} ${clientSecret ?? ""} ${scopes.join(" ")}`
     );
 
-    log?.("Calling createOidc", { params, publicUrl, configHash });
+    log?.(`Calling createOidc v${VERSION}`, { params, publicUrl, configHash });
 
     use_previous_instance: {
         const prOidc = prOidcByConfigHash.get(configHash);
