@@ -21,6 +21,7 @@ import type { StatefulObservable } from "./tools/StatefulObservable";
 import { setTimeout, clearTimeout } from "./vendor/frontend/worker-timers";
 import { OidcInitializationError } from "./OidcInitializationError";
 import { encodeBase64, decodeBase64 } from "./tools/base64";
+import { toHumanReadableDuration } from "./tools/toHumanReadableDuration";
 
 // NOTE: Replaced at build time
 const VERSION = "{{OIDC_SPA_VERSION}}";
@@ -189,6 +190,9 @@ export type ParamsOfCreateOidc<
     isAuthGloballyRequired?: IsAuthGloballyRequired;
     doEnableDebugLogs?: boolean;
 };
+
+// NOTE: This is not arbitrary, it matches what oidc-client-ts uses.
+const SESSION_STORAGE_PREFIX = "oidc.";
 
 let $isUserActive: StatefulObservable<boolean> | undefined = undefined;
 const prOidcByConfigHash = new Map<string, Promise<Oidc<any>>>();
@@ -854,7 +858,7 @@ export async function createOidc<
         }
 
         restore_from_session: {
-            const oidcClientTsUser = await oidcClientTsUserManager.getUser();
+            let oidcClientTsUser = await oidcClientTsUserManager.getUser();
 
             if (oidcClientTsUser === null) {
                 break restore_from_session;
@@ -866,9 +870,11 @@ export async function createOidc<
             // on the server. For example if the logout failed to redirect to the app.
             // We want to make sure that the session is still valid on the server side.
             try {
-                await oidcClientTsUserManager.signinSilent();
+                oidcClientTsUser = await oidcClientTsUserManager.signinSilent();
             } catch (error) {
                 assert(error instanceof Error);
+
+                log?.(`Session wasn't restorable: ${error.message}`);
 
                 if (error.message === "Failed to fetch") {
                     // Here it could be web origins as well but it's less likely because
@@ -884,8 +890,16 @@ export async function createOidc<
                     });
                 }
 
+                Object.keys(sessionStorage)
+                    .filter(key => key.startsWith(SESSION_STORAGE_PREFIX))
+                    .forEach(key => sessionStorage.removeItem(key));
+
                 return undefined;
             }
+
+            assert(oidcClientTsUser !== null);
+
+            log?.("Session successfully restored and access token refreshed");
 
             return {
                 "authMethod": "session storage" as const,
@@ -1290,7 +1304,7 @@ export async function createOidc<
                 const key = sessionStorage.key(i);
                 assert(key !== null);
 
-                if (!key.startsWith("oidc.")) {
+                if (!key.startsWith(SESSION_STORAGE_PREFIX)) {
                     continue;
                 }
 
@@ -1438,19 +1452,19 @@ export async function createOidc<
 
             log?.(
                 [
-                    `${Math.round(msBeforeExpiration / 1000)} seconds`,
+                    toHumanReadableDuration(msBeforeExpiration),
                     `before expiration of the access token.`,
-                    `Scheduling renewal ${Math.round(
-                        renewMsBeforeExpires / 1000
-                    )} seconds before expiration`
+                    `Scheduling renewal ${toHumanReadableDuration(
+                        renewMsBeforeExpires
+                    )} before expiration`
                 ].join(" ")
             );
 
             const timer = setTimeout(async () => {
                 log?.(
-                    `Renewing the access token now as it will expires in ${Math.round(
-                        renewMsBeforeExpires / 1000
-                    )} seconds`
+                    `Renewing the access token now as it will expires in ${toHumanReadableDuration(
+                        renewMsBeforeExpires
+                    )}`
                 );
 
                 try {
@@ -1479,10 +1493,29 @@ export async function createOidc<
 
     {
         const { startCountdown } = createStartCountdown({
-            "getCountdownEndTime": () =>
-                __unsafe_ssoSessionIdleSeconds !== undefined
-                    ? Date.now() + __unsafe_ssoSessionIdleSeconds * 1000
-                    : currentTokens.refreshTokenExpirationTime,
+            "getCountdownEndTime": (() => {
+                const getCountdownEndTime = () =>
+                    __unsafe_ssoSessionIdleSeconds !== undefined
+                        ? Date.now() + __unsafe_ssoSessionIdleSeconds * 1000
+                        : currentTokens.refreshTokenExpirationTime;
+
+                const durationBeforeAutoLogout = toHumanReadableDuration(
+                    getCountdownEndTime() - Date.now()
+                );
+
+                log?.(
+                    [
+                        `The user will be automatically logged out after ${durationBeforeAutoLogout} of inactivity.`,
+                        __unsafe_ssoSessionIdleSeconds === undefined
+                            ? undefined
+                            : `It was artificially defined by using the __unsafe_ssoSessionIdleSeconds param.`
+                    ]
+                        .filter(x => x !== undefined)
+                        .join("\n")
+                );
+
+                return getCountdownEndTime;
+            })(),
             "tickCallback": ({ secondsLeft }) => {
                 Array.from(autoLogoutCountdownTickCallbacks).forEach(tickCallback =>
                     tickCallback({ secondsLeft })
