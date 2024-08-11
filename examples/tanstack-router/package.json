@@ -11,7 +11,7 @@
         "preview": "vite preview"
     },
     "dependencies": {
-        "@tanstack/react-router": "1.26.18",
+        "@tanstack/react-router": "1.47.1",
         "oidc-spa": "latest",
         "react": "18.2.0",
         "react-dom": "18.2.0",
