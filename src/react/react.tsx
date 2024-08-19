@@ -153,7 +153,9 @@ export function createOidcReactApi_dependencyInjection<
         try {
             oidc = await createOidc(params);
         } catch (error) {
-            assert(error instanceof OidcInitializationError);
+            if (!(error instanceof OidcInitializationError)) {
+                throw error;
+            }
 
             return error;
         }
