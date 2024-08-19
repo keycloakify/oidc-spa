@@ -21,12 +21,12 @@ export type ParamsOfCreateMockOidc<
 
 const urlParamName = "isUserLoggedIn";
 
-export function createMockOidc<
+export async function createMockOidc<
     DecodedIdToken extends Record<string, unknown> = Record<string, unknown>,
     IsAuthGloballyRequired extends boolean = false
 >(
     params: ParamsOfCreateMockOidc<DecodedIdToken, IsAuthGloballyRequired>
-): IsAuthGloballyRequired extends true ? Oidc.LoggedIn<DecodedIdToken> : Oidc<DecodedIdToken> {
+): Promise<IsAuthGloballyRequired extends true ? Oidc.LoggedIn<DecodedIdToken> : Oidc<DecodedIdToken>> {
     const {
         isUserInitiallyLoggedIn = true,
         mockedParams = {},
@@ -101,11 +101,11 @@ export function createMockOidc<
             "initializationError": undefined
         });
         if (!isAuthGloballyRequired) {
-            oidc.login({
+            await oidc.login({
                 "redirectUrl": postLoginRedirectUrl,
                 "doesCurrentHrefRequiresAuth": true
             });
-            assert(false);
+            // Never here
         }
         // @ts-expect-error: We know what we are doing
         return oidc;

@@ -4,7 +4,6 @@ import { OidcInitializationError } from "../OidcInitializationError";
 import { assert } from "../vendor/frontend/tsafe";
 import { id } from "../vendor/frontend/tsafe";
 import { useGuaranteedMemo } from "../tools/powerhooks/useGuaranteedMemo";
-import type { PromiseOrNot } from "../tools/PromiseOrNot";
 import type { ValueOrAsyncGetter } from "../tools/ValueOrAsyncGetter";
 import { Deferred } from "../tools/Deferred";
 
@@ -117,7 +116,7 @@ export function createOidcReactApi_dependencyInjection<
     )
 >(
     paramsOrGetParams: ValueOrAsyncGetter<ParamsOfCreateOidc>,
-    createOidc: (params: ParamsOfCreateOidc) => PromiseOrNot<Oidc<DecodedIdToken>>
+    createOidc: (params: ParamsOfCreateOidc) => Promise<Oidc<DecodedIdToken>>
 ): OidcReactApi<
     DecodedIdToken,
     ParamsOfCreateOidc extends { isAuthGloballyRequired?: true | undefined } ? true : false

@@ -1271,6 +1271,7 @@ export async function createOidc<
                 "doesCurrentHrefRequiresAuth": true,
                 "redirectUrl": postLoginRedirectUrl
             });
+            // Never here
         }
 
         startTrackingLastPublicRoute();
