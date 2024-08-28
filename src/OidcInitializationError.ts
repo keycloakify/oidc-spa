@@ -82,8 +82,8 @@ export class OidcInitializationError extends Error {
                                                 return "You probably forgot to create the silent-sso.htm file in the public directory.";
                                             case "serving another file":
                                                 return [
-                                                    "You probably forgot to create the `silent-sso.htm` file in the public directory ?",
-                                                    "If you did create check the configuration of your web server, it's probably re-routing the GET request to silent-sso.htm",
+                                                    "You probably forgot to create the `silent-sso.htm` file in the public directory.",
+                                                    "If you did create it check the configuration of your web server, it's probably re-routing the GET request to silent-sso.htm",
                                                     "to another file. Likely your index.html"
                                                 ].join(" ");
                                             case "using .html instead of .htm extension":
