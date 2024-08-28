@@ -222,6 +222,15 @@ export async function createOidc<
         doEnableDebugLogs = false
     } = params;
 
+    for (const name of ["issuerUri", "clientId"] as const) {
+        const value = params[name];
+        if (typeof value !== "string") {
+            throw new Error(
+                `The parameter "${name}" is required, you provided: ${value}. (Forgot a .env variable?)`
+            );
+        }
+    }
+
     const log = (() => {
         if (!doEnableDebugLogs) {
             return undefined;
