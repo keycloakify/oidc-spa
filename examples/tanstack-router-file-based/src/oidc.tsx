@@ -56,6 +56,21 @@ export const {
      * by querying a GET /user endpoint with a authorization header
      * like `Bearer <accessToken>`.
      */
+    /*
+    decodedIdTokenSchema: {
+        parse: (decodedIdToken) => {
+
+            type DecodedIdToken = {
+                sub: string;
+                preferred_username: string
+            };
+
+            console.log(decodedIdToken);
+
+            return decodedIdToken as DecodedIdToken;
+        }
+    },
+    */
     decodedIdTokenSchema: z.object({
         sub: z.string(),
         preferred_username: z.string()
@@ -70,7 +85,7 @@ export const {
         ui_locales: "en" // Gere you would dynamically get the current language at the time of redirecting to the OIDC server
     }),
     // Remove this in your repo
-    doEnableDebugLogs: true
+    doEnableDebugLogs: false
 });
 
 // Using the mock adapter:

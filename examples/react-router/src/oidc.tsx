@@ -56,6 +56,21 @@ export const {
      * by querying a GET /user endpoint with a authorization header
      * like `Bearer <accessToken>`.
      */
+    /*
+    decodedIdTokenSchema: {
+        parse: (decodedIdToken) => {
+
+            type DecodedIdToken = {
+                sub: string;
+                preferred_username: string
+            };
+
+            console.log(decodedIdToken);
+
+            return decodedIdToken as DecodedIdToken;
+        }
+    },
+    */
     decodedIdTokenSchema: z.object({
         sub: z.string(),
         preferred_username: z.string()
