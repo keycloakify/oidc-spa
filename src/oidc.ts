@@ -312,7 +312,7 @@ export async function createOidc<
                   "redirectUri": `${publicUrl}/silent-sso.htm`
               };
 
-    log?.("Wether we use a dedicated silent-sso.htm file or not", silentSso);
+    log?.(`silent SSO:\n${JSON.stringify(silentSso, null, 2)}`);
 
     const IS_SILENT_SSO_RESERVED_QUERY_PARAM_NAME = "oidc-spa_silent_sso";
     const CONFIG_HASH_RESERVED_QUERY_PARAM_NAME = "oidc-spa_config_hash";
@@ -1202,6 +1202,40 @@ export async function createOidc<
 
             const { oidcClientTsUser, authMethod, backFromAuthServer } = result;
 
+            log_real_decoded_id_token: {
+                if (log === undefined) {
+                    break log_real_decoded_id_token;
+                }
+                const idToken = oidcClientTsUser.id_token;
+
+                if (idToken === undefined) {
+                    break log_real_decoded_id_token;
+                }
+
+                const decodedIdToken = decodeJwt(idToken);
+
+                log(
+                    [
+                        `Decoded ID token`,
+                        decodedIdTokenSchema === undefined
+                            ? ""
+                            : " before `decodedIdTokenSchema.parse()`\n",
+                        JSON.stringify(decodedIdToken, null, 2)
+                    ].join("")
+                );
+
+                if (decodedIdTokenSchema === undefined) {
+                    break log_real_decoded_id_token;
+                }
+
+                log(
+                    [
+                        "Decoded ID token after `decodedIdTokenSchema.parse()`\n",
+                        JSON.stringify(decodedIdTokenSchema.parse(decodedIdToken), null, 2)
+                    ].join("")
+                );
+            }
+
             const tokens = oidcClientTsUserToTokens({
                 oidcClientTsUser,
                 decodedIdTokenSchema
@@ -1298,7 +1332,7 @@ export async function createOidc<
         return oidc;
     }
 
-    log?.("User logged in");
+    log?.("User is logged in");
 
     let currentTokens = resultOfLoginProcess.tokens;
 
