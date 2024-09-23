@@ -66,7 +66,7 @@ export declare namespace Oidc {
     export type LoggedIn<DecodedIdToken extends Record<string, unknown> = Record<string, unknown>> =
         Common & {
             isUserLoggedIn: true;
-            renewTokens(): Promise<void>;
+            renewTokens(params?: { extraTokenParams?: Record<string, string> }): Promise<void>;
             getTokens: () => Tokens<DecodedIdToken>;
             subscribeToTokensChange: (onTokenChange: () => void) => { unsubscribe: () => void };
             logout: (
@@ -1405,10 +1405,14 @@ export async function createOidc<
             });
             return new Promise<never>(() => {});
         },
-        "renewTokens": async () => {
+        "renewTokens": async params => {
+            const { extraTokenParams } = params ?? {};
+
             assertSessionStorageNotCleared();
 
-            const oidcClientTsUser = await oidcClientTsUserManager.signinSilent();
+            const oidcClientTsUser = await oidcClientTsUserManager.signinSilent({
+                extraTokenParams
+            });
 
             assert(oidcClientTsUser !== null);
 

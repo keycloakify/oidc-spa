@@ -1,6 +1,6 @@
 {
     "name": "oidc-spa",
-    "version": "5.2.8",
+    "version": "5.3.0-rc.1",
     "description": "Openidconnect client for Single Page Applications",
     "repository": {
         "type": "git",
@@ -55,11 +55,11 @@
         "evt": "^2.5.7",
         "husky": "^4.3.8",
         "jsonwebtoken": "^9.0.2",
-        "jwt-decode": "3.1.2",
+        "jwt-decode": "4.0.0",
         "lint-staged": "^11.1.1",
         "node-fetch": "2.7.0",
         "@types/node-fetch": "2.6.11",
-        "oidc-client-ts": "2.4.0",
+        "oidc-client-ts": "3.0.1",
         "prettier": "^2.8.8",
         "react": "^18.2.0",
         "ts-node": "^10.9.1",
