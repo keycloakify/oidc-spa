@@ -151,6 +151,18 @@ export type ParamsOfCreateOidc<
      */
     extraQueryParams?: Record<string, string> | (() => Record<string, string>);
     /**
+     * Extra body params to be added to the /token POST request.
+     *
+     * It will be used when for the initial request, whenever the token is getting refreshed and if you call `renewTokens()`.
+     * You can also provide this parameter directly to the `renewTokens()` method.
+     *
+     * It can be either a string to string record or a function that returns a string to string record.
+     *
+     * Example: extraTokenParams: ()=> ({ selectedCustomer: "xxx" })
+     *          extraTokenParams: { selectedCustomer: "xxx" }
+     */
+    extraTokenParams?: Record<string, string> | (() => Record<string, string>);
+    /**
      * Where to redirect after successful login.
      * Default: window.location.href (here)
      *
@@ -213,6 +225,7 @@ export async function createOidc<
         scopes = ["profile"],
         transformUrlBeforeRedirect,
         extraQueryParams: extraQueryParamsOrGetter,
+        extraTokenParams: extraTokenParamsOrGetter,
         publicUrl: publicUrl_params,
         decodedIdTokenSchema,
         __unsafe_ssoSessionIdleSeconds,
@@ -247,17 +260,19 @@ export async function createOidc<
         });
     })();
 
-    const getExtraQueryParams = (() => {
-        if (typeof extraQueryParamsOrGetter === "function") {
-            return extraQueryParamsOrGetter;
+    const [getExtraQueryParams, getExtraTokenParams] = (
+        [extraQueryParamsOrGetter, extraTokenParamsOrGetter] as const
+    ).map(valueOrGetter => {
+        if (typeof valueOrGetter === "function") {
+            return valueOrGetter;
         }
 
-        if (extraQueryParamsOrGetter !== undefined) {
-            return () => extraQueryParamsOrGetter;
+        if (valueOrGetter !== undefined) {
+            return () => valueOrGetter;
         }
 
         return undefined;
-    })();
+    });
 
     const publicUrl = (() => {
         if (publicUrl_params === undefined) {
@@ -879,7 +894,9 @@ export async function createOidc<
             // on the server. For example if the logout failed to redirect to the app.
             // We want to make sure that the session is still valid on the server side.
             try {
-                oidcClientTsUser = await oidcClientTsUserManager.signinSilent();
+                oidcClientTsUser = await oidcClientTsUserManager.signinSilent({
+                    "extraTokenParams": getExtraTokenParams?.()
+                });
             } catch (error) {
                 assert(error instanceof Error);
 
@@ -1139,7 +1156,10 @@ export async function createOidc<
             window.addEventListener("message", listener, false);
 
             oidcClientTsUserManager
-                .signinSilent({ "silentRequestTimeoutInSeconds": timeoutDelayMs / 1000 })
+                .signinSilent({
+                    "silentRequestTimeoutInSeconds": timeoutDelayMs / 1000,
+                    "extraTokenParams": getExtraTokenParams?.()
+                })
                 .catch((error: Error) => {
                     if (error.message === "Failed to fetch") {
                         clearTimeout(timeout);
@@ -1406,12 +1426,15 @@ export async function createOidc<
             return new Promise<never>(() => {});
         },
         "renewTokens": async params => {
-            const { extraTokenParams } = params ?? {};
+            const { extraTokenParams: extraTokenParams_local } = params ?? {};
 
             assertSessionStorageNotCleared();
 
             const oidcClientTsUser = await oidcClientTsUserManager.signinSilent({
-                extraTokenParams
+                "extraTokenParams": {
+                    ...getExtraTokenParams?.(),
+                    ...extraTokenParams_local
+                }
             });
 
             assert(oidcClientTsUser !== null);
