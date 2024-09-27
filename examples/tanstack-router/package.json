@@ -11,7 +11,7 @@
         "preview": "vite preview"
     },
     "dependencies": {
-        "@tanstack/react-router": "1.47.1",
+        "@tanstack/react-router": "1.58.11",
         "oidc-spa": "latest",
         "react": "18.2.0",
         "react-dom": "18.2.0",
@@ -27,7 +27,7 @@
         "eslint-plugin-react-hooks": "4.6.0",
         "eslint-plugin-react-refresh": "0.4.5",
         "typescript": "5.4.4",
-        "vite": "5.3.4",
+        "vite": "5.4.8",
         "vite-tsconfig-paths": "4.3.2",
         "vite-plugin-commonjs": "0.10.1"
     }

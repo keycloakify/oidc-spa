@@ -91,7 +91,17 @@ const testAppNames = ["react-router", "tanstack-router", "tanstack-router-file-b
 const getTestAppPath = (testAppName: (typeof testAppNames)[number]) =>
     pathJoin(projectDirPath, "examples", testAppName);
 
-testAppNames.forEach(testAppName => execSync("yarn install", { "cwd": getTestAppPath(testAppName) }));
+testAppNames.forEach(testAppName => {
+    const cwd = getTestAppPath(testAppName);
+
+    const yarnLockFilePath = pathJoin(cwd, "yarn.lock");
+
+    if (fs.existsSync(yarnLockFilePath)) {
+        fs.rmSync(yarnLockFilePath);
+    }
+
+    execSync("yarn install", { cwd });
+});
 
 console.log("=== Linking common dependencies ===");
 
