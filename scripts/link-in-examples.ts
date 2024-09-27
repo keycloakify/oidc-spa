@@ -94,11 +94,13 @@ const getTestAppPath = (testAppName: (typeof testAppNames)[number]) =>
 testAppNames.forEach(testAppName => {
     const cwd = getTestAppPath(testAppName);
 
+    /*
     const yarnLockFilePath = pathJoin(cwd, "yarn.lock");
 
     if (fs.existsSync(yarnLockFilePath)) {
         fs.rmSync(yarnLockFilePath);
     }
+    */
 
     execSync("yarn install", { cwd });
 });
