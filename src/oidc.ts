@@ -1258,7 +1258,8 @@ export async function createOidc<
 
             const tokens = oidcClientTsUserToTokens({
                 oidcClientTsUser,
-                decodedIdTokenSchema
+                decodedIdTokenSchema,
+                log
             });
 
             if (tokens.refreshTokenExpirationTime < tokens.accessTokenExpirationTime) {
@@ -1448,7 +1449,8 @@ export async function createOidc<
 
             currentTokens = oidcClientTsUserToTokens({
                 oidcClientTsUser,
-                decodedIdTokenSchema
+                decodedIdTokenSchema,
+                log
             });
 
             // NOTE: We do that to preserve the cache and the object reference.
@@ -1625,8 +1627,9 @@ export async function createOidc<
 function oidcClientTsUserToTokens<DecodedIdToken extends Record<string, unknown>>(params: {
     oidcClientTsUser: OidcClientTsUser;
     decodedIdTokenSchema?: { parse: (data: unknown) => DecodedIdToken };
+    log: ((message: string) => void) | undefined;
 }): Oidc.Tokens<DecodedIdToken> {
-    const { oidcClientTsUser, decodedIdTokenSchema } = params;
+    const { oidcClientTsUser, decodedIdTokenSchema, log } = params;
 
     const accessToken = oidcClientTsUser.access_token;
 
@@ -1669,7 +1672,16 @@ function oidcClientTsUserToTokens<DecodedIdToken extends Record<string, unknown>
             return expirationTime;
         }
 
-        assert(false, "Failed to get refresh token expiration time");
+        log?.(
+            [
+                "Couldn't read the expiration time of the refresh token from the jwt",
+                "It's ok. Some OIDC server like Microsoft Entra ID does not use JWT for the refresh token.",
+                "Be aware that it prevent you from implementing the auto logout mechanism: https://docs.oidc-spa.dev/documentation/auto-logout",
+                "If you need auto logout you'll have to provide use the __unsafe_ssoSessionIdleSeconds param."
+            ].join("\n")
+        );
+
+        return Number.POSITIVE_INFINITY;
     })();
 
     const idToken = oidcClientTsUser.id_token;
