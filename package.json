@@ -1,6 +1,6 @@
 {
     "name": "oidc-spa",
-    "version": "5.4.1",
+    "version": "5.4.2-rc.0",
     "description": "Openidconnect client for Single Page Applications",
     "repository": {
         "type": "git",
@@ -44,7 +44,18 @@
     ],
     "keywords": [],
     "homepage": "https://docs.oidc-spa.dev/",
-    "dependencies": {},
+    "peerDependencies": {
+        "react": "*",
+        "@types/react": "*"
+    },
+    "peerDependenciesMeta": {
+        "react": {
+            "optional": true
+        },
+        "@types/react": {
+            "optional": true
+        }
+    },
     "devDependencies": {
         "@babel/core": "7.24.9",
         "@babel/preset-env": "7.24.8",
