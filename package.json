@@ -44,7 +44,18 @@
     ],
     "keywords": [],
     "homepage": "https://docs.oidc-spa.dev/",
-    "dependencies": {},
+    "peerDependencies": {
+        "react": "*",
+        "@types/react": "*"
+    },
+    "peerDependenciesMeta": {
+        "react": {
+            "optional": true
+        },
+        "@types/react": {
+            "optional": true
+        }
+    },
     "devDependencies": {
         "@babel/core": "7.24.9",
         "@babel/preset-env": "7.24.8",
