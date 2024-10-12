@@ -376,6 +376,7 @@ export async function createOidc<
     }
 
     const oidcClientTsUserManager = new OidcClientTsUserManager({
+        configHash,
         "authority": issuerUri,
         "client_id": clientId,
         "client_secret": clientSecret,
