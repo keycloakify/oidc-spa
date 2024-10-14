@@ -130,7 +130,6 @@ export type ParamsOfCreateOidc<
 > = {
     issuerUri: string;
     clientId: string;
-    clientSecret?: string;
     /**
      * The scopes being requested from the OIDC/OAuth2 provider (default: `["profile"]`
      * (the scope "openid" is added automatically as it's mandatory)
@@ -221,7 +220,6 @@ export async function createOidc<
     const {
         issuerUri,
         clientId,
-        clientSecret,
         scopes = ["profile"],
         transformUrlBeforeRedirect,
         extraQueryParams: extraQueryParamsOrGetter,
@@ -286,9 +284,7 @@ export async function createOidc<
         ).replace(/\/$/, "");
     })();
 
-    const configHash = fnv1aHashToHex(
-        `${issuerUri} ${clientId} ${clientSecret ?? ""} ${scopes.join(" ")}`
-    );
+    const configHash = fnv1aHashToHex(`${issuerUri} ${clientId} ${scopes.join(" ")}`);
 
     log?.(`Calling createOidc v${VERSION}`, { params, publicUrl, configHash });
 
@@ -379,7 +375,6 @@ export async function createOidc<
         configHash,
         "authority": issuerUri,
         "client_id": clientId,
-        "client_secret": clientSecret,
         "redirect_uri": "" /* provided when calling login */,
         "response_type": "code",
         "scope": Array.from(new Set(["openid", ...scopes])).join(" "),
