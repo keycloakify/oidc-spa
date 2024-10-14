@@ -202,13 +202,7 @@ export type ParamsOfCreateOidc<
     doEnableDebugLogs?: boolean;
 };
 
-// NOTE: This is not arbitrary, it matches what oidc-client-ts uses.
-const SESSION_STORAGE_PREFIX = "oidc.";
-
-let $isUserActive: StatefulObservable<boolean> | undefined = undefined;
 const prOidcByConfigHash = new Map<string, Promise<Oidc<any>>>();
-
-const URL_real = window.URL;
 
 /** @see: https://docs.oidc-spa.dev/v/v5/documentation/usage */
 export async function createOidc<
@@ -217,22 +211,6 @@ export async function createOidc<
 >(
     params: ParamsOfCreateOidc<DecodedIdToken, IsAuthGloballyRequired>
 ): Promise<IsAuthGloballyRequired extends true ? Oidc.LoggedIn<DecodedIdToken> : Oidc<DecodedIdToken>> {
-    const {
-        issuerUri,
-        clientId,
-        scopes = ["profile"],
-        transformUrlBeforeRedirect,
-        extraQueryParams: extraQueryParamsOrGetter,
-        extraTokenParams: extraTokenParamsOrGetter,
-        publicUrl: publicUrl_params,
-        decodedIdTokenSchema,
-        __unsafe_ssoSessionIdleSeconds,
-        autoLogoutParams = { "redirectTo": "current page" },
-        isAuthGloballyRequired = false,
-        postLoginRedirectUrl,
-        doEnableDebugLogs = false
-    } = params;
-
     for (const name of ["issuerUri", "clientId"] as const) {
         const value = params[name];
         if (typeof value !== "string") {
@@ -241,6 +219,8 @@ export async function createOidc<
             );
         }
     }
+
+    const { issuerUri, clientId, scopes = ["profile"], doEnableDebugLogs, ...rest } = params;
 
     const log = (() => {
         if (!doEnableDebugLogs) {
@@ -257,6 +237,84 @@ export async function createOidc<
             }
         });
     })();
+
+    const configHash = fnv1aHashToHex(`${issuerUri} ${clientId} ${scopes.join(" ")}`);
+
+    use_previous_instance: {
+        const prOidc = prOidcByConfigHash.get(configHash);
+
+        if (prOidc === undefined) {
+            break use_previous_instance;
+        }
+
+        log?.(
+            [
+                `createOidc was called again with the same config (${JSON.stringify({
+                    issuerUri,
+                    clientId,
+                    scopes
+                })})`,
+                `probably due to a hot module replacement. Returning the previous instance.`
+            ].join(" ")
+        );
+
+        // @ts-expect-error: We know what we're doing
+        return prOidc;
+    }
+
+    const dOidc = new Deferred<Oidc<any>>();
+
+    prOidcByConfigHash.set(configHash, dOidc.pr);
+
+    const oidc = await createOidc_nonMemoized(rest, {
+        issuerUri,
+        clientId,
+        scopes,
+        configHash,
+        log
+    });
+
+    dOidc.resolve(oidc);
+
+    return oidc;
+}
+
+// NOTE: This is not arbitrary, it matches what oidc-client-ts uses.
+const SESSION_STORAGE_PREFIX = "oidc.";
+
+let $isUserActive: StatefulObservable<boolean> | undefined = undefined;
+
+const URL_real = window.URL;
+
+export async function createOidc_nonMemoized<
+    DecodedIdToken extends Record<string, unknown> = Record<string, unknown>,
+    IsAuthGloballyRequired extends boolean = false
+>(
+    params: Omit<
+        ParamsOfCreateOidc<DecodedIdToken, IsAuthGloballyRequired>,
+        "issuerUri" | "clientId" | "scopes" | "doEnableDebugLogs"
+    >,
+    preProcessedParams: {
+        issuerUri: string;
+        clientId: string;
+        scopes: string[];
+        configHash: string;
+        log: typeof console.log | undefined;
+    }
+): Promise<IsAuthGloballyRequired extends true ? Oidc.LoggedIn<DecodedIdToken> : Oidc<DecodedIdToken>> {
+    const {
+        transformUrlBeforeRedirect,
+        extraQueryParams: extraQueryParamsOrGetter,
+        extraTokenParams: extraTokenParamsOrGetter,
+        publicUrl: publicUrl_params,
+        decodedIdTokenSchema,
+        __unsafe_ssoSessionIdleSeconds,
+        autoLogoutParams = { "redirectTo": "current page" },
+        isAuthGloballyRequired = false,
+        postLoginRedirectUrl
+    } = params;
+
+    const { issuerUri, clientId, scopes, configHash, log } = preProcessedParams;
 
     const [getExtraQueryParams, getExtraTokenParams] = (
         [extraQueryParamsOrGetter, extraTokenParamsOrGetter] as const
@@ -284,33 +342,7 @@ export async function createOidc<
         ).replace(/\/$/, "");
     })();
 
-    const configHash = fnv1aHashToHex(`${issuerUri} ${clientId} ${scopes.join(" ")}`);
-
     log?.(`Calling createOidc v${VERSION}`, { params, publicUrl, configHash });
-
-    use_previous_instance: {
-        const prOidc = prOidcByConfigHash.get(configHash);
-
-        if (prOidc === undefined) {
-            break use_previous_instance;
-        }
-
-        log?.("Using previous instance of oidc-spa");
-
-        console.warn(
-            [
-                `oidc-spa has been instantiated more than once with the same configuration.`,
-                `If you are in development mode with hot module replacement this is expected you can ignore this warning.`,
-                `In production however this is something that should be addressed.`
-            ].join(" ")
-        );
-
-        return prOidc as any;
-    }
-
-    const dOidc = new Deferred<Oidc<any>>();
-
-    prOidcByConfigHash.set(configHash, dOidc.pr);
 
     const silentSso =
         publicUrl === undefined
@@ -1316,7 +1348,6 @@ export async function createOidc<
             initializationError
         });
 
-        dOidc.resolve(oidc);
         // @ts-expect-error: We know what we are doing.
         return oidc;
     }
@@ -1342,8 +1373,6 @@ export async function createOidc<
             "login": params => loginOrGoToAuthServer({ "action": "login", ...params }),
             "initializationError": undefined
         });
-
-        dOidc.resolve(oidc);
 
         // @ts-expect-error: We know what we are doing.
         return oidc;
