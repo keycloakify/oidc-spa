@@ -84,19 +84,30 @@ export function retrieveQueryParamFromUrl(params: {
 }): { wasPresent: false } | { wasPresent: true; newUrl: string; value: string } {
     const { url, name } = params;
 
-    const { newUrl, values } = retrieveAllQueryParamStartingWithPrefixFromUrl({
+    let { newUrl, values } = retrieveAllQueryParamStartingWithPrefixFromUrl({
         url,
         "prefix": name,
         "doLeavePrefixInResults": true
     });
 
-    return name in values
-        ? {
-              "wasPresent": true,
-              newUrl,
-              "value": values[name]
-          }
-        : {
-              "wasPresent": false
-          };
+    if (!(name in values)) {
+        return { "wasPresent": false };
+    }
+
+    const { [name]: value, ...rest } = values;
+
+    Object.entries(rest).forEach(
+        ([name, value]) =>
+            (newUrl = addQueryParamToUrl({
+                name,
+                "url": newUrl,
+                value
+            }).newUrl)
+    );
+
+    return {
+        "wasPresent": true,
+        newUrl,
+        "value": values[name]
+    };
 }
