@@ -73,19 +73,43 @@ NextAuth.js is a authentication solution for Next.js and features a [Keycloak ad
 
 Heads over to [the documentation website](https://docs.oidc-spa.dev) 📘!
 
-## Sponsor
+## Sponsors
+
+Project backers, we trust and recommend their services.
 
 <br/>
 
 <div align="center">
 
-![Logo Dark](https://github.com/user-attachments/assets/935c0f10-6f7b-41f4-94cc-4540d0985569#gh-dark-mode-only)
+![Logo Dark](https://github.com/user-attachments/assets/d8f6b6f5-3de4-4adc-ba15-cb4074e8309b)
 
 </div>
 
 <div align="center">
 
-![Logo Light](https://github.com/user-attachments/assets/2e5bce29-4149-44fc-9d17-789e17e9642b#gh-light-mode-only)
+![Logo Light](https://github.com/user-attachments/assets/20736d6f-f22d-4a9d-9dfe-93be209a8191#gh-light-mode-only)
+
+</div>
+
+<br/>
+
+<p align="center">
+    <i><a href="https://phasetwo.io/"><strong>Keycloak on Steroids as a Service</strong></a> - Keycloak community contributors of popular <a href="https://github.com/p2-inc#our-extensions-">extensions</a> providing free and dedicated <a href="https://phasetwo.io/hosting/">Keycloak hosting</a> and enterprise <a href="https://phasetwo.io/support/">Keycloak support</a> to businesses of all sizes.</i>
+</p>
+
+<br/>
+<br/>
+<br/>
+
+<div align="center">
+
+![Logo Dark](https://github.com/user-attachments/assets/dd3925fb-a58a-4e91-b360-69c2fa1f1087)
+
+</div>
+
+<div align="center">
+
+![Logo Light](https://github.com/user-attachments/assets/6c00c201-eed7-485a-a887-70891559d69b#gh-light-mode-only)
 
 </div>
 
@@ -96,8 +120,6 @@ Heads over to [the documentation website](https://docs.oidc-spa.dev) 📘!
     <i><strong>Keycloak Consulting Services</strong> - Your partner in Keycloak deployment, configuration, and extension development for optimized identity management solutions.</i>
   </a>
 </p>
-
-Thank you, [Zone2](https://www.zone2.tech/), backing the project!
 
 ## Showcases
 
