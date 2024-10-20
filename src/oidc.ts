@@ -204,6 +204,10 @@ export type ParamsOfCreateOidc<
 
 const prOidcByConfigHash = new Map<string, Promise<Oidc<any>>>();
 
+function getConfigHash(params: { issuerUri: string; clientId: string }) {
+    return fnv1aHashToHex(`${params.issuerUri} ${params.clientId}`);
+}
+
 /** @see: https://docs.oidc-spa.dev/v/v5/documentation/usage */
 export async function createOidc<
     DecodedIdToken extends Record<string, unknown> = Record<string, unknown>,
@@ -238,7 +242,7 @@ export async function createOidc<
         });
     })();
 
-    const configHash = fnv1aHashToHex(`${issuerUri} ${clientId} ${scopes.join(" ")}`);
+    const configHash = getConfigHash({ issuerUri, clientId });
 
     use_previous_instance: {
         const prOidc = prOidcByConfigHash.get(configHash);
@@ -402,6 +406,8 @@ export async function createOidc_nonMemoized<
 
         await new Promise<never>(() => {});
     }
+
+    maybeImpersonate({ configHash });
 
     const oidcClientTsUserManager = new OidcClientTsUserManager({
         configHash,
@@ -1753,4 +1759,92 @@ function oidcClientTsUserToTokens<DecodedIdToken extends Record<string, unknown>
     });
 
     return tokens;
+}
+
+function maybeImpersonate(params: { configHash: string }) {
+    const { configHash } = params;
+
+    const value = (() => {
+        const KEY = "oidc-spa_impersonate";
+
+        from_url: {
+            const result = retrieveQueryParamFromUrl({ "url": window.location.href, "name": KEY });
+
+            if (!result.wasPresent) {
+                break from_url;
+            }
+
+            window.history.replaceState({}, "", result.newUrl);
+
+            sessionStorage.setItem(KEY, result.value);
+
+            return result.value;
+        }
+
+        from_session_storage: {
+            const value = sessionStorage.getItem(KEY);
+
+            if (value === null) {
+                break from_session_storage;
+            }
+
+            return value;
+        }
+
+        return undefined;
+    })();
+
+    if (value === undefined) {
+        return;
+    }
+
+    const arr = JSON.parse(decodeBase64(value)) as {
+        idToken: string;
+        accessToken: string;
+        refreshToken: string;
+    }[];
+
+    assert(arr instanceof Array);
+    arr.forEach(item => {
+        assert(item instanceof Object);
+        const { accessToken, idToken, refreshToken } = item;
+        assert(typeof accessToken === "string");
+        assert(typeof idToken === "string");
+        assert(typeof refreshToken === "string");
+    });
+
+    for (const { idToken, accessToken, refreshToken } of arr) {
+        const parsedAccessToken = decodeJwt(accessToken) as any;
+
+        assert(parsedAccessToken instanceof Object);
+        const { iss, azp, sid, scope, exp } = parsedAccessToken;
+        assert(typeof iss === "string");
+        assert(typeof azp === "string");
+        assert(typeof sid === "string");
+        assert(typeof scope === "string");
+        assert(typeof exp === "number");
+
+        const issuerUri = iss;
+        const clientId = azp;
+
+        if (getConfigHash({ issuerUri, clientId }) !== configHash) {
+            continue;
+        }
+
+        sessionStorage.setItem(
+            `${SESSION_STORAGE_PREFIX}user:${issuerUri}:${clientId}`,
+            JSON.stringify({
+                "id_token": idToken,
+                "session_state": sid,
+                "access_token": accessToken,
+                "refresh_token": refreshToken,
+                "token_type": "Bearer",
+                scope,
+                "profile": parsedAccessToken,
+                "expires_at": exp
+            })
+        );
+
+        break;
+    }
 }
