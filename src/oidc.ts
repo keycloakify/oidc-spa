@@ -82,7 +82,6 @@ export declare namespace Oidc {
             subscribeToAutoLogoutCountdown: (
                 tickCallback: (params: { secondsLeft: number | undefined }) => void
             ) => { unsubscribeFromAutoLogoutCountdown: () => void };
-            isImperativeImpersonation: boolean;
         } & (
                 | {
                       /**
@@ -202,7 +201,9 @@ export type ParamsOfCreateOidc<
     isAuthGloballyRequired?: IsAuthGloballyRequired;
     doEnableDebugLogs?: boolean;
 
-    doAllowImperativeImpersonation?: boolean;
+    getDoContinueWithImpersonation?: (params: {
+        parsedAccessToken: Record<string, unknown>;
+    }) => Promise<boolean>;
 };
 
 const prOidcByConfigHash = new Map<string, Promise<Oidc<any>>>();
@@ -319,7 +320,7 @@ export async function createOidc_nonMemoized<
         autoLogoutParams = { "redirectTo": "current page" },
         isAuthGloballyRequired = false,
         postLoginRedirectUrl,
-        doAllowImperativeImpersonation = false
+        getDoContinueWithImpersonation
     } = params;
 
     const { issuerUri, clientId, scopes, configHash, log } = preProcessedParams;
@@ -411,15 +412,16 @@ export async function createOidc_nonMemoized<
         await new Promise<never>(() => {});
     }
 
-    const isImperativeImpersonation = (() => {
-        if (!doAllowImperativeImpersonation) {
-            return false;
+    imperative_impersonation: {
+        if (getDoContinueWithImpersonation === undefined) {
+            break imperative_impersonation;
         }
 
-        const { isImperativeImpersonation } = maybeImpersonate({ configHash });
-
-        return isImperativeImpersonation;
-    })();
+        await maybeImpersonate({
+            configHash,
+            getDoContinueWithImpersonation
+        });
+    }
 
     const oidcClientTsUserManager = new OidcClientTsUserManager({
         configHash,
@@ -1529,8 +1531,7 @@ export async function createOidc_nonMemoized<
               })
             : {
                   "authMethod": resultOfLoginProcess.authMethod
-              }),
-        isImperativeImpersonation
+              })
     });
 
     {
@@ -1774,8 +1775,14 @@ function oidcClientTsUserToTokens<DecodedIdToken extends Record<string, unknown>
     return tokens;
 }
 
-function maybeImpersonate(params: { configHash: string }): { isImperativeImpersonation: boolean } {
-    const { configHash } = params;
+async function maybeImpersonate(params: {
+    configHash: string;
+    getDoContinueWithImpersonation: Exclude<
+        ParamsOfCreateOidc["getDoContinueWithImpersonation"],
+        undefined
+    >;
+}) {
+    const { configHash, getDoContinueWithImpersonation } = params;
 
     const value = (() => {
         const KEY = "oidc-spa_impersonate";
@@ -1808,7 +1815,7 @@ function maybeImpersonate(params: { configHash: string }): { isImperativeImperso
     })();
 
     if (value === undefined) {
-        return { "isImperativeImpersonation": false };
+        return;
     }
 
     const arr = JSON.parse(decodeBase64(value)) as {
@@ -1844,6 +1851,12 @@ function maybeImpersonate(params: { configHash: string }): { isImperativeImperso
             continue;
         }
 
+        const doContinue = await getDoContinueWithImpersonation({ parsedAccessToken });
+
+        if (!doContinue) {
+            return;
+        }
+
         sessionStorage.setItem(
             `${SESSION_STORAGE_PREFIX}user:${issuerUri}:${clientId}`,
             JSON.stringify({
@@ -1858,8 +1871,6 @@ function maybeImpersonate(params: { configHash: string }): { isImperativeImperso
             })
         );
 
-        return { "isImperativeImpersonation": true };
+        break;
     }
-
-    return { "isImperativeImpersonation": false };
 }

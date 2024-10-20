@@ -175,7 +175,6 @@ export async function createMockOidc<
               }
             : {
                   "authMethod": "silent signin"
-              }),
-        "isImperativeImpersonation": false
+              })
     });
 }
