@@ -351,7 +351,7 @@ export async function createOidc_nonMemoized<
         ).replace(/\/$/, "");
     })();
 
-    log?.(`Calling createOidc v${VERSION}`, { params, publicUrl, configHash });
+    log?.(`Calling createOidc v${VERSION}`, { issuerUri, clientId, scopes, publicUrl, configHash });
 
     const silentSso =
         publicUrl === undefined
@@ -419,7 +419,8 @@ export async function createOidc_nonMemoized<
 
         await maybeImpersonate({
             configHash,
-            getDoContinueWithImpersonation
+            getDoContinueWithImpersonation,
+            log
         });
     }
 
@@ -1781,8 +1782,9 @@ async function maybeImpersonate(params: {
         ParamsOfCreateOidc["getDoContinueWithImpersonation"],
         undefined
     >;
+    log: typeof console.log | undefined;
 }) {
-    const { configHash, getDoContinueWithImpersonation } = params;
+    const { configHash, getDoContinueWithImpersonation, log } = params;
 
     const value = (() => {
         const KEY = "oidc-spa_impersonate";
@@ -1793,6 +1795,8 @@ async function maybeImpersonate(params: {
             if (!result.wasPresent) {
                 break from_url;
             }
+
+            log?.("Found impersonation query param in the url");
 
             window.history.replaceState({}, "", result.newUrl);
 
@@ -1807,6 +1811,8 @@ async function maybeImpersonate(params: {
             if (value === null) {
                 break from_session_storage;
             }
+
+            log?.("Found impersonation query param in the session storage");
 
             return value;
         }
@@ -1823,6 +1829,8 @@ async function maybeImpersonate(params: {
         accessToken: string;
         refreshToken: string;
     }[];
+
+    log?.("Impersonation params got:", arr);
 
     assert(arr instanceof Array);
     arr.forEach(item => {
@@ -1848,14 +1856,29 @@ async function maybeImpersonate(params: {
         const clientId = azp;
 
         if (getConfigHash({ issuerUri, clientId }) !== configHash) {
+            log?.(
+                [
+                    `Skipping impersonation params entry`,
+                    `issuerUri/clientId: ${issuerUri}/${clientId} read from the access token`,
+                    `doesn't match the current configuration of this oidc client`
+                ].join(" ")
+            );
+
             continue;
         }
+
+        log?.(
+            "Impersonation param matched with the current configuration, asking for confirmation before continuing"
+        );
 
         const doContinue = await getDoContinueWithImpersonation({ parsedAccessToken });
 
         if (!doContinue) {
+            log?.("Impersonation was canceled by the user");
             return;
         }
+
+        log?.("Impersonation confirmed, storing the impersonation params in the session storage");
 
         sessionStorage.setItem(
             `${SESSION_STORAGE_PREFIX}user:${issuerUri}:${clientId}`,
@@ -1871,6 +1894,10 @@ async function maybeImpersonate(params: {
             })
         );
 
-        break;
+        return;
     }
+
+    log?.(
+        "Impersonation skipped, no impersonation params matched the current configuration of this oidc client"
+    );
 }
