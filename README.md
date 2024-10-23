@@ -65,7 +65,7 @@ The official OIDC Client for Keycloak. It only works with Keycloak and [will eve
 ### [NextAuth.js](https://next-auth.js.org/)
 
 NextAuth.js is a authentication solution for Next.js and features a [Keycloak adapter](https://next-auth.js.org/providers/keycloak).  
-`oidc-spa` is specifically designed for Single Page Applications, Next.js projects do not call in this category, so NextAuth.js is what you should use if you're using Next.js.
+`oidc-spa` is specifically designed for Single Page Applications, Next.js projects **do not** fall in this category, so NextAuth.js is what you should use if you're using Next.js.
 
 > _NOTE: We might create in the future a `oidc-mpa` library for Multi Page Applications that would aim at supporting Next.js projects._
 
