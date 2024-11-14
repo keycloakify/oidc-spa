@@ -1,5 +1,7 @@
 import {
     UserManager as OidcClientTsUserManager,
+    WebStorageStateStore,
+    InMemoryWebStorage,
     type User as OidcClientTsUser
 } from "./vendor/frontend/oidc-client-ts-and-jwt-decode";
 import { id } from "./vendor/frontend/tsafe";
@@ -204,6 +206,8 @@ export type ParamsOfCreateOidc<
     getDoContinueWithImpersonation?: (params: {
         parsedAccessToken: Record<string, unknown>;
     }) => Promise<boolean>;
+
+    doDisableTokenPersistence?: boolean;
 };
 
 const prOidcByConfigHash = new Map<string, Promise<Oidc<any>>>();
@@ -320,8 +324,11 @@ export async function createOidc_nonMemoized<
         autoLogoutParams = { "redirectTo": "current page" },
         isAuthGloballyRequired = false,
         postLoginRedirectUrl,
-        getDoContinueWithImpersonation
+        getDoContinueWithImpersonation,
+        doDisableTokenPersistence = false
     } = params;
+
+    const store = doDisableTokenPersistence ? new InMemoryWebStorage() : window.sessionStorage;
 
     const { issuerUri, clientId, scopes, configHash, log } = preProcessedParams;
 
@@ -420,6 +427,7 @@ export async function createOidc_nonMemoized<
         await maybeImpersonate({
             configHash,
             getDoContinueWithImpersonation,
+            store,
             log
         });
     }
@@ -448,7 +456,8 @@ export async function createOidc_nonMemoized<
             }).newUrl;
 
             return redirectUri;
-        })()
+        })(),
+        userStore: new WebStorageStateStore({ store })
     });
 
     let lastPublicRoute: string | undefined = undefined;
@@ -965,9 +974,14 @@ export async function createOidc_nonMemoized<
                     });
                 }
 
-                Object.keys(sessionStorage)
-                    .filter(key => key.startsWith(SESSION_STORAGE_PREFIX))
-                    .forEach(key => sessionStorage.removeItem(key));
+                for (let i = 0; i < store.length; i++) {
+                    const key = store.key(i);
+                    assert(key !== null);
+                    if (!key.startsWith(SESSION_STORAGE_PREFIX)) {
+                        continue;
+                    }
+                    store.removeItem(key);
+                }
 
                 return undefined;
             }
@@ -1411,8 +1425,8 @@ export async function createOidc_nonMemoized<
 
     const assertSessionStorageNotCleared = () => {
         const hasOidcSessionStorageEntry = (() => {
-            for (let i = 0; i < sessionStorage.length; i++) {
-                const key = sessionStorage.key(i);
+            for (let i = 0; i < store.length; i++) {
+                const key = store.key(i);
                 assert(key !== null);
 
                 if (!key.startsWith(SESSION_STORAGE_PREFIX)) {
@@ -1782,9 +1796,10 @@ async function maybeImpersonate(params: {
         ParamsOfCreateOidc["getDoContinueWithImpersonation"],
         undefined
     >;
+    store: Storage;
     log: typeof console.log | undefined;
 }) {
-    const { configHash, getDoContinueWithImpersonation, log } = params;
+    const { configHash, getDoContinueWithImpersonation, store, log } = params;
 
     const value = (() => {
         const KEY = "oidc-spa_impersonate";
@@ -1800,13 +1815,13 @@ async function maybeImpersonate(params: {
 
             window.history.replaceState({}, "", result.newUrl);
 
-            sessionStorage.setItem(KEY, result.value);
+            store.setItem(KEY, result.value);
 
             return result.value;
         }
 
         from_session_storage: {
-            const value = sessionStorage.getItem(KEY);
+            const value = store.getItem(KEY);
 
             if (value === null) {
                 break from_session_storage;
@@ -1880,7 +1895,7 @@ async function maybeImpersonate(params: {
 
         log?.("Impersonation confirmed, storing the impersonation params in the session storage");
 
-        sessionStorage.setItem(
+        store.setItem(
             `${SESSION_STORAGE_PREFIX}user:${issuerUri}:${clientId}`,
             JSON.stringify({
                 "id_token": idToken,
