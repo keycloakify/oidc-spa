@@ -100,7 +100,7 @@ export async function createMockOidc<
             "login": ({ redirectUrl }) => loginOrGoToAuthServer({ redirectUrl }),
             "initializationError": undefined
         });
-        if (!isAuthGloballyRequired) {
+        if (isAuthGloballyRequired) {
             await oidc.login({
                 "redirectUrl": postLoginRedirectUrl,
                 "doesCurrentHrefRequiresAuth": true
