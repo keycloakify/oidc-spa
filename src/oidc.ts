@@ -746,7 +746,7 @@ export async function createOidc_nonMemoized<
                 const result = retrieveQueryParamFromUrl({ name, url });
 
                 if (!result.wasPresent) {
-                    if (name === "iss") {
+                    if (name === "iss" || name === "session_state") {
                         continue;
                     }
                     missingMandatoryParams.push(name);
