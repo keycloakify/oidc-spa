@@ -332,6 +332,11 @@ export async function createOidc_nonMemoized<
 
     const { issuerUri, clientId, scopes, configHash, log } = preProcessedParams;
 
+    // NOTE: It's important that it is initialized here because of the garbage collection (see implementation).
+    const { clearLogoutParams, getLogoutParams, setLogoutParams } = createLogoutPropagationApi({
+        configHash
+    });
+
     const [getExtraQueryParams, getExtraTokenParams] = (
         [extraQueryParamsOrGetter, extraTokenParamsOrGetter] as const
     ).map(valueOrGetter => {
@@ -1458,6 +1463,8 @@ export async function createOidc_nonMemoized<
         "logout": async params => {
             assertSessionStorageNotCleared();
 
+            setLogoutParams(params);
+
             await oidcClientTsUserManager.signoutRedirect({
                 "post_logout_redirect_uri": ((): string => {
                     switch (params.redirectTo) {
@@ -1548,6 +1555,24 @@ export async function createOidc_nonMemoized<
                   "authMethod": resultOfLoginProcess.authMethod
               })
     });
+
+    {
+        clearLogoutParams();
+
+        (async () => {
+            while (true) {
+                await new Promise(resolve => setTimeout(resolve, 1_000));
+
+                const logoutParams = getLogoutParams();
+
+                if (logoutParams === undefined) {
+                    continue;
+                }
+
+                await oidc.logout(logoutParams);
+            }
+        })();
+    }
 
     {
         const getMsBeforeExpiration = () => {
@@ -1915,4 +1940,117 @@ async function maybeImpersonate(params: {
     log?.(
         "Impersonation skipped, no impersonation params matched the current configuration of this oidc client"
     );
+}
+
+function createLogoutPropagationApi(params: { configHash: string }) {
+    const { configHash } = params;
+
+    const KEY_PREFIX = "oidc-spa_logout-params_";
+
+    const KEY = `${KEY_PREFIX}${configHash}`;
+
+    type LogoutParams = Param0<Oidc.LoggedIn["logout"]>;
+
+    type ParsedValue = { logoutParams: LogoutParams; expirationTime: number };
+
+    function getIsParsedValue(value: unknown): value is ParsedValue {
+        return (
+            value instanceof Object &&
+            "logoutParams" in value &&
+            "expirationTime" in value &&
+            typeof value.expirationTime === "number"
+        );
+    }
+
+    function getParsedValue(): ParsedValue | undefined {
+        const value = localStorage.getItem(KEY);
+
+        if (value === null) {
+            return undefined;
+        }
+
+        let parsedValue: unknown;
+
+        try {
+            parsedValue = JSON.parse(value);
+            assert(getIsParsedValue(parsedValue));
+        } catch {
+            localStorage.removeItem(KEY);
+            return undefined;
+        }
+
+        return parsedValue;
+    }
+
+    function setLogoutParams(params: LogoutParams) {
+        const parsedValue: ParsedValue = {
+            logoutParams: params,
+            expirationTime: Date.now() + 7_000
+        };
+        localStorage.setItem(KEY, JSON.stringify(parsedValue));
+    }
+
+    function getLogoutParams(): LogoutParams | undefined {
+        const parsedValue = getParsedValue();
+
+        if (parsedValue === undefined) {
+            return undefined;
+        }
+
+        const { logoutParams } = parsedValue;
+
+        return logoutParams;
+    }
+
+    function clearLogoutParams() {
+        localStorage.removeItem(KEY);
+    }
+
+    (function garbageCollect() {
+        const { keys } = (() => {
+            const keys: string[] = [];
+
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+
+                if (key === null) {
+                    continue;
+                }
+
+                if (!key.startsWith(KEY_PREFIX)) {
+                    continue;
+                }
+
+                keys.push(key);
+            }
+
+            return { keys };
+        })();
+
+        let doesNeedReschedule = false;
+
+        const now = Date.now();
+
+        for (const key of keys) {
+            const parsedValue = getParsedValue();
+
+            if (parsedValue === undefined) {
+                continue;
+            }
+
+            const { expirationTime } = parsedValue;
+
+            if (now > expirationTime) {
+                localStorage.removeItem(key);
+            } else {
+                doesNeedReschedule = true;
+            }
+        }
+
+        if (doesNeedReschedule) {
+            setTimeout(() => garbageCollect(), 1_000);
+        }
+    })();
+
+    return { setLogoutParams, getLogoutParams, clearLogoutParams };
 }
