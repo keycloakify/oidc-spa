@@ -1,7 +1,6 @@
 import {
     UserManager as OidcClientTsUserManager,
     WebStorageStateStore,
-    InMemoryWebStorage,
     type User as OidcClientTsUser
 } from "./vendor/frontend/oidc-client-ts-and-jwt-decode";
 import { id } from "./vendor/frontend/tsafe";
@@ -11,7 +10,8 @@ import { assert, type Equals } from "./vendor/frontend/tsafe";
 import {
     addQueryParamToUrl,
     retrieveQueryParamFromUrl,
-    retrieveAllQueryParamFromUrl
+    retrieveAllQueryParamFromUrl,
+    retrieveAllQueryParamStartingWithPrefixFromUrl
 } from "./tools/urlQueryParams";
 import { fnv1aHashToHex } from "./tools/fnv1aHashToHex";
 import { Deferred } from "./tools/Deferred";
@@ -24,6 +24,9 @@ import { setTimeout, clearTimeout } from "./vendor/frontend/worker-timers";
 import { OidcInitializationError } from "./OidcInitializationError";
 import { encodeBase64, decodeBase64 } from "./tools/base64";
 import { toHumanReadableDuration } from "./tools/toHumanReadableDuration";
+import { createHybridStorage, type HybridStorage } from "./tools/HybridStorage";
+import { toFullyQualifiedUrl } from "./tools/toFullyQualifiedUrl";
+import { getStateData, type StateData } from "./StateData";
 
 // NOTE: Replaced at build time
 const VERSION = "{{OIDC_SPA_VERSION}}";
@@ -84,34 +87,22 @@ export declare namespace Oidc {
             subscribeToAutoLogoutCountdown: (
                 tickCallback: (params: { secondsLeft: number | undefined }) => void
             ) => { unsubscribeFromAutoLogoutCountdown: () => void };
-        } & (
+            /**
+             * Defined when authMethod is "back from auth server".
+             * If you called `goToAuthServer` or `login` with extraQueryParams, this object let you know the outcome of the
+             * of the action that was intended.
+             *
+             * For example, on a Keycloak server, if you called `goToAuthServer({ extraQueryParams: { kc_action: "UPDATE_PASSWORD" } })`
+             * you'll get back: `{ extraQueryParams: { kc_action: "UPDATE_PASSWORD" }, result: { kc_action_status: "success" } }` (or "cancelled")
+             */
+            backFromAuthServer:
                 | {
-                      /**
-                       * "back from auth server":
-                       *      The user was redirected to the authentication server login/registration page and then redirected back to the application.
-                       * "session storage":
-                       *    The user's authentication was restored from the browser session storage, typically after a page refresh.
-                       * "silent signin":
-                       *   The user was authenticated silently using an iframe to check the session with the authentication server.
-                       */
-                      authMethod: "back from auth server";
-                      /**
-                       * Defined when authMethod is "back from auth server".
-                       * If you called `goToAuthServer` or `login` with extraQueryParams, this object let you know the outcome of the
-                       * of the action that was intended.
-                       *
-                       * For example, on a Keycloak server, if you called `goToAuthServer({ extraQueryParams: { kc_action: "UPDATE_PASSWORD" } })`
-                       * you'll get back: `{ extraQueryParams: { kc_action: "UPDATE_PASSWORD" }, result: { kc_action_status: "success" } }` (or "cancelled")
-                       */
-                      backFromAuthServer: {
-                          extraQueryParams: Record<string, string>;
-                          result: Record<string, string>;
-                      };
+                      extraQueryParams: Record<string, string>;
+                      result: Record<string, string>;
                   }
-                | {
-                      authMethod: "session storage" | "silent signin";
-                  }
-            );
+                | undefined;
+            isNewVisitOrNewSession: boolean;
+        };
 
     export type Tokens<DecodedIdToken extends Record<string, unknown> = Record<string, unknown>> =
         Readonly<{
@@ -124,7 +115,7 @@ export declare namespace Oidc {
         }>;
 }
 
-const PARAMS_TO_RETRIEVE_FROM_SUCCESSFUL_LOGIN = ["code", "state", "session_state", "iss"] as const;
+const AUTH_RESPONSE_PARAM_NAMES = ["code", "state", "session_state", "iss"] as const;
 
 export type ParamsOfCreateOidc<
     DecodedIdToken extends Record<string, unknown> = Record<string, unknown>,
@@ -173,21 +164,21 @@ export type ParamsOfCreateOidc<
      */
     postLoginRedirectUrl?: string;
     /**
-     * This parameter is used to let oidc-spa knows where to find the silent-sso.htm file
-     * and also to know what is the root path of your application so it can redirect to it after logout.
-     *   - `${publicUrl}/silent-sso.htm` must return the `silent-sso.htm` that you are supposed to have created in your `public/` directory.
-     *   - Navigating to publicUrl should redirect to the home of your App.
+     * This parameter is used to let oidc-spa knows where is the home of your application.
      *
      * What should you put in this parameter?
      *   - Vite project:             `publicUrl: import.meta.env.BASE_URL`
      *   - Create React App project: `publicUrl: process.env.PUBLIC_URL`
      *   - Other:                    `publicUrl: "/"` (Usually, or `/my-app-name` if your app is not at the root of the domain)
-     *
-     * If you've opted out of using the `silent-sso.htm` file you can set `publicUrl` to `undefined`.
-     * Just be aware that calling `logout({ redirectTo: "home" })` will throw an error.
-     * Use `logout({ redirectTo: "specific url", url: "/..." })` or `logout({ redirectTo: "current page" })` instead.
      */
-    publicUrl: string | undefined;
+    BASE_URL: string | undefined;
+
+    /**
+     * This parameter is to provide if you don't have a dedicated oidc-callback.htm file.
+     * If this parameter is provided, `BASE_URL` must be explicitly set to undefined.
+     */
+    homeUrl?: string;
+
     decodedIdTokenSchema?: { parse: (data: unknown) => DecodedIdToken };
     /**
      * This parameter defines after how many seconds of inactivity the user should be
@@ -206,8 +197,6 @@ export type ParamsOfCreateOidc<
     getDoContinueWithImpersonation?: (params: {
         parsedAccessToken: Record<string, unknown>;
     }) => Promise<boolean>;
-
-    doDisableTokenPersistence?: boolean;
 };
 
 const prOidcByConfigHash = new Map<string, Promise<Oidc<any>>>();
@@ -291,9 +280,6 @@ export async function createOidc<
     return oidc;
 }
 
-// NOTE: This is not arbitrary, it matches what oidc-client-ts uses.
-const SESSION_STORAGE_PREFIX = "oidc.";
-
 let $isUserActive: StatefulObservable<boolean> | undefined = undefined;
 
 const URL_real = window.URL;
@@ -318,17 +304,15 @@ export async function createOidc_nonMemoized<
         transformUrlBeforeRedirect,
         extraQueryParams: extraQueryParamsOrGetter,
         extraTokenParams: extraTokenParamsOrGetter,
-        publicUrl: publicUrl_params,
+        BASE_URL: BASE_URL_params,
+        homeUrl,
         decodedIdTokenSchema,
         __unsafe_ssoSessionIdleSeconds,
         autoLogoutParams = { "redirectTo": "current page" },
         isAuthGloballyRequired = false,
         postLoginRedirectUrl,
-        getDoContinueWithImpersonation,
-        doDisableTokenPersistence = false
+        getDoContinueWithImpersonation
     } = params;
-
-    const store = doDisableTokenPersistence ? new InMemoryWebStorage() : window.sessionStorage;
 
     const { issuerUri, clientId, scopes, configHash, log } = preProcessedParams;
 
@@ -351,61 +335,71 @@ export async function createOidc_nonMemoized<
         return undefined;
     });
 
-    const publicUrl = (() => {
-        if (publicUrl_params === undefined) {
-            return undefined;
-        }
+    const urls = (() => {
+        if (homeUrl !== undefined) {
+            assert(
+                BASE_URL_params === undefined,
+                "If homeUrl is provided, BASE_URL must be explicitly set to undefined"
+            );
 
-        return (
-            publicUrl_params.startsWith("http")
-                ? publicUrl_params
-                : `${window.location.origin}${publicUrl_params}`
-        ).replace(/\/$/, "");
+            const url = toFullyQualifiedUrl(homeUrl);
+
+            return {
+                "hasDedicatedHtmFile": false,
+                "callbackUrl": url,
+                "homeUrl": url
+            };
+        } else {
+            assert(
+                BASE_URL_params !== undefined,
+                "If homeUrl is not provided, BASE_URL must be provided"
+            );
+
+            const url = toFullyQualifiedUrl(BASE_URL_params);
+
+            return {
+                "hasDedicatedHtmFile": true,
+                "callbackUrl": `${url}/oidc-callback.htm`,
+                "homeUrl": url
+            };
+        }
     })();
 
-    log?.(`Calling createOidc v${VERSION}`, { issuerUri, clientId, scopes, publicUrl, configHash });
+    log?.(`Calling createOidc v${VERSION}`, { issuerUri, clientId, scopes, configHash, urls });
 
-    const silentSso =
-        publicUrl === undefined
-            ? {
-                  "hasDedicatedHtmlFile": false,
-                  "redirectUri": window.location.href
-              }
-            : {
-                  "hasDedicatedHtmlFile": true,
-                  "redirectUri": `${publicUrl}/silent-sso.htm`
-              };
-
-    log?.(`silent SSO:\n${JSON.stringify(silentSso, null, 2)}`);
-
-    const IS_SILENT_SSO_RESERVED_QUERY_PARAM_NAME = "oidc-spa_silent_sso";
-    const CONFIG_HASH_RESERVED_QUERY_PARAM_NAME = "oidc-spa_config_hash";
-
-    silent_sso_polyfill: {
-        if (
-            !retrieveQueryParamFromUrl({
-                "url": window.location.href,
-                "name": IS_SILENT_SSO_RESERVED_QUERY_PARAM_NAME
-            }).wasPresent
-        ) {
-            break silent_sso_polyfill;
-        }
-
-        {
+    oidc_callback_htm_polyfill: {
+        const state = (() => {
             const result = retrieveQueryParamFromUrl({
                 "url": window.location.href,
-                "name": CONFIG_HASH_RESERVED_QUERY_PARAM_NAME
+                "name": "state"
             });
 
-            if (!result.wasPresent || result.value !== configHash) {
-                break silent_sso_polyfill;
+            if (!result.wasPresent) {
+                return undefined;
             }
+
+            return result.value;
+        })();
+
+        if (state === undefined) {
+            break oidc_callback_htm_polyfill;
         }
 
-        if (silentSso.hasDedicatedHtmlFile) {
-            log?.(
+        const stateData = getStateData({ state });
+
+        if (stateData === undefined) {
+            break oidc_callback_htm_polyfill;
+        }
+
+        if (stateData.configHash !== configHash) {
+            // Another oidc-spa instance should handle this
+            await new Promise<never>(() => {});
+        }
+
+        if (urls.hasDedicatedHtmFile) {
+            console.error(
                 [
-                    "User forgot to create the silent-sso.htm file or the web server is not serving it correctly",
+                    "You forgot to create the oidc-callback.htm file or the web server is not serving it correctly",
                     "suspending forever"
                 ].join(" ")
             );
@@ -415,14 +409,28 @@ export async function createOidc_nonMemoized<
             await new Promise<never>(() => {});
         }
 
-        log?.(
-            "Silent SSO dedicated html file is not used, polyfilling the behavior by sending a message to the parent"
-        );
+        const authResponse: Record<string, string> = {};
 
-        parent.postMessage(location.href, location.origin);
+        for (const [key, value] of new URL(location.href).searchParams) {
+            authResponse[key] = value;
+        }
+
+        if (stateData.isSilentSso) {
+            parent.postMessage(authResponse, location.origin);
+        } else {
+            const redirectUrl = new URL(stateData.redirectUrl);
+
+            for (const [key, value] of Object.entries(authResponse)) {
+                redirectUrl.searchParams.set(`oidc-spa.${key}`, value);
+            }
+
+            location.replace(redirectUrl.href);
+        }
 
         await new Promise<never>(() => {});
     }
+
+    const store = createHybridStorage();
 
     imperative_impersonation: {
         if (getDoContinueWithImpersonation === undefined) {
@@ -441,28 +449,12 @@ export async function createOidc_nonMemoized<
         configHash,
         "authority": issuerUri,
         "client_id": clientId,
-        "redirect_uri": "" /* provided when calling login */,
+        "redirect_uri": urls.callbackUrl,
         "response_type": "code",
         "scope": Array.from(new Set(["openid", ...scopes])).join(" "),
         "automaticSilentRenew": false,
-        "silent_redirect_uri": (() => {
-            let { redirectUri } = silentSso;
-
-            redirectUri = addQueryParamToUrl({
-                "url": redirectUri,
-                "name": CONFIG_HASH_RESERVED_QUERY_PARAM_NAME,
-                "value": configHash
-            }).newUrl;
-
-            redirectUri = addQueryParamToUrl({
-                "url": redirectUri,
-                "name": IS_SILENT_SSO_RESERVED_QUERY_PARAM_NAME,
-                "value": "true"
-            }).newUrl;
-
-            return redirectUri;
-        })(),
-        userStore: new WebStorageStateStore({ store })
+        "silent_redirect_uri": urls.callbackUrl,
+        "userStore": new WebStorageStateStore({ store })
     });
 
     let lastPublicRoute: string | undefined = undefined;
@@ -478,9 +470,6 @@ export async function createOidc_nonMemoized<
 
     let hasLoginBeenCalled = false;
 
-    const RESULT_OMIT_RESERVED_QUERY_PARAM_NAME = "oidc-spa_result_omit";
-    const EXTRA_QUERY_PARAMS_BACK_FROM_AUTH_SERVER_RESERVED_QUERY_PARAM_NAME = "oidc-spa_intent";
-
     type ParamsOfLoginOrGoToAuthServer = Omit<
         Param0<Oidc.NotLoggedIn["login"]>,
         "doesCurrentHrefRequiresAuth"
@@ -490,7 +479,7 @@ export async function createOidc_nonMemoized<
     const loginOrGoToAuthServer = async (params: ParamsOfLoginOrGoToAuthServer): Promise<never> => {
         const {
             extraQueryParams: extraQueryParams_fromLoginFn,
-            redirectUrl,
+            redirectUrl: redirectUrl_params,
             transformUrlBeforeRedirect: transformUrlBeforeRedirect_fromLoginFn,
             ...rest
         } = params;
@@ -513,11 +502,7 @@ export async function createOidc_nonMemoized<
         // NOTE: This is for handling cases when user press the back button on the login pages.
         // When the app is hosted on https (so not in dev mode) the browser will restore the state of the app
         // instead of reloading the page.
-        login_only: {
-            if (rest.action !== "login") {
-                break login_only;
-            }
-
+        if (rest.action === "login") {
             const callback = () => {
                 if (document.visibilityState === "visible") {
                     document.removeEventListener("visibilitychange", callback);
@@ -546,73 +531,12 @@ export async function createOidc_nonMemoized<
             document.addEventListener("visibilitychange", callback);
         }
 
-        const redirect_uri = (() => {
-            let url = (() => {
-                if (redirectUrl === undefined) {
-                    return window.location.href;
-                }
-                return redirectUrl.startsWith("/")
-                    ? `${window.location.origin}${redirectUrl}`
-                    : redirectUrl;
-            })();
+        const redirectUrl =
+            redirectUrl_params === undefined
+                ? window.location.href
+                : toFullyQualifiedUrl(redirectUrl_params);
 
-            url = addQueryParamToUrl({
-                url,
-                "name": CONFIG_HASH_RESERVED_QUERY_PARAM_NAME,
-                "value": configHash
-            }).newUrl;
-
-            {
-                const { values: queryParamsNamesToOmit_backFromAuthServer } =
-                    retrieveAllQueryParamFromUrl({ url });
-
-                url = addQueryParamToUrl({
-                    url,
-                    "name": RESULT_OMIT_RESERVED_QUERY_PARAM_NAME,
-                    "value": encodeBase64(
-                        JSON.stringify(Object.keys(queryParamsNamesToOmit_backFromAuthServer))
-                    )
-                }).newUrl;
-            }
-
-            {
-                const extraQueryParams_backFromAuthServer: Record<string, string> =
-                    extraQueryParams_fromLoginFn ?? {};
-
-                read_query_params_added_by_transform_before_redirect: {
-                    if (transformUrlBeforeRedirect_fromLoginFn === undefined) {
-                        break read_query_params_added_by_transform_before_redirect;
-                    }
-
-                    let url_afterTransform;
-
-                    try {
-                        url_afterTransform = transformUrlBeforeRedirect_fromLoginFn("https://dummy.com");
-                    } catch {
-                        break read_query_params_added_by_transform_before_redirect;
-                    }
-
-                    const { values: queryParamsAddedByTransformBeforeRedirect } =
-                        retrieveAllQueryParamFromUrl({ "url": url_afterTransform });
-
-                    for (const [name, value] of Object.entries(
-                        queryParamsAddedByTransformBeforeRedirect
-                    )) {
-                        extraQueryParams_backFromAuthServer[name] = value;
-                    }
-                }
-
-                url = addQueryParamToUrl({
-                    url,
-                    "name": EXTRA_QUERY_PARAMS_BACK_FROM_AUTH_SERVER_RESERVED_QUERY_PARAM_NAME,
-                    "value": encodeBase64(JSON.stringify(extraQueryParams_backFromAuthServer))
-                }).newUrl;
-            }
-
-            return url;
-        })();
-
-        log?.(`redirect_uri: ${redirect_uri}`);
+        log?.(`redirectUrl: ${redirectUrl}`);
 
         //NOTE: We know there is a extraQueryParameter option but it doesn't allow
         // to control the encoding so we have to highjack global URL Class that is
@@ -661,28 +585,6 @@ export async function createOidc_nonMemoized<
                                 }
                             });
 
-                            // NOTE: Put the redirect_uri at the end of the url to avoid
-                            // for aesthetic reasons, to avoid having the oidc-spa specific query parameters
-                            // being directly visible in the browser's address bar.
-                            {
-                                const name = "redirect_uri";
-
-                                const result = retrieveQueryParamFromUrl({
-                                    url,
-                                    name
-                                });
-
-                                assert(result.wasPresent);
-
-                                url = result.newUrl;
-
-                                url = addQueryParamToUrl({
-                                    url,
-                                    name,
-                                    "value": result.value
-                                }).newUrl;
-                            }
-
                             return url;
                         }
 
@@ -709,210 +611,107 @@ export async function createOidc_nonMemoized<
 
         log?.(`redirectMethod: ${redirectMethod}`);
 
+        const { extraQueryParams } = (() => {
+            const extraQueryParams: Record<string, string> = extraQueryParams_fromLoginFn ?? {};
+
+            read_query_params_added_by_transform_before_redirect: {
+                if (transformUrlBeforeRedirect_fromLoginFn === undefined) {
+                    break read_query_params_added_by_transform_before_redirect;
+                }
+
+                let url_afterTransform;
+
+                try {
+                    url_afterTransform = transformUrlBeforeRedirect_fromLoginFn("https://dummy.com");
+                } catch {
+                    break read_query_params_added_by_transform_before_redirect;
+                }
+
+                const { values: queryParamsAddedByTransformBeforeRedirect } =
+                    retrieveAllQueryParamFromUrl({ "url": url_afterTransform });
+
+                for (const [name, value] of Object.entries(queryParamsAddedByTransformBeforeRedirect)) {
+                    extraQueryParams[name] = value;
+                }
+            }
+
+            return { extraQueryParams };
+        })();
+
         await oidcClientTsUserManager.signinRedirect({
-            redirect_uri,
+            state: id<StateData>({
+                configHash,
+                "isSilentSso": false,
+                redirectUrl,
+                extraQueryParams
+            }),
             redirectMethod
         });
         return new Promise<never>(() => {});
     };
 
-    const resultOfLoginProcess = await (async function getUser() {
-        read_successful_login_query_params: {
-            let url = window.location.href;
-
-            const queryParameterNames_toCleanFromHref = new Set<string>();
-
-            {
-                const name = CONFIG_HASH_RESERVED_QUERY_PARAM_NAME;
-
-                queryParameterNames_toCleanFromHref.add(name);
-
-                const result = retrieveQueryParamFromUrl({
-                    name,
-                    url
+    const resultOfLoginProcess = await (async () => {
+        read_auth_response_from_url: {
+            const { values: authResponse, newUrl: locationHref_cleanedUp } =
+                retrieveAllQueryParamStartingWithPrefixFromUrl({
+                    "url": window.location.href,
+                    "prefix": "oidc-spa.",
+                    "doLeavePrefixInResults": false
                 });
 
-                if (!result.wasPresent || result.value !== configHash) {
-                    break read_successful_login_query_params;
-                }
+            const state: string | undefined = authResponse["state"];
 
-                url = result.newUrl;
+            if (state === undefined) {
+                break read_auth_response_from_url;
             }
 
-            log?.("Back from the auth server, reading the query params to initialize the auth");
+            const stateData = getStateData({ state });
 
-            let loginSuccessUrl = "https://dummy.com";
-
-            let missingMandatoryParams: string[] = [];
-
-            for (const name of PARAMS_TO_RETRIEVE_FROM_SUCCESSFUL_LOGIN) {
-                queryParameterNames_toCleanFromHref.add(name);
-
-                const result = retrieveQueryParamFromUrl({ name, url });
-
-                if (!result.wasPresent) {
-                    if (name === "iss" || name === "session_state") {
-                        continue;
-                    }
-                    missingMandatoryParams.push(name);
-                    continue;
-                }
-
-                loginSuccessUrl = addQueryParamToUrl({
-                    "url": loginSuccessUrl,
-                    "name": name,
-                    "value": result.value
-                }).newUrl;
-
-                url = result.newUrl;
+            if (stateData === undefined) {
+                break read_auth_response_from_url;
             }
+
+            assert(!stateData.isSilentSso);
+
+            if (stateData.configHash !== configHash) {
+                break read_auth_response_from_url;
+            }
+
+            window.history.replaceState(null, "", locationHref_cleanedUp);
+
+            log?.("Back from the auth server, with the following auth response", authResponse);
 
             {
-                const result = retrieveQueryParamFromUrl({ "name": "error", url });
+                const error: string | undefined = authResponse["error"];
 
-                if (result.wasPresent) {
+                if (error !== undefined) {
                     throw new Error(
                         [
-                            "The OIDC server responded with an error passed as query parameter after the login process",
-                            `this error is: ${result.value}`
+                            "The OIDC server responded with an error after the login process",
+                            `this error is: ${error}`
                         ].join(" ")
                     );
                 }
             }
 
-            let extraQueryParams_backFromAuthServer;
+            const { authResponseUrl } = (() => {
+                let authResponseUrl = "https://dummy.com";
 
-            {
-                const name = EXTRA_QUERY_PARAMS_BACK_FROM_AUTH_SERVER_RESERVED_QUERY_PARAM_NAME;
-
-                queryParameterNames_toCleanFromHref.add(name);
-
-                const result = retrieveQueryParamFromUrl({
-                    name,
-                    url
-                });
-
-                assert(result.wasPresent);
-
-                url = result.newUrl;
-
-                extraQueryParams_backFromAuthServer = JSON.parse(decodeBase64(result.value)) as Record<
-                    string,
-                    string
-                >;
-            }
-
-            let queryParamsNamesToOmit_backFromAuthServer;
-
-            {
-                const name = RESULT_OMIT_RESERVED_QUERY_PARAM_NAME;
-
-                queryParameterNames_toCleanFromHref.add(name);
-
-                const result = retrieveQueryParamFromUrl({
-                    name,
-                    url
-                });
-
-                assert(result.wasPresent);
-
-                url = result.newUrl;
-
-                queryParamsNamesToOmit_backFromAuthServer = JSON.parse(
-                    decodeBase64(result.value)
-                ) as string[];
-            }
-
-            let result_backFromAuthServer: Record<string, string> = {};
-
-            {
-                const { values } = retrieveAllQueryParamFromUrl({ url });
-
-                for (const [name, value] of Object.entries(values)) {
-                    if (queryParamsNamesToOmit_backFromAuthServer.includes(name)) {
-                        continue;
-                    }
-
-                    queryParameterNames_toCleanFromHref.add(name);
-
-                    result_backFromAuthServer[name] = value;
-
-                    const result = retrieveQueryParamFromUrl({
+                for (const [name, value] of Object.entries(authResponse)) {
+                    authResponseUrl = addQueryParamToUrl({
+                        "url": authResponseUrl,
                         name,
-                        url
-                    });
-
-                    assert(result.wasPresent);
-
-                    url = result.newUrl;
+                        value
+                    }).newUrl;
                 }
-            }
 
-            log?.("Cleaning the url from the OIDC query parameters");
-
-            {
-                let count = 0;
-
-                while (true) {
-                    window.history.pushState(null, "", url);
-
-                    await new Promise(resolve => setTimeout(resolve, 0));
-
-                    const queryParameterNames_stillOnHref = Object.keys(
-                        retrieveAllQueryParamFromUrl({ "url": window.location.href }).values
-                    ).filter(name => queryParameterNames_toCleanFromHref.has(name));
-
-                    if (queryParameterNames_stillOnHref.length === 0) {
-                        break;
-                    }
-
-                    if (count === 5) {
-                        throw new Error(
-                            [
-                                `Failed to clean the OIDC query parameters from the`,
-                                `url with history.pushState after ${count} attempts`
-                            ].join(" ")
-                        );
-                    }
-
-                    log?.(
-                        [
-                            `Some oidc query params are still on the location.href after being cleaned`,
-                            `They where probably added back by an external library. Retrying to remove them...\n`,
-                            `Params still present: ${queryParameterNames_stillOnHref.join(", ")}`
-                        ].join(" ")
-                    );
-
-                    url = window.location.href;
-
-                    queryParameterNames_stillOnHref.forEach(name => {
-                        const result = retrieveQueryParamFromUrl({
-                            name,
-                            url
-                        });
-
-                        assert(result.wasPresent);
-
-                        url = result.newUrl;
-                    });
-
-                    count++;
-                }
-            }
-
-            if (missingMandatoryParams.length !== 0) {
-                throw new Error(
-                    [
-                        "After the login process the following mandatory OIDC query parameters where missing:",
-                        missingMandatoryParams.join(", ")
-                    ].join(" ")
-                );
-            }
+                return { authResponseUrl };
+            })();
 
             let oidcClientTsUser: OidcClientTsUser | undefined = undefined;
 
             try {
-                oidcClientTsUser = await oidcClientTsUserManager.signinRedirectCallback(loginSuccessUrl);
+                oidcClientTsUser = await oidcClientTsUserManager.signinRedirectCallback(authResponseUrl);
             } catch (error) {
                 assert(error instanceof Error);
 
@@ -938,20 +737,31 @@ export async function createOidc_nonMemoized<
                 "authMethod": "back from auth server" as const,
                 oidcClientTsUser,
                 "backFromAuthServer": {
-                    "extraQueryParams": extraQueryParams_backFromAuthServer,
-                    "result": result_backFromAuthServer
+                    "extraQueryParams": stateData.extraQueryParams,
+                    "result": Object.fromEntries(
+                        Object.entries(authResponse).filter(
+                            ([name]) =>
+                                name !== "state" &&
+                                name !== "session_state" &&
+                                name !== "iss" &&
+                                name !== "code"
+                        )
+                    )
                 }
             };
         }
 
-        restore_from_session: {
+        // NOTE: oidc-spa do not persist the user token in the session storage.
+        // So this block is not used EXCEPT for imperative impersonation.
+        // We use a hybrid storage that persists only in this case.
+        restore_session_from_session_storage: {
             let oidcClientTsUser = await oidcClientTsUserManager.getUser();
 
             if (oidcClientTsUser === null) {
-                break restore_from_session;
+                break restore_session_from_session_storage;
             }
 
-            log?.("Restoring the auth from the session storage");
+            log?.("Restoring the user auth from the session storage");
 
             // Here the access token could be still valid but the session might have been invalidated
             // on the server. For example if the logout failed to redirect to the app.
@@ -979,14 +789,7 @@ export async function createOidc_nonMemoized<
                     });
                 }
 
-                for (let i = 0; i < store.length; i++) {
-                    const key = store.key(i);
-                    assert(key !== null);
-                    if (!key.startsWith(SESSION_STORAGE_PREFIX)) {
-                        continue;
-                    }
-                    store.removeItem(key);
-                }
+                store.removeItem(`oidc.user:${issuerUri}:${clientId}`);
 
                 return undefined;
             }
@@ -1004,7 +807,13 @@ export async function createOidc_nonMemoized<
         restore_from_http_only_cookie: {
             log?.("Trying to restore the auth from the httpOnly cookie (silent signin with iframe)");
 
-            const dLoginSuccessUrl = new Deferred<string | undefined>();
+            type AuthResponse = {
+                state: string;
+                code: string;
+                [key: string]: string;
+            };
+
+            const dAuthResponse = new Deferred<AuthResponse | undefined>();
 
             const timeoutDelayMs = (() => {
                 const downlinkAndRtt = getDownlinkAndRtt();
@@ -1028,45 +837,45 @@ export async function createOidc_nonMemoized<
             const timeout = setTimeout(async () => {
                 let dedicatedSilentSsoHtmlFileCsp: string | null | undefined = undefined;
 
-                silent_sso_html_unreachable: {
-                    if (!silentSso.hasDedicatedHtmlFile) {
-                        break silent_sso_html_unreachable;
+                oidc_callback_htm_unreachable: {
+                    if (!urls.hasDedicatedHtmFile) {
+                        break oidc_callback_htm_unreachable;
                     }
 
-                    const getSilentSsoReachabilityStatus = async (ext?: "html") =>
-                        fetch(`${silentSso.redirectUri}${ext === "html" ? "l" : ""}`).then(
+                    const getHtmFileReachabilityStatus = async (ext?: "html") =>
+                        fetch(`${urls.callbackUrl}${ext === "html" ? "l" : ""}`).then(
                             async response => {
                                 dedicatedSilentSsoHtmlFileCsp =
                                     response.headers.get("Content-Security-Policy");
 
                                 const content = await response.text();
 
-                                return content.length < 250 &&
-                                    content.includes("parent.postMessage(location.href")
+                                return content.length < 1200 &&
+                                    content.includes("parent.postMessage(authResponse")
                                     ? "ok"
                                     : "reachable but wrong content";
                             },
                             () => "not reachable" as const
                         );
 
-                    const silentSsoHtmReachabilityStatus = await getSilentSsoReachabilityStatus();
+                    const status = await getHtmFileReachabilityStatus();
 
-                    if (silentSsoHtmReachabilityStatus === "ok") {
-                        break silent_sso_html_unreachable;
+                    if (status === "ok") {
+                        break oidc_callback_htm_unreachable;
                     }
 
-                    dLoginSuccessUrl.reject(
+                    dAuthResponse.reject(
                         new OidcInitializationError({
                             "type": "bad configuration",
                             "likelyCause": {
-                                "type": "silent-sso.htm not properly served",
-                                "silentSsoHtmlUrl": silentSso.redirectUri,
+                                "type": "oidc-callback.htm not properly served",
+                                "oidcCallbackHtmUrl": urls.callbackUrl,
                                 "likelyCause": await (async () => {
-                                    if ((await getSilentSsoReachabilityStatus("html")) === "ok") {
+                                    if ((await getHtmFileReachabilityStatus("html")) === "ok") {
                                         return "using .html instead of .htm extension";
                                     }
 
-                                    switch (silentSsoHtmReachabilityStatus) {
+                                    switch (status) {
                                         case "not reachable":
                                             return "the file hasn't been created";
                                         case "reachable but wrong content":
@@ -1081,19 +890,19 @@ export async function createOidc_nonMemoized<
 
                 frame_ancestors_none: {
                     const csp = await (async () => {
-                        if (silentSso.hasDedicatedHtmlFile) {
+                        if (urls.hasDedicatedHtmFile) {
                             assert(dedicatedSilentSsoHtmlFileCsp !== undefined);
                             return dedicatedSilentSsoHtmlFileCsp;
                         }
 
-                        const csp = await fetch(silentSso.redirectUri).then(
+                        const csp = await fetch(urls.callbackUrl).then(
                             response => response.headers.get("Content-Security-Policy"),
                             error => id<Error>(error)
                         );
 
                         if (csp instanceof Error) {
-                            dLoginSuccessUrl.reject(
-                                new Error(`Failed to fetch ${silentSso.redirectUri}: ${csp.message}`)
+                            dAuthResponse.reject(
+                                new Error(`Failed to fetch ${urls.callbackUrl}: ${csp.message}`)
                             );
                             return new Promise<never>(() => {});
                         }
@@ -1115,12 +924,12 @@ export async function createOidc_nonMemoized<
                         break frame_ancestors_none;
                     }
 
-                    dLoginSuccessUrl.reject(
+                    dAuthResponse.reject(
                         new OidcInitializationError({
                             "type": "bad configuration",
                             "likelyCause": {
                                 "type": "frame-ancestors none",
-                                silentSso
+                                urls
                             }
                         })
                     );
@@ -1132,42 +941,43 @@ export async function createOidc_nonMemoized<
                 // So this means that it's very likely a OIDC client misconfiguration.
                 // It could also be a very slow network but this risk is mitigated by the fact that we check
                 // for the network speed to adjust the timeout delay.
-                dLoginSuccessUrl.reject(
+                dAuthResponse.reject(
                     new OidcInitializationError({
                         "type": "bad configuration",
                         "likelyCause": {
                             "type": "misconfigured OIDC client",
                             clientId,
                             timeoutDelayMs,
-                            publicUrl
+                            "callbackUrl": urls.callbackUrl
                         }
                     })
                 );
             }, timeoutDelayMs);
 
             const listener = (event: MessageEvent) => {
-                if (typeof event.data !== "string") {
+                function getIsAuthResponse(data: any): data is AuthResponse {
+                    return (
+                        data instanceof Object &&
+                        Object.values(data).every(value => typeof value === "string") &&
+                        "state" in data &&
+                        "code" in data
+                    );
+                }
+
+                if (!getIsAuthResponse(event.data)) {
                     return;
                 }
 
-                const url = event.data;
+                const authResponse = event.data;
 
-                {
-                    let result: ReturnType<typeof retrieveQueryParamFromUrl>;
+                const stateData = getStateData({ state: authResponse.state });
 
-                    try {
-                        result = retrieveQueryParamFromUrl({
-                            "name": CONFIG_HASH_RESERVED_QUERY_PARAM_NAME,
-                            url
-                        });
-                    } catch {
-                        // This could possibly happen if url is not a valid url.
-                        return;
-                    }
+                if (stateData === undefined) {
+                    return;
+                }
 
-                    if (!result.wasPresent || result.value !== configHash) {
-                        return;
-                    }
+                if (stateData.configHash !== configHash) {
+                    return;
                 }
 
                 clearTimeout(timeout);
@@ -1175,50 +985,16 @@ export async function createOidc_nonMemoized<
                 window.removeEventListener("message", listener);
 
                 {
-                    const result = retrieveQueryParamFromUrl({ "name": "error", url });
+                    const error: string | undefined = authResponse["error"];
 
-                    if (result.wasPresent) {
-                        log?.(`The auth server responded with: ${result.value}`);
-                        dLoginSuccessUrl.resolve(undefined);
+                    if (error !== undefined) {
+                        log?.(`The auth server responded with: ${error}`);
+                        dAuthResponse.resolve(undefined);
                         return;
                     }
                 }
 
-                let loginSuccessUrl = "https://dummy.com";
-
-                const missingMandatoryParams: string[] = [];
-
-                for (const name of PARAMS_TO_RETRIEVE_FROM_SUCCESSFUL_LOGIN) {
-                    const result = retrieveQueryParamFromUrl({ name, url });
-
-                    if (!result.wasPresent) {
-                        if (name === "iss") {
-                            continue;
-                        }
-                        missingMandatoryParams.push(name);
-                        continue;
-                    }
-
-                    loginSuccessUrl = addQueryParamToUrl({
-                        "url": loginSuccessUrl,
-                        "name": name,
-                        "value": result.value
-                    }).newUrl;
-                }
-
-                if (missingMandatoryParams.length !== 0) {
-                    dLoginSuccessUrl.reject(
-                        new Error(
-                            [
-                                "After the silent signin process the following mandatory OIDC query parameters where missing:",
-                                missingMandatoryParams.join(", ")
-                            ].join(" ")
-                        )
-                    );
-                    return;
-                }
-
-                dLoginSuccessUrl.resolve(loginSuccessUrl);
+                dAuthResponse.resolve(authResponse);
             };
 
             window.addEventListener("message", listener, false);
@@ -1234,7 +1010,7 @@ export async function createOidc_nonMemoized<
 
                         // Here we know it's not web origin because it's not the token we are fetching
                         // but just the well known configuration endpoint that is not subject to CORS.
-                        dLoginSuccessUrl.reject(
+                        dAuthResponse.reject(
                             new OidcInitializationError({
                                 "type": "server down",
                                 issuerUri
@@ -1243,17 +1019,31 @@ export async function createOidc_nonMemoized<
                     }
                 });
 
-            const loginSuccessUrl = await dLoginSuccessUrl.pr;
+            const authResponse = await dAuthResponse.pr;
 
-            if (loginSuccessUrl === undefined) {
+            if (authResponse === undefined) {
                 log?.("There is no active session");
                 break restore_from_http_only_cookie;
             }
 
+            const { authResponseUrl } = (() => {
+                let authResponseUrl = "https://dummy.com";
+
+                for (const [name, value] of Object.entries(authResponse)) {
+                    authResponseUrl = addQueryParamToUrl({
+                        "url": authResponseUrl,
+                        name,
+                        value
+                    }).newUrl;
+                }
+
+                return { authResponseUrl };
+            })();
+
             let oidcClientTsUser: OidcClientTsUser | undefined = undefined;
 
             try {
-                oidcClientTsUser = await oidcClientTsUserManager.signinRedirectCallback(loginSuccessUrl);
+                oidcClientTsUser = await oidcClientTsUserManager.signinRedirectCallback(authResponseUrl);
             } catch (error) {
                 assert(error instanceof Error);
 
@@ -1821,108 +1611,96 @@ async function maybeImpersonate(params: {
         ParamsOfCreateOidc["getDoContinueWithImpersonation"],
         undefined
     >;
-    store: Storage;
+    store: HybridStorage;
     log: typeof console.log | undefined;
 }) {
     const { configHash, getDoContinueWithImpersonation, store, log } = params;
 
-    const value = (() => {
-        const KEY = "oidc-spa_impersonate";
+    const QUERY_PARAM_NAME = "oidc-spa_impersonate";
 
-        from_url: {
-            const result = retrieveQueryParamFromUrl({ "url": window.location.href, "name": KEY });
+    const result = retrieveQueryParamFromUrl({
+        "url": window.location.href,
+        "name": QUERY_PARAM_NAME
+    });
 
-            if (!result.wasPresent) {
-                break from_url;
-            }
-
-            log?.("Found impersonation query param in the url");
-
-            window.history.replaceState({}, "", result.newUrl);
-
-            store.setItem(KEY, result.value);
-
-            return result.value;
-        }
-
-        from_session_storage: {
-            const value = store.getItem(KEY);
-
-            if (value === null) {
-                break from_session_storage;
-            }
-
-            log?.("Found impersonation query param in the session storage");
-
-            return value;
-        }
-
-        return undefined;
-    })();
-
-    if (value === undefined) {
+    if (!result.wasPresent) {
         return;
     }
 
-    const arr = JSON.parse(decodeBase64(value)) as {
+    type ParsedValue = {
         idToken: string;
         accessToken: string;
         refreshToken: string;
     }[];
 
-    log?.("Impersonation params got:", arr);
+    function isParsedValue(value: unknown): value is ParsedValue {
+        if (!Array.isArray(value)) {
+            return false;
+        }
 
-    assert(arr instanceof Array);
-    arr.forEach(item => {
-        assert(item instanceof Object);
-        const { accessToken, idToken, refreshToken } = item;
-        assert(typeof accessToken === "string");
-        assert(typeof idToken === "string");
-        assert(typeof refreshToken === "string");
-    });
+        return value.every(item => {
+            return (
+                typeof item === "object" &&
+                item !== null &&
+                typeof (item as Record<string, unknown>).idToken === "string" &&
+                typeof (item as Record<string, unknown>).accessToken === "string" &&
+                typeof (item as Record<string, unknown>).refreshToken === "string"
+            );
+        });
+    }
 
-    for (const { idToken, accessToken, refreshToken } of arr) {
+    const parsedValue = JSON.parse(decodeBase64(result.value));
+
+    assert(isParsedValue(parsedValue));
+
+    log?.("Impersonation params got:", parsedValue);
+
+    let match:
+        | {
+              parsedStoreValue: {
+                  id_token: string;
+                  session_state: string;
+                  access_token: string;
+                  refresh_token: string;
+                  token_type: "Bearer";
+                  scope: string;
+                  profile: Record<string, unknown>;
+                  expires_at: number;
+              };
+              parsedAccessToken: Record<string, unknown>;
+              issuerUri: string;
+              clientId: string;
+              index: number;
+          }
+        | undefined = undefined;
+
+    for (let index = 0; index < parsedValue.length; index++) {
+        const { idToken, accessToken, refreshToken } = parsedValue[index];
+
         const parsedAccessToken = decodeJwt(accessToken) as any;
 
         assert(parsedAccessToken instanceof Object);
         const { iss, azp, sid, scope, exp } = parsedAccessToken;
         assert(typeof iss === "string");
         assert(typeof azp === "string");
-        assert(typeof sid === "string");
-        assert(typeof scope === "string");
-        assert(typeof exp === "number");
 
         const issuerUri = iss;
         const clientId = azp;
 
         if (getConfigHash({ issuerUri, clientId }) !== configHash) {
-            log?.(
-                [
-                    `Skipping impersonation params entry`,
-                    `issuerUri/clientId: ${issuerUri}/${clientId} read from the access token`,
-                    `doesn't match the current configuration of this oidc client`
-                ].join(" ")
-            );
-
             continue;
         }
 
-        log?.(
-            "Impersonation param matched with the current configuration, asking for confirmation before continuing"
-        );
-
-        const doContinue = await getDoContinueWithImpersonation({ parsedAccessToken });
-
-        if (!doContinue) {
-            log?.("Impersonation was canceled by the user");
-            return;
-        }
+        assert(typeof sid === "string");
+        assert(typeof scope === "string");
+        assert(typeof exp === "number");
 
         log?.("Impersonation confirmed, storing the impersonation params in the session storage");
 
-        store.setItem(
-            `${SESSION_STORAGE_PREFIX}user:${issuerUri}:${clientId}`,
-            JSON.stringify({
+        assert(match === undefined, "More than one impersonation params matched the current config");
+
+        match = {
+            parsedStoreValue: {
                 "id_token": idToken,
                 "session_state": sid,
                 "access_token": accessToken,
@@ -1931,14 +1709,62 @@ async function maybeImpersonate(params: {
                 scope,
                 "profile": parsedAccessToken,
                 "expires_at": exp
-            })
-        );
+            },
+            parsedAccessToken,
+            issuerUri,
+            clientId,
+            index
+        };
+    }
 
+    if (match === undefined) {
         return;
     }
 
+    // Clean up the url
+    {
+        parsedValue.splice(match.index, 1);
+
+        let url = window.location.href;
+
+        if (parsedValue.length === 0) {
+            const result = retrieveQueryParamFromUrl({
+                url,
+                name: QUERY_PARAM_NAME
+            });
+
+            assert(result.wasPresent);
+
+            url = result.newUrl;
+        } else {
+            const { newUrl } = addQueryParamToUrl({
+                url,
+                name: QUERY_PARAM_NAME,
+                value: encodeBase64(JSON.stringify(parsedValue))
+            });
+
+            url = newUrl;
+        }
+
+        window.history.replaceState(null, "", url);
+    }
+
     log?.(
-        "Impersonation skipped, no impersonation params matched the current configuration of this oidc client"
+        "Impersonation param matched with the current configuration, asking for confirmation before continuing"
+    );
+
+    const doContinue = await getDoContinueWithImpersonation({
+        parsedAccessToken: match.parsedAccessToken
+    });
+
+    if (!doContinue) {
+        log?.("Impersonation was canceled by the user");
+        return;
+    }
+
+    store.setItem_persistInSessionStorage(
+        `oidc.user:${match.issuerUri}:${match.clientId}`,
+        JSON.stringify(match.parsedStoreValue)
     );
 }
 

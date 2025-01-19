@@ -17,15 +17,15 @@ export class OidcInitializationError extends Error {
                             type: "misconfigured OIDC client";
                             clientId: string;
                             timeoutDelayMs: number;
-                            publicUrl: string | undefined;
+                            callbackUrl: string;
                         }
                       | {
                             type: "not in Web Origins";
                             clientId: string;
                         }
                       | {
-                            type: "silent-sso.htm not properly served";
-                            silentSsoHtmlUrl: string;
+                            type: "oidc-callback.htm not properly served";
+                            oidcCallbackHtmUrl: string;
                             likelyCause:
                                 | "serving another file"
                                 | "the file hasn't been created"
@@ -33,9 +33,9 @@ export class OidcInitializationError extends Error {
                         }
                       | {
                             type: "frame-ancestors none";
-                            silentSso: {
-                                hasDedicatedHtmlFile: boolean;
-                                redirectUri: string;
+                            urls: {
+                                hasDedicatedHtmFile: boolean;
+                                callbackUrl: string;
                             };
                         };
               }
@@ -73,9 +73,9 @@ export class OidcInitializationError extends Error {
                                     `You should probably add "${location.origin}/*" to the list.`,
                                     `More info: https://docs.oidc-spa.dev/v/v5/resources/usage-with-keycloak`
                                 ].join(" ");
-                            case "silent-sso.htm not properly served":
+                            case "oidc-callback.htm not properly served":
                                 return [
-                                    `${params.likelyCause.silentSsoHtmlUrl} not properly served by your web server.`,
+                                    `${params.likelyCause.oidcCallbackHtmUrl} not properly served by your web server.`,
                                     (() => {
                                         switch (params.likelyCause.likelyCause) {
                                             case "the file hasn't been created":
