@@ -27,6 +27,11 @@ import { toHumanReadableDuration } from "./tools/toHumanReadableDuration";
 import { createHybridStorage, type HybridStorage } from "./tools/HybridStorage";
 import { toFullyQualifiedUrl } from "./tools/toFullyQualifiedUrl";
 import { getStateData, type StateData } from "./StateData";
+import {
+    garbageCollectLogoutPropagationLocalStorage,
+    setLogoutParamsForOtherTabs,
+    getPrOtherTabLogout
+} from "./logoutPropagationToOtherTabs";
 
 // NOTE: Replaced at build time
 const VERSION = "{{OIDC_SPA_VERSION}}";
@@ -101,7 +106,21 @@ export declare namespace Oidc {
                       result: Record<string, string>;
                   }
                 | undefined;
-            isNewVisitOrNewSession: boolean;
+            /**
+             * This is true when the user has just returned from the login pages.
+             * This is also true when the user navigate to your app and was able to be silently signed in because there was still a valid session.
+             * This false however when the use just reload the page.
+             *
+             * This can be used to perform some action related to session initialization
+             * but avoiding doing it repeatedly every time the user reload the page.
+             *
+             * Note that this is referring to the browser session and not the OIDC session
+             * on the server side.
+             *
+             * If you want to perform an action only when a new OIDC session is created
+             * you can test oidc.isNewBrowserSession && oidc.backFromAuthServer !== undefined
+             */
+            isNewBrowserSession: boolean;
         };
 
     export type Tokens<DecodedIdToken extends Record<string, unknown> = Record<string, unknown>> =
@@ -114,8 +133,6 @@ export declare namespace Oidc {
             decodedIdToken: DecodedIdToken;
         }>;
 }
-
-const AUTH_RESPONSE_PARAM_NAMES = ["code", "state", "session_state", "iss"] as const;
 
 export type ParamsOfCreateOidc<
     DecodedIdToken extends Record<string, unknown> = Record<string, unknown>,
@@ -316,11 +333,6 @@ export async function createOidc_nonMemoized<
 
     const { issuerUri, clientId, scopes, configHash, log } = preProcessedParams;
 
-    // NOTE: It's important that it is initialized here because of the garbage collection (see implementation).
-    const { clearLogoutParams, getLogoutParams, setLogoutParams } = createLogoutPropagationApi({
-        configHash
-    });
-
     const [getExtraQueryParams, getExtraTokenParams] = (
         [extraQueryParamsOrGetter, extraTokenParamsOrGetter] as const
     ).map(valueOrGetter => {
@@ -430,6 +442,8 @@ export async function createOidc_nonMemoized<
         await new Promise<never>(() => {});
     }
 
+    garbageCollectLogoutPropagationLocalStorage();
+
     const store = createHybridStorage();
 
     imperative_impersonation: {
@@ -486,23 +500,17 @@ export async function createOidc_nonMemoized<
 
         log?.("Calling loginOrGoToAuthServer", { params });
 
-        login_only: {
-            if (rest.action !== "login") {
-                break login_only;
-            }
-
+        // NOTE: This is for handling cases when user press the back button on the login pages.
+        // When the app is hosted on https (so not in dev mode) the browser will restore the state of the app
+        // instead of reloading the page.
+        if (rest.action === "login") {
             if (hasLoginBeenCalled) {
                 log?.("login() has already been called, ignoring the call");
                 return new Promise<never>(() => {});
             }
 
             hasLoginBeenCalled = true;
-        }
 
-        // NOTE: This is for handling cases when user press the back button on the login pages.
-        // When the app is hosted on https (so not in dev mode) the browser will restore the state of the app
-        // instead of reloading the page.
-        if (rest.action === "login") {
             const callback = () => {
                 if (document.visibilityState === "visible") {
                     document.removeEventListener("visibilitychange", callback);
@@ -734,7 +742,6 @@ export async function createOidc_nonMemoized<
             }
 
             return {
-                "authMethod": "back from auth server" as const,
                 oidcClientTsUser,
                 "backFromAuthServer": {
                     "extraQueryParams": stateData.extraQueryParams,
@@ -799,8 +806,8 @@ export async function createOidc_nonMemoized<
             log?.("Session successfully restored and access token refreshed");
 
             return {
-                "authMethod": "session storage" as const,
-                oidcClientTsUser
+                oidcClientTsUser,
+                "backFromAuthServer": undefined
             };
         }
 
@@ -1066,8 +1073,8 @@ export async function createOidc_nonMemoized<
             log?.("Successful silent signed in");
 
             return {
-                "authMethod": "silent signin" as const,
-                oidcClientTsUser
+                oidcClientTsUser,
+                backFromAuthServer: undefined
             };
         }
 
@@ -1078,7 +1085,7 @@ export async function createOidc_nonMemoized<
                 return undefined;
             }
 
-            const { oidcClientTsUser, authMethod, backFromAuthServer } = result;
+            const { oidcClientTsUser, backFromAuthServer } = result;
 
             log_real_decoded_id_token: {
                 if (log === undefined) {
@@ -1130,7 +1137,7 @@ export async function createOidc_nonMemoized<
                 );
             }
 
-            return { tokens, authMethod, backFromAuthServer };
+            return { tokens, backFromAuthServer };
         },
         error => {
             assert(error instanceof Error);
@@ -1210,6 +1217,19 @@ export async function createOidc_nonMemoized<
 
     log?.("User is logged in");
 
+    const isNewBrowserSession = (() => {
+        const key = `oidc-spa:browser-session:${configHash}`;
+
+        if (store.getItem(key) === null) {
+            store.setItem(key, "true");
+            return true;
+        }
+
+        return false;
+    })();
+
+    log?.(`isNewBrowserSession: ${isNewBrowserSession}`);
+
     let currentTokens = resultOfLoginProcess.tokens;
 
     const autoLogoutCountdownTickCallbacks = new Set<
@@ -1218,42 +1238,24 @@ export async function createOidc_nonMemoized<
 
     const onTokenChanges = new Set<() => void>();
 
-    const assertSessionStorageNotCleared = () => {
-        const hasOidcSessionStorageEntry = (() => {
-            for (let i = 0; i < store.length; i++) {
-                const key = store.key(i);
-                assert(key !== null);
-
-                if (!key.startsWith(SESSION_STORAGE_PREFIX)) {
-                    continue;
-                }
-
-                return true;
-            }
-
-            return false;
-        })();
-
-        if (hasOidcSessionStorageEntry) {
-            return;
-        }
-
-        throw new Error(
-            [
-                `You have manually cleared the sessionStorage. oidc-spa can't operate in this condition.`,
-                `Make sure you do not delete the "oidc." prefixed entries in the sessionStorage.`
-            ].join(" ")
-        );
-    };
+    let hasLogoutBeenCalled = false;
 
     const oidc = id<Oidc.LoggedIn<DecodedIdToken>>({
         ...common,
         "isUserLoggedIn": true,
         "getTokens": () => currentTokens,
         "logout": async params => {
-            assertSessionStorageNotCleared();
+            if (hasLoginBeenCalled) {
+                log?.("logout() has already been called, ignoring the call");
+                return new Promise<never>(() => {});
+            }
 
-            setLogoutParams(params);
+            hasLogoutBeenCalled = true;
+
+            setLogoutParamsForOtherTabs({
+                configHash,
+                logoutParams: params
+            });
 
             await oidcClientTsUserManager.signoutRedirect({
                 "post_logout_redirect_uri": ((): string => {
@@ -1335,33 +1337,14 @@ export async function createOidc_nonMemoized<
         },
         //"loginScenario": resultOfLoginProcess.loginScenario,
         "goToAuthServer": params => loginOrGoToAuthServer({ "action": "go to auth server", ...params }),
-        ...(resultOfLoginProcess.authMethod === "back from auth server"
-            ? (assert(resultOfLoginProcess.backFromAuthServer !== undefined),
-              {
-                  "authMethod": "back from auth server",
-                  "backFromAuthServer": resultOfLoginProcess.backFromAuthServer
-              })
-            : {
-                  "authMethod": resultOfLoginProcess.authMethod
-              })
+        "backFromAuthServer": resultOfLoginProcess.backFromAuthServer,
+        isNewBrowserSession
     });
 
     {
-        clearLogoutParams();
+        const { prOtherTabLogout } = getPrOtherTabLogout({ configHash });
 
-        (async () => {
-            while (true) {
-                await new Promise(resolve => setTimeout(resolve, 1_000));
-
-                const logoutParams = getLogoutParams();
-
-                if (logoutParams === undefined) {
-                    continue;
-                }
-
-                await oidc.logout(logoutParams);
-            }
-        })();
+        prOtherTabLogout.then(logoutParams => oidc.logout(logoutParams));
     }
 
     {
@@ -1766,117 +1749,4 @@ async function maybeImpersonate(params: {
         `oidc.user:${match.issuerUri}:${match.clientId}`,
         JSON.stringify(match.parsedStoreValue)
     );
-}
-
-function createLogoutPropagationApi(params: { configHash: string }) {
-    const { configHash } = params;
-
-    const KEY_PREFIX = "oidc-spa_logout-params_";
-
-    const KEY = `${KEY_PREFIX}${configHash}`;
-
-    type LogoutParams = Param0<Oidc.LoggedIn["logout"]>;
-
-    type ParsedValue = { logoutParams: LogoutParams; expirationTime: number };
-
-    function getIsParsedValue(value: unknown): value is ParsedValue {
-        return (
-            value instanceof Object &&
-            "logoutParams" in value &&
-            "expirationTime" in value &&
-            typeof value.expirationTime === "number"
-        );
-    }
-
-    function getParsedValue(): ParsedValue | undefined {
-        const value = localStorage.getItem(KEY);
-
-        if (value === null) {
-            return undefined;
-        }
-
-        let parsedValue: unknown;
-
-        try {
-            parsedValue = JSON.parse(value);
-            assert(getIsParsedValue(parsedValue));
-        } catch {
-            localStorage.removeItem(KEY);
-            return undefined;
-        }
-
-        return parsedValue;
-    }
-
-    function setLogoutParams(params: LogoutParams) {
-        const parsedValue: ParsedValue = {
-            logoutParams: params,
-            expirationTime: Date.now() + 7_000
-        };
-        localStorage.setItem(KEY, JSON.stringify(parsedValue));
-    }
-
-    function getLogoutParams(): LogoutParams | undefined {
-        const parsedValue = getParsedValue();
-
-        if (parsedValue === undefined) {
-            return undefined;
-        }
-
-        const { logoutParams } = parsedValue;
-
-        return logoutParams;
-    }
-
-    function clearLogoutParams() {
-        localStorage.removeItem(KEY);
-    }
-
-    (function garbageCollect() {
-        const { keys } = (() => {
-            const keys: string[] = [];
-
-            for (let i = 0; i < localStorage.length; i++) {
-                const key = localStorage.key(i);
-
-                if (key === null) {
-                    continue;
-                }
-
-                if (!key.startsWith(KEY_PREFIX)) {
-                    continue;
-                }
-
-                keys.push(key);
-            }
-
-            return { keys };
-        })();
-
-        let doesNeedReschedule = false;
-
-        const now = Date.now();
-
-        for (const key of keys) {
-            const parsedValue = getParsedValue();
-
-            if (parsedValue === undefined) {
-                continue;
-            }
-
-            const { expirationTime } = parsedValue;
-
-            if (now > expirationTime) {
-                localStorage.removeItem(key);
-            } else {
-                doesNeedReschedule = true;
-            }
-        }
-
-        if (doesNeedReschedule) {
-            setTimeout(() => garbageCollect(), 1_000);
-        }
-    })();
-
-    return { setLogoutParams, getLogoutParams, clearLogoutParams };
 }
