@@ -2,133 +2,34 @@ import {
     UserManager as OidcClientTsUserManager,
     WebStorageStateStore,
     type User as OidcClientTsUser
-} from "./vendor/frontend/oidc-client-ts-and-jwt-decode";
-import { id } from "./vendor/frontend/tsafe";
-import type { Param0 } from "./vendor/frontend/tsafe";
-import { readExpirationTimeInJwt } from "./tools/readExpirationTimeInJwt";
-import { assert, type Equals } from "./vendor/frontend/tsafe";
+} from "../vendor/frontend/oidc-client-ts-and-jwt-decode";
+import { id, type Param0, assert, type Equals } from "../vendor/frontend/tsafe";
+import { setTimeout, clearTimeout } from "../vendor/frontend/worker-timers";
 import {
     addQueryParamToUrl,
     retrieveQueryParamFromUrl,
     retrieveAllQueryParamFromUrl,
     retrieveAllQueryParamStartingWithPrefixFromUrl
-} from "./tools/urlQueryParams";
-import { fnv1aHashToHex } from "./tools/fnv1aHashToHex";
-import { Deferred } from "./tools/Deferred";
-import { decodeJwt } from "./tools/decodeJwt";
-import { getDownlinkAndRtt } from "./tools/getDownlinkAndRtt";
-import { createIsUserActive } from "./tools/createIsUserActive";
-import { createStartCountdown } from "./tools/startCountdown";
-import type { StatefulObservable } from "./tools/StatefulObservable";
-import { setTimeout, clearTimeout } from "./vendor/frontend/worker-timers";
+} from "../tools/urlQueryParams";
+import { Deferred } from "../tools/Deferred";
+import { decodeJwt } from "../tools/decodeJwt";
+import { getDownlinkAndRtt } from "../tools/getDownlinkAndRtt";
+import { createIsUserActive } from "../tools/createIsUserActive";
+import { createStartCountdown } from "../tools/startCountdown";
+import type { StatefulObservable } from "../tools/StatefulObservable";
+import { toHumanReadableDuration } from "../tools/toHumanReadableDuration";
+import { createHybridStorage } from "../tools/HybridStorage";
+import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";
 import { OidcInitializationError } from "./OidcInitializationError";
-import { encodeBase64, decodeBase64 } from "./tools/base64";
-import { toHumanReadableDuration } from "./tools/toHumanReadableDuration";
-import { createHybridStorage, type HybridStorage } from "./tools/HybridStorage";
-import { toFullyQualifiedUrl } from "./tools/toFullyQualifiedUrl";
 import { getStateData, type StateData } from "./StateData";
 import { notifyOtherTabOfLogout, getPrOtherTabLogout } from "./logoutPropagationToOtherTabs";
+import { getConfigHash } from "./configHash";
+import { maybeImpersonate } from "./imperativeImpersonation";
+import { oidcClientTsUserToTokens } from "./oidcClientTsUserToTokens";
+import type { Oidc } from "./Oidc";
 
 // NOTE: Replaced at build time
 const VERSION = "{{OIDC_SPA_VERSION}}";
-
-export declare type Oidc<DecodedIdToken extends Record<string, unknown> = Record<string, unknown>> =
-    | Oidc.LoggedIn<DecodedIdToken>
-    | Oidc.NotLoggedIn;
-
-export declare namespace Oidc {
-    export type Common = {
-        params: {
-            issuerUri: string;
-            clientId: string;
-        };
-    };
-
-    export type NotLoggedIn = Common & {
-        isUserLoggedIn: false;
-        login: (params: {
-            doesCurrentHrefRequiresAuth: boolean;
-            /**
-             * Add extra query parameters to the url before redirecting to the login pages.
-             */
-            extraQueryParams?: Record<string, string>;
-            /**
-             * Where to redirect after successful login.
-             * Default: window.location.href (here)
-             *
-             * It does not need to include the origin, eg: "/dashboard"
-             */
-            redirectUrl?: string;
-
-            /**
-             * Transform the url before redirecting to the login pages.
-             * Prefer using the extraQueryParams parameter if you're only adding query parameters.
-             */
-            transformUrlBeforeRedirect?: (url: string) => string;
-        }) => Promise<never>;
-        initializationError: OidcInitializationError | undefined;
-    };
-
-    export type LoggedIn<DecodedIdToken extends Record<string, unknown> = Record<string, unknown>> =
-        Common & {
-            isUserLoggedIn: true;
-            renewTokens(params?: { extraTokenParams?: Record<string, string> }): Promise<void>;
-            getTokens: () => Tokens<DecodedIdToken>;
-            subscribeToTokensChange: (onTokenChange: () => void) => { unsubscribe: () => void };
-            logout: (
-                params:
-                    | { redirectTo: "home" | "current page" }
-                    | { redirectTo: "specific url"; url: string }
-            ) => Promise<never>;
-            goToAuthServer: (params: {
-                extraQueryParams?: Record<string, string>;
-                redirectUrl?: string;
-                transformUrlBeforeRedirect?: (url: string) => string;
-            }) => Promise<never>;
-            subscribeToAutoLogoutCountdown: (
-                tickCallback: (params: { secondsLeft: number | undefined }) => void
-            ) => { unsubscribeFromAutoLogoutCountdown: () => void };
-            /**
-             * Defined when authMethod is "back from auth server".
-             * If you called `goToAuthServer` or `login` with extraQueryParams, this object let you know the outcome of the
-             * of the action that was intended.
-             *
-             * For example, on a Keycloak server, if you called `goToAuthServer({ extraQueryParams: { kc_action: "UPDATE_PASSWORD" } })`
-             * you'll get back: `{ extraQueryParams: { kc_action: "UPDATE_PASSWORD" }, result: { kc_action_status: "success" } }` (or "cancelled")
-             */
-            backFromAuthServer:
-                | {
-                      extraQueryParams: Record<string, string>;
-                      result: Record<string, string>;
-                  }
-                | undefined;
-            /**
-             * This is true when the user has just returned from the login pages.
-             * This is also true when the user navigate to your app and was able to be silently signed in because there was still a valid session.
-             * This false however when the use just reload the page.
-             *
-             * This can be used to perform some action related to session initialization
-             * but avoiding doing it repeatedly every time the user reload the page.
-             *
-             * Note that this is referring to the browser session and not the OIDC session
-             * on the server side.
-             *
-             * If you want to perform an action only when a new OIDC session is created
-             * you can test oidc.isNewBrowserSession && oidc.backFromAuthServer !== undefined
-             */
-            isNewBrowserSession: boolean;
-        };
-
-    export type Tokens<DecodedIdToken extends Record<string, unknown> = Record<string, unknown>> =
-        Readonly<{
-            accessToken: string;
-            accessTokenExpirationTime: number;
-            idToken: string;
-            refreshToken: string;
-            refreshTokenExpirationTime: number;
-            decodedIdToken: DecodedIdToken;
-        }>;
-}
 
 export type ParamsOfCreateOidc<
     DecodedIdToken extends Record<string, unknown> = Record<string, unknown>,
@@ -213,10 +114,6 @@ export type ParamsOfCreateOidc<
 };
 
 const prOidcByConfigHash = new Map<string, Promise<Oidc<any>>>();
-
-function getConfigHash(params: { issuerUri: string; clientId: string }) {
-    return fnv1aHashToHex(`${params.issuerUri} ${params.clientId}`);
-}
 
 /** @see: https://docs.oidc-spa.dev/v/v5/documentation/usage */
 export async function createOidc<
@@ -1211,19 +1108,6 @@ export async function createOidc_nonMemoized<
 
     log?.("User is logged in");
 
-    const isNewBrowserSession = (() => {
-        const key = `oidc-spa:browser-session:${configHash}`;
-
-        if (store.getItem(key) === null) {
-            store.setItem(key, "true");
-            return true;
-        }
-
-        return false;
-    })();
-
-    log?.(`isNewBrowserSession: ${isNewBrowserSession}`);
-
     let currentTokens = resultOfLoginProcess.tokens;
 
     const autoLogoutCountdownTickCallbacks = new Set<
@@ -1282,8 +1166,6 @@ export async function createOidc_nonMemoized<
         "renewTokens": async params => {
             const { extraTokenParams: extraTokenParams_local } = params ?? {};
 
-            assertSessionStorageNotCleared();
-
             const oidcClientTsUser = await oidcClientTsUserManager.signinSilent({
                 "extraTokenParams": {
                     ...getExtraTokenParams?.(),
@@ -1332,7 +1214,21 @@ export async function createOidc_nonMemoized<
         //"loginScenario": resultOfLoginProcess.loginScenario,
         "goToAuthServer": params => loginOrGoToAuthServer({ "action": "go to auth server", ...params }),
         "backFromAuthServer": resultOfLoginProcess.backFromAuthServer,
-        isNewBrowserSession
+        "isNewBrowserSession": (() => {
+            const key = `oidc-spa:browser-session:${configHash}`;
+
+            if (store.getItem(key) === null) {
+                store.setItem(key, "true");
+
+                log?.("This is a new browser session");
+
+                return true;
+            }
+
+            log?.("This is not a new browser session");
+
+            return false;
+        })()
     });
 
     {
@@ -1474,273 +1370,4 @@ export async function createOidc_nonMemoized<
     }
 
     return oidc;
-}
-
-function oidcClientTsUserToTokens<DecodedIdToken extends Record<string, unknown>>(params: {
-    oidcClientTsUser: OidcClientTsUser;
-    decodedIdTokenSchema?: { parse: (data: unknown) => DecodedIdToken };
-    log: ((message: string) => void) | undefined;
-}): Oidc.Tokens<DecodedIdToken> {
-    const { oidcClientTsUser, decodedIdTokenSchema, log } = params;
-
-    const accessToken = oidcClientTsUser.access_token;
-
-    const accessTokenExpirationTime = (() => {
-        read_from_metadata: {
-            const { expires_at } = oidcClientTsUser;
-
-            if (expires_at === undefined) {
-                break read_from_metadata;
-            }
-
-            return expires_at * 1000;
-        }
-
-        read_from_jwt: {
-            const expirationTime = readExpirationTimeInJwt(accessToken);
-
-            if (expirationTime === undefined) {
-                break read_from_jwt;
-            }
-
-            return expirationTime;
-        }
-
-        assert(false, "Failed to get access token expiration time");
-    })();
-
-    const refreshToken = oidcClientTsUser.refresh_token;
-
-    assert(refreshToken !== undefined, "No refresh token provided by the oidc server");
-
-    const refreshTokenExpirationTime = (() => {
-        read_from_jwt: {
-            const expirationTime = readExpirationTimeInJwt(refreshToken);
-
-            if (expirationTime === undefined) {
-                break read_from_jwt;
-            }
-
-            return expirationTime;
-        }
-
-        log?.(
-            [
-                "Couldn't read the expiration time of the refresh token from the jwt",
-                "It's ok. Some OIDC server like Microsoft Entra ID does not use JWT for the refresh token.",
-                "Be aware that it prevent you from implementing the auto logout mechanism: https://docs.oidc-spa.dev/documentation/auto-logout",
-                "If you need auto logout you'll have to provide use the __unsafe_ssoSessionIdleSeconds param."
-            ].join("\n")
-        );
-
-        return Number.POSITIVE_INFINITY;
-    })();
-
-    const idToken = oidcClientTsUser.id_token;
-
-    assert(idToken !== undefined, "No id token provided by the oidc server");
-
-    const tokens: Oidc.Tokens<DecodedIdToken> = {
-        accessToken,
-        accessTokenExpirationTime,
-        refreshToken,
-        refreshTokenExpirationTime,
-        idToken,
-        "decodedIdToken": null as any
-    };
-
-    let cache:
-        | {
-              idToken: string;
-              decodedIdToken: DecodedIdToken;
-          }
-        | undefined = undefined;
-
-    Object.defineProperty(tokens, "decodedIdToken", {
-        "get": function (this: Oidc.Tokens<DecodedIdToken>) {
-            if (cache !== undefined && cache.idToken === this.idToken) {
-                return cache.decodedIdToken;
-            }
-
-            let decodedIdToken = decodeJwt(this.idToken) as DecodedIdToken;
-
-            if (decodedIdTokenSchema !== undefined) {
-                decodedIdToken = decodedIdTokenSchema.parse(decodedIdToken);
-            }
-
-            cache = {
-                "idToken": this.idToken,
-                decodedIdToken
-            };
-
-            return decodedIdToken;
-        },
-        "configurable": true,
-        "enumerable": true
-    });
-
-    return tokens;
-}
-
-async function maybeImpersonate(params: {
-    configHash: string;
-    getDoContinueWithImpersonation: Exclude<
-        ParamsOfCreateOidc["getDoContinueWithImpersonation"],
-        undefined
-    >;
-    store: HybridStorage;
-    log: typeof console.log | undefined;
-}) {
-    const { configHash, getDoContinueWithImpersonation, store, log } = params;
-
-    const QUERY_PARAM_NAME = "oidc-spa_impersonate";
-
-    const result = retrieveQueryParamFromUrl({
-        "url": window.location.href,
-        "name": QUERY_PARAM_NAME
-    });
-
-    if (!result.wasPresent) {
-        return;
-    }
-
-    type ParsedValue = {
-        idToken: string;
-        accessToken: string;
-        refreshToken: string;
-    }[];
-
-    function isParsedValue(value: unknown): value is ParsedValue {
-        if (!Array.isArray(value)) {
-            return false;
-        }
-
-        return value.every(item => {
-            return (
-                typeof item === "object" &&
-                item !== null &&
-                typeof (item as Record<string, unknown>).idToken === "string" &&
-                typeof (item as Record<string, unknown>).accessToken === "string" &&
-                typeof (item as Record<string, unknown>).refreshToken === "string"
-            );
-        });
-    }
-
-    const parsedValue = JSON.parse(decodeBase64(result.value));
-
-    assert(isParsedValue(parsedValue));
-
-    log?.("Impersonation params got:", parsedValue);
-
-    let match:
-        | {
-              parsedStoreValue: {
-                  id_token: string;
-                  session_state: string;
-                  access_token: string;
-                  refresh_token: string;
-                  token_type: "Bearer";
-                  scope: string;
-                  profile: Record<string, unknown>;
-                  expires_at: number;
-              };
-              parsedAccessToken: Record<string, unknown>;
-              issuerUri: string;
-              clientId: string;
-              index: number;
-          }
-        | undefined = undefined;
-
-    for (let index = 0; index < parsedValue.length; index++) {
-        const { idToken, accessToken, refreshToken } = parsedValue[index];
-
-        const parsedAccessToken = decodeJwt(accessToken) as any;
-
-        assert(parsedAccessToken instanceof Object);
-        const { iss, azp, sid, scope, exp } = parsedAccessToken;
-        assert(typeof iss === "string");
-        assert(typeof azp === "string");
-
-        const issuerUri = iss;
-        const clientId = azp;
-
-        if (getConfigHash({ issuerUri, clientId }) !== configHash) {
-            continue;
-        }
-
-        assert(typeof sid === "string");
-        assert(typeof scope === "string");
-        assert(typeof exp === "number");
-
-        log?.("Impersonation confirmed, storing the impersonation params in the session storage");
-
-        assert(match === undefined, "More than one impersonation params matched the current config");
-
-        match = {
-            parsedStoreValue: {
-                "id_token": idToken,
-                "session_state": sid,
-                "access_token": accessToken,
-                "refresh_token": refreshToken,
-                "token_type": "Bearer",
-                scope,
-                "profile": parsedAccessToken,
-                "expires_at": exp
-            },
-            parsedAccessToken,
-            issuerUri,
-            clientId,
-            index
-        };
-    }
-
-    if (match === undefined) {
-        return;
-    }
-
-    // Clean up the url
-    {
-        parsedValue.splice(match.index, 1);
-
-        let url = window.location.href;
-
-        if (parsedValue.length === 0) {
-            const result = retrieveQueryParamFromUrl({
-                url,
-                name: QUERY_PARAM_NAME
-            });
-
-            assert(result.wasPresent);
-
-            url = result.newUrl;
-        } else {
-            const { newUrl } = addQueryParamToUrl({
-                url,
-                name: QUERY_PARAM_NAME,
-                value: encodeBase64(JSON.stringify(parsedValue))
-            });
-
-            url = newUrl;
-        }
-
-        window.history.replaceState(null, "", url);
-    }
-
-    log?.(
-        "Impersonation param matched with the current configuration, asking for confirmation before continuing"
-    );
-
-    const doContinue = await getDoContinueWithImpersonation({
-        parsedAccessToken: match.parsedAccessToken
-    });
-
-    if (!doContinue) {
-        log?.("Impersonation was canceled by the user");
-        return;
-    }
-
-    store.setItem_persistInSessionStorage(
-        `oidc.user:${match.issuerUri}:${match.clientId}`,
-        JSON.stringify(match.parsedStoreValue)
-    );
 }

@@ -1,10 +1,10 @@
-import { assert } from "tsafe/assert";
+import { assert } from "../vendor/frontend/tsafe";
 
 export type HybridStorage = Storage & {
     setItem_persistInSessionStorage: (key: string, value: string) => void;
 };
 
-const PREFIX = "hybridStorage.";
+const PREFIX = "hybridStorage:";
 
 export function createHybridStorage(): HybridStorage {
     const arr: {
@@ -31,7 +31,6 @@ export function createHybridStorage(): HybridStorage {
             value,
             isPersisted: true
         });
-
     }
 
     const storage = {
@@ -39,7 +38,7 @@ export function createHybridStorage(): HybridStorage {
             return arr.length;
         },
         clear() {
-            for(let i = 0; i < storage.length; i++){
+            for (let i = 0; i < storage.length; i++) {
                 const key = storage.key(i);
                 assert(key !== null);
                 storage.removeItem(key);
@@ -47,7 +46,7 @@ export function createHybridStorage(): HybridStorage {
         },
         getItem(key: string) {
             const item = arr.find(item => item.key === key);
-            if( item === undefined){
+            if (item === undefined) {
                 return null;
             }
             return item.value;
@@ -56,7 +55,6 @@ export function createHybridStorage(): HybridStorage {
             return arr[index]?.key ?? null;
         },
         removeItem(key: string) {
-
             const item = arr.find(item => item.key === key);
 
             if (item === undefined) {
@@ -70,13 +68,11 @@ export function createHybridStorage(): HybridStorage {
             const index = arr.indexOf(item);
 
             arr.splice(index, 1);
-
         },
         setItem(key: string, value: string) {
-
             const item = arr.find(item => item.key === key);
 
-            if( item !== undefined && item.isPersisted ){
+            if (item !== undefined && item.isPersisted) {
                 storage.setItem_persistInSessionStorage(key, value);
                 return;
             }
@@ -91,10 +87,8 @@ export function createHybridStorage(): HybridStorage {
             }
 
             item.value = value;
-
         },
         setItem_persistInSessionStorage(key: string, value: string) {
-
             sessionStorage.setItem(`${PREFIX}${key}`, value);
 
             const item = arr.find(item => item.key === key);
@@ -109,7 +103,6 @@ export function createHybridStorage(): HybridStorage {
             }
 
             item.value = value;
-
         }
     };
 

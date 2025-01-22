@@ -1,7 +1,6 @@
-import type { Param0 } from "./vendor/frontend/tsafe";
-import { Deferred } from "./tools/Deferred";
-import type { Oidc } from "./oidc";
-import { assert, is } from "./vendor/frontend/tsafe";
+import { assert, is, type Param0 } from "../vendor/frontend/tsafe";
+import { Deferred } from "../tools/Deferred";
+import type { Oidc } from "./Oidc";
 
 type LogoutParams = Param0<Oidc.LoggedIn["logout"]>;
 

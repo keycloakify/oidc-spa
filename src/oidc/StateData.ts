@@ -11,7 +11,7 @@ export type StateData = {
       }
 );
 
-function isStateData(value: any): value is StateData {
+function getIsStateData(value: any): value is StateData {
     if (typeof value !== "object" || value === null) {
         return false;
     }
@@ -51,7 +51,7 @@ export function getStateData(params: { state: string }): StateData | undefined {
 
     const { data } = JSON.parse(lsItem).data;
 
-    if (!isStateData(data)) {
+    if (!getIsStateData(data)) {
         return undefined;
     }
 

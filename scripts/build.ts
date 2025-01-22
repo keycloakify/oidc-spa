@@ -25,7 +25,7 @@ run("npx tsc");
 
     assert(typeof version === "string");
 
-    const filePath = pathJoin(distDirPath, "oidc.js");
+    const filePath = pathJoin(distDirPath, "oidc", "createOidc.js");
 
     const content = fs.readFileSync(filePath).toString("utf8");
 

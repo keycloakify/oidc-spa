@@ -1,4 +1,4 @@
-import { assert, type Equals } from "./vendor/frontend/tsafe";
+import { assert, type Equals } from "../vendor/frontend/tsafe";
 
 export class OidcInitializationError extends Error {
     public readonly type: "server down" | "bad configuration" | "unknown";
