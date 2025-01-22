@@ -27,11 +27,7 @@ import { toHumanReadableDuration } from "./tools/toHumanReadableDuration";
 import { createHybridStorage, type HybridStorage } from "./tools/HybridStorage";
 import { toFullyQualifiedUrl } from "./tools/toFullyQualifiedUrl";
 import { getStateData, type StateData } from "./StateData";
-import {
-    garbageCollectLogoutPropagationLocalStorage,
-    setLogoutParamsForOtherTabs,
-    getPrOtherTabLogout
-} from "./logoutPropagationToOtherTabs";
+import { notifyOtherTabOfLogout, getPrOtherTabLogout } from "./logoutPropagationToOtherTabs";
 
 // NOTE: Replaced at build time
 const VERSION = "{{OIDC_SPA_VERSION}}";
@@ -441,8 +437,6 @@ export async function createOidc_nonMemoized<
 
         await new Promise<never>(() => {});
     }
-
-    garbageCollectLogoutPropagationLocalStorage();
 
     const store = createHybridStorage();
 
@@ -1245,14 +1239,14 @@ export async function createOidc_nonMemoized<
         "isUserLoggedIn": true,
         "getTokens": () => currentTokens,
         "logout": async params => {
-            if (hasLoginBeenCalled) {
+            if (hasLogoutBeenCalled) {
                 log?.("logout() has already been called, ignoring the call");
                 return new Promise<never>(() => {});
             }
 
             hasLogoutBeenCalled = true;
 
-            setLogoutParamsForOtherTabs({
+            notifyOtherTabOfLogout({
                 configHash,
                 logoutParams: params
             });
