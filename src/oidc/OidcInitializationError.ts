@@ -59,9 +59,7 @@ export class OidcInitializationError extends Error {
                             case "misconfigured OIDC client":
                                 return [
                                     `The OIDC client ${params.likelyCause.clientId} seems to be misconfigured on your OIDC server.`,
-                                    `If you are using Keycloak you likely need to add "${
-                                        params.likelyCause.publicUrl ?? window.location.origin
-                                    }/*" to the list of Valid Redirect URIs`,
+                                    `If you are using Keycloak you likely need to add "${params.likelyCause.callbackUrl}" to the list of Valid Redirect URIs`,
                                     `in the ${params.likelyCause.clientId} client configuration.\n`,
                                     `More info: https://docs.oidc-spa.dev/v/v5/resources/usage-with-keycloak`,
                                     `Silent SSO timed out after ${params.likelyCause.timeoutDelayMs}ms.`
@@ -94,10 +92,10 @@ export class OidcInitializationError extends Error {
                                 ].join(" ");
                             case "frame-ancestors none":
                                 return [
-                                    params.likelyCause.silentSso.hasDedicatedHtmlFile
-                                        ? `The silent-sso.htm file, `
+                                    params.likelyCause.urls.hasDedicatedHtmFile
+                                        ? `The oidc-callback.htm file, `
                                         : `The URI used for Silent SSO, `,
-                                    `${params.likelyCause.silentSso.redirectUri}, `,
+                                    `${params.likelyCause.urls.callbackUrl}, `,
                                     "is served by your web server with the HTTP header `Content-Security-Policy: frame-ancestors none` in the response.\n",
                                     "This header prevents the silent sign-in process from working.\n",
                                     "To fix this issue, you should configure your web server to not send this header or to use `frame-ancestors self` instead of `frame-ancestors none`.\n",

@@ -11,9 +11,9 @@
             authResponse[key] = value;
         }
 
-        const { data } = JSON.parse(localStorage.getItem(`oidc.${authResponse.state}`));
+        const stateData = authResponse.state ? JSON.parse(localStorage.getItem(`oidc.${authResponse.state}`)) : undefined;
 
-        if (data.isSilentSso) {
+        if (!stateData || data.isSilentSso) {
             parent.postMessage(authResponse, location.origin);
         } else {
             const redirectUrl = new URL(data.redirectUrl);

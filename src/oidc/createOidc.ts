@@ -1135,28 +1135,16 @@ export async function createOidc_nonMemoized<
                 logoutParams: params
             });
 
-            await oidcClientTsUserManager.signoutRedirect({
+            // TODO: Use silentSignOut and redirect to the single callback endpoint.
+            await oidcClientTsUserManager.signoutSilent({
                 "post_logout_redirect_uri": ((): string => {
                     switch (params.redirectTo) {
                         case "current page":
                             return window.location.href;
                         case "home":
-                            if (publicUrl === undefined) {
-                                throw new Error(
-                                    [
-                                        "Since you've opted out of the `silent-sso.htm` file you are probably in a",
-                                        "setup a bit less standard. To avoid any confusion on where the users should be",
-                                        "redirected after logout please explicitly specify the url to redirect to.",
-                                        "With `logout({ redirectTo: 'specific url', url: '/my-home' })` or use",
-                                        "`logout({ redirectTo: 'current page' })` if you want to redirect to the current page."
-                                    ].join(" ")
-                                );
-                            }
-                            return publicUrl;
+                            return urls.homeUrl;
                         case "specific url":
-                            return params.url.startsWith("/")
-                                ? `${window.location.origin}${params.url}`
-                                : params.url;
+                            return toFullyQualifiedUrl(params.url);
                     }
                     assert<Equals<typeof params, never>>(false);
                 })()
