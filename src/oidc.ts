@@ -7,7 +7,7 @@ import {
 import { id } from "./vendor/frontend/tsafe";
 import type { Param0 } from "./vendor/frontend/tsafe";
 import { readExpirationTimeInJwt } from "./tools/readExpirationTimeInJwt";
-import { assert, type Equals } from "./vendor/frontend/tsafe";
+import { assert, typeGuard, type Equals } from "./vendor/frontend/tsafe";
 import {
     addQueryParamToUrl,
     retrieveQueryParamFromUrl,
@@ -1885,21 +1885,36 @@ async function maybeImpersonate(params: {
         const parsedAccessToken = decodeJwt(accessToken) as any;
 
         assert(parsedAccessToken instanceof Object);
-        const { iss, azp, sid, scope, exp } = parsedAccessToken;
+        const { iss, azp, sid, scope, exp, audience } = parsedAccessToken;
         assert(typeof iss === "string");
         assert(typeof azp === "string");
         assert(typeof sid === "string");
         assert(typeof scope === "string");
         assert(typeof exp === "number");
+        assert(
+            typeGuard<string[] | undefined>(
+                audience,
+                audience === undefined ||
+                    (audience instanceof Array && audience.every(x => typeof x === "string"))
+            )
+        );
 
         const issuerUri = iss;
-        const clientId = azp;
 
-        if (getConfigHash({ issuerUri, clientId }) !== configHash) {
+        const clientId = (() => {
+            for (const clientId of [azp, ...(audience ?? [])]) {
+                if (getConfigHash({ issuerUri, clientId }) === configHash) {
+                    return clientId;
+                }
+            }
+
+            return undefined;
+        })();
+
+        if (clientId === undefined) {
             log?.(
                 [
                     `Skipping impersonation params entry`,
-                    `issuerUri/clientId: ${issuerUri}/${clientId} read from the access token`,
                     `doesn't match the current configuration of this oidc client`
                 ].join(" ")
             );
