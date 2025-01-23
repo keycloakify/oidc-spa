@@ -3,6 +3,7 @@ import { retrieveQueryParamFromUrl, addQueryParamToUrl } from "../tools/urlQuery
 import { createObjectThatThrowsIfAccessed } from "../tools/createObjectThatThrowsIfAccessed";
 import { id } from "../vendor/frontend/tsafe";
 import { assert, type Equals } from "../vendor/frontend/tsafe";
+import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";
 
 export type ParamsOfCreateMockOidc<
     DecodedIdToken extends Record<string, unknown> = Record<string, unknown>,
@@ -10,7 +11,7 @@ export type ParamsOfCreateMockOidc<
 > = {
     mockedParams?: Partial<Oidc["params"]>;
     mockedTokens?: Partial<Oidc.Tokens<DecodedIdToken>>;
-    publicUrl?: string;
+    homeUrl: string;
     isAuthGloballyRequired?: IsAuthGloballyRequired;
     postLoginRedirectUrl?: string;
 } & (IsAuthGloballyRequired extends true
@@ -31,7 +32,7 @@ export async function createMockOidc<
         isUserInitiallyLoggedIn = true,
         mockedParams = {},
         mockedTokens = {},
-        publicUrl: publicUrl_params,
+        homeUrl: homeUrl_params,
         isAuthGloballyRequired = false,
         postLoginRedirectUrl
     } = params;
@@ -51,17 +52,7 @@ export async function createMockOidc<
         return result.value === "true";
     })();
 
-    const publicUrl = (() => {
-        if (publicUrl_params === undefined) {
-            return window.location.origin;
-        }
-
-        return (
-            publicUrl_params.startsWith("http")
-                ? publicUrl_params
-                : `${window.location.origin}${publicUrl_params}`
-        ).replace(/\/$/, "");
-    })();
+    const homeUrl = toFullyQualifiedUrl(homeUrl_params);
 
     const common: Oidc.Common = {
         "params": {
@@ -144,11 +135,9 @@ export async function createMockOidc<
                         case "current page":
                             return window.location.href;
                         case "home":
-                            return publicUrl;
+                            return homeUrl;
                         case "specific url":
-                            return params.url.startsWith("/")
-                                ? `${window.location.origin}${params.url}`
-                                : params.url;
+                            return toFullyQualifiedUrl(params.url);
                     }
                     assert<Equals<typeof params, never>>(false);
                 })(),
@@ -165,16 +154,7 @@ export async function createMockOidc<
         }),
         //"loginScenario": isUserInitiallyLoggedIn ? "silentSignin" : "backFromLoginPages",
         "goToAuthServer": async ({ redirectUrl }) => loginOrGoToAuthServer({ redirectUrl }),
-        ...(isUserInitiallyLoggedIn
-            ? {
-                  "authMethod": "back from auth server",
-                  "backFromAuthServer": {
-                      "extraQueryParams": {},
-                      "result": {}
-                  }
-              }
-            : {
-                  "authMethod": "silent signin"
-              })
+        "isNewBrowserSession": false,
+        "backFromAuthServer": undefined
     });
 }

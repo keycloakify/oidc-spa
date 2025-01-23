@@ -1,6 +1,5 @@
 import { useEffect, useState, createContext, useContext, useReducer, type ReactNode } from "react";
-import { createOidc, type ParamsOfCreateOidc, type Oidc } from "../oidc";
-import { OidcInitializationError } from "../OidcInitializationError";
+import { type Oidc, createOidc, type ParamsOfCreateOidc, OidcInitializationError } from "../oidc";
 import { assert } from "../vendor/frontend/tsafe";
 import { id } from "../vendor/frontend/tsafe";
 import { useGuaranteedMemo } from "../tools/powerhooks/useGuaranteedMemo";
@@ -41,35 +40,16 @@ export namespace OidcReact {
             redirectUrl?: string;
             transformUrlBeforeRedirect?: (url: string) => string;
         }) => Promise<never>;
-    } & (
+
+        backFromAuthServer:
             | {
-                  /**
-                   * "back from auth server":
-                   *      The user was redirected to the authentication server login/registration page and then redirected back to the application.
-                   * "session storage":
-                   *    The user's authentication was restored from the browser session storage, typically after a page refresh.
-                   * "silent signin":
-                   *   The user was authenticated silently using an iframe to check the session with the authentication server.
-                   */
-                  authMethod: "back from auth server";
-                  /**
-                   * Defined when authMethod is "back from auth server".
-                   * If you called `goToAuthServer` or `login` with extraQueryParams, this object let you know the outcome of the
-                   * of the action that was intended.
-                   *
-                   * For example, on a Keycloak server, if you called `goToAuthServer({ extraQueryParams: { kc_action: "UPDATE_PASSWORD" } })`
-                   * you'll get back: `{ extraQueryParams: { kc_action: "UPDATE_PASSWORD" }, result: { kc_action_status: "success" } }` (or "cancelled")
-                   */
-                  backFromAuthServer: {
-                      extraQueryParams: Record<string, string>;
-                      result: Record<string, string>;
-                  };
+                  extraQueryParams: Record<string, string>;
+                  result: Record<string, string>;
               }
-            | {
-                  authMethod: "session storage" | "silent signin";
-                  backFromAuthServer?: never;
-              }
-        );
+            | undefined;
+
+        isNewBrowserSession: boolean;
+    };
 }
 
 const oidcContext = createContext<
@@ -304,14 +284,8 @@ export function createOidcReactApi_dependencyInjection<
                       "renewTokens": oidc.renewTokens,
                       "subscribeToAutoLogoutCountdown": oidc.subscribeToAutoLogoutCountdown,
                       "goToAuthServer": oidc.goToAuthServer,
-                      ...(oidc.authMethod === "back from auth server"
-                          ? {
-                                "authMethod": "back from auth server",
-                                "backFromAuthServer": oidc.backFromAuthServer
-                            }
-                          : {
-                                "authMethod": oidc.authMethod
-                            })
+                      "isNewBrowserSession": oidc.isNewBrowserSession,
+                      "backFromAuthServer": oidc.backFromAuthServer
                   })
               )
             : id<OidcReact.NotLoggedIn>({
