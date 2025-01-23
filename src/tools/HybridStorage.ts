@@ -4,9 +4,11 @@ export type HybridStorage = Storage & {
     setItem_persistInSessionStorage: (key: string, value: string) => void;
 };
 
-const PREFIX = "hybridStorage:";
+export function createHybridStorage(params: { persistenceKey: string }): HybridStorage {
+    const { persistenceKey } = params;
 
-export function createHybridStorage(): HybridStorage {
+    const sessionStoragePrefix = `hybridStorage:${persistenceKey}:`;
+
     const arr: {
         key: string;
         value: string;
@@ -18,7 +20,7 @@ export function createHybridStorage(): HybridStorage {
         if (key === null) {
             continue;
         }
-        if (!key.startsWith(PREFIX)) {
+        if (!key.startsWith(sessionStoragePrefix)) {
             continue;
         }
 
@@ -27,7 +29,7 @@ export function createHybridStorage(): HybridStorage {
         assert(value !== null);
 
         arr.push({
-            key: key.slice(PREFIX.length),
+            key: key.slice(sessionStoragePrefix.length),
             value,
             isPersisted: true
         });
@@ -62,7 +64,7 @@ export function createHybridStorage(): HybridStorage {
             }
 
             if (item.isPersisted) {
-                sessionStorage.removeItem(`${PREFIX}${key}`);
+                sessionStorage.removeItem(`${sessionStoragePrefix}${key}`);
             }
 
             const index = arr.indexOf(item);
@@ -89,7 +91,7 @@ export function createHybridStorage(): HybridStorage {
             item.value = value;
         },
         setItem_persistInSessionStorage(key: string, value: string) {
-            sessionStorage.setItem(`${PREFIX}${key}`, value);
+            sessionStorage.setItem(`${sessionStoragePrefix}${key}`, value);
 
             const item = arr.find(item => item.key === key);
 

@@ -335,7 +335,7 @@ export async function createOidc_nonMemoized<
         await new Promise<never>(() => {});
     }
 
-    const store = createHybridStorage();
+    const store = createHybridStorage({ "persistenceKey": configHash });
 
     imperative_impersonation: {
         if (getDoContinueWithImpersonation === undefined) {
