@@ -1116,39 +1116,56 @@ export async function createOidc_nonMemoized<
 
     let hasLogoutBeenCalled = false;
 
+    const logout = async (params: {
+        logoutParams: Param0<Oidc.LoggedIn<DecodedIdToken>["logout"]>;
+        isLogoutInitiatedByOtherTab: boolean;
+    }): Promise<never> => {
+        const { logoutParams, isLogoutInitiatedByOtherTab } = params;
+
+        if (hasLogoutBeenCalled) {
+            log?.("logout() has already been called, ignoring the call");
+            return new Promise<never>(() => {});
+        }
+
+        hasLogoutBeenCalled = true;
+
+        if (!isLogoutInitiatedByOtherTab) {
+            notifyOtherTabOfLogout({
+                configHash,
+                logoutParams
+            });
+        }
+
+        // TODO: Use silentSignOut and redirect to the single callback endpoint.
+        await oidcClientTsUserManager.signoutRedirect({
+            "post_logout_redirect_uri": ((): string => {
+                switch (logoutParams.redirectTo) {
+                    case "current page":
+                        return window.location.href;
+                    case "home":
+                        return urls.homeUrl;
+                    case "specific url":
+                        return toFullyQualifiedUrl(logoutParams.url);
+                }
+                assert<Equals<typeof logoutParams, never>>(false);
+            })()
+        });
+        return new Promise<never>(() => {});
+    };
+
+    {
+        const { prOtherTabLogout } = getPrOtherTabLogout({ configHash });
+
+        prOtherTabLogout.then(logoutParams =>
+            logout({ logoutParams, isLogoutInitiatedByOtherTab: true })
+        );
+    }
+
     const oidc = id<Oidc.LoggedIn<DecodedIdToken>>({
         ...common,
         "isUserLoggedIn": true,
         "getTokens": () => currentTokens,
-        "logout": async params => {
-            if (hasLogoutBeenCalled) {
-                log?.("logout() has already been called, ignoring the call");
-                return new Promise<never>(() => {});
-            }
-
-            hasLogoutBeenCalled = true;
-
-            notifyOtherTabOfLogout({
-                configHash,
-                logoutParams: params
-            });
-
-            // TODO: Use silentSignOut and redirect to the single callback endpoint.
-            await oidcClientTsUserManager.signoutSilent({
-                "post_logout_redirect_uri": ((): string => {
-                    switch (params.redirectTo) {
-                        case "current page":
-                            return window.location.href;
-                        case "home":
-                            return urls.homeUrl;
-                        case "specific url":
-                            return toFullyQualifiedUrl(params.url);
-                    }
-                    assert<Equals<typeof params, never>>(false);
-                })()
-            });
-            return new Promise<never>(() => {});
-        },
+        "logout": params => logout({ "logoutParams": params, "isLogoutInitiatedByOtherTab": false }),
         "renewTokens": async params => {
             const { extraTokenParams: extraTokenParams_local } = params ?? {};
 
@@ -1197,14 +1214,13 @@ export async function createOidc_nonMemoized<
 
             return { unsubscribeFromAutoLogoutCountdown };
         },
-        //"loginScenario": resultOfLoginProcess.loginScenario,
         "goToAuthServer": params => loginOrGoToAuthServer({ "action": "go to auth server", ...params }),
         "backFromAuthServer": resultOfLoginProcess.backFromAuthServer,
         "isNewBrowserSession": (() => {
             const key = `oidc-spa:browser-session:${configHash}`;
 
-            if (store.getItem(key) === null) {
-                store.setItem(key, "true");
+            if (sessionStorage.getItem(key) === null) {
+                sessionStorage.setItem(key, "true");
 
                 log?.("This is a new browser session");
 
@@ -1216,12 +1232,6 @@ export async function createOidc_nonMemoized<
             return false;
         })()
     });
-
-    {
-        const { prOtherTabLogout } = getPrOtherTabLogout({ configHash });
-
-        prOtherTabLogout.then(logoutParams => oidc.logout(logoutParams));
-    }
 
     {
         const getMsBeforeExpiration = () => {
