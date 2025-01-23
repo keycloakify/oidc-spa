@@ -49,7 +49,7 @@ export function getStateData(params: { state: string }): StateData | undefined {
         return undefined;
     }
 
-    const { data } = JSON.parse(lsItem).data;
+    const { data } = JSON.parse(lsItem);
 
     if (!getIsStateData(data)) {
         return undefined;

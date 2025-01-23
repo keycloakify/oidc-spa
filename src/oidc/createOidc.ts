@@ -707,7 +707,6 @@ export async function createOidc_nonMemoized<
 
             type AuthResponse = {
                 state: string;
-                code: string;
                 [key: string]: string;
             };
 
@@ -854,12 +853,7 @@ export async function createOidc_nonMemoized<
 
             const listener = (event: MessageEvent) => {
                 function getIsAuthResponse(data: any): data is AuthResponse {
-                    return (
-                        data instanceof Object &&
-                        Object.values(data).every(value => typeof value === "string") &&
-                        "state" in data &&
-                        "code" in data
-                    );
+                    return data instanceof Object && "state" in data && typeof data.state === "string";
                 }
 
                 if (!getIsAuthResponse(event.data)) {
@@ -896,8 +890,6 @@ export async function createOidc_nonMemoized<
             };
 
             window.addEventListener("message", listener, false);
-
-            console.log("new!");
 
             oidcClientTsUserManager
                 .signinSilent({
