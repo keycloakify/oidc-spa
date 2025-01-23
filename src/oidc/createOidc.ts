@@ -897,10 +897,16 @@ export async function createOidc_nonMemoized<
 
             window.addEventListener("message", listener, false);
 
+            console.log("new!");
+
             oidcClientTsUserManager
                 .signinSilent({
                     "silentRequestTimeoutInSeconds": timeoutDelayMs / 1000,
-                    "extraTokenParams": getExtraTokenParams?.()
+                    "extraTokenParams": getExtraTokenParams?.(),
+                    "state": id<StateData>({
+                        configHash,
+                        "isSilentSso": true
+                    })
                 })
                 .catch((error: Error) => {
                     if (error.message === "Failed to fetch") {

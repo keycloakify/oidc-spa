@@ -23,7 +23,7 @@ export const {
 
     issuerUri: import.meta.env.VITE_OIDC_ISSUER,
     clientId: import.meta.env.VITE_OIDC_CLIENT_ID,
-    publicUrl: import.meta.env.BASE_URL,
+    BASE_URL: import.meta.env.BASE_URL,
     /**
      * This parameter is optional.
      *
