@@ -1885,7 +1885,7 @@ async function maybeImpersonate(params: {
         const parsedAccessToken = decodeJwt(accessToken) as any;
 
         assert(parsedAccessToken instanceof Object);
-        const { iss, azp, sid, scope, exp, audience } = parsedAccessToken;
+        const { iss, azp, sid, scope, exp, aud } = parsedAccessToken;
         assert(typeof iss === "string");
         assert(typeof azp === "string");
         assert(typeof sid === "string");
@@ -1893,16 +1893,15 @@ async function maybeImpersonate(params: {
         assert(typeof exp === "number");
         assert(
             typeGuard<string[] | undefined>(
-                audience,
-                audience === undefined ||
-                    (audience instanceof Array && audience.every(x => typeof x === "string"))
+                aud,
+                aud === undefined || (aud instanceof Array && aud.every(x => typeof x === "string"))
             )
         );
 
         const issuerUri = iss;
 
         const clientId = (() => {
-            for (const clientId of [azp, ...(audience ?? [])]) {
+            for (const clientId of [azp, ...(aud ?? [])]) {
                 if (getConfigHash({ issuerUri, clientId }) === configHash) {
                     return clientId;
                 }
