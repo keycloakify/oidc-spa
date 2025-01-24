@@ -3,7 +3,7 @@ import {
     WebStorageStateStore,
     type User as OidcClientTsUser
 } from "../vendor/frontend/oidc-client-ts-and-jwt-decode";
-import { id, type Param0, assert, type Equals } from "../vendor/frontend/tsafe";
+import { id, type Param0, assert } from "../vendor/frontend/tsafe";
 import { setTimeout, clearTimeout } from "../vendor/frontend/worker-timers";
 import {
     addQueryParamToUrl,
@@ -26,6 +26,7 @@ import { notifyOtherTabOfLogout, getPrOtherTabLogout } from "./logoutPropagation
 import { getConfigHash } from "./configHash";
 import { maybeImpersonate } from "./imperativeImpersonation";
 import { oidcClientTsUserToTokens } from "./oidcClientTsUserToTokens";
+import { loginOrLogoutSilent, authResponseToUrl } from "./loginOrLogoutSilent";
 import type { Oidc } from "./Oidc";
 
 // NOTE: Replaced at build time
@@ -1113,54 +1114,35 @@ export async function createOidc_nonMemoized<
 
         hasLogoutBeenCalled = true;
 
-        if (!isLogoutInitiatedByOtherTab) {
-            notifyOtherTabOfLogout({
-                configHash,
-                logoutParams
-            });
-        }
+        const result_logoutSilent = await loginOrLogoutSilent({
+            configHash,
+            oidcClientTsUserManager,
+            "action": {
+                "type": "logout"
+            }
+        });
 
-        type AuthResponse = {
-            state: string;
-            [key: string]: string;
-        };
+        assert(result_logoutSilent.isSuccess);
 
-        const dAuthResponse = new Deferred<AuthResponse | undefined>();
+        await oidcClientTsUserManager.signoutSilentCallback(
+            authResponseToUrl(result_logoutSilent.authResponse)
+        );
 
-        const timeoutDelayMs = getIFrameTimeoutDelayMs();
+        notifyOtherTabOfLogout({
+            configHash,
+            logoutParams
+        });
 
-        const timeout = setTimeout(() => {
-            dAuthResponse.resolve(undefined);
-        }, timeoutDelayMs);
-
-        const listener = (event: MessageEvent) => {};
-
-        window.addEventListener("message", listener, false);
-
-        // TODO: Use silentSignOut and redirect to the single callback endpoint.
-        oidcClientTsUserManager
-            .signoutSilent({
-                "silentRequestTimeoutInSeconds": timeoutDelayMs / 1000,
-                "state": id<StateData>({
-                    "isSilentSso": true,
-                    configHash
-                })
-            })
-            .catch((error: Error) => {});
-
-        /*
-            "post_logout_redirect_uri": ((): string => {
-                switch (logoutParams.redirectTo) {
-                    case "current page":
-                        return window.location.href;
-                    case "home":
-                        return urls.homeUrl;
-                    case "specific url":
-                        return toFullyQualifiedUrl(logoutParams.url);
-                }
-                assert<Equals<typeof logoutParams, never>>(false);
-            })()
-        */
+        window.location.href = (() => {
+            switch (logoutParams.redirectTo) {
+                case "current page":
+                    return window.location.href;
+                case "home":
+                    return urls.homeUrl;
+                case "specific url":
+                    return toFullyQualifiedUrl(logoutParams.url);
+            }
+        })();
 
         return new Promise<never>(() => {});
     };
