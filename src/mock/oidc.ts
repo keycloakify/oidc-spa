@@ -39,8 +39,8 @@ export async function createMockOidc<
 
     const isUserLoggedIn = (() => {
         const result = retrieveQueryParamFromUrl({
-            "url": window.location.href,
-            "name": urlParamName
+            url: window.location.href,
+            name: urlParamName
         });
 
         if (!result.wasPresent) {
@@ -53,14 +53,14 @@ export async function createMockOidc<
     })();
 
     const homeUrl = toFullyQualifiedUrl({
-        "urlish": homeUrl_params,
-        "doAssertNoQueryParams": true
+        urlish: homeUrl_params,
+        doAssertNoQueryParams: true
     });
 
     const common: Oidc.Common = {
-        "params": {
-            "clientId": mockedParams.clientId ?? "mymockclient",
-            "issuerUri": mockedParams.issuerUri ?? "https://my-mock-oidc-server.net/realms/mymockrealm"
+        params: {
+            clientId: mockedParams.clientId ?? "mymockclient",
+            issuerUri: mockedParams.issuerUri ?? "https://my-mock-oidc-server.net/realms/mymockrealm"
         }
     };
 
@@ -70,7 +70,7 @@ export async function createMockOidc<
         const { redirectUrl } = params;
 
         const { newUrl } = addQueryParamToUrl({
-            "url": (() => {
+            url: (() => {
                 if (redirectUrl === undefined) {
                     return window.location.href;
                 }
@@ -78,8 +78,8 @@ export async function createMockOidc<
                     ? `${window.location.origin}${redirectUrl}`
                     : redirectUrl;
             })(),
-            "name": urlParamName,
-            "value": "true"
+            name: urlParamName,
+            value: "true"
         });
 
         window.location.href = newUrl;
@@ -90,14 +90,14 @@ export async function createMockOidc<
     if (!isUserLoggedIn) {
         const oidc = id<Oidc.NotLoggedIn>({
             ...common,
-            "isUserLoggedIn": false,
-            "login": ({ redirectUrl }) => loginOrGoToAuthServer({ redirectUrl }),
-            "initializationError": undefined
+            isUserLoggedIn: false,
+            login: ({ redirectUrl }) => loginOrGoToAuthServer({ redirectUrl }),
+            initializationError: undefined
         });
         if (isAuthGloballyRequired) {
             await oidc.login({
-                "redirectUrl": postLoginRedirectUrl,
-                "doesCurrentHrefRequiresAuth": true
+                redirectUrl: postLoginRedirectUrl,
+                doesCurrentHrefRequiresAuth: true
             });
             // Never here
         }
@@ -107,19 +107,19 @@ export async function createMockOidc<
 
     return id<Oidc.LoggedIn<DecodedIdToken>>({
         ...common,
-        "isUserLoggedIn": true,
-        "renewTokens": async () => {},
-        "getTokens": (() => {
+        isUserLoggedIn: true,
+        renewTokens: async () => {},
+        getTokens: (() => {
             const tokens: Oidc.Tokens<DecodedIdToken> = {
-                "accessToken": mockedTokens.accessToken ?? "mocked-access-token",
-                "accessTokenExpirationTime": mockedTokens.accessTokenExpirationTime ?? Infinity,
-                "idToken": mockedTokens.idToken ?? "mocked-id-token",
-                "refreshToken": mockedTokens.refreshToken ?? "mocked-refresh-token",
-                "refreshTokenExpirationTime": mockedTokens.refreshTokenExpirationTime ?? Infinity,
-                "decodedIdToken":
+                accessToken: mockedTokens.accessToken ?? "mocked-access-token",
+                accessTokenExpirationTime: mockedTokens.accessTokenExpirationTime ?? Infinity,
+                idToken: mockedTokens.idToken ?? "mocked-id-token",
+                refreshToken: mockedTokens.refreshToken ?? "mocked-refresh-token",
+                refreshTokenExpirationTime: mockedTokens.refreshTokenExpirationTime ?? Infinity,
+                decodedIdToken:
                     mockedTokens.decodedIdToken ??
                     createObjectThatThrowsIfAccessed<DecodedIdToken>({
-                        "debugMessage": [
+                        debugMessage: [
                             "You haven't provided a mocked decodedIdToken",
                             "See https://docs.oidc-spa.dev/v/v6/documentation/mock"
                         ].join("\n")
@@ -128,12 +128,12 @@ export async function createMockOidc<
 
             return () => tokens;
         })(),
-        "subscribeToTokensChange": () => ({
-            "unsubscribe": () => {}
+        subscribeToTokensChange: () => ({
+            unsubscribe: () => {}
         }),
-        "logout": params => {
+        logout: params => {
             const { newUrl } = addQueryParamToUrl({
-                "url": (() => {
+                url: (() => {
                     switch (params.redirectTo) {
                         case "current page":
                             return window.location.href;
@@ -141,26 +141,26 @@ export async function createMockOidc<
                             return homeUrl;
                         case "specific url":
                             return toFullyQualifiedUrl({
-                                "urlish": params.url,
-                                "doAssertNoQueryParams": false
+                                urlish: params.url,
+                                doAssertNoQueryParams: false
                             });
                     }
                     assert<Equals<typeof params, never>>(false);
                 })(),
-                "name": urlParamName,
-                "value": "false"
+                name: urlParamName,
+                value: "false"
             });
 
             window.location.href = newUrl;
 
             return new Promise<never>(() => {});
         },
-        "subscribeToAutoLogoutCountdown": () => ({
-            "unsubscribeFromAutoLogoutCountdown": () => {}
+        subscribeToAutoLogoutCountdown: () => ({
+            unsubscribeFromAutoLogoutCountdown: () => {}
         }),
         //"loginScenario": isUserInitiallyLoggedIn ? "silentSignin" : "backFromLoginPages",
-        "goToAuthServer": async ({ redirectUrl }) => loginOrGoToAuthServer({ redirectUrl }),
-        "isNewBrowserSession": false,
-        "backFromAuthServer": undefined
+        goToAuthServer: async ({ redirectUrl }) => loginOrGoToAuthServer({ redirectUrl }),
+        isNewBrowserSession: false,
+        backFromAuthServer: undefined
     });
 }

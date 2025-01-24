@@ -74,7 +74,7 @@ export function oidcClientTsUserToTokens<DecodedIdToken extends Record<string, u
         refreshToken,
         refreshTokenExpirationTime,
         idToken,
-        "decodedIdToken": null as any
+        decodedIdToken: null as any
     };
 
     let cache:
@@ -85,7 +85,7 @@ export function oidcClientTsUserToTokens<DecodedIdToken extends Record<string, u
         | undefined = undefined;
 
     Object.defineProperty(tokens, "decodedIdToken", {
-        "get": function (this: Oidc.Tokens<DecodedIdToken>) {
+        get: function (this: Oidc.Tokens<DecodedIdToken>) {
             if (cache !== undefined && cache.idToken === this.idToken) {
                 return cache.decodedIdToken;
             }
@@ -97,14 +97,14 @@ export function oidcClientTsUserToTokens<DecodedIdToken extends Record<string, u
             }
 
             cache = {
-                "idToken": this.idToken,
+                idToken: this.idToken,
                 decodedIdToken
             };
 
             return decodedIdToken;
         },
-        "configurable": true,
-        "enumerable": true
+        configurable: true,
+        enumerable: true
     });
 
     return tokens;

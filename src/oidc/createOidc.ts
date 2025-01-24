@@ -145,8 +145,8 @@ export async function createOidc<
     } = params;
 
     const issuerUri = toFullyQualifiedUrl({
-        "urlish": issuerUri_params,
-        "doAssertNoQueryParams": true
+        urlish: issuerUri_params,
+        doAssertNoQueryParams: true
     });
 
     const log = (() => {
@@ -234,7 +234,7 @@ export async function createOidc_nonMemoized<
         homeUrl,
         decodedIdTokenSchema,
         __unsafe_ssoSessionIdleSeconds,
-        autoLogoutParams = { "redirectTo": "current page" },
+        autoLogoutParams = { redirectTo: "current page" },
         isAuthGloballyRequired = false,
         postLoginRedirectUrl,
         getDoContinueWithImpersonation
@@ -264,14 +264,14 @@ export async function createOidc_nonMemoized<
             );
 
             const url = toFullyQualifiedUrl({
-                "urlish": homeUrl,
-                "doAssertNoQueryParams": true
+                urlish: homeUrl,
+                doAssertNoQueryParams: true
             });
 
             return {
-                "hasDedicatedHtmFile": false,
-                "callbackUrl": url,
-                "homeUrl": url
+                hasDedicatedHtmFile: false,
+                callbackUrl: url,
+                homeUrl: url
             };
         } else {
             assert(
@@ -280,14 +280,14 @@ export async function createOidc_nonMemoized<
             );
 
             const url = toFullyQualifiedUrl({
-                "urlish": BASE_URL_params,
-                "doAssertNoQueryParams": true
+                urlish: BASE_URL_params,
+                doAssertNoQueryParams: true
             });
 
             return {
-                "hasDedicatedHtmFile": true,
-                "callbackUrl": `${url}/oidc-callback.htm`,
-                "homeUrl": url
+                hasDedicatedHtmFile: true,
+                callbackUrl: `${url}/oidc-callback.htm`,
+                homeUrl: url
             };
         }
     })();
@@ -297,8 +297,8 @@ export async function createOidc_nonMemoized<
     oidc_callback_htm_polyfill: {
         const state = (() => {
             const result = retrieveQueryParamFromUrl({
-                "url": window.location.href,
-                "name": "state"
+                url: window.location.href,
+                name: "state"
             });
 
             if (!result.wasPresent) {
@@ -357,7 +357,7 @@ export async function createOidc_nonMemoized<
         await new Promise<never>(() => {});
     }
 
-    const store = createHybridStorage({ "persistenceKey": configHash });
+    const store = createHybridStorage({ persistenceKey: configHash });
 
     imperative_impersonation: {
         if (getDoContinueWithImpersonation === undefined) {
@@ -374,15 +374,15 @@ export async function createOidc_nonMemoized<
 
     const oidcClientTsUserManager = new OidcClientTsUserManager({
         configHash,
-        "authority": issuerUri,
-        "client_id": clientId,
-        "redirect_uri": urls.callbackUrl,
-        "response_type": "code",
-        "scope": Array.from(new Set(["openid", ...scopes])).join(" "),
-        "automaticSilentRenew": false,
-        "silent_redirect_uri": urls.callbackUrl,
-        "post_logout_redirect_uri": urls.callbackUrl,
-        "userStore": new WebStorageStateStore({ store })
+        authority: issuerUri,
+        client_id: clientId,
+        redirect_uri: urls.callbackUrl,
+        response_type: "code",
+        scope: Array.from(new Set(["openid", ...scopes])).join(" "),
+        automaticSilentRenew: false,
+        silent_redirect_uri: urls.callbackUrl,
+        post_logout_redirect_uri: urls.callbackUrl,
+        userStore: new WebStorageStateStore({ store })
     });
 
     let lastPublicRoute: string | undefined = undefined;
@@ -457,8 +457,8 @@ export async function createOidc_nonMemoized<
             redirectUrl_params === undefined
                 ? window.location.href
                 : toFullyQualifiedUrl({
-                      "urlish": redirectUrl_params,
-                      "doAssertNoQueryParams": false
+                      urlish: redirectUrl_params,
+                      doAssertNoQueryParams: false
                   });
 
         log?.(`redirectUrl: ${redirectUrl}`);
@@ -472,9 +472,9 @@ export async function createOidc_nonMemoized<
                 const urlInstance = new URL_real(...args);
 
                 return new Proxy(urlInstance, {
-                    "get": (target, prop) => {
+                    get: (target, prop) => {
                         if (prop === "href") {
-                            Object.defineProperty(window, "URL", { "value": URL_real });
+                            Object.defineProperty(window, "URL", { value: URL_real });
 
                             let url = urlInstance.href;
 
@@ -519,7 +519,7 @@ export async function createOidc_nonMemoized<
                 });
             };
 
-            Object.defineProperty(window, "URL", { "value": URL });
+            Object.defineProperty(window, "URL", { value: URL });
         }
 
         // NOTE: This is for the behavior when the use presses the back button on the login pages.
@@ -553,7 +553,7 @@ export async function createOidc_nonMemoized<
                 }
 
                 const { values: queryParamsAddedByTransformBeforeRedirect } =
-                    retrieveAllQueryParamFromUrl({ "url": url_afterTransform });
+                    retrieveAllQueryParamFromUrl({ url: url_afterTransform });
 
                 for (const [name, value] of Object.entries(queryParamsAddedByTransformBeforeRedirect)) {
                     extraQueryParams[name] = value;
@@ -566,7 +566,7 @@ export async function createOidc_nonMemoized<
         await oidcClientTsUserManager.signinRedirect({
             state: id<StateData>({
                 configHash,
-                "isSilentSso": false,
+                isSilentSso: false,
                 redirectUrl,
                 extraQueryParams
             }),
@@ -579,9 +579,9 @@ export async function createOidc_nonMemoized<
         read_auth_response_from_url: {
             const { values: authResponse, newUrl: locationHref_cleanedUp } =
                 retrieveAllQueryParamStartingWithPrefixFromUrl({
-                    "url": window.location.href,
-                    "prefix": "oidc-spa.",
-                    "doLeavePrefixInResults": false
+                    url: window.location.href,
+                    prefix: "oidc-spa.",
+                    doLeavePrefixInResults: false
                 });
 
             const state: string | undefined = authResponse["state"];
@@ -624,7 +624,7 @@ export async function createOidc_nonMemoized<
 
                 for (const [name, value] of Object.entries(authResponse)) {
                     authResponseUrl = addQueryParamToUrl({
-                        "url": authResponseUrl,
+                        url: authResponseUrl,
                         name,
                         value
                     }).newUrl;
@@ -654,9 +654,9 @@ export async function createOidc_nonMemoized<
 
             return {
                 oidcClientTsUser,
-                "backFromAuthServer": {
-                    "extraQueryParams": stateData.extraQueryParams,
-                    "result": Object.fromEntries(
+                backFromAuthServer: {
+                    extraQueryParams: stateData.extraQueryParams,
+                    result: Object.fromEntries(
                         Object.entries(authResponse).filter(
                             ([name]) =>
                                 name !== "state" &&
@@ -686,7 +686,7 @@ export async function createOidc_nonMemoized<
             // We want to make sure that the session is still valid on the server side.
             try {
                 oidcClientTsUser = await oidcClientTsUserManager.signinSilent({
-                    "extraTokenParams": getExtraTokenParams?.()
+                    extraTokenParams: getExtraTokenParams?.()
                 });
             } catch (error) {
                 assert(error instanceof Error);
@@ -710,7 +710,7 @@ export async function createOidc_nonMemoized<
 
             return {
                 oidcClientTsUser,
-                "backFromAuthServer": undefined
+                backFromAuthServer: undefined
             };
         }
 
@@ -720,8 +720,8 @@ export async function createOidc_nonMemoized<
             const result_loginSilent = await loginOrLogoutSilent({
                 oidcClientTsUserManager,
                 configHash,
-                "action": {
-                    "type": "login",
+                action: {
+                    type: "login",
                     getExtraTokenParams
                 }
             });
@@ -734,8 +734,8 @@ export async function createOidc_nonMemoized<
                         });
                     case "timeout":
                         throw createIframeTimeoutInitializationError({
-                            "hasDedicatedHtmFile": urls.hasDedicatedHtmFile,
-                            "callbackUrl": urls.callbackUrl,
+                            hasDedicatedHtmFile: urls.hasDedicatedHtmFile,
+                            callbackUrl: urls.callbackUrl,
                             clientId,
                             issuerUri
                         });
@@ -851,7 +851,7 @@ export async function createOidc_nonMemoized<
     );
 
     const common: Oidc.Common = {
-        "params": {
+        params: {
             issuerUri,
             clientId
         }
@@ -866,8 +866,8 @@ export async function createOidc_nonMemoized<
             error instanceof OidcInitializationError
                 ? error
                 : new OidcInitializationError({
-                      "isAuthServerLikelyDown": false,
-                      "messageOrCause": error
+                      isAuthServerLikelyDown: false,
+                      messageOrCause: error
                   });
 
         if (isAuthGloballyRequired) {
@@ -887,8 +887,8 @@ export async function createOidc_nonMemoized<
 
         const oidc = id<Oidc.NotLoggedIn>({
             ...common,
-            "isUserLoggedIn": false,
-            "login": async () => {
+            isUserLoggedIn: false,
+            login: async () => {
                 alert("Authentication is currently unavailable. Please try again later.");
                 return new Promise<never>(() => {});
             },
@@ -905,9 +905,9 @@ export async function createOidc_nonMemoized<
         if (isAuthGloballyRequired) {
             log?.("Authentication is required everywhere on this app, redirecting to the login page");
             await loginOrGoToAuthServer({
-                "action": "login",
-                "doesCurrentHrefRequiresAuth": true,
-                "redirectUrl": postLoginRedirectUrl
+                action: "login",
+                doesCurrentHrefRequiresAuth: true,
+                redirectUrl: postLoginRedirectUrl
             });
             // Never here
         }
@@ -916,9 +916,9 @@ export async function createOidc_nonMemoized<
 
         const oidc = id<Oidc.NotLoggedIn>({
             ...common,
-            "isUserLoggedIn": false,
-            "login": params => loginOrGoToAuthServer({ "action": "login", ...params }),
-            "initializationError": undefined
+            isUserLoggedIn: false,
+            login: params => loginOrGoToAuthServer({ action: "login", ...params }),
+            initializationError: undefined
         });
 
         // @ts-expect-error: We know what we are doing.
@@ -948,9 +948,9 @@ export async function createOidc_nonMemoized<
 
     const oidc = id<Oidc.LoggedIn<DecodedIdToken>>({
         ...common,
-        "isUserLoggedIn": true,
-        "getTokens": () => currentTokens,
-        "logout": async params => {
+        isUserLoggedIn: true,
+        getTokens: () => currentTokens,
+        logout: async params => {
             if (hasLogoutBeenCalled) {
                 log?.("logout() has already been called, ignoring the call");
                 return new Promise<never>(() => {});
@@ -962,8 +962,8 @@ export async function createOidc_nonMemoized<
                 const result_logoutSilent = await loginOrLogoutSilent({
                     configHash,
                     oidcClientTsUserManager,
-                    "action": {
-                        "type": "logout"
+                    action: {
+                        type: "logout"
                     }
                 });
 
@@ -985,8 +985,8 @@ export async function createOidc_nonMemoized<
                         return urls.homeUrl;
                     case "specific url":
                         return toFullyQualifiedUrl({
-                            "urlish": params.url,
-                            "doAssertNoQueryParams": false
+                            urlish: params.url,
+                            doAssertNoQueryParams: false
                         });
                 }
             })();
@@ -1000,11 +1000,11 @@ export async function createOidc_nonMemoized<
 
             return new Promise<never>(() => {});
         },
-        "renewTokens": async params => {
+        renewTokens: async params => {
             const { extraTokenParams: extraTokenParams_local } = params ?? {};
 
             const oidcClientTsUser = await oidcClientTsUserManager.signinSilent({
-                "extraTokenParams": {
+                extraTokenParams: {
                     ...getExtraTokenParams?.(),
                     ...extraTokenParams_local
                 }
@@ -1030,16 +1030,16 @@ export async function createOidc_nonMemoized<
 
             Array.from(onTokenChanges).forEach(onTokenChange => onTokenChange());
         },
-        "subscribeToTokensChange": onTokenChange => {
+        subscribeToTokensChange: onTokenChange => {
             onTokenChanges.add(onTokenChange);
 
             return {
-                "unsubscribe": () => {
+                unsubscribe: () => {
                     onTokenChanges.delete(onTokenChange);
                 }
             };
         },
-        "subscribeToAutoLogoutCountdown": tickCallback => {
+        subscribeToAutoLogoutCountdown: tickCallback => {
             autoLogoutCountdownTickCallbacks.add(tickCallback);
 
             const unsubscribeFromAutoLogoutCountdown = () => {
@@ -1048,9 +1048,9 @@ export async function createOidc_nonMemoized<
 
             return { unsubscribeFromAutoLogoutCountdown };
         },
-        "goToAuthServer": params => loginOrGoToAuthServer({ "action": "go to auth server", ...params }),
-        "backFromAuthServer": resultOfLoginProcess.backFromAuthServer,
-        "isNewBrowserSession": (() => {
+        goToAuthServer: params => loginOrGoToAuthServer({ action: "go to auth server", ...params }),
+        backFromAuthServer: resultOfLoginProcess.backFromAuthServer,
+        isNewBrowserSession: (() => {
             const key = `oidc-spa:browser-session:${configHash}`;
 
             if (sessionStorage.getItem(key) === null) {
@@ -1128,8 +1128,8 @@ export async function createOidc_nonMemoized<
                     // This is due to the fact that pushing to history only works if it's
                     // triggered by a user interaction.
                     await loginOrGoToAuthServer({
-                        "action": "login",
-                        "doesCurrentHrefRequiresAuth": false
+                        action: "login",
+                        doesCurrentHrefRequiresAuth: false
                     });
                 }
             }, msBeforeExpiration - renewMsBeforeExpires);
@@ -1144,7 +1144,7 @@ export async function createOidc_nonMemoized<
 
     {
         const { startCountdown } = createStartCountdown({
-            "getCountdownEndTime": (() => {
+            getCountdownEndTime: (() => {
                 const getCountdownEndTime = () =>
                     __unsafe_ssoSessionIdleSeconds !== undefined
                         ? Date.now() + __unsafe_ssoSessionIdleSeconds * 1000
@@ -1167,7 +1167,7 @@ export async function createOidc_nonMemoized<
 
                 return getCountdownEndTime;
             })(),
-            "tickCallback": ({ secondsLeft }) => {
+            tickCallback: ({ secondsLeft }) => {
                 Array.from(autoLogoutCountdownTickCallbacks).forEach(tickCallback =>
                     tickCallback({ secondsLeft })
                 );
@@ -1182,7 +1182,7 @@ export async function createOidc_nonMemoized<
 
         if ($isUserActive === undefined) {
             $isUserActive = createIsUserActive({
-                "theUserIsConsideredInactiveAfterMsOfInactivity": 5_000
+                theUserIsConsideredInactiveAfterMsOfInactivity: 5_000
             }).$isUserActive;
         }
 

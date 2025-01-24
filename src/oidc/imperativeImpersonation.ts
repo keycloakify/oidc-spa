@@ -20,8 +20,8 @@ export async function maybeImpersonate(params: {
     const QUERY_PARAM_NAME = "oidc-spa_impersonate";
 
     const result = retrieveQueryParamFromUrl({
-        "url": window.location.href,
-        "name": QUERY_PARAM_NAME
+        url: window.location.href,
+        name: QUERY_PARAM_NAME
     });
 
     if (!result.wasPresent) {
@@ -102,14 +102,14 @@ export async function maybeImpersonate(params: {
 
         match = {
             parsedStoreValue: {
-                "id_token": idToken,
-                "session_state": sid,
-                "access_token": accessToken,
-                "refresh_token": refreshToken,
-                "token_type": "Bearer",
+                id_token: idToken,
+                session_state: sid,
+                access_token: accessToken,
+                refresh_token: refreshToken,
+                token_type: "Bearer",
                 scope,
-                "profile": parsedAccessToken,
-                "expires_at": exp
+                profile: parsedAccessToken,
+                expires_at: exp
             },
             parsedAccessToken,
             issuerUri,

@@ -13,7 +13,7 @@ const startTime = Date.now();
 const distDirPath = pathJoin(__dirname, "..", "dist");
 
 if (fs.existsSync(distDirPath)) {
-    fs.rmSync(distDirPath, { "recursive": true });
+    fs.rmSync(distDirPath, { recursive: true });
 }
 
 run("npx tsc");
@@ -40,7 +40,7 @@ const extraBundleFileBasenames = new Set<string>();
 
 (["backend", "frontend"] as const)
     .map(backendOrFrontend => ({
-        "vendorDirPath": pathJoin(distDirPath, "vendor", backendOrFrontend),
+        vendorDirPath: pathJoin(distDirPath, "vendor", backendOrFrontend),
         backendOrFrontend
     }))
     .forEach(({ backendOrFrontend, vendorDirPath }) =>
@@ -60,7 +60,7 @@ const extraBundleFileBasenames = new Set<string>();
                 const cacheDirPath = pathJoin(__dirname, "..", "node_modules", ".cache", "scripts");
 
                 if (!fs.existsSync(cacheDirPath)) {
-                    fs.mkdirSync(cacheDirPath, { "recursive": true });
+                    fs.mkdirSync(cacheDirPath, { recursive: true });
                 }
 
                 const webpackConfigJsFilePath = pathJoin(cacheDirPath, "webpack.config.js");
@@ -130,7 +130,7 @@ const extraBundleFileBasenames = new Set<string>();
                         }
                     });
 
-                fs.rmSync(webpackOutputDirPath, { "recursive": true });
+                fs.rmSync(webpackOutputDirPath, { recursive: true });
 
                 fs.writeFileSync(
                     filePath,
@@ -148,5 +148,5 @@ console.log(`✓ built in ${((Date.now() - startTime) / 1000).toFixed(2)}s`);
 
 function run(command: string) {
     console.log(`$ ${command}`);
-    child_process.execSync(command, { "stdio": "inherit" });
+    child_process.execSync(command, { stdio: "inherit" });
 }

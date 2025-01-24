@@ -168,7 +168,7 @@ export function createOidcReactApi_dependencyInjection<
             return (
                 <>
                     {ErrorFallback === undefined ? (
-                        <h1 style={{ "color": "red" }}>
+                        <h1 style={{ color: "red" }}>
                             An error occurred while initializing the OIDC client:&nbsp;
                             {initializationError.message}
                         </h1>
@@ -226,18 +226,18 @@ export function createOidcReactApi_dependencyInjection<
                 }
 
                 const oidcTokens: Oidc.Tokens<DecodedIdToken> = {
-                    "accessToken": tokens.accessToken,
-                    "accessTokenExpirationTime": tokens.accessTokenExpirationTime,
-                    "idToken": tokens.idToken,
-                    "refreshToken": tokens.refreshToken,
-                    "refreshTokenExpirationTime": tokens.refreshTokenExpirationTime,
-                    "decodedIdToken": null as any
+                    accessToken: tokens.accessToken,
+                    accessTokenExpirationTime: tokens.accessTokenExpirationTime,
+                    idToken: tokens.idToken,
+                    refreshToken: tokens.refreshToken,
+                    refreshTokenExpirationTime: tokens.refreshTokenExpirationTime,
+                    decodedIdToken: null as any
                 };
 
                 let cache: { decodedIdToken: Record<string, unknown> } | undefined = undefined;
 
                 Object.defineProperty(oidcTokens, "decodedIdToken", {
-                    "get": () => {
+                    get: () => {
                         if (cache !== undefined) {
                             return cache.decodedIdToken;
                         }
@@ -270,7 +270,7 @@ export function createOidcReactApi_dependencyInjection<
         })();
 
         const common: OidcReact.Common = {
-            "params": oidc.params
+            params: oidc.params
         };
 
         return oidc.isUserLoggedIn
@@ -278,21 +278,21 @@ export function createOidcReactApi_dependencyInjection<
                   (assert(oidcTokens !== undefined),
                   {
                       ...common,
-                      "isUserLoggedIn": true,
+                      isUserLoggedIn: true,
                       oidcTokens,
-                      "logout": oidc.logout,
-                      "renewTokens": oidc.renewTokens,
-                      "subscribeToAutoLogoutCountdown": oidc.subscribeToAutoLogoutCountdown,
-                      "goToAuthServer": oidc.goToAuthServer,
-                      "isNewBrowserSession": oidc.isNewBrowserSession,
-                      "backFromAuthServer": oidc.backFromAuthServer
+                      logout: oidc.logout,
+                      renewTokens: oidc.renewTokens,
+                      subscribeToAutoLogoutCountdown: oidc.subscribeToAutoLogoutCountdown,
+                      goToAuthServer: oidc.goToAuthServer,
+                      isNewBrowserSession: oidc.isNewBrowserSession,
+                      backFromAuthServer: oidc.backFromAuthServer
                   })
               )
             : id<OidcReact.NotLoggedIn>({
                   ...common,
-                  "isUserLoggedIn": false,
-                  "login": oidc.login,
-                  "initializationError": oidc.initializationError
+                  isUserLoggedIn: false,
+                  login: oidc.login,
+                  initializationError: oidc.initializationError
               });
     }
 

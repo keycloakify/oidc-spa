@@ -19,7 +19,7 @@ export function authResponseToUrl(authResponse: AuthResponse): string {
 
     for (const [name, value] of Object.entries(authResponse)) {
         authResponseUrl = addQueryParamToUrl({
-            "url": authResponseUrl,
+            url: authResponseUrl,
             name,
             value
         }).newUrl;
@@ -75,8 +75,8 @@ export async function loginOrLogoutSilent(params: {
 
     const timeout = setTimeout(async () => {
         dResult.reject({
-            "isSuccess": false,
-            "cause": "timeout"
+            isSuccess: false,
+            cause: "timeout"
         });
     }, timeoutDelayMs);
 
@@ -102,7 +102,7 @@ export async function loginOrLogoutSilent(params: {
         window.removeEventListener("message", listener);
 
         dResult.resolve({
-            "isSuccess": true,
+            isSuccess: true,
             authResponse
         });
     };
@@ -111,18 +111,18 @@ export async function loginOrLogoutSilent(params: {
 
     (() => {
         const params_common = {
-            "state": id<StateData>({
+            state: id<StateData>({
                 configHash,
-                "isSilentSso": true
+                isSilentSso: true
             }),
-            "silentRequestTimeoutInSeconds": timeoutDelayMs / 1000
+            silentRequestTimeoutInSeconds: timeoutDelayMs / 1000
         };
 
         switch (action.type) {
             case "login":
                 return oidcClientTsUserManager.signinSilent({
                     ...params_common,
-                    "extraTokenParams": action.getExtraTokenParams?.()
+                    extraTokenParams: action.getExtraTokenParams?.()
                 });
             case "logout":
                 return oidcClientTsUserManager.signoutSilent({
@@ -140,8 +140,8 @@ export async function loginOrLogoutSilent(params: {
             clearTimeout(timeout);
 
             dResult.resolve({
-                "isSuccess": false,
-                "cause": "can't reach well-known oidc endpoint"
+                isSuccess: false,
+                cause: "can't reach well-known oidc endpoint"
             });
 
             return;

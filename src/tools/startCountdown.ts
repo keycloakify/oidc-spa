@@ -27,7 +27,7 @@ export function createStartCountdown(params: {
 
         const stopCountdown = () => {
             clearTimeout(timer);
-            tickCallback({ "secondsLeft": undefined });
+            tickCallback({ secondsLeft: undefined });
         };
 
         return { stopCountdown };

@@ -9,8 +9,8 @@ export function useGuaranteedMemo<T>(fn: () => T, deps: readonly any[]): T {
         ref.current.prevDeps.map((v, i) => v === deps[i]).indexOf(false) >= 0
     ) {
         ref.current = {
-            "v": fn(),
-            "prevDeps": [...deps]
+            v: fn(),
+            prevDeps: [...deps]
         };
     }
 

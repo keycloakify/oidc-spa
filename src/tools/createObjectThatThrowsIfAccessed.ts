@@ -29,7 +29,7 @@ export function createObjectThatThrowsIfAccessed<T extends object>(params?: {
 
     const trappedObject = new Proxy<T>({} as any, {
         get,
-        "set": get
+        set: get
     });
 
     return trappedObject;
