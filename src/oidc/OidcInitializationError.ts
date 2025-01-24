@@ -149,6 +149,173 @@ export async function createWellKnownOidcConfigurationEndpointUnreachableInitial
     });
 }
 
+export async function createIframeTimeoutInitializationError(params: {
+    hasDedicatedHtmFile: boolean;
+    callbackUrl: string;
+}): Promise<OidcInitializationError2> {
+    const { hasDedicatedHtmFile, callbackUrl } = params;
+
+    oidc_callback_htm_unreachable: {
+        if (!hasDedicatedHtmFile) {
+            break oidc_callback_htm_unreachable;
+        }
+
+        const getHtmFileReachabilityStatus = async (ext?: "html") =>
+            fetch(`${callbackUrl}${ext === "html" ? "l" : ""}`).then(
+                async response => {
+                    if (!response.ok) {
+                        return "not reachable";
+                    }
+
+                    let content: string;
+
+                    try {
+                        content = await response.text();
+                    } catch {
+                        return "not reachable";
+                    }
+
+                    if (content.length > 1200 || !content.includes("parent.postMessage(authResponse")) {
+                        return "reachable but does no contain the expected content";
+                    }
+
+                    return "seems ok";
+                },
+                () => "not reachable" as const
+            );
+
+        const status = await getHtmFileReachabilityStatus();
+
+        if (status === "seems ok") {
+            break oidc_callback_htm_unreachable;
+        }
+
+        if (status === "reachable but does no contain the expected content") {
+            return new OidcInitializationError2({
+                "isAuthServerLikelyDown": false,
+                "messageOrCause": [
+                    "There is an issue with the content of the file oidc-callback.htm.",
+                    `The url ${callbackUrl} does respond with a 200 status code but the content is not the expected one.`,
+                    `You might have created the file in the public directory but it seems that your web server is serving another file instead.`,
+                    `Check the configuration of you web server to see if it's not re-routing the GET request to something else like index.html.`
+                ].join("\n")
+            });
+        }
+
+        assert(status === "not reachable");
+
+        const status_wrongExtension = await getHtmFileReachabilityStatus("html");
+
+        if (status_wrongExtension === "seems ok") {
+            return new OidcInitializationError2({
+                "isAuthServerLikelyDown": false,
+                "messageOrCause": [
+                    "You have created the file oidc-callback.html instead of oidc-callback.htm.",
+                    "The expected extension is .htm not .html."
+                ].join("\n")
+            });
+        }
+
+        for (const legacyCallbackFileBasename of [".htm", ".html"].map(ext => `silent-sso${ext}`)) {
+            const legacyCallbackUrl = callbackUrl.replace("silent-sso.htm", legacyCallbackFileBasename);
+
+            const isPresent = await fetch(legacyCallbackUrl).then(
+                async response => {
+                    if (!response.ok) {
+                        return false;
+                    }
+
+                    return true;
+                },
+                () => false
+            );
+
+            if (!isPresent) {
+                continue;
+            }
+
+            return new OidcInitializationError2({
+                "isAuthServerLikelyDown": false,
+                "messageOrCause": [
+                    `In oidc-spa v6 is no longer using the ${legacyCallbackFileBasename} file.`,
+                    `It is now oidc-callback.htm.`,
+                    `Check the documentation: https://docs.oidc-spa.dev/v/v6`
+                ].join("\n")
+            });
+        }
+
+        return new OidcInitializationError2({
+            "isAuthServerLikelyDown": false,
+            "messageOrCause": [
+                `You seem to have forgotten to create the oidc-callback.htm file in the public directory.`,
+                `${callbackUrl} is not reachable.`,
+                `Check the documentation: https://docs.oidc-spa.dev/v/v6`
+            ].join("\n")
+        });
+    }
+
+    frame_ancestors_none: {
+        const csp = await (async () => {
+            if (urls.hasDedicatedHtmFile) {
+                assert(dedicatedSilentSsoHtmlFileCsp !== undefined);
+                return dedicatedSilentSsoHtmlFileCsp;
+            }
+
+            const csp = await fetch(urls.callbackUrl).then(
+                response => response.headers.get("Content-Security-Policy"),
+                error => id<Error>(error)
+            );
+
+            if (csp instanceof Error) {
+                return new Error(`Failed to fetch ${urls.callbackUrl}: ${csp.message}`);
+            }
+
+            return csp;
+        })();
+
+        if (csp instanceof Error) {
+            return csp;
+        }
+
+        if (csp === null) {
+            break frame_ancestors_none;
+        }
+
+        const hasFrameAncestorsNone = csp
+            .replace(/["']/g, "")
+            .replace(/\s+/g, " ")
+            .toLowerCase()
+            .includes("frame-ancestors none");
+
+        if (!hasFrameAncestorsNone) {
+            break frame_ancestors_none;
+        }
+
+        return new OidcInitializationError({
+            "type": "bad configuration",
+            "likelyCause": {
+                "type": "frame-ancestors none",
+                urls
+            }
+        });
+    }
+
+    // Here we know that the server is not down and that the issuer_uri is correct
+    // otherwise we would have had a fetch error when loading the iframe.
+    // So this means that it's very likely a OIDC client misconfiguration.
+    // It could also be a very slow network but this risk is mitigated by the fact that we check
+    // for the network speed to adjust the timeout delay.
+    return new OidcInitializationError({
+        "type": "bad configuration",
+        "likelyCause": {
+            "type": "misconfigured OIDC client",
+            clientId,
+            timeoutDelayMs,
+            "callbackUrl": urls.callbackUrl
+        }
+    });
+}
+
 export class OidcInitializationError extends Error {
     public readonly type: "server down" | "bad configuration" | "unknown";
 
@@ -277,113 +444,4 @@ export class OidcInitializationError extends Error {
 
 export async function diagnoseCantReachWellKnownOpenidConfiguration(): OidcInitializationError {}
 
-export async function diagnoseSilentSignInError(params: {}): Promise<OidcInitializationError> {
-    let dedicatedSilentSsoHtmlFileCsp: string | null | undefined = undefined;
-
-    oidc_callback_htm_unreachable: {
-        if (!urls.hasDedicatedHtmFile) {
-            break oidc_callback_htm_unreachable;
-        }
-
-        const getHtmFileReachabilityStatus = async (ext?: "html") =>
-            fetch(`${urls.callbackUrl}${ext === "html" ? "l" : ""}`).then(
-                async response => {
-                    dedicatedSilentSsoHtmlFileCsp = response.headers.get("Content-Security-Policy");
-
-                    const content = await response.text();
-
-                    return content.length < 1200 && content.includes("parent.postMessage(authResponse")
-                        ? "ok"
-                        : "reachable but wrong content";
-                },
-                () => "not reachable" as const
-            );
-
-        const status = await getHtmFileReachabilityStatus();
-
-        if (status === "ok") {
-            break oidc_callback_htm_unreachable;
-        }
-
-        return new OidcInitializationError({
-            "type": "bad configuration",
-            "likelyCause": {
-                "type": "oidc-callback.htm not properly served",
-                "oidcCallbackHtmUrl": urls.callbackUrl,
-                "likelyCause": await (async () => {
-                    if ((await getHtmFileReachabilityStatus("html")) === "ok") {
-                        return "using .html instead of .htm extension";
-                    }
-
-                    switch (status) {
-                        case "not reachable":
-                            return "the file hasn't been created";
-                        case "reachable but wrong content":
-                            return "serving another file";
-                    }
-                })()
-            }
-        });
-    }
-
-    frame_ancestors_none: {
-        const csp = await (async () => {
-            if (urls.hasDedicatedHtmFile) {
-                assert(dedicatedSilentSsoHtmlFileCsp !== undefined);
-                return dedicatedSilentSsoHtmlFileCsp;
-            }
-
-            const csp = await fetch(urls.callbackUrl).then(
-                response => response.headers.get("Content-Security-Policy"),
-                error => id<Error>(error)
-            );
-
-            if (csp instanceof Error) {
-                return new Error(`Failed to fetch ${urls.callbackUrl}: ${csp.message}`);
-            }
-
-            return csp;
-        })();
-
-        if (csp instanceof Error) {
-            return csp;
-        }
-
-        if (csp === null) {
-            break frame_ancestors_none;
-        }
-
-        const hasFrameAncestorsNone = csp
-            .replace(/["']/g, "")
-            .replace(/\s+/g, " ")
-            .toLowerCase()
-            .includes("frame-ancestors none");
-
-        if (!hasFrameAncestorsNone) {
-            break frame_ancestors_none;
-        }
-
-        return new OidcInitializationError({
-            "type": "bad configuration",
-            "likelyCause": {
-                "type": "frame-ancestors none",
-                urls
-            }
-        });
-    }
-
-    // Here we know that the server is not down and that the issuer_uri is correct
-    // otherwise we would have had a fetch error when loading the iframe.
-    // So this means that it's very likely a OIDC client misconfiguration.
-    // It could also be a very slow network but this risk is mitigated by the fact that we check
-    // for the network speed to adjust the timeout delay.
-    return new OidcInitializationError({
-        "type": "bad configuration",
-        "likelyCause": {
-            "type": "misconfigured OIDC client",
-            clientId,
-            timeoutDelayMs,
-            "callbackUrl": urls.callbackUrl
-        }
-    });
-}
+export async function diagnoseSilentSignInError(params: {}): Promise<OidcInitializationError> {}
