@@ -35,7 +35,7 @@ type ResultOfLoginOrLogoutSilent =
       }
     | {
           isSuccess: false;
-          cause: "timeout" | "server down";
+          cause: "timeout" | "can't reach well-known oidc endpoint";
       };
 
 export async function loginOrLogoutSilent(params: {
@@ -141,7 +141,7 @@ export async function loginOrLogoutSilent(params: {
 
             dResult.resolve({
                 "isSuccess": false,
-                "cause": "server down"
+                "cause": "can't reach well-known oidc endpoint"
             });
 
             return;

@@ -52,7 +52,10 @@ export async function createMockOidc<
         return result.value === "true";
     })();
 
-    const homeUrl = toFullyQualifiedUrl(homeUrl_params);
+    const homeUrl = toFullyQualifiedUrl({
+        "urlish": homeUrl_params,
+        "doAssertNoQueryParams": true
+    });
 
     const common: Oidc.Common = {
         "params": {
@@ -118,7 +121,7 @@ export async function createMockOidc<
                     createObjectThatThrowsIfAccessed<DecodedIdToken>({
                         "debugMessage": [
                             "You haven't provided a mocked decodedIdToken",
-                            "See https://docs.oidc-spa.dev/v/v5/documentation/mock"
+                            "See https://docs.oidc-spa.dev/v/v6/documentation/mock"
                         ].join("\n")
                     })
             };
@@ -137,7 +140,10 @@ export async function createMockOidc<
                         case "home":
                             return homeUrl;
                         case "specific url":
-                            return toFullyQualifiedUrl(params.url);
+                            return toFullyQualifiedUrl({
+                                "urlish": params.url,
+                                "doAssertNoQueryParams": false
+                            });
                     }
                     assert<Equals<typeof params, never>>(false);
                 })(),

@@ -1,6 +1,7 @@
-import { assert, type Equals } from "../vendor/frontend/tsafe";
+import { assert } from "../vendor/frontend/tsafe";
+import { getIsValidRemoteJson } from "../tools/getIsValidRemoteJson";
 
-export class OidcInitializationError2 extends Error {
+export class OidcInitializationError extends Error {
     public readonly isAuthServerLikelyDown: boolean;
 
     constructor(params: { messageOrCause: string | Error; isAuthServerLikelyDown: boolean }) {
@@ -27,6 +28,7 @@ function parseKeycloakIssuerUri(issuerUri: string):
           realm: string;
           // If defined must start with / and end with no /
           kcHttpRelativePath: string | undefined;
+          adminConsoleUrl: string;
       } {
     const url = new URL(issuerUri);
 
@@ -41,32 +43,14 @@ function parseKeycloakIssuerUri(issuerUri: string):
     return {
         "origin": url.origin,
         realm,
-        kcHttpRelativePath: kcHttpRelativePath === "" ? undefined : kcHttpRelativePath
+        "kcHttpRelativePath": kcHttpRelativePath === "" ? undefined : kcHttpRelativePath,
+        "adminConsoleUrl": `${url.origin}${kcHttpRelativePath}/admin/${realm}/console`
     };
-}
-
-function getIsValidRemoteJson(url: string): Promise<boolean> {
-    return fetch(url).then(
-        async response => {
-            if (!response.ok) {
-                return false;
-            }
-
-            try {
-                await response.json();
-            } catch {
-                return false;
-            }
-
-            return true;
-        },
-        () => false
-    );
 }
 
 export async function createWellKnownOidcConfigurationEndpointUnreachableInitializationError(params: {
     issuerUri: string;
-}): Promise<OidcInitializationError2> {
+}): Promise<OidcInitializationError> {
     const { issuerUri } = params;
 
     const issuerUri_parsed = parseKeycloakIssuerUri(issuerUri);
@@ -80,7 +64,7 @@ export async function createWellKnownOidcConfigurationEndpointUnreachableInitial
     ].join("\n");
 
     if (issuerUri_parsed === undefined) {
-        return new OidcInitializationError2({
+        return new OidcInitializationError({
             "messageOrCause": [
                 commonFallbackMessagePart,
                 ``,
@@ -106,7 +90,7 @@ export async function createWellKnownOidcConfigurationEndpointUnreachableInitial
         const isValid = await getIsValidRemoteJson(`${issuerUri_candidate}${WELL_KNOWN_PATH}`);
 
         if (isValid) {
-            return new OidcInitializationError2({
+            return new OidcInitializationError({
                 "messageOrCause": [
                     `Your Keycloak server is configured with KC_HTTP_RELATIVE_PATH=/auth`,
                     `The issuerUri you provided: ${issuerUri}`,
@@ -122,7 +106,7 @@ export async function createWellKnownOidcConfigurationEndpointUnreachableInitial
         const isValid = await getIsValidRemoteJson(`${issuerUri_candidate}${WELL_KNOWN_PATH}`);
 
         if (isValid) {
-            return new OidcInitializationError2({
+            return new OidcInitializationError({
                 "messageOrCause": [
                     `Your Keycloak server is configured with KC_HTTP_RELATIVE_PATH=/`,
                     `The issuerUri you provided: ${issuerUri}`,
@@ -134,7 +118,7 @@ export async function createWellKnownOidcConfigurationEndpointUnreachableInitial
         }
     }
 
-    return new OidcInitializationError2({
+    return new OidcInitializationError({
         "messageOrCause": [
             commonFallbackMessagePart,
             ``,
@@ -152,8 +136,10 @@ export async function createWellKnownOidcConfigurationEndpointUnreachableInitial
 export async function createIframeTimeoutInitializationError(params: {
     hasDedicatedHtmFile: boolean;
     callbackUrl: string;
-}): Promise<OidcInitializationError2> {
-    const { hasDedicatedHtmFile, callbackUrl } = params;
+    issuerUri: string;
+    clientId: string;
+}): Promise<OidcInitializationError> {
+    const { hasDedicatedHtmFile, callbackUrl, issuerUri, clientId } = params;
 
     oidc_callback_htm_unreachable: {
         if (!hasDedicatedHtmFile) {
@@ -191,7 +177,7 @@ export async function createIframeTimeoutInitializationError(params: {
         }
 
         if (status === "reachable but does no contain the expected content") {
-            return new OidcInitializationError2({
+            return new OidcInitializationError({
                 "isAuthServerLikelyDown": false,
                 "messageOrCause": [
                     "There is an issue with the content of the file oidc-callback.htm.",
@@ -207,7 +193,7 @@ export async function createIframeTimeoutInitializationError(params: {
         const status_wrongExtension = await getHtmFileReachabilityStatus("html");
 
         if (status_wrongExtension === "seems ok") {
-            return new OidcInitializationError2({
+            return new OidcInitializationError({
                 "isAuthServerLikelyDown": false,
                 "messageOrCause": [
                     "You have created the file oidc-callback.html instead of oidc-callback.htm.",
@@ -234,7 +220,7 @@ export async function createIframeTimeoutInitializationError(params: {
                 continue;
             }
 
-            return new OidcInitializationError2({
+            return new OidcInitializationError({
                 "isAuthServerLikelyDown": false,
                 "messageOrCause": [
                     `In oidc-spa v6 is no longer using the ${legacyCallbackFileBasename} file.`,
@@ -244,7 +230,7 @@ export async function createIframeTimeoutInitializationError(params: {
             });
         }
 
-        return new OidcInitializationError2({
+        return new OidcInitializationError({
             "isAuthServerLikelyDown": false,
             "messageOrCause": [
                 `You seem to have forgotten to create the oidc-callback.htm file in the public directory.`,
@@ -255,27 +241,29 @@ export async function createIframeTimeoutInitializationError(params: {
     }
 
     frame_ancestors_none: {
-        const csp = await (async () => {
-            if (urls.hasDedicatedHtmFile) {
-                assert(dedicatedSilentSsoHtmlFileCsp !== undefined);
-                return dedicatedSilentSsoHtmlFileCsp;
-            }
+        const cspOrError = await fetch(callbackUrl).then(
+            response => {
+                if (!response.ok) {
+                    return new Error(`${callbackUrl} responded with a ${response.status} status code.`);
+                }
 
-            const csp = await fetch(urls.callbackUrl).then(
-                response => response.headers.get("Content-Security-Policy"),
-                error => id<Error>(error)
-            );
+                return response.headers.get("Content-Security-Policy");
+            },
+            error => error
+        );
 
-            if (csp instanceof Error) {
-                return new Error(`Failed to fetch ${urls.callbackUrl}: ${csp.message}`);
-            }
-
-            return csp;
-        })();
-
-        if (csp instanceof Error) {
-            return csp;
+        if (cspOrError instanceof Error) {
+            return new OidcInitializationError({
+                "isAuthServerLikelyDown": false,
+                "messageOrCause": new Error(
+                    `Unexpected error while trying to diagnose why the silent sign-in process timed out.`,
+                    // @ts-expect-error
+                    { "cause": cspOrError }
+                )
+            });
         }
+
+        const csp = cspOrError;
 
         if (csp === null) {
             break frame_ancestors_none;
@@ -292,156 +280,97 @@ export async function createIframeTimeoutInitializationError(params: {
         }
 
         return new OidcInitializationError({
-            "type": "bad configuration",
-            "likelyCause": {
-                "type": "frame-ancestors none",
-                urls
-            }
+            "isAuthServerLikelyDown": false,
+            "messageOrCause": [
+                hasDedicatedHtmFile ? `The oidc-callback.htm file,` : `The url used as OIDC callback,`,
+                "is served by your web server with the HTTP header `Content-Security-Policy: frame-ancestors none` in the response.\n",
+                "This header prevents the silent sign-in process from working.\n",
+                "To fix this issue, you should configure your web server not to send this header or to use `frame-ancestors self` instead of `frame-ancestors none`.\n",
+                "If you use Nginx, you can replace:\n",
+                `add_header Content-Security-Policy "frame-ancestors 'none'";\n`,
+                "with:\n",
+                `map $uri $add_content_security_policy {\n`,
+                `   "~*silent-sso\.html$" "frame-ancestors 'self'";\n`,
+                `   default "frame-ancestors 'none'";\n`,
+                `}\n`,
+                `add_header Content-Security-Policy $add_content_security_policy;\n`,
+                `\n`,
+                `The url in question is: ${callbackUrl}`
+            ].join(" ")
         });
     }
 
     // Here we know that the server is not down and that the issuer_uri is correct
-    // otherwise we would have had a fetch error when loading the iframe.
+    // otherwise we would have had a fetch error earlier on the well-known endpoint.
     // So this means that it's very likely a OIDC client misconfiguration.
     // It could also be a very slow network but this risk is mitigated by the fact that we check
     // for the network speed to adjust the timeout delay.
     return new OidcInitializationError({
-        "type": "bad configuration",
-        "likelyCause": {
-            "type": "misconfigured OIDC client",
-            clientId,
-            timeoutDelayMs,
-            "callbackUrl": urls.callbackUrl
-        }
+        "isAuthServerLikelyDown": false,
+        "messageOrCause": [
+            `The silent sign-in process timed out.`,
+            `Given the result of the diagnostic that oidc-spa just performed", 
+            "the most likely cause of the issue is that you forgot to add the oidc callback URL to the list of Valid Redirect URIs.\n`,
+            `The client id is: ${clientId}\n`,
+            `The URL that should be added to the list of Valid Redirect URIs is: ${callbackUrl}\n\n`,
+            ...(() => {
+                const issuerUri_parsed = parseKeycloakIssuerUri(issuerUri);
+
+                if (issuerUri_parsed === undefined) {
+                    return [
+                        "Checkout the documentation of the OIDC server you are using to see how to configure the client properly."
+                    ];
+                }
+
+                return [
+                    `Since it seems that you are using Keycloak, here are the steps to follow:\n`,
+                    `- Go to the Keycloak admin console. ${issuerUri_parsed.adminConsoleUrl}/console\n`,
+                    `- Log in as an admin user.\n`,
+                    `- In the left menu, click on "Clients".\n`,
+                    `- Find '${clientId}' in the list of clients and click on it.\n`,
+                    `- Find 'Valid Redirect URIs' and add '${callbackUrl}' to the list.\n`,
+                    `- Save the changes.\n\n`,
+                    `More info: https://docs.oidc-spa.dev/v/v6/resources/usage-with-keycloak`
+                ];
+            })()
+        ].join(" ")
     });
 }
 
-export class OidcInitializationError extends Error {
-    public readonly type: "server down" | "bad configuration" | "unknown";
+export function createFailedToFetchTokenEndpointInitializationError(params: {
+    issuerUri: string;
+    clientId: string;
+}) {
+    const { issuerUri, clientId } = params;
 
-    constructor(
-        params:
-            | {
-                  type: "server down";
-                  issuerUri: string;
-              }
-            | {
-                  type: "bad configuration";
-                  likelyCause:
-                      | {
-                            // Most likely redirect URIs or the client does not exist.
-                            type: "misconfigured OIDC client";
-                            clientId: string;
-                            timeoutDelayMs: number;
-                            callbackUrl: string;
-                        }
-                      | {
-                            type: "not in Web Origins";
-                            clientId: string;
-                        }
-                      | {
-                            type: "oidc-callback.htm not properly served";
-                            oidcCallbackHtmUrl: string;
-                            likelyCause:
-                                | "serving another file"
-                                | "the file hasn't been created"
-                                | "using .html instead of .htm extension";
-                        }
-                      | {
-                            type: "frame-ancestors none";
-                            urls: {
-                                hasDedicatedHtmFile: boolean;
-                                callbackUrl: string;
-                            };
-                        };
-              }
-            | {
-                  type: "unknown";
-                  cause: Error;
-              }
-    ) {
-        super(
-            (() => {
-                switch (params.type) {
-                    case "server down":
-                        return [
-                            `The OIDC server seems to be down. Or the issuerUri you provided is incorrect.`,
-                            ``,
-                            `issuerUri: ${params.issuerUri}`,
-                            `Endpoint that couldn't be reached: ${params.issuerUri}/.well-known/openid-configuration`,
-                            ``,
-                            `If you know it's not the case it means that the issuerUri: ${params.issuerUri} is incorrect.`,
-                            `If you are using Keycloak makes sure that the realm exists and that the url is well formed.\n`,
-                            `More info: https://docs.oidc-spa.dev/v/v5/resources/usage-with-keycloak`
-                        ].join("\n");
-                    case "bad configuration":
-                        switch (params.likelyCause.type) {
-                            case "misconfigured OIDC client":
-                                return [
-                                    `The OIDC client ${params.likelyCause.clientId} seems to be misconfigured on your OIDC server.`,
-                                    `If you are using Keycloak you likely need to add "${params.likelyCause.callbackUrl}" to the list of Valid Redirect URIs`,
-                                    `in the ${params.likelyCause.clientId} client configuration.\n`,
-                                    `More info: https://docs.oidc-spa.dev/v/v5/resources/usage-with-keycloak`,
-                                    `Silent SSO timed out after ${params.likelyCause.timeoutDelayMs}ms.`
-                                ].join(" ");
-                            case "not in Web Origins":
-                                return [
-                                    `It seems that there is a CORS issue.`,
-                                    `If you are using Keycloak check the "Web Origins" option in your ${params.likelyCause.clientId} client configuration.`,
-                                    `You should probably add "${location.origin}/*" to the list.`,
-                                    `More info: https://docs.oidc-spa.dev/v/v5/resources/usage-with-keycloak`
-                                ].join(" ");
-                            case "oidc-callback.htm not properly served":
-                                return [
-                                    `${params.likelyCause.oidcCallbackHtmUrl} not properly served by your web server.`,
-                                    (() => {
-                                        switch (params.likelyCause.likelyCause) {
-                                            case "the file hasn't been created":
-                                                return "You probably forgot to create the silent-sso.htm file in the public directory.";
-                                            case "serving another file":
-                                                return [
-                                                    "You probably forgot to create the `silent-sso.htm` file in the public directory.",
-                                                    "If you did create it check the configuration of your web server, it's probably re-routing the GET request to silent-sso.htm",
-                                                    "to another file. Likely your index.html"
-                                                ].join(" ");
-                                            case "using .html instead of .htm extension":
-                                                return "You have probably upgraded from oidc-spa v4 to v5, in oidc-spa v5 the silent-sso file should have a .htm extension instead of .html";
-                                        }
-                                    })(),
-                                    `Documentation: https://docs.oidc-spa.dev/v/v5/documentation/installation`
-                                ].join(" ");
-                            case "frame-ancestors none":
-                                return [
-                                    params.likelyCause.urls.hasDedicatedHtmFile
-                                        ? `The oidc-callback.htm file, `
-                                        : `The URI used for Silent SSO, `,
-                                    `${params.likelyCause.urls.callbackUrl}, `,
-                                    "is served by your web server with the HTTP header `Content-Security-Policy: frame-ancestors none` in the response.\n",
-                                    "This header prevents the silent sign-in process from working.\n",
-                                    "To fix this issue, you should configure your web server to not send this header or to use `frame-ancestors self` instead of `frame-ancestors none`.\n",
-                                    "If you use Nginx, you can replace:\n",
-                                    `add_header Content-Security-Policy "frame-ancestors 'none'";\n`,
-                                    "with:\n",
-                                    `map $uri $add_content_security_policy {\n`,
-                                    `   "~*silent-sso\.html$" "frame-ancestors 'self'";\n`,
-                                    `   default "frame-ancestors 'none'";\n`,
-                                    `}\n`,
-                                    `add_header Content-Security-Policy $add_content_security_policy;\n`
-                                ].join(" ");
-                        }
-                    case "unknown":
-                        return params.cause.message;
+    return new OidcInitializationError({
+        "isAuthServerLikelyDown": false,
+        "messageOrCause": [
+            "Failed to fetch the token endpoint.\n",
+            "This is usually due to a CORS issue.\n",
+            `Make sure you have added '${window.location.origin}' to the list of Web Origins`,
+            `in the '${clientId}' client configuration of your OIDC server.\n`,
+            "\n",
+            ...(() => {
+                const issuerUri_parsed = parseKeycloakIssuerUri(issuerUri);
+
+                if (issuerUri_parsed === undefined) {
+                    return [
+                        "Checkout the documentation of the OIDC server you are using to see how to configure the client properly."
+                    ];
                 }
-                assert<Equals<typeof params, never>>(false);
-            })(),
-            // @ts-expect-error
-            { "cause": params.type === "unknown" ? params.cause : undefined }
-        );
-        this.type = params.type;
-        Object.setPrototypeOf(this, new.target.prototype);
-    }
+
+                return [
+                    `Since it seems that you are using Keycloak, here are the steps to follow:\n`,
+                    `- Go to the Keycloak admin console. ${issuerUri_parsed.adminConsoleUrl}\n`,
+                    `- Log in as an admin user.\n`,
+                    `- In the left menu, click on "Clients".\n`,
+                    `- Find '${clientId}' in the list of clients and click on it.\n`,
+                    `- Find 'Web Origins' and add '${window.location.origin}' to the list.\n`,
+                    `- Save the changes.\n\n`,
+                    `More info: https://docs.oidc-spa.dev/v/v6/resources/usage-with-keycloak`
+                ];
+            })()
+        ].join(" ")
+    });
 }
-
-export async function diagnoseCantReachWellKnownOpenidConfiguration(): OidcInitializationError {}
-
-export async function diagnoseSilentSignInError(params: {}): Promise<OidcInitializationError> {}

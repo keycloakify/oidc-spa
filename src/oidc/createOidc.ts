@@ -19,7 +19,12 @@ import type { StatefulObservable } from "../tools/StatefulObservable";
 import { toHumanReadableDuration } from "../tools/toHumanReadableDuration";
 import { createHybridStorage } from "../tools/HybridStorage";
 import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";
-import { OidcInitializationError, diagnoseSilentSignInError } from "./OidcInitializationError";
+import {
+    OidcInitializationError,
+    createFailedToFetchTokenEndpointInitializationError,
+    createIframeTimeoutInitializationError,
+    createWellKnownOidcConfigurationEndpointUnreachableInitializationError
+} from "./OidcInitializationError";
 import { getStateData, type StateData } from "./StateData";
 import { notifyOtherTabOfLogout, getPrOtherTabLogout } from "./logoutPropagationToOtherTabs";
 import { getConfigHash } from "./configHash";
@@ -139,17 +144,10 @@ export async function createOidc<
         ...rest
     } = params;
 
-    const issuerUri = (() => {
-        const url = new URL(issuerUri_params);
-
-        if (url.searchParams.size !== 0) {
-            throw new Error(
-                `The issuerUri parameter must not contain any query parameter, you provided: ${issuerUri_params}`
-            );
-        }
-
-        return issuerUri_params.replace(/\/$/, "");
-    })();
+    const issuerUri = toFullyQualifiedUrl({
+        "urlish": issuerUri_params,
+        "doAssertNoQueryParams": true
+    });
 
     const log = (() => {
         if (!doEnableDebugLogs) {
@@ -265,7 +263,10 @@ export async function createOidc_nonMemoized<
                 "If homeUrl is provided, BASE_URL must be explicitly set to undefined"
             );
 
-            const url = toFullyQualifiedUrl(homeUrl);
+            const url = toFullyQualifiedUrl({
+                "urlish": homeUrl,
+                "doAssertNoQueryParams": true
+            });
 
             return {
                 "hasDedicatedHtmFile": false,
@@ -278,7 +279,10 @@ export async function createOidc_nonMemoized<
                 "If homeUrl is not provided, BASE_URL must be provided"
             );
 
-            const url = toFullyQualifiedUrl(BASE_URL_params);
+            const url = toFullyQualifiedUrl({
+                "urlish": BASE_URL_params,
+                "doAssertNoQueryParams": true
+            });
 
             return {
                 "hasDedicatedHtmFile": true,
@@ -452,7 +456,10 @@ export async function createOidc_nonMemoized<
         const redirectUrl =
             redirectUrl_params === undefined
                 ? window.location.href
-                : toFullyQualifiedUrl(redirectUrl_params);
+                : toFullyQualifiedUrl({
+                      "urlish": redirectUrl_params,
+                      "doAssertNoQueryParams": false
+                  });
 
         log?.(`redirectUrl: ${redirectUrl}`);
 
@@ -634,15 +641,9 @@ export async function createOidc_nonMemoized<
                 assert(error instanceof Error);
 
                 if (error.message === "Failed to fetch") {
-                    // If it's a fetch error here we know that the web server is not down and the login was successful,
-                    // we just where redirected from the login pages.
-                    // This means it's likely a "Web origins" misconfiguration.
-                    throw new OidcInitializationError({
-                        "type": "bad configuration",
-                        "likelyCause": {
-                            "type": "not in Web Origins",
-                            clientId
-                        }
+                    throw createFailedToFetchTokenEndpointInitializationError({
+                        clientId,
+                        issuerUri
                     });
                 }
 
@@ -693,15 +694,7 @@ export async function createOidc_nonMemoized<
                 log?.(`Session wasn't restorable: ${error.message}`);
 
                 if (error.message === "Failed to fetch") {
-                    // Here it could be web origins as well but it's less likely because
-                    // it would mean that there was once a valid configuration and it has been
-                    // changed to an invalid one before the token expired.
-                    // but the server is not necessarily down, the issuerUri could be wrong.
-                    // So the error that we return should be either "server down" if fetching the
-                    // well known configuration endpoint failed without returning any status code
-                    // or "bad configuration" if the endpoint returned a 404 or an other status code.
-                    throw new OidcInitializationError({
-                        "type": "server down",
+                    throw createWellKnownOidcConfigurationEndpointUnreachableInitializationError({
                         issuerUri
                     });
                 }
@@ -734,22 +727,21 @@ export async function createOidc_nonMemoized<
             });
 
             if (!result_loginSilent.isSuccess) {
-                const initializationError = await (async () => {
-                    switch (result_loginSilent.cause) {
-                        case "server down":
-                            return new OidcInitializationError({
-                                "type": "server down",
-                                issuerUri
-                            });
-                        case "timeout": {
-                            return await diagnoseSilentSignInError();
-                        }
-                    }
-                })();
+                switch (result_loginSilent.cause) {
+                    case "can't reach well-known oidc endpoint":
+                        throw createWellKnownOidcConfigurationEndpointUnreachableInitializationError({
+                            issuerUri
+                        });
+                    case "timeout":
+                        throw createIframeTimeoutInitializationError({
+                            "hasDedicatedHtmFile": urls.hasDedicatedHtmFile,
+                            "callbackUrl": urls.callbackUrl,
+                            clientId,
+                            issuerUri
+                        });
+                }
 
-                assert<Equals<typeof initializationError, OidcInitializationError>>();
-
-                throw initializationError;
+                assert<Equals<typeof result_loginSilent.cause, never>>(false);
             }
 
             const { authResponse } = result_loginSilent;
@@ -774,15 +766,9 @@ export async function createOidc_nonMemoized<
                 assert(error instanceof Error);
 
                 if (error.message === "Failed to fetch") {
-                    // If we have a fetch error here. We know for sure that the server isn't down,
-                    // the silent sign-in was successful. We also know that the issuer_uri is correct.
-                    // so it's very likely the web origins that are misconfigured.
-                    throw new OidcInitializationError({
-                        "type": "bad configuration",
-                        "likelyCause": {
-                            "type": "not in Web Origins",
-                            clientId
-                        }
+                    throw createFailedToFetchTokenEndpointInitializationError({
+                        clientId,
+                        issuerUri
                     });
                 }
 
@@ -880,8 +866,8 @@ export async function createOidc_nonMemoized<
             error instanceof OidcInitializationError
                 ? error
                 : new OidcInitializationError({
-                      "type": "unknown",
-                      "cause": error
+                      "isAuthServerLikelyDown": false,
+                      "messageOrCause": error
                   });
 
         if (isAuthGloballyRequired) {
@@ -889,7 +875,12 @@ export async function createOidc_nonMemoized<
         }
 
         console.error(
-            `OIDC initialization error of type "${initializationError.type}": ${initializationError.message}`
+            [
+                `OIDC initialization error: `,
+                `isAuthServerLikelyDown: ${initializationError.isAuthServerLikelyDown}`,
+                ``,
+                initializationError.message
+            ].join("\n")
         );
 
         startTrackingLastPublicRoute();
@@ -993,7 +984,10 @@ export async function createOidc_nonMemoized<
                     case "home":
                         return urls.homeUrl;
                     case "specific url":
-                        return toFullyQualifiedUrl(params.url);
+                        return toFullyQualifiedUrl({
+                            "urlish": params.url,
+                            "doAssertNoQueryParams": false
+                        });
                 }
             })();
 
