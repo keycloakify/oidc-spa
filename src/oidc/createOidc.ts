@@ -1091,6 +1091,15 @@ export async function createOidc_nonMemoized<
 
     log?.("User is logged in");
 
+    {
+        const { prOtherTabLogout } = getPrOtherTabLogout({ configHash });
+
+        prOtherTabLogout.then(({ postLogoutRedirectUrl }) => {
+            log?.(`Other tab has logged out, redirecting to ${postLogoutRedirectUrl}`);
+            window.location.href = postLogoutRedirectUrl;
+        });
+    }
+
     let currentTokens = resultOfLoginProcess.tokens;
 
     const autoLogoutCountdownTickCallbacks = new Set<
@@ -1101,65 +1110,57 @@ export async function createOidc_nonMemoized<
 
     let hasLogoutBeenCalled = false;
 
-    const logout = async (params: {
-        logoutParams: Param0<Oidc.LoggedIn<DecodedIdToken>["logout"]>;
-        isLogoutInitiatedByOtherTab: boolean;
-    }): Promise<never> => {
-        const { logoutParams, isLogoutInitiatedByOtherTab } = params;
-
-        if (hasLogoutBeenCalled) {
-            log?.("logout() has already been called, ignoring the call");
-            return new Promise<never>(() => {});
-        }
-
-        hasLogoutBeenCalled = true;
-
-        const result_logoutSilent = await loginOrLogoutSilent({
-            configHash,
-            oidcClientTsUserManager,
-            "action": {
-                "type": "logout"
-            }
-        });
-
-        assert(result_logoutSilent.isSuccess);
-
-        await oidcClientTsUserManager.signoutSilentCallback(
-            authResponseToUrl(result_logoutSilent.authResponse)
-        );
-
-        notifyOtherTabOfLogout({
-            configHash,
-            logoutParams
-        });
-
-        window.location.href = (() => {
-            switch (logoutParams.redirectTo) {
-                case "current page":
-                    return window.location.href;
-                case "home":
-                    return urls.homeUrl;
-                case "specific url":
-                    return toFullyQualifiedUrl(logoutParams.url);
-            }
-        })();
-
-        return new Promise<never>(() => {});
-    };
-
-    {
-        const { prOtherTabLogout } = getPrOtherTabLogout({ configHash });
-
-        prOtherTabLogout.then(logoutParams =>
-            logout({ logoutParams, isLogoutInitiatedByOtherTab: true })
-        );
-    }
-
     const oidc = id<Oidc.LoggedIn<DecodedIdToken>>({
         ...common,
         "isUserLoggedIn": true,
         "getTokens": () => currentTokens,
-        "logout": params => logout({ "logoutParams": params, "isLogoutInitiatedByOtherTab": false }),
+        "logout": async params => {
+            if (hasLogoutBeenCalled) {
+                log?.("logout() has already been called, ignoring the call");
+                return new Promise<never>(() => {});
+            }
+
+            hasLogoutBeenCalled = true;
+
+            try {
+                const result_logoutSilent = await loginOrLogoutSilent({
+                    configHash,
+                    oidcClientTsUserManager,
+                    "action": {
+                        "type": "logout"
+                    }
+                });
+
+                assert(result_logoutSilent.isSuccess);
+
+                await oidcClientTsUserManager.signoutSilentCallback(
+                    authResponseToUrl(result_logoutSilent.authResponse)
+                );
+            } catch (error) {
+                // NOTE: We don't know very well what to do here.
+                log?.(`Error during silent logout: ${String(error)}`);
+            }
+
+            const postLogoutRedirectUrl: string = (() => {
+                switch (params.redirectTo) {
+                    case "current page":
+                        return window.location.href;
+                    case "home":
+                        return urls.homeUrl;
+                    case "specific url":
+                        return toFullyQualifiedUrl(params.url);
+                }
+            })();
+
+            notifyOtherTabOfLogout({
+                configHash,
+                postLogoutRedirectUrl
+            });
+
+            window.location.href = postLogoutRedirectUrl;
+
+            return new Promise<never>(() => {});
+        },
         "renewTokens": async params => {
             const { extraTokenParams: extraTokenParams_local } = params ?? {};
 

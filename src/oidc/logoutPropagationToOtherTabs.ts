@@ -1,11 +1,8 @@
-import { assert, is, type Param0 } from "../vendor/frontend/tsafe";
+import { assert, is } from "../vendor/frontend/tsafe";
 import { Deferred } from "../tools/Deferred";
-import type { Oidc } from "./Oidc";
-
-type LogoutParams = Param0<Oidc.LoggedIn["logout"]>;
 
 type Message = {
-    logoutParams: LogoutParams;
+    postLogoutRedirectUrl: string;
     appInstanceId: string;
 };
 
@@ -26,11 +23,11 @@ const getAppInstanceId = (() => {
     };
 })();
 
-export function notifyOtherTabOfLogout(params: { configHash: string; logoutParams: LogoutParams }) {
-    const { configHash, logoutParams } = params;
+export function notifyOtherTabOfLogout(params: { configHash: string; postLogoutRedirectUrl: string }) {
+    const { configHash, postLogoutRedirectUrl } = params;
 
     const message: Message = {
-        logoutParams,
+        postLogoutRedirectUrl,
         appInstanceId: getAppInstanceId()
     };
 
@@ -40,7 +37,7 @@ export function notifyOtherTabOfLogout(params: { configHash: string; logoutParam
 export function getPrOtherTabLogout(params: { configHash: string }) {
     const { configHash } = params;
 
-    const dOtherTabLogout = new Deferred<LogoutParams>();
+    const dOtherTabLogout = new Deferred<{ postLogoutRedirectUrl: string }>();
 
     const channel = new BroadcastChannel(getChannelName({ configHash }));
 
@@ -53,8 +50,12 @@ export function getPrOtherTabLogout(params: { configHash: string }) {
             return;
         }
 
-        dOtherTabLogout.resolve(message.logoutParams);
+        const { postLogoutRedirectUrl } = message;
+
+        dOtherTabLogout.resolve({ postLogoutRedirectUrl });
     };
 
-    return { prOtherTabLogout: dOtherTabLogout.pr };
+    const prOtherTabLogout = dOtherTabLogout.pr;
+
+    return { prOtherTabLogout };
 }
