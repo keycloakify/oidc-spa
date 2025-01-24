@@ -13,7 +13,6 @@ import {
 } from "../tools/urlQueryParams";
 import { Deferred } from "../tools/Deferred";
 import { decodeJwt } from "../tools/decodeJwt";
-import { getDownlinkAndRtt } from "../tools/getDownlinkAndRtt";
 import { createIsUserActive } from "../tools/createIsUserActive";
 import { createStartCountdown } from "../tools/startCountdown";
 import type { StatefulObservable } from "../tools/StatefulObservable";
@@ -21,6 +20,7 @@ import { toHumanReadableDuration } from "../tools/toHumanReadableDuration";
 import { createHybridStorage } from "../tools/HybridStorage";
 import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";
 import { OidcInitializationError } from "./OidcInitializationError";
+import { getIFrameTimeoutDelayMs } from "./iframeTimeoutDelay";
 import { getStateData, type StateData } from "./StateData";
 import { notifyOtherTabOfLogout, getPrOtherTabLogout } from "./logoutPropagationToOtherTabs";
 import { getConfigHash } from "./configHash";
@@ -359,6 +359,7 @@ export async function createOidc_nonMemoized<
         "scope": Array.from(new Set(["openid", ...scopes])).join(" "),
         "automaticSilentRenew": false,
         "silent_redirect_uri": urls.callbackUrl,
+        "post_logout_redirect_uri": urls.callbackUrl,
         "userStore": new WebStorageStateStore({ store })
     });
 
@@ -712,24 +713,7 @@ export async function createOidc_nonMemoized<
 
             const dAuthResponse = new Deferred<AuthResponse | undefined>();
 
-            const timeoutDelayMs = (() => {
-                const downlinkAndRtt = getDownlinkAndRtt();
-
-                if (downlinkAndRtt === undefined) {
-                    return 5000;
-                }
-
-                const { downlink, rtt } = downlinkAndRtt;
-
-                // Base delay is the minimum delay we're willing to tolerate
-                const baseDelay = 3000;
-
-                // Calculate dynamic delay based on RTT and downlink
-                // Add 1 to downlink to avoid division by zero
-                const dynamicDelay = rtt * 2.5 + 3000 / (downlink + 1);
-
-                return Math.max(baseDelay, dynamicDelay);
-            })();
+            const timeoutDelayMs = getIFrameTimeoutDelayMs();
 
             const timeout = setTimeout(async () => {
                 let dedicatedSilentSsoHtmlFileCsp: string | null | undefined = undefined;
@@ -1136,8 +1120,35 @@ export async function createOidc_nonMemoized<
             });
         }
 
+        type AuthResponse = {
+            state: string;
+            [key: string]: string;
+        };
+
+        const dAuthResponse = new Deferred<AuthResponse | undefined>();
+
+        const timeoutDelayMs = getIFrameTimeoutDelayMs();
+
+        const timeout = setTimeout(() => {
+            dAuthResponse.resolve(undefined);
+        }, timeoutDelayMs);
+
+        const listener = (event: MessageEvent) => {};
+
+        window.addEventListener("message", listener, false);
+
         // TODO: Use silentSignOut and redirect to the single callback endpoint.
-        await oidcClientTsUserManager.signoutRedirect({
+        oidcClientTsUserManager
+            .signoutSilent({
+                "silentRequestTimeoutInSeconds": timeoutDelayMs / 1000,
+                "state": id<StateData>({
+                    "isSilentSso": true,
+                    configHash
+                })
+            })
+            .catch((error: Error) => {});
+
+        /*
             "post_logout_redirect_uri": ((): string => {
                 switch (logoutParams.redirectTo) {
                     case "current page":
@@ -1149,7 +1160,8 @@ export async function createOidc_nonMemoized<
                 }
                 assert<Equals<typeof logoutParams, never>>(false);
             })()
-        });
+        */
+
         return new Promise<never>(() => {});
     };
 
