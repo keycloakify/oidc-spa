@@ -3,7 +3,7 @@ import {
     WebStorageStateStore,
     type User as OidcClientTsUser
 } from "../vendor/frontend/oidc-client-ts-and-jwt-decode";
-import { id, type Param0, assert } from "../vendor/frontend/tsafe";
+import { id, type Param0, assert, type Equals } from "../vendor/frontend/tsafe";
 import { setTimeout, clearTimeout } from "../vendor/frontend/worker-timers";
 import {
     addQueryParamToUrl,
@@ -19,7 +19,7 @@ import type { StatefulObservable } from "../tools/StatefulObservable";
 import { toHumanReadableDuration } from "../tools/toHumanReadableDuration";
 import { createHybridStorage } from "../tools/HybridStorage";
 import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";
-import { OidcInitializationError } from "./OidcInitializationError";
+import { OidcInitializationError, diagnoseSilentSignInError } from "./OidcInitializationError";
 import { getStateData, type StateData } from "./StateData";
 import { notifyOtherTabOfLogout, getPrOtherTabLogout } from "./logoutPropagationToOtherTabs";
 import { getConfigHash } from "./configHash";
@@ -131,7 +131,25 @@ export async function createOidc<
         }
     }
 
-    const { issuerUri, clientId, scopes = ["profile"], doEnableDebugLogs, ...rest } = params;
+    const {
+        issuerUri: issuerUri_params,
+        clientId,
+        scopes = ["profile"],
+        doEnableDebugLogs,
+        ...rest
+    } = params;
+
+    const issuerUri = (() => {
+        const url = new URL(issuerUri_params);
+
+        if (url.searchParams.size !== 0) {
+            throw new Error(
+                `The issuerUri parameter must not contain any query parameter, you provided: ${issuerUri_params}`
+            );
+        }
+
+        return issuerUri_params.replace(/\/$/, "");
+    })();
 
     const log = (() => {
         if (!doEnableDebugLogs) {
@@ -716,7 +734,7 @@ export async function createOidc_nonMemoized<
             });
 
             if (!result_loginSilent.isSuccess) {
-                const initializationError: OidcInitializationError = await (async () => {
+                const initializationError = await (async () => {
                     switch (result_loginSilent.cause) {
                         case "server down":
                             return new OidcInitializationError({
@@ -724,121 +742,12 @@ export async function createOidc_nonMemoized<
                                 issuerUri
                             });
                         case "timeout": {
-                            let dedicatedSilentSsoHtmlFileCsp: string | null | undefined = undefined;
-
-                            oidc_callback_htm_unreachable: {
-                                if (!urls.hasDedicatedHtmFile) {
-                                    break oidc_callback_htm_unreachable;
-                                }
-
-                                const getHtmFileReachabilityStatus = async (ext?: "html") =>
-                                    fetch(`${urls.callbackUrl}${ext === "html" ? "l" : ""}`).then(
-                                        async response => {
-                                            dedicatedSilentSsoHtmlFileCsp =
-                                                response.headers.get("Content-Security-Policy");
-
-                                            const content = await response.text();
-
-                                            return content.length < 1200 &&
-                                                content.includes("parent.postMessage(authResponse")
-                                                ? "ok"
-                                                : "reachable but wrong content";
-                                        },
-                                        () => "not reachable" as const
-                                    );
-
-                                const status = await getHtmFileReachabilityStatus();
-
-                                if (status === "ok") {
-                                    break oidc_callback_htm_unreachable;
-                                }
-
-                                return new OidcInitializationError({
-                                    "type": "bad configuration",
-                                    "likelyCause": {
-                                        "type": "oidc-callback.htm not properly served",
-                                        "oidcCallbackHtmUrl": urls.callbackUrl,
-                                        "likelyCause": await (async () => {
-                                            if ((await getHtmFileReachabilityStatus("html")) === "ok") {
-                                                return "using .html instead of .htm extension";
-                                            }
-
-                                            switch (status) {
-                                                case "not reachable":
-                                                    return "the file hasn't been created";
-                                                case "reachable but wrong content":
-                                                    return "serving another file";
-                                            }
-                                        })()
-                                    }
-                                });
-                            }
-
-                            frame_ancestors_none: {
-                                const csp = await (async () => {
-                                    if (urls.hasDedicatedHtmFile) {
-                                        assert(dedicatedSilentSsoHtmlFileCsp !== undefined);
-                                        return dedicatedSilentSsoHtmlFileCsp;
-                                    }
-
-                                    const csp = await fetch(urls.callbackUrl).then(
-                                        response => response.headers.get("Content-Security-Policy"),
-                                        error => id<Error>(error)
-                                    );
-
-                                    if (csp instanceof Error) {
-                                        return new Error(
-                                            `Failed to fetch ${urls.callbackUrl}: ${csp.message}`
-                                        );
-                                    }
-
-                                    return csp;
-                                })();
-
-                                if (csp instanceof Error) {
-                                    return csp;
-                                }
-
-                                if (csp === null) {
-                                    break frame_ancestors_none;
-                                }
-
-                                const hasFrameAncestorsNone = csp
-                                    .replace(/["']/g, "")
-                                    .replace(/\s+/g, " ")
-                                    .toLowerCase()
-                                    .includes("frame-ancestors none");
-
-                                if (!hasFrameAncestorsNone) {
-                                    break frame_ancestors_none;
-                                }
-
-                                return new OidcInitializationError({
-                                    "type": "bad configuration",
-                                    "likelyCause": {
-                                        "type": "frame-ancestors none",
-                                        urls
-                                    }
-                                });
-                            }
-
-                            // Here we know that the server is not down and that the issuer_uri is correct
-                            // otherwise we would have had a fetch error when loading the iframe.
-                            // So this means that it's very likely a OIDC client misconfiguration.
-                            // It could also be a very slow network but this risk is mitigated by the fact that we check
-                            // for the network speed to adjust the timeout delay.
-                            return new OidcInitializationError({
-                                "type": "bad configuration",
-                                "likelyCause": {
-                                    "type": "misconfigured OIDC client",
-                                    clientId,
-                                    timeoutDelayMs,
-                                    "callbackUrl": urls.callbackUrl
-                                }
-                            });
+                            return await diagnoseSilentSignInError();
                         }
                     }
                 })();
+
+                assert<Equals<typeof initializationError, OidcInitializationError>>();
 
                 throw initializationError;
             }
