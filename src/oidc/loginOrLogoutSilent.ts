@@ -1,9 +1,9 @@
 import type { UserManager as OidcClientTsUserManager } from "../vendor/frontend/oidc-client-ts-and-jwt-decode";
-import { getIFrameTimeoutDelayMs } from "./iframeTimeoutDelay";
 import { Deferred } from "../tools/Deferred";
 import { id } from "../vendor/frontend/tsafe";
 import { getStateData, type StateData } from "./StateData";
 import { addQueryParamToUrl } from "../tools/urlQueryParams";
+import { getDownlinkAndRtt } from "../tools/getDownlinkAndRtt";
 
 export type AuthResponse = {
     state: string;
@@ -54,7 +54,24 @@ export async function loginOrLogoutSilent(params: {
 
     const dResult = new Deferred<ResultOfLoginOrLogoutSilent>();
 
-    const timeoutDelayMs = getIFrameTimeoutDelayMs();
+    const timeoutDelayMs: number = (() => {
+        const downlinkAndRtt = getDownlinkAndRtt();
+
+        if (downlinkAndRtt === undefined) {
+            return 5000;
+        }
+
+        const { downlink, rtt } = downlinkAndRtt;
+
+        // Calculate dynamic delay based on RTT and downlink
+        // Add 1 to downlink to avoid division by zero
+        const dynamicDelay = rtt * 2.5 + 3000 / (downlink + 1);
+
+        // Base delay is the minimum delay we're willing to tolerate
+        const BASE_DELAY_MS = 3000;
+
+        return Math.max(BASE_DELAY_MS, dynamicDelay);
+    })();
 
     const timeout = setTimeout(async () => {
         dResult.reject({
