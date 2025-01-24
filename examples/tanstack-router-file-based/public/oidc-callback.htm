@@ -11,11 +11,9 @@
             authResponse[key] = value;
         }
 
-        const stateData = authResponse.state ? JSON.parse(localStorage.getItem(`oidc.${authResponse.state}`)).data : undefined;
+        const stateData = JSON.parse(localStorage.getItem(`oidc.${authResponse.state}`)).data;
 
-        console.log(stateData);
-
-        if (!stateData || stateData.isSilentSso) {
+        if (stateData.isSilentSso) {
             console.log("Posting message to parent window");
             parent.postMessage(authResponse, location.origin);
         } else {
