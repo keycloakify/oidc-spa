@@ -117,6 +117,8 @@ export type ParamsOfCreateOidc<
         decodedIdToken: DecodedIdToken;
         accessToken: string;
     }) => Promise<boolean>;
+
+    __clientSecret_DO_NOT_USE_OR_YOU_WILL_BE_FIRED?: string;
 };
 
 const prOidcByConfigHash = new Map<string, Promise<Oidc<any>>>();
@@ -238,7 +240,8 @@ export async function createOidc_nonMemoized<
         autoLogoutParams = { redirectTo: "current page" },
         isAuthGloballyRequired = false,
         postLoginRedirectUrl,
-        getDoContinueWithImpersonation
+        getDoContinueWithImpersonation,
+        __clientSecret_DO_NOT_USE_OR_YOU_WILL_BE_FIRED
     } = params;
 
     const { issuerUri, clientId, scopes, configHash, log } = preProcessedParams;
@@ -385,7 +388,8 @@ export async function createOidc_nonMemoized<
         automaticSilentRenew: false,
         silent_redirect_uri: urls.callbackUrl,
         post_logout_redirect_uri: urls.callbackUrl,
-        userStore: new WebStorageStateStore({ store })
+        userStore: new WebStorageStateStore({ store }),
+        client_secret: __clientSecret_DO_NOT_USE_OR_YOU_WILL_BE_FIRED
     });
 
     let lastPublicRoute: string | undefined = undefined;
