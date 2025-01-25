@@ -114,7 +114,8 @@ export type ParamsOfCreateOidc<
     doEnableDebugLogs?: boolean;
 
     getDoContinueWithImpersonation?: (params: {
-        parsedAccessToken: Record<string, unknown>;
+        decodedIdToken: DecodedIdToken;
+        accessToken: string;
     }) => Promise<boolean>;
 };
 
@@ -364,8 +365,10 @@ export async function createOidc_nonMemoized<
             break imperative_impersonation;
         }
 
-        await maybeImpersonate({
-            configHash,
+        await maybeImpersonate<DecodedIdToken>({
+            issuerUri,
+            clientId,
+            decodedIdTokenSchema,
             getDoContinueWithImpersonation,
             store,
             log
