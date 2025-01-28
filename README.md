@@ -27,27 +27,30 @@
   <a href="https://docs.oidc-spa.dev">Documentation</a>
 </p>
 
-An Open ID Connect client tailored for Single Page Applications, particularly suitable for [Vite](https://vitejs.dev/) projects.\
-This library is intended for scenarios such as integrating your application with [Keycloak](https://www.keycloak.org/). &#x20;
+An Open ID Connect client for single page applications, particularly suitable for [Vite](https://vitejs.dev/) projects.  
+This library is for integrating your application with OIDC Server like [Keycloak](https://www.keycloak.org/), [Ory Hydra](https://www.ory.sh/hydra/) or [Dex](https://dexidp.io/). &#x20;
 
-In straightforward terms, this library is ideal for those seeking to enable user login/registration in their web application. When used in conjunction with Keycloak (for example), it enables you to offer a modern and secure authentication experience with minimal coding effort. This includes options for signing in via Google, X, GitHub, or other social media platforms. We provide comprehensive guidance from beginning to end.
+In straightforward terms, oidc-spa enable login/registration in your web application.  
+When used in conjunction with Keycloak (for example),
+it enables you to offer a modern and secure authentication experience with minimal coding effort.  
+This includes options for signing in via Google, X, GitHub, or other social media platforms. We provide comprehensive guidance from beginning to end.
 
--   🎓 Accessible to all skill levels; no need to be an OIDC expert. And we are here to help [on Discord](https://discord.gg/mJdYJSdcm4).
--   🛠️ Easy to set up; eliminates the need for creating special `/login` `/logout` routes.
--   💬 Helpful debug message telling you what's wrong in your configuration and how to fix it.
--   🎛️ Minimal API surface for ease of use.
+-   🎓 Accessible to all skill levels; no need to be an authentication expert. And we are here to help [on Discord](https://discord.gg/mJdYJSdcm4).
+-   🛠️ Easy to set up; eliminates the need for creating special `/login` `/logout` routes. You don't need to think about refreshing the tokens.
+-   💬 Helpful debug message telling you what's wrong in your server configuration and how to fix it.
 -   🕣 Easy implementation of auto logout. _Are you still there? You will be logged out in 10...9..._
 -   ✨ Robust yet optional React integration.
--   📖 Comprehensive documentation and project examples: End-to-end solutions for authenticating your app.
--   ✅ Best in class type safety: Enhanced API response types based on usage context.
+-   📖 Comprehensive documentation and project examples.
+-   ✅ Best in class type safety, optional Zod integration to validate the shape of the JWT token.
+-   🔒 Compliance with the highest security standards. Authorization Code Flow + PKCE.
+    No token persistence in `localStorage` or `sessionStorage`. Auditors will have nothing to say about your auth.
 
 ## Comparison with Existing Libraries
 
 ### [oidc-client-ts](https://github.com/authts/oidc-client-ts)
 
-While `oidc-client-ts` serves as a comprehensive toolkit, our library aims to provide a simplified, ready-to-use adapter that will pass
-any security audit and that will just work out of the box on any browser.  
-We utilize `oidc-client-ts` internally but abstract away most of its intricacies.
+While `oidc-client-ts` serves as a comprehensive toolkit to support all sort of applications, our library aims to provide a simplified, ready-to-use adapter
+specifically tailored for SPAs.
 
 ### [react-oidc-context](https://github.com/authts/react-oidc-context)
 
