@@ -21,6 +21,9 @@ export const {
     // `createReactOidc(async () => params)`. It will be called when the <OidcProvider />
     // is first mounted or when getOidc() is called.
 
+    // NOTE: If you are using keycloak, the issuerUri should be formatted like this:
+    // issuerUri: https://<YOUR_KEYCLOAK_DOMAIN><KC_RELATIVE_PATH>/realms/<REALM_NAME>
+    // KC_RELATIVE_PATH is by default "" in modern keycloak, on older keycloak it used to be "/auth" by default.
     issuerUri: import.meta.env.VITE_OIDC_ISSUER,
     clientId: import.meta.env.VITE_OIDC_CLIENT_ID,
     BASE_URL: import.meta.env.BASE_URL,
