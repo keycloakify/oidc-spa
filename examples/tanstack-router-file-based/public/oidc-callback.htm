@@ -1,0 +1,31 @@
+<!doctype html>
+<html>
+
+<body>
+    <!-- oidc-spa file. Do not remove, do not edit -->
+    <script>
+
+        const authResponse = {};
+
+        for (const [key, value] of new URL(location.href).searchParams) {
+            authResponse[key] = value;
+        }
+
+        const { data } = JSON.parse(localStorage.getItem(`oidc.${authResponse.state}`));
+
+        if (data.isSilentSso) {
+            parent.postMessage(authResponse, location.origin);
+        } else {
+            const redirectUrl = new URL(data.redirectUrl);
+
+            for (const [key, value] of Object.entries(authResponse)) {
+                redirectUrl.searchParams.set(`oidc-spa.${key}`, value);
+            }
+
+            location.replace(redirectUrl.href);
+        }
+
+    </script>
+</body>
+
+</html>

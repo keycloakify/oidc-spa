@@ -2,7 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { useOidc } from "oidc";
 
 export function Header() {
-    const { isUserLoggedIn, login, logout, oidcTokens, initializationError } = useOidc();
+    const { isUserLoggedIn, initializationError } = useOidc();
 
     return (
         <div
@@ -19,9 +19,13 @@ export function Header() {
             <span>OIDC-SPA + Tanstack-router Starter</span>
             {/* You do not have to display an error here, it's just to show that if you want you can
                 But it's best to enable the user to navigate unauthenticated and to display an error
-                only if he attemt to login (by default it display an alert) */}
+                only if he attempt to login (by default it display an alert) */}
             {initializationError !== undefined && (
-                <div style={{ color: "red" }}>Initialization error: {initializationError.message}</div>
+                <div style={{ color: "red" }}>
+                    {initializationError.isAuthServerLikelyDown
+                        ? "Sorry our Keycloak server is down"
+                        : `Initialization error: ${initializationError.message}`}
+                </div>
             )}
 
             <div>
@@ -40,36 +44,45 @@ export function Header() {
                 </Link>
             </div>
 
-            {isUserLoggedIn ? (
-                <div>
-                    <span>Hello {oidcTokens.decodedIdToken.preferred_username}</span>
-                    &nbsp; &nbsp;
-                    <button onClick={() => logout({ redirectTo: "home" })}>Logout</button>
-                </div>
-            ) : (
-                <div>
-                    <button onClick={() => login({ doesCurrentHrefRequiresAuth: false })}>Login</button>{" "}
-                    <button
-                        onClick={() =>
-                            login({
-                                doesCurrentHrefRequiresAuth: false,
-                                transformUrlBeforeRedirect: url => {
-                                    const urlObj = new URL(url);
+            {isUserLoggedIn ? <LoggedInAuthButton /> : <NotLoggedInAuthButton />}
+        </div>
+    );
+}
 
-                                    urlObj.pathname = urlObj.pathname.replace(
-                                        /\/auth$/,
-                                        "/registrations"
-                                    );
+function LoggedInAuthButton() {
+    const { oidcTokens, logout } = useOidc({ assert: "user logged in" });
 
-                                    return urlObj.href;
-                                }
-                            })
+    return (
+        <div>
+            <span>Hello {oidcTokens.decodedIdToken.preferred_username}</span>
+            &nbsp; &nbsp;
+            <button onClick={() => logout({ redirectTo: "home" })}>Logout</button>
+        </div>
+    );
+}
+
+function NotLoggedInAuthButton() {
+    const { login } = useOidc({ assert: "user not logged in" });
+
+    return (
+        <div>
+            <button onClick={() => login({ doesCurrentHrefRequiresAuth: false })}>Login</button>{" "}
+            <button
+                onClick={() =>
+                    login({
+                        doesCurrentHrefRequiresAuth: false,
+                        transformUrlBeforeRedirect: url => {
+                            const urlObj = new URL(url);
+
+                            urlObj.pathname = urlObj.pathname.replace(/\/auth$/, "/registrations");
+
+                            return urlObj.href;
                         }
-                    >
-                        Register
-                    </button>
-                </div>
-            )}
+                    })
+                }
+            >
+                Register
+            </button>
         </div>
     );
 }

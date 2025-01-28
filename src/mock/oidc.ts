@@ -3,6 +3,7 @@ import { retrieveQueryParamFromUrl, addQueryParamToUrl } from "../tools/urlQuery
 import { createObjectThatThrowsIfAccessed } from "../tools/createObjectThatThrowsIfAccessed";
 import { id } from "../vendor/frontend/tsafe";
 import { assert, type Equals } from "../vendor/frontend/tsafe";
+import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";
 
 export type ParamsOfCreateMockOidc<
     DecodedIdToken extends Record<string, unknown> = Record<string, unknown>,
@@ -10,7 +11,13 @@ export type ParamsOfCreateMockOidc<
 > = {
     mockedParams?: Partial<Oidc["params"]>;
     mockedTokens?: Partial<Oidc.Tokens<DecodedIdToken>>;
-    publicUrl?: string;
+    /**
+     * The URL of the home page of your app.
+     * We need to know this so we know where to redirect when you call `logout({ redirectTo: "home"})`.
+     * In the majority of cases it should be `homeUrl: "/"` but it could aso be something like `homeUrl: "/dashboard"`
+     * if your web app isn't hosted at the root of the domain.
+     */
+    homeUrl: string;
     isAuthGloballyRequired?: IsAuthGloballyRequired;
     postLoginRedirectUrl?: string;
 } & (IsAuthGloballyRequired extends true
@@ -31,15 +38,15 @@ export async function createMockOidc<
         isUserInitiallyLoggedIn = true,
         mockedParams = {},
         mockedTokens = {},
-        publicUrl: publicUrl_params,
+        homeUrl: homeUrl_params,
         isAuthGloballyRequired = false,
         postLoginRedirectUrl
     } = params;
 
     const isUserLoggedIn = (() => {
         const result = retrieveQueryParamFromUrl({
-            "url": window.location.href,
-            "name": urlParamName
+            url: window.location.href,
+            name: urlParamName
         });
 
         if (!result.wasPresent) {
@@ -51,22 +58,15 @@ export async function createMockOidc<
         return result.value === "true";
     })();
 
-    const publicUrl = (() => {
-        if (publicUrl_params === undefined) {
-            return window.location.origin;
-        }
-
-        return (
-            publicUrl_params.startsWith("http")
-                ? publicUrl_params
-                : `${window.location.origin}${publicUrl_params}`
-        ).replace(/\/$/, "");
-    })();
+    const homeUrl = toFullyQualifiedUrl({
+        urlish: homeUrl_params,
+        doAssertNoQueryParams: true
+    });
 
     const common: Oidc.Common = {
-        "params": {
-            "clientId": mockedParams.clientId ?? "mymockclient",
-            "issuerUri": mockedParams.issuerUri ?? "https://my-mock-oidc-server.net/realms/mymockrealm"
+        params: {
+            clientId: mockedParams.clientId ?? "mymockclient",
+            issuerUri: mockedParams.issuerUri ?? "https://my-mock-oidc-server.net/realms/mymockrealm"
         }
     };
 
@@ -76,7 +76,7 @@ export async function createMockOidc<
         const { redirectUrl } = params;
 
         const { newUrl } = addQueryParamToUrl({
-            "url": (() => {
+            url: (() => {
                 if (redirectUrl === undefined) {
                     return window.location.href;
                 }
@@ -84,8 +84,8 @@ export async function createMockOidc<
                     ? `${window.location.origin}${redirectUrl}`
                     : redirectUrl;
             })(),
-            "name": urlParamName,
-            "value": "true"
+            name: urlParamName,
+            value: "true"
         });
 
         window.location.href = newUrl;
@@ -96,14 +96,14 @@ export async function createMockOidc<
     if (!isUserLoggedIn) {
         const oidc = id<Oidc.NotLoggedIn>({
             ...common,
-            "isUserLoggedIn": false,
-            "login": ({ redirectUrl }) => loginOrGoToAuthServer({ redirectUrl }),
-            "initializationError": undefined
+            isUserLoggedIn: false,
+            login: ({ redirectUrl }) => loginOrGoToAuthServer({ redirectUrl }),
+            initializationError: undefined
         });
         if (isAuthGloballyRequired) {
             await oidc.login({
-                "redirectUrl": postLoginRedirectUrl,
-                "doesCurrentHrefRequiresAuth": true
+                redirectUrl: postLoginRedirectUrl,
+                doesCurrentHrefRequiresAuth: true
             });
             // Never here
         }
@@ -113,68 +113,60 @@ export async function createMockOidc<
 
     return id<Oidc.LoggedIn<DecodedIdToken>>({
         ...common,
-        "isUserLoggedIn": true,
-        "renewTokens": async () => {},
-        "getTokens": (() => {
+        isUserLoggedIn: true,
+        renewTokens: async () => {},
+        getTokens: (() => {
             const tokens: Oidc.Tokens<DecodedIdToken> = {
-                "accessToken": mockedTokens.accessToken ?? "mocked-access-token",
-                "accessTokenExpirationTime": mockedTokens.accessTokenExpirationTime ?? Infinity,
-                "idToken": mockedTokens.idToken ?? "mocked-id-token",
-                "refreshToken": mockedTokens.refreshToken ?? "mocked-refresh-token",
-                "refreshTokenExpirationTime": mockedTokens.refreshTokenExpirationTime ?? Infinity,
-                "decodedIdToken":
+                accessToken: mockedTokens.accessToken ?? "mocked-access-token",
+                accessTokenExpirationTime: mockedTokens.accessTokenExpirationTime ?? Infinity,
+                idToken: mockedTokens.idToken ?? "mocked-id-token",
+                refreshToken: mockedTokens.refreshToken ?? "mocked-refresh-token",
+                refreshTokenExpirationTime: mockedTokens.refreshTokenExpirationTime ?? Infinity,
+                decodedIdToken:
                     mockedTokens.decodedIdToken ??
                     createObjectThatThrowsIfAccessed<DecodedIdToken>({
-                        "debugMessage": [
+                        debugMessage: [
                             "You haven't provided a mocked decodedIdToken",
-                            "See https://docs.oidc-spa.dev/v/v5/documentation/mock"
+                            "See https://docs.oidc-spa.dev/v/v6/documentation/mock"
                         ].join("\n")
                     })
             };
 
             return () => tokens;
         })(),
-        "subscribeToTokensChange": () => ({
-            "unsubscribe": () => {}
+        subscribeToTokensChange: () => ({
+            unsubscribe: () => {}
         }),
-        "logout": params => {
+        logout: params => {
             const { newUrl } = addQueryParamToUrl({
-                "url": (() => {
+                url: (() => {
                     switch (params.redirectTo) {
                         case "current page":
                             return window.location.href;
                         case "home":
-                            return publicUrl;
+                            return homeUrl;
                         case "specific url":
-                            return params.url.startsWith("/")
-                                ? `${window.location.origin}${params.url}`
-                                : params.url;
+                            return toFullyQualifiedUrl({
+                                urlish: params.url,
+                                doAssertNoQueryParams: false
+                            });
                     }
                     assert<Equals<typeof params, never>>(false);
                 })(),
-                "name": urlParamName,
-                "value": "false"
+                name: urlParamName,
+                value: "false"
             });
 
             window.location.href = newUrl;
 
             return new Promise<never>(() => {});
         },
-        "subscribeToAutoLogoutCountdown": () => ({
-            "unsubscribeFromAutoLogoutCountdown": () => {}
+        subscribeToAutoLogoutCountdown: () => ({
+            unsubscribeFromAutoLogoutCountdown: () => {}
         }),
         //"loginScenario": isUserInitiallyLoggedIn ? "silentSignin" : "backFromLoginPages",
-        "goToAuthServer": async ({ redirectUrl }) => loginOrGoToAuthServer({ redirectUrl }),
-        ...(isUserInitiallyLoggedIn
-            ? {
-                  "authMethod": "back from auth server",
-                  "backFromAuthServer": {
-                      "extraQueryParams": {},
-                      "result": {}
-                  }
-              }
-            : {
-                  "authMethod": "silent signin"
-              })
+        goToAuthServer: async ({ redirectUrl }) => loginOrGoToAuthServer({ redirectUrl }),
+        isNewBrowserSession: false,
+        backFromAuthServer: undefined
     });
 }

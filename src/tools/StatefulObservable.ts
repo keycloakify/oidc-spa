@@ -19,13 +19,13 @@ export function createStatefulObservable<T>(getInitialValue: () => T): StatefulO
         let wrappedState: [T] | undefined = undefined;
 
         return {
-            "get": () => {
+            get: () => {
                 if (wrappedState === undefined) {
                     wrappedState = [getInitialValue()];
                 }
                 return wrappedState[0];
             },
-            "set": (data: T) => {
+            set: (data: T) => {
                 wrappedState = [data];
 
                 nextFunctions.forEach(next => next(data));
@@ -35,16 +35,16 @@ export function createStatefulObservable<T>(getInitialValue: () => T): StatefulO
 
     return Object.defineProperty(
         {
-            "current": null as any as T,
-            "subscribe": (next: (data: T) => void) => {
+            current: null as any as T,
+            subscribe: (next: (data: T) => void) => {
                 nextFunctions.push(next);
 
-                return { "unsubscribe": () => nextFunctions.splice(nextFunctions.indexOf(next), 1) };
+                return { unsubscribe: () => nextFunctions.splice(nextFunctions.indexOf(next), 1) };
             }
         },
         "current",
         {
-            "enumerable": true,
+            enumerable: true,
             get,
             set
         }

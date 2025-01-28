@@ -36,7 +36,7 @@ export function retrieveAllQueryParamStartingWithPrefixFromUrl<
 
         return {
             baseUrl,
-            "locationSearch": rest.join("?").trim()
+            locationSearch: rest.join("?").trim()
         };
     })();
 
@@ -62,7 +62,7 @@ export function retrieveAllQueryParamStartingWithPrefixFromUrl<
     })();
 
     return {
-        "newUrl": `${baseUrl}${newLocationSearch}`,
+        newUrl: `${baseUrl}${newLocationSearch}`,
         values
     };
 }
@@ -72,9 +72,9 @@ export function retrieveAllQueryParamFromUrl(params: { url: string }): {
     values: Record<string, string>;
 } {
     return retrieveAllQueryParamStartingWithPrefixFromUrl({
-        "url": params.url,
-        "prefix": "",
-        "doLeavePrefixInResults": true
+        url: params.url,
+        prefix: "",
+        doLeavePrefixInResults: true
     });
 }
 
@@ -86,12 +86,12 @@ export function retrieveQueryParamFromUrl(params: {
 
     let { newUrl, values } = retrieveAllQueryParamStartingWithPrefixFromUrl({
         url,
-        "prefix": name,
-        "doLeavePrefixInResults": true
+        prefix: name,
+        doLeavePrefixInResults: true
     });
 
     if (!(name in values)) {
-        return { "wasPresent": false };
+        return { wasPresent: false };
     }
 
     const { [name]: value, ...rest } = values;
@@ -100,14 +100,14 @@ export function retrieveQueryParamFromUrl(params: {
         ([name, value]) =>
             (newUrl = addQueryParamToUrl({
                 name,
-                "url": newUrl,
+                url: newUrl,
                 value
             }).newUrl)
     );
 
     return {
-        "wasPresent": true,
+        wasPresent: true,
         newUrl,
-        "value": values[name]
+        value: values[name]
     };
 }

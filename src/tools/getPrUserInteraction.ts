@@ -17,7 +17,7 @@ export function getPrUserInteraction() {
     window.document.addEventListener("keydown", callback, false);
 
     return {
-        "prUserInteraction": d.pr,
-        "cancelPrUserInteraction": cleanup
+        prUserInteraction: d.pr,
+        cancelPrUserInteraction: cleanup
     };
 }

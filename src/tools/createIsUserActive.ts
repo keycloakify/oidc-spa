@@ -22,8 +22,8 @@ export function createIsUserActive(params: { theUserIsConsideredInactiveAfterMsO
     let clearScheduledSetInactive = scheduleSetInactive();
 
     const { unsubscribeFromUserInteraction } = subscribeToUserInteraction({
-        "throttleMs": 1_000,
-        "callback": () => {
+        throttleMs: 1_000,
+        callback: () => {
             clearScheduledSetInactive();
             clearScheduledSetInactive = scheduleSetInactive();
 

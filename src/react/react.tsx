@@ -1,7 +1,6 @@
 import { useEffect, useState, createContext, useContext, useReducer, type ReactNode } from "react";
-import { createOidc, type ParamsOfCreateOidc, type Oidc } from "../oidc";
-import { OidcInitializationError } from "../OidcInitializationError";
-import { assert } from "../vendor/frontend/tsafe";
+import { type Oidc, createOidc, type ParamsOfCreateOidc, OidcInitializationError } from "../oidc";
+import { assert, type Equals } from "../vendor/frontend/tsafe";
 import { id } from "../vendor/frontend/tsafe";
 import { useGuaranteedMemo } from "../tools/powerhooks/useGuaranteedMemo";
 import type { ValueOrAsyncGetter } from "../tools/ValueOrAsyncGetter";
@@ -23,6 +22,8 @@ export namespace OidcReact {
         logout?: never;
         subscribeToAutoLogoutCountdown?: never;
         goToAuthServer?: never;
+        backFromAuthServer?: never;
+        isNewBrowserSession?: never;
     };
 
     export type LoggedIn<DecodedIdToken extends Record<string, unknown>> = Common & {
@@ -41,35 +42,16 @@ export namespace OidcReact {
             redirectUrl?: string;
             transformUrlBeforeRedirect?: (url: string) => string;
         }) => Promise<never>;
-    } & (
+
+        backFromAuthServer:
             | {
-                  /**
-                   * "back from auth server":
-                   *      The user was redirected to the authentication server login/registration page and then redirected back to the application.
-                   * "session storage":
-                   *    The user's authentication was restored from the browser session storage, typically after a page refresh.
-                   * "silent signin":
-                   *   The user was authenticated silently using an iframe to check the session with the authentication server.
-                   */
-                  authMethod: "back from auth server";
-                  /**
-                   * Defined when authMethod is "back from auth server".
-                   * If you called `goToAuthServer` or `login` with extraQueryParams, this object let you know the outcome of the
-                   * of the action that was intended.
-                   *
-                   * For example, on a Keycloak server, if you called `goToAuthServer({ extraQueryParams: { kc_action: "UPDATE_PASSWORD" } })`
-                   * you'll get back: `{ extraQueryParams: { kc_action: "UPDATE_PASSWORD" }, result: { kc_action_status: "success" } }` (or "cancelled")
-                   */
-                  backFromAuthServer: {
-                      extraQueryParams: Record<string, string>;
-                      result: Record<string, string>;
-                  };
+                  extraQueryParams: Record<string, string>;
+                  result: Record<string, string>;
               }
-            | {
-                  authMethod: "session storage" | "silent signin";
-                  backFromAuthServer?: never;
-              }
-        );
+            | undefined;
+
+        isNewBrowserSession: boolean;
+    };
 }
 
 const oidcContext = createContext<
@@ -93,11 +75,12 @@ type OidcReactApi<
         : (props: { fallback?: ReactNode; children: ReactNode }) => JSX.Element;
     useOidc: IsAuthGloballyRequired extends true
         ? {
-              (params?: { assertUserLoggedIn: true }): OidcReact.LoggedIn<DecodedIdToken>;
+              (params?: { assert: "user logged in" }): OidcReact.LoggedIn<DecodedIdToken>;
           }
         : {
-              (params?: { assertUserLoggedIn: false }): OidcReact<DecodedIdToken>;
-              (params: { assertUserLoggedIn: true }): OidcReact.LoggedIn<DecodedIdToken>;
+              (params?: { assert?: undefined }): OidcReact<DecodedIdToken>;
+              (params: { assert: "user logged in" }): OidcReact.LoggedIn<DecodedIdToken>;
+              (params: { assert: "user not logged in" }): OidcReact.NotLoggedIn;
           };
     getOidc: () => Promise<
         IsAuthGloballyRequired extends true ? Oidc.LoggedIn<DecodedIdToken> : Oidc<DecodedIdToken>
@@ -188,7 +171,7 @@ export function createOidcReactApi_dependencyInjection<
             return (
                 <>
                     {ErrorFallback === undefined ? (
-                        <h1 style={{ "color": "red" }}>
+                        <h1 style={{ color: "red" }}>
                             An error occurred while initializing the OIDC client:&nbsp;
                             {initializationError.message}
                         </h1>
@@ -206,10 +189,10 @@ export function createOidcReactApi_dependencyInjection<
         );
     }
 
-    function useOidc(params?: { assertUserLoggedIn: false }): OidcReact<DecodedIdToken>;
-    function useOidc(params: { assertUserLoggedIn: true }): OidcReact.LoggedIn<DecodedIdToken>;
-    function useOidc(params?: { assertUserLoggedIn: boolean }): OidcReact<DecodedIdToken> {
-        const { assertUserLoggedIn = false } = params ?? {};
+    function useOidc(params?: {
+        assert?: "user logged in" | "user not logged in";
+    }): OidcReact<DecodedIdToken> {
+        const { assert: assert_params } = params ?? {};
 
         const { oidc, decodedIdTokenSchema: decodedIdTokenSchema_context } = (function useClosure() {
             const context = useContext(oidcContext);
@@ -231,10 +214,32 @@ export function createOidcReactApi_dependencyInjection<
             return unsubscribe;
         }, [oidc]);
 
-        if (assertUserLoggedIn && !oidc.isUserLoggedIn) {
-            throw new Error(
-                "The user must be logged in to use this hook (assertUserLoggedIn was set to true)"
-            );
+        check_assertion: {
+            if (assert_params === undefined) {
+                break check_assertion;
+            }
+
+            const getMessage = (v: string) =>
+                [
+                    "There is a logic error in the application.",
+                    `If this component is mounted the user is supposed ${v}.`,
+                    "An explicit assertion was made in this sense."
+                ].join(" ");
+
+            switch (assert_params) {
+                case "user logged in":
+                    if (!oidc.isUserLoggedIn) {
+                        throw new Error(getMessage("to be logged in but currently they arn't"));
+                    }
+                    break;
+                case "user not logged in":
+                    if (oidc.isUserLoggedIn) {
+                        throw new Error(getMessage("not to be logged in but currently they are"));
+                    }
+                    break;
+                default:
+                    assert<Equals<typeof assert_params, never>>(false);
+            }
         }
 
         const { oidcTokens } = (function useClosure() {
@@ -246,18 +251,18 @@ export function createOidcReactApi_dependencyInjection<
                 }
 
                 const oidcTokens: Oidc.Tokens<DecodedIdToken> = {
-                    "accessToken": tokens.accessToken,
-                    "accessTokenExpirationTime": tokens.accessTokenExpirationTime,
-                    "idToken": tokens.idToken,
-                    "refreshToken": tokens.refreshToken,
-                    "refreshTokenExpirationTime": tokens.refreshTokenExpirationTime,
-                    "decodedIdToken": null as any
+                    accessToken: tokens.accessToken,
+                    accessTokenExpirationTime: tokens.accessTokenExpirationTime,
+                    idToken: tokens.idToken,
+                    refreshToken: tokens.refreshToken,
+                    refreshTokenExpirationTime: tokens.refreshTokenExpirationTime,
+                    decodedIdToken: null as any
                 };
 
                 let cache: { decodedIdToken: Record<string, unknown> } | undefined = undefined;
 
                 Object.defineProperty(oidcTokens, "decodedIdToken", {
-                    "get": () => {
+                    get: () => {
                         if (cache !== undefined) {
                             return cache.decodedIdToken;
                         }
@@ -290,7 +295,7 @@ export function createOidcReactApi_dependencyInjection<
         })();
 
         const common: OidcReact.Common = {
-            "params": oidc.params
+            params: oidc.params
         };
 
         return oidc.isUserLoggedIn
@@ -298,27 +303,21 @@ export function createOidcReactApi_dependencyInjection<
                   (assert(oidcTokens !== undefined),
                   {
                       ...common,
-                      "isUserLoggedIn": true,
+                      isUserLoggedIn: true,
                       oidcTokens,
-                      "logout": oidc.logout,
-                      "renewTokens": oidc.renewTokens,
-                      "subscribeToAutoLogoutCountdown": oidc.subscribeToAutoLogoutCountdown,
-                      "goToAuthServer": oidc.goToAuthServer,
-                      ...(oidc.authMethod === "back from auth server"
-                          ? {
-                                "authMethod": "back from auth server",
-                                "backFromAuthServer": oidc.backFromAuthServer
-                            }
-                          : {
-                                "authMethod": oidc.authMethod
-                            })
+                      logout: oidc.logout,
+                      renewTokens: oidc.renewTokens,
+                      subscribeToAutoLogoutCountdown: oidc.subscribeToAutoLogoutCountdown,
+                      goToAuthServer: oidc.goToAuthServer,
+                      isNewBrowserSession: oidc.isNewBrowserSession,
+                      backFromAuthServer: oidc.backFromAuthServer
                   })
               )
             : id<OidcReact.NotLoggedIn>({
                   ...common,
-                  "isUserLoggedIn": false,
-                  "login": oidc.login,
-                  "initializationError": oidc.initializationError
+                  isUserLoggedIn: false,
+                  login: oidc.login,
+                  initializationError: oidc.initializationError
               });
     }
 

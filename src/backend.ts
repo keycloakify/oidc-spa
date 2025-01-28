@@ -89,7 +89,7 @@ export async function createOidcBackend<DecodedAccessToken extends Record<string
     });
 
     return {
-        "verifyAndDecodeAccessToken": ({ accessToken }) => {
+        verifyAndDecodeAccessToken: ({ accessToken }) => {
             let result = id<ResultOfAccessTokenVerify<DecodedAccessToken> | undefined>(undefined);
 
             jwt.verify(accessToken, publicKey, { algorithms: [signingAlgorithm] }, (err, decoded) => {
@@ -100,9 +100,9 @@ export async function createOidcBackend<DecodedAccessToken extends Record<string
 
                     if (err.name === "TokenExpiredError") {
                         result = id<ResultOfAccessTokenVerify.Invalid>({
-                            "isValid": false,
-                            "errorCase": "expired",
-                            "errorMessage": err.message
+                            isValid: false,
+                            errorCase: "expired",
+                            errorMessage: err.message
                         });
                         return;
                     }
@@ -110,9 +110,9 @@ export async function createOidcBackend<DecodedAccessToken extends Record<string
                     evtInvalidSignature.post();
 
                     result = id<ResultOfAccessTokenVerify.Invalid>({
-                        "isValid": false,
-                        "errorCase": "invalid signature",
-                        "errorMessage": err.message
+                        isValid: false,
+                        errorCase: "invalid signature",
+                        errorMessage: err.message
                     });
 
                     return;
@@ -124,17 +124,17 @@ export async function createOidcBackend<DecodedAccessToken extends Record<string
                     decodedAccessToken = decodedAccessTokenSchema.parse(decoded) as DecodedAccessToken;
                 } catch (error) {
                     result = id<ResultOfAccessTokenVerify.Invalid>({
-                        "isValid": false,
-                        "errorCase": "does not respect schema",
-                        "errorMessage": String(error)
+                        isValid: false,
+                        errorCase: "does not respect schema",
+                        errorMessage: String(error)
                     });
 
                     return;
                 }
 
                 result = id<ResultOfAccessTokenVerify.Valid<DecodedAccessToken>>({
-                    "isValid": true,
-                    "decodedAccessToken": decodedAccessToken
+                    isValid: true,
+                    decodedAccessToken: decodedAccessToken
                 });
             });
 
@@ -168,11 +168,11 @@ async function fetchPublicKeyAndSigningAlgorithm(params: { issuerUri: string }) 
 
     const { keys } = z
         .object({
-            "keys": z.array(
+            keys: z.array(
                 z.object({
-                    "use": z.string(),
-                    "alg": z.string(),
-                    "x5c": z.tuple([z.string()])
+                    use: z.string(),
+                    alg: z.string(),
+                    x5c: z.tuple([z.string()])
                 })
             )
         })

@@ -18,10 +18,10 @@ fs.writeFileSync(
 
                 return {
                     ...packageJsonParsed,
-                    "main": packageJsonParsed["main"]?.replace(/^dist\//, ""),
-                    "types": packageJsonParsed["types"]?.replace(/^dist\//, ""),
-                    "module": packageJsonParsed["module"]?.replace(/^dist\//, ""),
-                    "bin": !("bin" in packageJsonParsed)
+                    main: packageJsonParsed["main"]?.replace(/^dist\//, ""),
+                    types: packageJsonParsed["types"]?.replace(/^dist\//, ""),
+                    module: packageJsonParsed["module"]?.replace(/^dist\//, ""),
+                    bin: !("bin" in packageJsonParsed)
                         ? undefined
                         : Object.fromEntries(
                               Object.entries(packageJsonParsed["bin"]).map(([key, value]) => [
@@ -29,7 +29,7 @@ fs.writeFileSync(
                                   (value as string).replace(/^dist\//, "")
                               ])
                           ),
-                    "exports": !("exports" in packageJsonParsed)
+                    exports: !("exports" in packageJsonParsed)
                         ? undefined
                         : Object.fromEntries(
                               Object.entries(packageJsonParsed["exports"]).map(([key, value]) => [
@@ -66,7 +66,7 @@ const commonThirdPartyDeps = (() => {
 
 const yarnGlobalDirPath = pathJoin(rootDirPath, ".yarn_home");
 
-fs.rmSync(yarnGlobalDirPath, { "recursive": true, "force": true });
+fs.rmSync(yarnGlobalDirPath, { recursive: true, force: true });
 fs.mkdirSync(yarnGlobalDirPath);
 
 const execYarnLink = (params: { targetModuleName?: string; cwd: string }) => {
@@ -82,9 +82,9 @@ const execYarnLink = (params: { targetModuleName?: string; cwd: string }) => {
 
     execSync(cmd, {
         cwd,
-        "env": {
+        env: {
             ...process.env,
-            "HOME": yarnGlobalDirPath
+            HOME: yarnGlobalDirPath
         }
     });
 };
@@ -112,7 +112,7 @@ if (testAppPaths.length === 0) {
     process.exit(-1);
 }
 
-testAppPaths.forEach(testAppPath => execSync("yarn install", { "cwd": testAppPath }));
+testAppPaths.forEach(testAppPath => execSync("yarn install", { cwd: testAppPath }));
 
 console.log("=== Linking common dependencies ===");
 
@@ -134,26 +134,26 @@ commonThirdPartyDeps.forEach(commonThirdPartyDep => {
         ]
     );
 
-    execYarnLink({ "cwd": localInstallPath });
+    execYarnLink({ cwd: localInstallPath });
 });
 
 commonThirdPartyDeps.forEach(commonThirdPartyDep =>
     testAppPaths.forEach(testAppPath =>
         execYarnLink({
-            "cwd": testAppPath,
-            "targetModuleName": commonThirdPartyDep
+            cwd: testAppPath,
+            targetModuleName: commonThirdPartyDep
         })
     )
 );
 
 console.log("=== Linking in house dependencies ===");
 
-execYarnLink({ "cwd": pathJoin(rootDirPath, "dist") });
+execYarnLink({ cwd: pathJoin(rootDirPath, "dist") });
 
 testAppPaths.forEach(testAppPath =>
     execYarnLink({
-        "cwd": testAppPath,
-        "targetModuleName": JSON.parse(
+        cwd: testAppPath,
+        targetModuleName: JSON.parse(
             fs.readFileSync(pathJoin(rootDirPath, "package.json")).toString("utf8")
         )["name"]
     })
