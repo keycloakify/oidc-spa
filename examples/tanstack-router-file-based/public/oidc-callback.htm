@@ -11,13 +11,12 @@
             authResponse[key] = value;
         }
 
-        const stateData = JSON.parse(localStorage.getItem(`oidc.${authResponse.state}`)).data;
+        const { data } = JSON.parse(localStorage.getItem(`oidc.${authResponse.state}`));
 
-        if (stateData.isSilentSso) {
-            console.log("Posting message to parent window");
+        if (data.isSilentSso) {
             parent.postMessage(authResponse, location.origin);
         } else {
-            const redirectUrl = new URL(stateData.redirectUrl);
+            const redirectUrl = new URL(data.redirectUrl);
 
             for (const [key, value] of Object.entries(authResponse)) {
                 redirectUrl.searchParams.set(`oidc-spa.${key}`, value);
