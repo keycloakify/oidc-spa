@@ -180,10 +180,11 @@ export async function createIframeTimeoutInitializationError(params: {
             return new OidcInitializationError({
                 isAuthServerLikelyDown: false,
                 messageOrCause: [
-                    "There is an issue with the content of the file oidc-callback.htm.",
-                    `The url ${callbackUrl} does respond with a 200 status code but the content is not the expected one.`,
-                    `You might have created the file in the public directory but it seems that your web server is serving another file instead.`,
-                    `Check the configuration of you web server to see if it's not re-routing the GET request to something else like index.html.`
+                    "There is an issue with the content of the `oidc-callback.htm` file that you should have created in the public directory of your repository.",
+                    `The URL "${callbackUrl}" responds with a 200 status code, but the content is not as expected.`,
+                    "It seems you may have forgotten to create the file.",
+                    "Refer to the documentation: https://docs.oidc-spa.dev/v/v6",
+                    "If you have created the file, verify your web server's configuration to ensure it isn't re-routing the GET request to something else, such as `index.html`."
                 ].join("\n")
             });
         }

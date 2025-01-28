@@ -328,12 +328,6 @@ export async function createOidc_nonMemoized<
         }
 
         if (urls.hasDedicatedHtmFile) {
-            console.error(
-                [
-                    "You forgot to create the oidc-callback.htm file or the web server is not serving it correctly",
-                    "suspending forever."
-                ].join(" ")
-            );
             // Here the user forget to create the silent-sso.htm file or or the web server is not serving it correctly
             // we shouldn't fall back to the SPA page.
             // In this case we want to let the timeout of the parent expire to provide the correct error message.
@@ -565,7 +559,14 @@ export async function createOidc_nonMemoized<
         return new Promise<never>(() => {});
     };
 
-    const resultOfLoginProcess = await (async () => {
+    const resultOfLoginProcess = await (async (): Promise<
+        | undefined // User is currently not logged in
+        | Error // Initialization error
+        | {
+              oidcClientTsUser: OidcClientTsUser;
+              backFromAuthServer: Oidc.LoggedIn["backFromAuthServer"]; // Undefined is silent signin
+          }
+    > => {
         read_auth_response_from_url: {
             const { values: authResponse, newUrl: locationHref_cleanedUp } =
                 retrieveAllQueryParamStartingWithPrefixFromUrl({
@@ -600,7 +601,7 @@ export async function createOidc_nonMemoized<
                 const error: string | undefined = authResponse["error"];
 
                 if (error !== undefined) {
-                    throw new Error(
+                    return new Error(
                         [
                             "The OIDC server responded with an error after the login process",
                             `this error is: ${error}`
@@ -631,7 +632,7 @@ export async function createOidc_nonMemoized<
                 assert(error instanceof Error);
 
                 if (error.message === "Failed to fetch") {
-                    throw createFailedToFetchTokenEndpointInitializationError({
+                    return createFailedToFetchTokenEndpointInitializationError({
                         clientId,
                         issuerUri
                     });
@@ -674,11 +675,11 @@ export async function createOidc_nonMemoized<
             if (!result_loginSilent.isSuccess) {
                 switch (result_loginSilent.cause) {
                     case "can't reach well-known oidc endpoint":
-                        throw createWellKnownOidcConfigurationEndpointUnreachableInitializationError({
+                        return createWellKnownOidcConfigurationEndpointUnreachableInitializationError({
                             issuerUri
                         });
                     case "timeout":
-                        throw createIframeTimeoutInitializationError({
+                        return createIframeTimeoutInitializationError({
                             hasDedicatedHtmFile: urls.hasDedicatedHtmFile,
                             callbackUrl: urls.callbackUrl,
                             clientId,
@@ -711,7 +712,7 @@ export async function createOidc_nonMemoized<
                 assert(error instanceof Error);
 
                 if (error.message === "Failed to fetch") {
-                    throw createFailedToFetchTokenEndpointInitializationError({
+                    return createFailedToFetchTokenEndpointInitializationError({
                         clientId,
                         issuerUri
                     });
@@ -728,72 +729,69 @@ export async function createOidc_nonMemoized<
             };
         }
 
+        // NOTE: The user is not logged in, we had no error during the initialization
         return undefined;
-    })().then(
-        result => {
-            if (result === undefined) {
-                return undefined;
-            }
-
-            const { oidcClientTsUser, backFromAuthServer } = result;
-
-            log_real_decoded_id_token: {
-                if (log === undefined) {
-                    break log_real_decoded_id_token;
-                }
-                const idToken = oidcClientTsUser.id_token;
-
-                if (idToken === undefined) {
-                    break log_real_decoded_id_token;
-                }
-
-                const decodedIdToken = decodeJwt(idToken);
-
-                log(
-                    [
-                        `Decoded ID token`,
-                        decodedIdTokenSchema === undefined
-                            ? ""
-                            : " before `decodedIdTokenSchema.parse()`\n",
-                        JSON.stringify(decodedIdToken, null, 2)
-                    ].join("")
-                );
-
-                if (decodedIdTokenSchema === undefined) {
-                    break log_real_decoded_id_token;
-                }
-
-                log(
-                    [
-                        "Decoded ID token after `decodedIdTokenSchema.parse()`\n",
-                        JSON.stringify(decodedIdTokenSchema.parse(decodedIdToken), null, 2)
-                    ].join("")
-                );
-            }
-
-            const tokens = oidcClientTsUserToTokens({
-                oidcClientTsUser,
-                decodedIdTokenSchema,
-                log
-            });
-
-            if (tokens.refreshTokenExpirationTime < tokens.accessTokenExpirationTime) {
-                console.warn(
-                    [
-                        "The OIDC refresh token shorter than the one of the access token.",
-                        "This is very unusual and probably a misconfiguration.",
-                        `Check your oidc server configuration for ${clientId} ${issuerUri}`
-                    ].join(" ")
-                );
-            }
-
-            return { tokens, backFromAuthServer };
-        },
-        error => {
-            assert(error instanceof Error);
-            return error;
+    })().then(result => {
+        if (result === undefined) {
+            return undefined;
         }
-    );
+
+        if (result instanceof Error) {
+            return result;
+        }
+
+        const { oidcClientTsUser, backFromAuthServer } = result;
+
+        log_real_decoded_id_token: {
+            if (log === undefined) {
+                break log_real_decoded_id_token;
+            }
+            const idToken = oidcClientTsUser.id_token;
+
+            if (idToken === undefined) {
+                break log_real_decoded_id_token;
+            }
+
+            const decodedIdToken = decodeJwt(idToken);
+
+            log(
+                [
+                    `Decoded ID token`,
+                    decodedIdTokenSchema === undefined ? "" : " before `decodedIdTokenSchema.parse()`\n",
+                    JSON.stringify(decodedIdToken, null, 2)
+                ].join("")
+            );
+
+            if (decodedIdTokenSchema === undefined) {
+                break log_real_decoded_id_token;
+            }
+
+            log(
+                [
+                    "Decoded ID token after `decodedIdTokenSchema.parse()`\n",
+                    JSON.stringify(decodedIdTokenSchema.parse(decodedIdToken), null, 2)
+                ].join("")
+            );
+        }
+
+        const tokens = oidcClientTsUserToTokens({
+            oidcClientTsUser,
+            decodedIdTokenSchema,
+            log
+        });
+
+        if (tokens.refreshTokenExpirationTime < tokens.accessTokenExpirationTime) {
+            console.warn(
+                [
+                    "The OIDC refresh token shorter than the one of the access token.",
+                    "This is very unusual and probably a misconfiguration.",
+                    `Check your oidc server configuration for ${clientId} ${issuerUri}`
+                ].join(" ")
+            );
+        }
+
+        return { tokens, backFromAuthServer };
+    });
 
     const common: Oidc.Common = {
         params: {
@@ -821,7 +819,7 @@ export async function createOidc_nonMemoized<
 
         console.error(
             [
-                `OIDC initialization error: `,
+                `oidc-spa Initialization Error: `,
                 `isAuthServerLikelyDown: ${initializationError.isAuthServerLikelyDown}`,
                 ``,
                 initializationError.message

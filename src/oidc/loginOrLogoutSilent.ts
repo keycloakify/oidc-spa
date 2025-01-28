@@ -74,7 +74,7 @@ export async function loginOrLogoutSilent(params: {
     })();
 
     const timeout = setTimeout(async () => {
-        dResult.reject({
+        dResult.resolve({
             isSuccess: false,
             cause: "timeout"
         });
