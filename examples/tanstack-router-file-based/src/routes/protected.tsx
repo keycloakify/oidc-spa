@@ -21,7 +21,7 @@ export const Route = createFileRoute("/protected")({
 
 function ProtectedPage() {
     // Here we can safely assume that the user is logged in.
-    const { oidcTokens, goToAuthServer, backFromAuthServer } = useOidc({ assertUserLoggedIn: true });
+    const { oidcTokens, goToAuthServer, backFromAuthServer } = useOidc({ assert: "user logged in" });
 
     return (
         <h4>
