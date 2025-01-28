@@ -176,21 +176,6 @@ export async function createIframeTimeoutInitializationError(params: {
             break oidc_callback_htm_unreachable;
         }
 
-        if (status === "reachable but does no contain the expected content") {
-            return new OidcInitializationError({
-                isAuthServerLikelyDown: false,
-                messageOrCause: [
-                    "There is an issue with the content of the `oidc-callback.htm` file that you should have created in the public directory of your repository.",
-                    `The URL "${callbackUrl}" responds with a 200 status code, but the content is not as expected.`,
-                    "It seems you may have forgotten to create the file.",
-                    "Refer to the documentation: https://docs.oidc-spa.dev/v/v6",
-                    "If you have created the file, verify your web server's configuration to ensure it isn't re-routing the GET request to something else, such as `index.html`."
-                ].join("\n")
-            });
-        }
-
-        assert(status === "not reachable");
-
         const status_wrongExtension = await getHtmFileReachabilityStatus("html");
 
         if (status_wrongExtension === "seems ok") {
@@ -230,6 +215,21 @@ export async function createIframeTimeoutInitializationError(params: {
                 ].join("\n")
             });
         }
+
+        if (status === "reachable but does no contain the expected content") {
+            return new OidcInitializationError({
+                isAuthServerLikelyDown: false,
+                messageOrCause: [
+                    "There is an issue with the content of the `oidc-callback.htm` file that you should have created in the public directory of your repository.",
+                    `The URL "${callbackUrl}" responds with a 200 status code, but the content is not as expected.`,
+                    "It seems you may have forgotten to create the file.",
+                    "Refer to the documentation: https://docs.oidc-spa.dev/v/v6",
+                    "If you have created the file, verify your web server's configuration to ensure it isn't re-routing the GET request to something else, such as `index.html`."
+                ].join("\n")
+            });
+        }
+
+        assert(status === "not reachable");
 
         return new OidcInitializationError({
             isAuthServerLikelyDown: false,
@@ -309,29 +309,30 @@ export async function createIframeTimeoutInitializationError(params: {
     return new OidcInitializationError({
         isAuthServerLikelyDown: false,
         messageOrCause: [
-            `The silent sign-in process timed out.`,
-            `Given the result of the diagnostic that oidc-spa just performed", 
-            "the most likely cause of the issue is that you forgot to add the oidc callback URL to the list of Valid Redirect URIs.\n`,
-            `The client id is: ${clientId}\n`,
-            `The URL that should be added to the list of Valid Redirect URIs is: ${callbackUrl}\n\n`,
+            `The silent sign-in process timed out.\n`,
+            `Based on the diagnostic performed by oidc-spa:\n`,
+            `- Either the client ID "${clientId}" does not exist, or\n`,
+            `- You forgot to add the OIDC callback URL to the list of Valid Redirect URIs.\n`,
+            `Client ID: "${clientId}"\n`,
+            `Callback URL to add to the list of Valid Redirect URIs: "${callbackUrl}"\n\n`,
             ...(() => {
-                const issuerUri_parsed = parseKeycloakIssuerUri(issuerUri);
+                const issuerUriParsed = parseKeycloakIssuerUri(issuerUri);
 
-                if (issuerUri_parsed === undefined) {
+                if (!issuerUriParsed) {
                     return [
-                        "Checkout the documentation of the OIDC server you are using to see how to configure the client properly."
+                        "Check the documentation of your OIDC server to learn how to configure the client properly."
                     ];
                 }
 
                 return [
-                    `Since it seems that you are using Keycloak, here are the steps to follow:\n`,
-                    `- Go to the Keycloak admin console. ${issuerUri_parsed.adminConsoleUrl}/console\n`,
-                    `- Log in as an admin user.\n`,
-                    `- In the left menu, click on "Clients".\n`,
-                    `- Find '${clientId}' in the list of clients and click on it.\n`,
-                    `- Find 'Valid Redirect URIs' and add '${callbackUrl}' to the list.\n`,
-                    `- Save the changes.\n\n`,
-                    `More info: https://docs.oidc-spa.dev/v/v6/resources/usage-with-keycloak`
+                    `It seems you are using Keycloak. Follow these steps to resolve the issue:\n\n`,
+                    `1. Go to the Keycloak admin console: ${issuerUriParsed.adminConsoleUrl}/console\n`,
+                    `2. Log in as an admin user.\n`,
+                    `3. In the left menu, click on "Clients".\n`,
+                    `4. Locate the client "${clientId}" in the list and click on it.\n`,
+                    `5. Find "Valid Redirect URIs" and add "${callbackUrl}" to the list.\n`,
+                    `6. Save the changes.\n\n`,
+                    `For more information, refer to the documentation: https://docs.oidc-spa.dev/v/v6/resources/usage-with-keycloak`
                 ];
             })()
         ].join(" ")
