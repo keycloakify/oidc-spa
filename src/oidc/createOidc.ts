@@ -1,7 +1,8 @@
 import {
     UserManager as OidcClientTsUserManager,
     WebStorageStateStore,
-    type User as OidcClientTsUser
+    type User as OidcClientTsUser,
+    InMemoryWebStorage
 } from "../vendor/frontend/oidc-client-ts-and-jwt-decode";
 import { id, type Param0, assert, type Equals } from "../vendor/frontend/tsafe";
 import { setTimeout, clearTimeout } from "../vendor/frontend/worker-timers";
@@ -17,7 +18,6 @@ import { createIsUserActive } from "../tools/createIsUserActive";
 import { createStartCountdown } from "../tools/startCountdown";
 import type { StatefulObservable } from "../tools/StatefulObservable";
 import { toHumanReadableDuration } from "../tools/toHumanReadableDuration";
-import { createHybridStorage } from "../tools/HybridStorage";
 import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";
 import {
     OidcInitializationError,
@@ -28,7 +28,6 @@ import {
 import { getStateData, type StateData } from "./StateData";
 import { notifyOtherTabOfLogout, getPrOtherTabLogout } from "./logoutPropagationToOtherTabs";
 import { getConfigHash } from "./configHash";
-import { maybeImpersonate } from "./imperativeImpersonation";
 import { oidcClientTsUserToTokens } from "./oidcClientTsUserToTokens";
 import { loginOrLogoutSilent, authResponseToUrl } from "./loginOrLogoutSilent";
 import type { Oidc } from "./Oidc";
@@ -112,11 +111,6 @@ export type ParamsOfCreateOidc<
     autoLogoutParams?: Parameters<Oidc.LoggedIn<any>["logout"]>[0];
     isAuthGloballyRequired?: IsAuthGloballyRequired;
     doEnableDebugLogs?: boolean;
-
-    getDoContinueWithImpersonation?: (params: {
-        decodedIdToken: DecodedIdToken;
-        accessToken: string;
-    }) => Promise<boolean>;
 
     __clientSecret_DO_NOT_USE_OR_YOU_WILL_BE_FIRED?: string;
 };
@@ -240,7 +234,6 @@ export async function createOidc_nonMemoized<
         autoLogoutParams = { redirectTo: "current page" },
         isAuthGloballyRequired = false,
         postLoginRedirectUrl,
-        getDoContinueWithImpersonation,
         __clientSecret_DO_NOT_USE_OR_YOU_WILL_BE_FIRED
     } = params;
 
@@ -361,23 +354,6 @@ export async function createOidc_nonMemoized<
         await new Promise<never>(() => {});
     }
 
-    const store = createHybridStorage({ persistenceKey: configHash });
-
-    imperative_impersonation: {
-        if (getDoContinueWithImpersonation === undefined) {
-            break imperative_impersonation;
-        }
-
-        await maybeImpersonate<DecodedIdToken>({
-            issuerUri,
-            clientId,
-            decodedIdTokenSchema,
-            getDoContinueWithImpersonation,
-            store,
-            log
-        });
-    }
-
     const oidcClientTsUserManager = new OidcClientTsUserManager({
         configHash,
         authority: issuerUri,
@@ -388,7 +364,7 @@ export async function createOidc_nonMemoized<
         automaticSilentRenew: false,
         silent_redirect_uri: urls.callbackUrl,
         post_logout_redirect_uri: urls.callbackUrl,
-        userStore: new WebStorageStateStore({ store }),
+        userStore: new WebStorageStateStore({ store: new InMemoryWebStorage() }),
         client_secret: __clientSecret_DO_NOT_USE_OR_YOU_WILL_BE_FIRED
     });
 
@@ -673,51 +649,6 @@ export async function createOidc_nonMemoized<
                         )
                     )
                 }
-            };
-        }
-
-        // NOTE: oidc-spa do not persist the user token in the session storage.
-        // So this block is not used EXCEPT for imperative impersonation.
-        // We use a hybrid storage that persists only in this case.
-        restore_session_from_session_storage: {
-            let oidcClientTsUser = await oidcClientTsUserManager.getUser();
-
-            if (oidcClientTsUser === null) {
-                break restore_session_from_session_storage;
-            }
-
-            log?.("Restoring the user auth from the session storage");
-
-            // Here the access token could be still valid but the session might have been invalidated
-            // on the server. For example if the logout failed to redirect to the app.
-            // We want to make sure that the session is still valid on the server side.
-            try {
-                oidcClientTsUser = await oidcClientTsUserManager.signinSilent({
-                    extraTokenParams: getExtraTokenParams?.()
-                });
-            } catch (error) {
-                assert(error instanceof Error);
-
-                log?.(`Session wasn't restorable: ${error.message}`);
-
-                if (error.message === "Failed to fetch") {
-                    throw createWellKnownOidcConfigurationEndpointUnreachableInitializationError({
-                        issuerUri
-                    });
-                }
-
-                store.removeItem(`oidc.user:${issuerUri}:${clientId}`);
-
-                return undefined;
-            }
-
-            assert(oidcClientTsUser !== null);
-
-            log?.("Session successfully restored and access token refreshed");
-
-            return {
-                oidcClientTsUser,
-                backFromAuthServer: undefined
             };
         }
 
