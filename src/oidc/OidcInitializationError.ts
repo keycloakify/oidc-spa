@@ -161,7 +161,7 @@ export async function createIframeTimeoutInitializationError(params: {
                         return "not reachable";
                     }
 
-                    if (content.length > 1200 || !content.includes("parent.postMessage(authResponse")) {
+                    if (content.length > 1200 || !content.includes("oidc-spa.")) {
                         return "reachable but does no contain the expected content";
                     }
 
