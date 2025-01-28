@@ -11,6 +11,12 @@ export type ParamsOfCreateMockOidc<
 > = {
     mockedParams?: Partial<Oidc["params"]>;
     mockedTokens?: Partial<Oidc.Tokens<DecodedIdToken>>;
+    /**
+     * The URL of the home page of your app.
+     * We need to know this so we know where to redirect when you call `logout({ redirectTo: "home"})`.
+     * In the majority of cases it should be `homeUrl: "/"` but it could aso be something like `homeUrl: "/dashboard"`
+     * if your web app isn't hosted at the root of the domain.
+     */
     homeUrl: string;
     isAuthGloballyRequired?: IsAuthGloballyRequired;
     postLoginRedirectUrl?: string;

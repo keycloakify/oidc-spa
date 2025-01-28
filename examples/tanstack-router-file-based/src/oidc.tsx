@@ -82,7 +82,7 @@ export const {
     // This parameter is optional.
     // It allows you to pass extra query params before redirecting to the OIDC server.
     extraQueryParams: () => ({
-        ui_locales: "en" // Gere you would dynamically get the current language at the time of redirecting to the OIDC server
+        ui_locales: "en" // Here you would dynamically get the current language at the time of redirecting to the OIDC server
     }),
     // Remove this in your repo
     doEnableDebugLogs: true
@@ -101,13 +101,12 @@ const decodedIdTokenSchema = z.object({
     preferred_username: z.string()
 });
 
-const publicUrl = import.meta.env.BASE_URL;
 
 export const { OidcProvider, useOidc, getOidc } =
     !import.meta.env.VITE_OIDC_ISSUER ?
         createMockReactOidc({
             isUserInitiallyLoggedIn: false,
-            publicUrl,
+            homeUrl: import.meta.env.BASE_URL,
             mockedTokens: {
                 decodedIdToken: {
                     sub: "123",
@@ -118,7 +117,7 @@ export const { OidcProvider, useOidc, getOidc } =
         createReactOidc({
             issuerUri: import.meta.env.VITE_OIDC_ISSUER,
             clientId: import.meta.env.VITE_OIDC_CLIENT_ID,
-            publicUrl,
+            BASE_URL: import.meta.env.BASE_URL,
             decodedIdTokenSchema
         });
 */

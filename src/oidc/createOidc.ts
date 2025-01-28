@@ -81,19 +81,26 @@ export type ParamsOfCreateOidc<
      * This parameter can also be passed to login() directly as `redirectUrl`.
      */
     postLoginRedirectUrl?: string;
+
     /**
-     * This parameter is used to let oidc-spa knows where is the home of your application.
+     * This parameter is used so that oidc-spa know where to find the oidc-callback.htm file
+     * that you have created in the `public` dir and where is the home page of your app (for logout({ redirectTo: "home" })).
      *
      * What should you put in this parameter?
-     *   - Vite project:             `publicUrl: import.meta.env.BASE_URL`
-     *   - Create React App project: `publicUrl: process.env.PUBLIC_URL`
-     *   - Other:                    `publicUrl: "/"` (Usually, or `/my-app-name` if your app is not at the root of the domain)
+     *   - Vite project:             `BASE_URL: import.meta.env.BASE_URL`
+     *   - Create React App project: `BASE_URL: process.env.PUBLIC_URL`
+     *   - Other:                    `BASE_URL: "/"` (Usually, or `/dashboard` if your app is not at the root of the domain)
+     *
+     * If you do not have a dedicated oidc-callback.htm file, explicitly set `BASE_URL: undefined` and provide a `homeUrl`.
      */
     BASE_URL: string | undefined;
 
     /**
-     * This parameter is to provide if you don't have a dedicated oidc-callback.htm file.
-     * If this parameter is provided, `BASE_URL` must be explicitly set to undefined.
+     * This parameter is to be provided if and only if you have set `BASE_URL: undefined`.
+     * It should indicate the home page of your app.
+     * In the majority of cases it should be `homeUrl: "/"` but it could aso be something like `homeUrl: "/dashboard"`
+     * if your web app isn't hosted at the root of the domain.
+     * We need to know this only to know where to redirect when you call `logout({ redirectTo: "home"})`
      */
     homeUrl?: string;
 
@@ -324,7 +331,7 @@ export async function createOidc_nonMemoized<
             console.error(
                 [
                     "You forgot to create the oidc-callback.htm file or the web server is not serving it correctly",
-                    "suspending forever"
+                    "suspending forever."
                 ].join(" ")
             );
             // Here the user forget to create the silent-sso.htm file or or the web server is not serving it correctly
