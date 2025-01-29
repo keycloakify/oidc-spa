@@ -15,7 +15,17 @@ export function toFullyQualifiedUrl(params: { urlish: string; doAssertNoQueryPar
         url = `${window.location.origin}${path}`;
     }
 
-    url = url.replace(/\/$/, "");
+    {
+        const urlObj = new URL(url);
+
+        urlObj.pathname = urlObj.pathname
+            // Make sure there is no double slash like in `https://example.com//foo//bar`
+            .replace(/\/\//g, "/")
+            // Make sure there is no trailing slash.
+            .replace(/\/$/, "");
+
+        url = urlObj.href;
+    }
 
     throw_if_query_params: {
         if (!doAssertNoQueryParams) {
