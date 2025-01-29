@@ -30,6 +30,7 @@ import { notifyOtherTabOfLogout, getPrOtherTabLogout } from "./logoutPropagation
 import { getConfigHash } from "./configHash";
 import { oidcClientTsUserToTokens } from "./oidcClientTsUserToTokens";
 import { loginOrLogoutSilent, authResponseToUrl } from "./loginOrLogoutSilent";
+import { setExpectedCallbackFileVersion } from "./expectedCallbackFileVersion";
 import type { Oidc } from "./Oidc";
 
 // NOTE: Replaced at build time
@@ -310,10 +311,45 @@ export async function createOidc_nonMemoized<
             break oidc_callback_htm_polyfill;
         }
 
+        const reloadOnRestore = () => {
+            document.addEventListener("visibilitychange", () => {
+                if (document.visibilityState === "visible") {
+                    location.reload();
+                }
+            });
+        };
+
         const stateData = getStateData({ state });
 
         if (stateData === undefined) {
-            break oidc_callback_htm_polyfill;
+            {
+                const result = retrieveQueryParamFromUrl({
+                    url: window.location.href,
+                    name: "code"
+                });
+
+                if (!result.wasPresent || result.value.length < 6) {
+                    // It just happens that there is a state query param in the url
+                    break oidc_callback_htm_polyfill;
+                }
+            }
+
+            // Here we are almost certain that we navigated back or forward to the callback page.
+            // since we have a state and a code query param in the url.
+
+            reloadOnRestore();
+
+            const KEY = "oidc-spa.has-navigated-back";
+            if (sessionStorage.getItem(KEY) === "true") {
+                sessionStorage.removeItem(KEY);
+                history.forward();
+            } else {
+                sessionStorage.setItem(KEY, "true");
+                history.back();
+            }
+
+            await new Promise<never>(() => {});
+            assert(false);
         }
 
         if (stateData.configHash !== configHash) {
@@ -327,6 +363,8 @@ export async function createOidc_nonMemoized<
             // In this case we want to let the timeout of the parent expire to provide the correct error message.
             await new Promise<never>(() => {});
         }
+
+        reloadOnRestore();
 
         const authResponse: Record<string, string> = {};
 
@@ -541,6 +579,10 @@ export async function createOidc_nonMemoized<
             return { extraQueryParams };
         })();
 
+        if (urls.hasDedicatedHtmFile) {
+            setExpectedCallbackFileVersion();
+        }
+
         await oidcClientTsUserManager.signinRedirect({
             state: id<StateData>({
                 configHash,
@@ -663,7 +705,8 @@ export async function createOidc_nonMemoized<
                 action: {
                     type: "login",
                     getExtraTokenParams
-                }
+                },
+                hasDedicatedHtmFile: urls.hasDedicatedHtmFile
             });
 
             if (!result_loginSilent.isSuccess) {
@@ -899,6 +942,7 @@ export async function createOidc_nonMemoized<
                 const result_logoutSilent = await loginOrLogoutSilent({
                     configHash,
                     oidcClientTsUserManager,
+                    hasDedicatedHtmFile: urls.hasDedicatedHtmFile,
                     action: {
                         type: "logout"
                     }
