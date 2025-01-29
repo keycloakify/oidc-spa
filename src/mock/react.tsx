@@ -5,7 +5,7 @@ import type { ValueOrAsyncGetter } from "../tools/ValueOrAsyncGetter";
 /** @see: https://docs.oidc-spa.dev/v/v5/documentation/mock */
 export function createMockReactOidc<
     DecodedIdToken extends Record<string, unknown> = Record<string, unknown>,
-    IsAuthGloballyRequired extends boolean = false
->(params: ValueOrAsyncGetter<ParamsOfCreateMockOidc<DecodedIdToken, IsAuthGloballyRequired>>) {
+    AutoLogin extends boolean = false
+>(params: ValueOrAsyncGetter<ParamsOfCreateMockOidc<DecodedIdToken, AutoLogin>>) {
     return createOidcReactApi_dependencyInjection(params, createMockOidc);
 }

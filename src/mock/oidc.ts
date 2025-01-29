@@ -7,7 +7,7 @@ import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";
 
 export type ParamsOfCreateMockOidc<
     DecodedIdToken extends Record<string, unknown> = Record<string, unknown>,
-    IsAuthGloballyRequired extends boolean = false
+    AutoLogin extends boolean = false
 > = {
     mockedParams?: Partial<Oidc["params"]>;
     mockedTokens?: Partial<Oidc.Tokens<DecodedIdToken>>;
@@ -18,9 +18,9 @@ export type ParamsOfCreateMockOidc<
      * if your web app isn't hosted at the root of the domain.
      */
     homeUrl: string;
-    isAuthGloballyRequired?: IsAuthGloballyRequired;
+    autoLogin?: AutoLogin;
     postLoginRedirectUrl?: string;
-} & (IsAuthGloballyRequired extends true
+} & (AutoLogin extends true
     ? { isUserInitiallyLoggedIn?: true }
     : {
           isUserInitiallyLoggedIn: boolean;
@@ -30,16 +30,16 @@ const urlParamName = "isUserLoggedIn";
 
 export async function createMockOidc<
     DecodedIdToken extends Record<string, unknown> = Record<string, unknown>,
-    IsAuthGloballyRequired extends boolean = false
+    AutoLogin extends boolean = false
 >(
-    params: ParamsOfCreateMockOidc<DecodedIdToken, IsAuthGloballyRequired>
-): Promise<IsAuthGloballyRequired extends true ? Oidc.LoggedIn<DecodedIdToken> : Oidc<DecodedIdToken>> {
+    params: ParamsOfCreateMockOidc<DecodedIdToken, AutoLogin>
+): Promise<AutoLogin extends true ? Oidc.LoggedIn<DecodedIdToken> : Oidc<DecodedIdToken>> {
     const {
         isUserInitiallyLoggedIn = true,
         mockedParams = {},
         mockedTokens = {},
         homeUrl: homeUrl_params,
-        isAuthGloballyRequired = false,
+        autoLogin = false,
         postLoginRedirectUrl
     } = params;
 
@@ -100,7 +100,7 @@ export async function createMockOidc<
             login: ({ redirectUrl }) => loginOrGoToAuthServer({ redirectUrl }),
             initializationError: undefined
         });
-        if (isAuthGloballyRequired) {
+        if (autoLogin) {
             await oidc.login({
                 redirectUrl: postLoginRedirectUrl,
                 doesCurrentHrefRequiresAuth: true

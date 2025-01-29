@@ -37,7 +37,7 @@ const VERSION = "{{OIDC_SPA_VERSION}}";
 
 export type ParamsOfCreateOidc<
     DecodedIdToken extends Record<string, unknown> = Record<string, unknown>,
-    IsAuthGloballyRequired extends boolean = false
+    AutoLogin extends boolean = false
 > = {
     issuerUri: string;
     clientId: string;
@@ -116,8 +116,8 @@ export type ParamsOfCreateOidc<
     __unsafe_ssoSessionIdleSeconds?: number;
 
     autoLogoutParams?: Parameters<Oidc.LoggedIn<any>["logout"]>[0];
-    isAuthGloballyRequired?: IsAuthGloballyRequired;
-    doEnableDebugLogs?: boolean;
+    autoLogin?: AutoLogin;
+    debugLogs?: boolean;
 
     __clientSecret_DO_NOT_USE_OR_YOU_WILL_BE_FIRED?: string;
 };
@@ -127,10 +127,10 @@ const prOidcByConfigHash = new Map<string, Promise<Oidc<any>>>();
 /** @see: https://docs.oidc-spa.dev/v/v5/documentation/usage */
 export async function createOidc<
     DecodedIdToken extends Record<string, unknown> = Record<string, unknown>,
-    IsAuthGloballyRequired extends boolean = false
+    AutoLogin extends boolean = false
 >(
-    params: ParamsOfCreateOidc<DecodedIdToken, IsAuthGloballyRequired>
-): Promise<IsAuthGloballyRequired extends true ? Oidc.LoggedIn<DecodedIdToken> : Oidc<DecodedIdToken>> {
+    params: ParamsOfCreateOidc<DecodedIdToken, AutoLogin>
+): Promise<AutoLogin extends true ? Oidc.LoggedIn<DecodedIdToken> : Oidc<DecodedIdToken>> {
     for (const name of ["issuerUri", "clientId"] as const) {
         const value = params[name];
         if (typeof value !== "string") {
@@ -140,13 +140,7 @@ export async function createOidc<
         }
     }
 
-    const {
-        issuerUri: issuerUri_params,
-        clientId,
-        scopes = ["profile"],
-        doEnableDebugLogs,
-        ...rest
-    } = params;
+    const { issuerUri: issuerUri_params, clientId, scopes = ["profile"], debugLogs, ...rest } = params;
 
     const issuerUri = toFullyQualifiedUrl({
         urlish: issuerUri_params,
@@ -154,7 +148,7 @@ export async function createOidc<
     });
 
     const log = (() => {
-        if (!doEnableDebugLogs) {
+        if (!debugLogs) {
             return undefined;
         }
 
@@ -216,11 +210,11 @@ const URL_real = window.URL;
 
 export async function createOidc_nonMemoized<
     DecodedIdToken extends Record<string, unknown> = Record<string, unknown>,
-    IsAuthGloballyRequired extends boolean = false
+    AutoLogin extends boolean = false
 >(
     params: Omit<
-        ParamsOfCreateOidc<DecodedIdToken, IsAuthGloballyRequired>,
-        "issuerUri" | "clientId" | "scopes" | "doEnableDebugLogs"
+        ParamsOfCreateOidc<DecodedIdToken, AutoLogin>,
+        "issuerUri" | "clientId" | "scopes" | "debugLogs"
     >,
     preProcessedParams: {
         issuerUri: string;
@@ -229,7 +223,7 @@ export async function createOidc_nonMemoized<
         configHash: string;
         log: typeof console.log | undefined;
     }
-): Promise<IsAuthGloballyRequired extends true ? Oidc.LoggedIn<DecodedIdToken> : Oidc<DecodedIdToken>> {
+): Promise<AutoLogin extends true ? Oidc.LoggedIn<DecodedIdToken> : Oidc<DecodedIdToken>> {
     const {
         transformUrlBeforeRedirect,
         extraQueryParams: extraQueryParamsOrGetter,
@@ -239,7 +233,7 @@ export async function createOidc_nonMemoized<
         decodedIdTokenSchema,
         __unsafe_ssoSessionIdleSeconds,
         autoLogoutParams = { redirectTo: "current page" },
-        isAuthGloballyRequired = false,
+        autoLogin = false,
         postLoginRedirectUrl,
         __clientSecret_DO_NOT_USE_OR_YOU_WILL_BE_FIRED
     } = params;
@@ -813,7 +807,7 @@ export async function createOidc_nonMemoized<
                       messageOrCause: error
                   });
 
-        if (isAuthGloballyRequired) {
+        if (autoLogin) {
             throw initializationError;
         }
 
@@ -845,7 +839,7 @@ export async function createOidc_nonMemoized<
     if (resultOfLoginProcess === undefined) {
         log?.("User not logged in");
 
-        if (isAuthGloballyRequired) {
+        if (autoLogin) {
             log?.("Authentication is required everywhere on this app, redirecting to the login page");
             await loginOrGoToAuthServer({
                 action: "login",

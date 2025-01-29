@@ -62,18 +62,15 @@ const oidcContext = createContext<
     | undefined
 >(undefined);
 
-type OidcReactApi<
-    DecodedIdToken extends Record<string, unknown>,
-    IsAuthGloballyRequired extends boolean
-> = {
-    OidcProvider: IsAuthGloballyRequired extends true
+type OidcReactApi<DecodedIdToken extends Record<string, unknown>, AutoLogin extends boolean> = {
+    OidcProvider: AutoLogin extends true
         ? (props: {
               fallback?: ReactNode;
               ErrorFallback?: (props: { initializationError: OidcInitializationError }) => ReactNode;
               children: ReactNode;
           }) => JSX.Element
         : (props: { fallback?: ReactNode; children: ReactNode }) => JSX.Element;
-    useOidc: IsAuthGloballyRequired extends true
+    useOidc: AutoLogin extends true
         ? {
               (params?: { assert: "user logged in" }): OidcReact.LoggedIn<DecodedIdToken>;
           }
@@ -83,14 +80,14 @@ type OidcReactApi<
               (params: { assert: "user not logged in" }): OidcReact.NotLoggedIn;
           };
     getOidc: () => Promise<
-        IsAuthGloballyRequired extends true ? Oidc.LoggedIn<DecodedIdToken> : Oidc<DecodedIdToken>
+        AutoLogin extends true ? Oidc.LoggedIn<DecodedIdToken> : Oidc<DecodedIdToken>
     >;
 };
 
 export function createOidcReactApi_dependencyInjection<
     DecodedIdToken extends Record<string, unknown>,
     ParamsOfCreateOidc extends {
-        isAuthGloballyRequired?: boolean;
+        autoLogin?: boolean;
     } & (
         | {
               decodedIdTokenSchema: { parse: (data: unknown) => DecodedIdToken } | undefined;
@@ -102,13 +99,13 @@ export function createOidcReactApi_dependencyInjection<
     createOidc: (params: ParamsOfCreateOidc) => Promise<Oidc<DecodedIdToken>>
 ): OidcReactApi<
     DecodedIdToken,
-    ParamsOfCreateOidc extends { isAuthGloballyRequired?: true | undefined } ? true : false
+    ParamsOfCreateOidc extends { autoLogin?: true | undefined } ? true : false
 > {
     const dReadyToCreate = new Deferred<void>();
 
     let decodedIdTokenSchema: { parse: (data: unknown) => DecodedIdToken } | undefined = undefined;
 
-    // NOTE: It can be InitializationError only if isAuthGloballyRequired is true
+    // NOTE: It can be InitializationError only if autoLogin is true
     const prOidcOrInitializationError = (async () => {
         const params = await (async () => {
             if (typeof paramsOrGetParams === "function") {
@@ -346,7 +343,7 @@ export function createOidcReactApi_dependencyInjection<
 /** @see: https://docs.oidc-spa.dev/v/v5/documentation/usage#react-api */
 export function createReactOidc<
     DecodedIdToken extends Record<string, unknown> = Record<string, unknown>,
-    IsAuthGloballyRequired extends boolean = false
->(params: ValueOrAsyncGetter<ParamsOfCreateOidc<DecodedIdToken, IsAuthGloballyRequired>>) {
+    AutoLogin extends boolean = false
+>(params: ValueOrAsyncGetter<ParamsOfCreateOidc<DecodedIdToken, AutoLogin>>) {
     return createOidcReactApi_dependencyInjection(params, createOidc);
 }
