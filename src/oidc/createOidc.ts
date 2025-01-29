@@ -124,7 +124,7 @@ export type ParamsOfCreateOidc<
 
 const prOidcByConfigHash = new Map<string, Promise<Oidc<any>>>();
 
-/** @see: https://docs.oidc-spa.dev/v/v5/documentation/usage */
+/** @see: https://docs.oidc-spa.dev/v/v6/usage */
 export async function createOidc<
     DecodedIdToken extends Record<string, unknown> = Record<string, unknown>,
     AutoLogin extends boolean = false

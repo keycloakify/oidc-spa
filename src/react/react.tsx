@@ -340,7 +340,7 @@ export function createOidcReactApi_dependencyInjection<
     };
 }
 
-/** @see: https://docs.oidc-spa.dev/v/v5/documentation/usage#react-api */
+/** @see: https://docs.oidc-spa.dev/v/v6/usage#react-api */
 export function createReactOidc<
     DecodedIdToken extends Record<string, unknown> = Record<string, unknown>,
     AutoLogin extends boolean = false

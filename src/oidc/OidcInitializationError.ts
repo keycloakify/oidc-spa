@@ -211,7 +211,7 @@ export async function createIframeTimeoutInitializationError(params: {
                 messageOrCause: [
                     `In oidc-spa v6 is no longer using the ${legacyCallbackFileBasename} file.`,
                     `It is now oidc-callback.htm.`,
-                    `Check the documentation: https://docs.oidc-spa.dev/v/v6`
+                    `Check the documentation: https://docs.oidc-spa.dev/v/v6/installation`
                 ].join("\n")
             });
         }
@@ -223,7 +223,7 @@ export async function createIframeTimeoutInitializationError(params: {
                     "There is an issue with the content of the `oidc-callback.htm` file that you should have created in the public directory of your repository.",
                     `The URL "${callbackUrl}" responds with a 200 status code, but the content is not as expected.`,
                     "It seems you may have forgotten to create the file.",
-                    "Refer to the documentation: https://docs.oidc-spa.dev/v/v6",
+                    "Refer to the documentation: https://docs.oidc-spa.dev/v/v6/installation",
                     "If you have created the file, verify your web server's configuration to ensure it isn't re-routing the GET request to something else, such as `index.html`."
                 ].join("\n")
             });
@@ -236,7 +236,7 @@ export async function createIframeTimeoutInitializationError(params: {
             messageOrCause: [
                 `You seem to have forgotten to create the oidc-callback.htm file in the public directory.`,
                 `${callbackUrl} is not reachable.`,
-                `Check the documentation: https://docs.oidc-spa.dev/v/v6`
+                `Check the documentation: https://docs.oidc-spa.dev/v/v6/installation`
             ].join("\n")
         });
     }
@@ -332,7 +332,7 @@ export async function createIframeTimeoutInitializationError(params: {
                     `4. Locate the client "${clientId}" in the list and click on it.\n`,
                     `5. Find "Valid Redirect URIs" and add "${callbackUrl}" to the list.\n`,
                     `6. Save the changes.\n\n`,
-                    `For more information, refer to the documentation: https://docs.oidc-spa.dev/v/v6/resources/usage-with-keycloak`
+                    `For more information, refer to the documentation: https://docs.oidc-spa.dev/v/v6/resources/keycloak-configuration`
                 ];
             })()
         ].join(" ")
@@ -370,7 +370,7 @@ export function createFailedToFetchTokenEndpointInitializationError(params: {
                     `- Find '${clientId}' in the list of clients and click on it.\n`,
                     `- Find 'Web Origins' and add '${window.location.origin}' to the list.\n`,
                     `- Save the changes.\n\n`,
-                    `More info: https://docs.oidc-spa.dev/v/v6/resources/usage-with-keycloak`
+                    `More info: https://docs.oidc-spa.dev/v/v6/resources/keycloak-configuration`
                 ];
             })()
         ].join(" ")

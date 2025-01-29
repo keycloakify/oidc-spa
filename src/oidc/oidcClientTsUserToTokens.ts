@@ -56,7 +56,7 @@ export function oidcClientTsUserToTokens<DecodedIdToken extends Record<string, u
             [
                 "Couldn't read the expiration time of the refresh token from the jwt",
                 "It's ok. Some OIDC server like Microsoft Entra ID does not use JWT for the refresh token.",
-                "Be aware that it prevent you from implementing the auto logout mechanism: https://docs.oidc-spa.dev/documentation/auto-logout",
+                "Be aware that it prevent you from implementing the auto logout mechanism: https://docs.oidc-spa.dev/v/v6/auto-logout",
                 "If you need auto logout you'll have to provide use the __unsafe_ssoSessionIdleSeconds param."
             ].join("\n")
         );
