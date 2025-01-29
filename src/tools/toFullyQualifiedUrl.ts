@@ -20,11 +20,14 @@ export function toFullyQualifiedUrl(params: { urlish: string; doAssertNoQueryPar
 
         urlObj.pathname = urlObj.pathname
             // Make sure there is no double slash like in `https://example.com//foo//bar`
-            .replace(/\/\//g, "/")
-            // Make sure there is no trailing slash.
-            .replace(/\/$/, "");
+            .replace(/\/\//g, "/");
 
         url = urlObj.href;
+    }
+
+    // make sure no trailing slash
+    if (url.endsWith("/")) {
+        url = url.slice(0, -1);
     }
 
     throw_if_query_params: {
