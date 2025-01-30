@@ -155,6 +155,7 @@ export async function loginOrLogoutSilent(params: {
 
         // NOTE: Here, except error on our understanding there can't be any other
         // error than timeout so we fail silently and let the timeout expire.
+        console.error("================>", error);
     });
 
     return dResult.pr;
