@@ -2,7 +2,8 @@ import {
     UserManager as OidcClientTsUserManager,
     WebStorageStateStore,
     type User as OidcClientTsUser,
-    InMemoryWebStorage
+    InMemoryWebStorage,
+    Log
 } from "../vendor/frontend/oidc-client-ts-and-jwt-decode";
 import { id, type Param0, assert, type Equals } from "../vendor/frontend/tsafe";
 import { setTimeout, clearTimeout } from "../vendor/frontend/worker-timers";
@@ -32,6 +33,10 @@ import { loginOrLogoutSilent, authResponseToUrl } from "./loginOrLogoutSilent";
 import { setExpectedCallbackFileVersion } from "./expectedCallbackFileVersion";
 import { oidcCallbackPolyfill } from "./oidcCallbackPolyfill";
 import type { Oidc } from "./Oidc";
+
+// Enable debug logging
+Log.setLogger(console);
+Log.setLevel(Log.DEBUG);
 
 // NOTE: Replaced at build time
 const VERSION = "{{OIDC_SPA_VERSION}}";
