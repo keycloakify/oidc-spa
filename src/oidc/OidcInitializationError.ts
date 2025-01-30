@@ -191,9 +191,24 @@ export async function createIframeTimeoutInitializationError(params: {
         for (const legacyCallbackFileBasename of [".htm", ".html"].map(ext => `silent-sso${ext}`)) {
             const legacyCallbackUrl = callbackUrl.replace("silent-sso.htm", legacyCallbackFileBasename);
 
-            const isPresent = await fetch(legacyCallbackUrl).then(
+            const doesSeemsOk = await fetch(legacyCallbackUrl).then(
                 async response => {
                     if (!response.ok) {
+                        return false;
+                    }
+
+                    let content: string;
+
+                    try {
+                        content = await response.text();
+                    } catch {
+                        return false;
+                    }
+
+                    if (
+                        content.length > 1200 ||
+                        !content.includes("parent.postMessage(location.href,")
+                    ) {
                         return false;
                     }
 
@@ -202,7 +217,7 @@ export async function createIframeTimeoutInitializationError(params: {
                 () => false
             );
 
-            if (!isPresent) {
+            if (!doesSeemsOk) {
                 continue;
             }
 
