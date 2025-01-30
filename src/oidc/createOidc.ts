@@ -8,7 +8,6 @@ import { id, type Param0, assert, type Equals } from "../vendor/frontend/tsafe";
 import { setTimeout, clearTimeout } from "../vendor/frontend/worker-timers";
 import {
     addQueryParamToUrl,
-    retrieveQueryParamFromUrl,
     retrieveAllQueryParamFromUrl,
     retrieveAllQueryParamStartingWithPrefixFromUrl
 } from "../tools/urlQueryParams";
@@ -31,6 +30,7 @@ import { getConfigHash } from "./configHash";
 import { oidcClientTsUserToTokens } from "./oidcClientTsUserToTokens";
 import { loginOrLogoutSilent, authResponseToUrl } from "./loginOrLogoutSilent";
 import { setExpectedCallbackFileVersion } from "./expectedCallbackFileVersion";
+import { oidcCallbackPolyfill } from "./oidcCallbackPolyfill";
 import type { Oidc } from "./Oidc";
 
 // NOTE: Replaced at build time
@@ -209,6 +209,9 @@ let $isUserActive: StatefulObservable<boolean> | undefined = undefined;
 
 const URL_real = window.URL;
 
+let hasLoginBeenCalled = false;
+let hasLogoutBeenCalled = false;
+
 export async function createOidc_nonMemoized<
     DecodedIdToken extends Record<string, unknown> = Record<string, unknown>,
     AutoLogin extends boolean = false
@@ -293,99 +296,7 @@ export async function createOidc_nonMemoized<
 
     log?.(`Calling createOidc v${VERSION}`, { issuerUri, clientId, scopes, configHash, urls });
 
-    oidc_callback_htm_polyfill: {
-        const state = (() => {
-            const result = retrieveQueryParamFromUrl({
-                url: window.location.href,
-                name: "state"
-            });
-
-            if (!result.wasPresent) {
-                return undefined;
-            }
-
-            return result.value;
-        })();
-
-        if (state === undefined) {
-            break oidc_callback_htm_polyfill;
-        }
-
-        const reloadOnRestore = () => {
-            document.addEventListener("visibilitychange", () => {
-                if (document.visibilityState === "visible") {
-                    location.reload();
-                }
-            });
-        };
-
-        const stateData = getStateData({ state });
-
-        if (stateData === undefined) {
-            {
-                const result = retrieveQueryParamFromUrl({
-                    url: window.location.href,
-                    name: "code"
-                });
-
-                if (!result.wasPresent || result.value.length < 6) {
-                    // It just happens that there is a state query param in the url
-                    break oidc_callback_htm_polyfill;
-                }
-            }
-
-            // Here we are almost certain that we navigated back or forward to the callback page.
-            // since we have a state and a code query param in the url.
-
-            reloadOnRestore();
-
-            const KEY = "oidc-spa.has-navigated-back";
-            if (sessionStorage.getItem(KEY) === "true") {
-                sessionStorage.removeItem(KEY);
-                history.forward();
-            } else {
-                sessionStorage.setItem(KEY, "true");
-                history.back();
-            }
-
-            await new Promise<never>(() => {});
-            assert(false);
-        }
-
-        if (stateData.configHash !== configHash) {
-            // Another oidc-spa instance should handle this
-            await new Promise<never>(() => {});
-        }
-
-        if (urls.hasDedicatedHtmFile) {
-            // Here the user forget to create the silent-sso.htm file or or the web server is not serving it correctly
-            // we shouldn't fall back to the SPA page.
-            // In this case we want to let the timeout of the parent expire to provide the correct error message.
-            await new Promise<never>(() => {});
-        }
-
-        reloadOnRestore();
-
-        const authResponse: Record<string, string> = {};
-
-        for (const [key, value] of new URL(location.href).searchParams) {
-            authResponse[key] = value;
-        }
-
-        if (stateData.isSilentSso) {
-            parent.postMessage(authResponse, location.origin);
-        } else {
-            const redirectUrl = new URL(stateData.redirectUrl);
-
-            for (const [key, value] of Object.entries(authResponse)) {
-                redirectUrl.searchParams.set(`oidc-spa.${key}`, value);
-            }
-
-            location.replace(redirectUrl.href);
-        }
-
-        await new Promise<never>(() => {});
-    }
+    await oidcCallbackPolyfill({ hasDedicatedHtmFile: urls.hasDedicatedHtmFile });
 
     const oidcClientTsUserManager = new OidcClientTsUserManager({
         configHash,
@@ -411,8 +322,6 @@ export async function createOidc_nonMemoized<
             return realPushState(...args);
         };
     };
-
-    let hasLoginBeenCalled = false;
 
     type ParamsOfLoginOrGoToAuthServer = Omit<
         Param0<Oidc.NotLoggedIn["login"]>,
@@ -924,8 +833,6 @@ export async function createOidc_nonMemoized<
 
     const onTokenChanges = new Set<() => void>();
 
-    let hasLogoutBeenCalled = false;
-
     const oidc = id<Oidc.LoggedIn<DecodedIdToken>>({
         ...common,
         isUserLoggedIn: true,
@@ -976,6 +883,14 @@ export async function createOidc_nonMemoized<
                 configHash,
                 postLogoutRedirectUrl
             });
+
+            const listener = () => {
+                if (document.visibilityState === "visible") {
+                    document.removeEventListener("visibilitychange", listener);
+                    location.reload();
+                }
+            };
+            document.addEventListener("visibilitychange", listener);
 
             window.location.href = postLogoutRedirectUrl;
 
