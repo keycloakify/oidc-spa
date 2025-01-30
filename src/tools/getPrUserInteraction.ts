@@ -11,10 +11,14 @@ export function getPrUserInteraction() {
     const cleanup = () => {
         window.document.removeEventListener("mousemove", callback, false);
         window.document.removeEventListener("keydown", callback, false);
+        window.document.removeEventListener("touchstart", callback, false);
+        window.document.removeEventListener("touchend", callback, false);
     };
 
     window.document.addEventListener("mousemove", callback, false);
     window.document.addEventListener("keydown", callback, false);
+    window.document.addEventListener("touchstart", callback, false);
+    window.document.addEventListener("touchend", callback, false);
 
     return {
         prUserInteraction: d.pr,
