@@ -1,4 +1,5 @@
 import { useEffect, useState, createContext, useContext, useReducer, type ReactNode } from "react";
+import type { JSX } from "../tools/JSX";
 import { type Oidc, createOidc, type ParamsOfCreateOidc, OidcInitializationError } from "../oidc";
 import { assert, type Equals } from "../vendor/frontend/tsafe";
 import { id } from "../vendor/frontend/tsafe";
