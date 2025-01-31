@@ -153,6 +153,11 @@ export async function loginOrLogoutSilent(params: {
             return;
         }
 
+        if (!error.message.includes("IFrame timed out without a response")) {
+            console.error(error.message);
+            throw error;
+        }
+
         // NOTE: Here, except error on our understanding there can't be any other
         // error than timeout so we fail silently and let the timeout expire.
     });
