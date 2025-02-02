@@ -4,13 +4,9 @@ import {
     type User as OidcClientTsUser,
     InMemoryWebStorage
 } from "../vendor/frontend/oidc-client-ts-and-jwt-decode";
-import { id, type Param0, assert, type Equals } from "../vendor/frontend/tsafe";
+import { id, type Param0, assert, type Equals, typeGuard } from "../vendor/frontend/tsafe";
 import { setTimeout, clearTimeout } from "../vendor/frontend/worker-timers";
-import {
-    addQueryParamToUrl,
-    retrieveAllQueryParamFromUrl,
-    retrieveAllQueryParamStartingWithPrefixFromUrl
-} from "../tools/urlQueryParams";
+import { addQueryParamToUrl, retrieveAllQueryParamFromUrl } from "../tools/urlQueryParams";
 import { Deferred } from "../tools/Deferred";
 import { decodeJwt } from "../tools/decodeJwt";
 import { createIsUserActive } from "../tools/createIsUserActive";
@@ -512,33 +508,60 @@ export async function createOidc_nonMemoized<
               backFromAuthServer: Oidc.LoggedIn["backFromAuthServer"]; // Undefined is silent signin
           }
     > => {
-        read_auth_response_from_url: {
-            const { values: authResponse, newUrl: locationHref_cleanedUp } =
-                retrieveAllQueryParamStartingWithPrefixFromUrl({
-                    url: window.location.href,
-                    prefix: "oidc-spa.",
-                    doLeavePrefixInResults: false
-                });
+        read_auth_response: {
+            const authResponse = (() => {
+                const KEY = "oidc-spa.authResponse";
+
+                const value = sessionStorage.getItem(KEY);
+
+                if (value === null) {
+                    return undefined;
+                }
+
+                sessionStorage.removeItem(KEY);
+
+                let authResponse: unknown;
+
+                try {
+                    authResponse = JSON.parse(value);
+
+                    assert(
+                        typeGuard<Record<string, string>>(
+                            authResponse,
+                            authResponse instanceof Object &&
+                                Object.values(authResponse).every(value => typeof value === "string")
+                        ),
+                        "Valid json but not expected shape"
+                    );
+                } catch (error) {
+                    console.error(`Failed to parse auth response from callback URL ${String(error)}`);
+                    return undefined;
+                }
+
+                return authResponse;
+            })();
+
+            if (authResponse === undefined) {
+                break read_auth_response;
+            }
 
             const state: string | undefined = authResponse["state"];
 
             if (state === undefined) {
-                break read_auth_response_from_url;
+                break read_auth_response;
             }
 
             const stateData = getStateData({ state });
 
             if (stateData === undefined) {
-                break read_auth_response_from_url;
+                break read_auth_response;
             }
 
             assert(!stateData.isSilentSso);
 
             if (stateData.configHash !== configHash) {
-                break read_auth_response_from_url;
+                break read_auth_response;
             }
-
-            window.history.replaceState(null, "", locationHref_cleanedUp);
 
             log?.("Back from the auth server, with the following auth response", authResponse);
 

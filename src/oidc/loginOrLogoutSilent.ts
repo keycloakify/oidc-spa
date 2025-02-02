@@ -1,6 +1,6 @@
 import type { UserManager as OidcClientTsUserManager } from "../vendor/frontend/oidc-client-ts-and-jwt-decode";
 import { Deferred } from "../tools/Deferred";
-import { id } from "../vendor/frontend/tsafe";
+import { id, assert, typeGuard } from "../vendor/frontend/tsafe";
 import { getStateData, type StateData } from "./StateData";
 import { addQueryParamToUrl } from "../tools/urlQueryParams";
 import { getDownlinkAndRtt } from "../tools/getDownlinkAndRtt";
@@ -153,14 +153,67 @@ export async function loginOrLogoutSilent(params: {
             return;
         }
 
-        if (!error.message.includes("IFrame timed out without a response")) {
-            console.error(error.message);
-            throw error;
-        }
-
         // NOTE: Here, except error on our understanding there can't be any other
         // error than timeout so we fail silently and let the timeout expire.
     });
 
-    return dResult.pr;
+    const result = await dResult.pr;
+
+    let isDone = false;
+
+    for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        assert(key !== null);
+
+        if (!key.startsWith("oidc.")) {
+            continue;
+        }
+
+        const value = localStorage.getItem(key);
+
+        assert(value !== null);
+
+        let parsedValue: unknown;
+
+        try {
+            parsedValue = JSON.parse(value);
+        } catch {
+            console.log("one");
+            continue;
+        }
+
+        if (!typeGuard<Record<string, unknown>>(parsedValue, parsedValue instanceof Object)) {
+            console.log("two");
+            continue;
+        }
+
+        const { data } = parsedValue;
+
+        if (
+            !typeGuard<{ configHash: string }>(
+                data,
+                data instanceof Object && "configHash" in data && typeof data.configHash === "string"
+            )
+        ) {
+            console.log("three");
+            continue;
+        }
+
+        if (data.configHash !== configHash) {
+            console.log("four");
+            continue;
+        }
+
+        parsedValue.data = null;
+
+        localStorage.setItem(key, JSON.stringify(parsedValue));
+
+        isDone = true;
+
+        break;
+    }
+
+    assert(isDone, "We couldn't find the data in localStorage");
+
+    return result;
 }
