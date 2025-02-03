@@ -4,15 +4,13 @@
 <body>
     <!-- oidc-spa file. Do not remove, do not edit -->
     <script>
-        if (localStorage.getItem("oidc-spa.callback-file-version") !== "2") {
+        if (localStorage.getItem("oidc-spa.callback-file-version") !== "3") {
             alert("Your oidc-callback.htm file is outdated. Please update it. https://docs.oidc-spa.dev/v/v6");
         }
         const reloadOnRestore = () => {
             const listener = () => {
                 if (document.visibilityState === "visible") {
                     document.removeEventListener("visibilitychange", listener);
-                    // TODO: Debug, remove
-                    console.log("we got a restore, reloading");
                     location.reload();
                 }
             };
@@ -26,48 +24,49 @@
                 authResponse[key] = value;
             }
 
-            // TODO: Remove, debug
-            if (!("state" in authResponse)) {
-                alert("no state in url");
-            }
-
             const data = (() => {
-                const json = localStorage.getItem(`oidc.${authResponse.state}`);
+
+                const KEY = `oidc.${authResponse.state}`;
+
+                const json = localStorage.getItem(KEY);
 
                 if (json === null) {
                     return undefined;
                 }
 
-                const { data } = JSON.parse(json);
+                const obj = JSON.parse(json);
 
-                if (data === null) {
+                if (obj.data.isProcessed) {
                     return undefined;
                 }
 
-                return data;
+                obj.data.isProcessed = true;
+
+                localStorage.setItem(KEY, JSON.stringify(obj));
+
+                return obj.data;
 
             })();
 
+            const BACK_NAVIGATION_TRACKER_KEY = "oidc-spa.has-navigated-back";
+
             if (data === undefined) {
-                console.log("no data");
                 reloadOnRestore();
-                const KEY = "oidc-spa.has-navigated-back";
-                if (sessionStorage.getItem(KEY) === "true") {
-                    sessionStorage.removeItem(KEY);
+                if (sessionStorage.getItem(BACK_NAVIGATION_TRACKER_KEY) === "true") {
+                    sessionStorage.removeItem(BACK_NAVIGATION_TRACKER_KEY);
                     history.forward();
                 } else {
-                    sessionStorage.setItem(KEY, "true");
+                    sessionStorage.setItem(BACK_NAVIGATION_TRACKER_KEY, "true");
                     history.back();
                 }
                 break main;
             }
 
             if (data.isSilentSso) {
-                console.log("silent sso");
                 parent.postMessage(authResponse, location.origin);
             } else {
-                console.log("not silent sso");
                 reloadOnRestore();
+                sessionStorage.removeItem(BACK_NAVIGATION_TRACKER_KEY);
                 sessionStorage.setItem(`oidc-spa.authResponse`, JSON.stringify(authResponse));
                 location.href = data.redirectUrl;
             }

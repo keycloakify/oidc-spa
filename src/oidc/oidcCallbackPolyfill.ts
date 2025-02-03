@@ -1,5 +1,8 @@
 import { retrieveQueryParamFromUrl } from "../tools/urlQueryParams";
 import { getStateData } from "./StateData";
+import { getIsConfigHash } from "./configHash";
+
+const BACK_NAVIGATION_TRACKER_KEY = "oidc-spa.has-navigated-back";
 
 let previousCall:
     | {
@@ -33,6 +36,10 @@ export function oidcCallbackPolyfill(params: { hasDedicatedHtmFile: boolean }): 
             return undefined;
         }
 
+        if (!getIsConfigHash({ maybeConfigHash: result.value })) {
+            return undefined;
+        }
+
         return result.value;
     })();
 
@@ -40,41 +47,18 @@ export function oidcCallbackPolyfill(params: { hasDedicatedHtmFile: boolean }): 
         return;
     }
 
-    const reloadOnRestore = () => {
-        const listener = () => {
-            if (document.visibilityState === "visible") {
-                document.removeEventListener("visibilitychange", listener);
-                location.reload();
-            }
-        };
-        document.addEventListener("visibilitychange", listener);
-    };
-
-    const stateData = getStateData({ state });
+    const stateData = getStateData({ configHash: state, isCallbackContext: true });
 
     if (stateData === undefined) {
-        {
-            const result = retrieveQueryParamFromUrl({
-                url: window.location.href,
-                name: "code"
-            });
-
-            if (!result.wasPresent || result.value.length < 6) {
-                // It just happens that there is a state query param in the url
-                return;
-            }
-        }
-
         // Here we are almost certain that we navigated back or forward to the callback page.
         // since we have a state and a code query param in the url.
         reloadOnRestore();
 
-        const KEY = "oidc-spa.has-navigated-back";
-        if (sessionStorage.getItem(KEY) === "true") {
-            sessionStorage.removeItem(KEY);
+        if (sessionStorage.getItem(BACK_NAVIGATION_TRACKER_KEY) === "true") {
+            sessionStorage.removeItem(BACK_NAVIGATION_TRACKER_KEY);
             history.forward();
         } else {
-            sessionStorage.setItem(KEY, "true");
+            sessionStorage.setItem(BACK_NAVIGATION_TRACKER_KEY, "true");
             history.back();
         }
 
@@ -98,15 +82,20 @@ export function oidcCallbackPolyfill(params: { hasDedicatedHtmFile: boolean }): 
         parent.postMessage(authResponse, location.origin);
     } else {
         reloadOnRestore();
-
-        const redirectUrl = new URL(stateData.redirectUrl);
-
-        for (const [key, value] of Object.entries(authResponse)) {
-            redirectUrl.searchParams.set(`oidc-spa.${key}`, value);
-        }
-
-        location.href = redirectUrl.href;
+        sessionStorage.removeItem(BACK_NAVIGATION_TRACKER_KEY);
+        sessionStorage.setItem("oidc-spa.authResponse", JSON.stringify(authResponse));
+        location.href = stateData.redirectUrl;
     }
 
     return new Promise<never>(() => {});
+}
+
+function reloadOnRestore() {
+    const listener = () => {
+        if (document.visibilityState === "visible") {
+            document.removeEventListener("visibilitychange", listener);
+            location.reload();
+        }
+    };
+    document.addEventListener("visibilitychange", listener);
 }

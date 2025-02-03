@@ -1,5 +1,5 @@
 export type StateData = {
-    configHash: string;
+    hasBeenProcessedByCallback: boolean;
 } & (
     | {
           isSilentSso: false;
@@ -11,12 +11,14 @@ export type StateData = {
       }
 );
 
+export const STATE_STORE_KEY_PREFIX = "oidc.";
+
 function getIsStateData(value: any): value is StateData {
     if (typeof value !== "object" || value === null) {
         return false;
     }
 
-    if (typeof value.configHash !== "string") {
+    if (typeof value.hasBeenProcessedByCallback !== "boolean") {
         return false;
     }
 
@@ -40,19 +42,36 @@ function getIsStateData(value: any): value is StateData {
     return false;
 }
 
-export function getStateData(params: { state: string }): StateData | undefined {
-    const { state } = params;
+export function getStateData(params: {
+    configHash: string;
+    isCallbackContext: boolean;
+}): StateData | undefined {
+    const { configHash, isCallbackContext } = params;
 
-    const lsItem = localStorage.getItem(`oidc.${state}`);
+    const KEY = `${STATE_STORE_KEY_PREFIX}${configHash}`;
+
+    const lsItem = localStorage.getItem(KEY);
 
     if (lsItem === null) {
         return undefined;
     }
 
-    const { data } = JSON.parse(lsItem);
+    const obj = JSON.parse(lsItem);
+
+    const { data } = obj;
 
     if (!getIsStateData(data)) {
         return undefined;
+    }
+
+    if (isCallbackContext) {
+        if (data.hasBeenProcessedByCallback) {
+            return undefined;
+        }
+
+        data.hasBeenProcessedByCallback = true;
+
+        localStorage.setItem(KEY, JSON.stringify(obj));
     }
 
     return data;

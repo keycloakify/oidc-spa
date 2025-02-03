@@ -20,7 +20,7 @@ import {
     createIframeTimeoutInitializationError,
     createWellKnownOidcConfigurationEndpointUnreachableInitializationError
 } from "./OidcInitializationError";
-import { getStateData, type StateData } from "./StateData";
+import { getStateData, type StateData, STATE_STORE_KEY_PREFIX } from "./StateData";
 import { notifyOtherTabOfLogout, getPrOtherTabLogout } from "./logoutPropagationToOtherTabs";
 import { getConfigHash } from "./configHash";
 import { oidcClientTsUserToTokens } from "./oidcClientTsUserToTokens";
@@ -305,6 +305,7 @@ export async function createOidc_nonMemoized<
         silent_redirect_uri: urls.callbackUrl,
         post_logout_redirect_uri: urls.callbackUrl,
         userStore: new WebStorageStateStore({ store: new InMemoryWebStorage() }),
+        stateStore: new WebStorageStateStore({ store: localStorage, prefix: STATE_STORE_KEY_PREFIX }),
         client_secret: __clientSecret_DO_NOT_USE_OR_YOU_WILL_BE_FIRED
     });
 
@@ -490,7 +491,7 @@ export async function createOidc_nonMemoized<
 
         await oidcClientTsUserManager.signinRedirect({
             state: id<StateData>({
-                configHash,
+                hasBeenProcessedByCallback: false,
                 isSilentSso: false,
                 redirectUrl,
                 extraQueryParams
@@ -545,23 +546,17 @@ export async function createOidc_nonMemoized<
                 break read_auth_response;
             }
 
-            const state: string | undefined = authResponse["state"];
-
-            if (state === undefined) {
+            if (authResponse["state"] !== configHash) {
                 break read_auth_response;
             }
 
-            const stateData = getStateData({ state });
+            const stateData = getStateData({ configHash, isCallbackContext: false });
 
             if (stateData === undefined) {
                 break read_auth_response;
             }
 
             assert(!stateData.isSilentSso);
-
-            if (stateData.configHash !== configHash) {
-                break read_auth_response;
-            }
 
             log?.("Back from the auth server, with the following auth response", authResponse);
 
