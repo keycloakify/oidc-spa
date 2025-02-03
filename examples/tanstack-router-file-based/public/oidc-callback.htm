@@ -28,7 +28,7 @@
 
                 const KEY = `oidc.${authResponse.state}`;
 
-                const json = localStorage.getItem(KEY);
+                const json = sessionStorage.getItem(KEY);
 
                 if (json === null) {
                     return undefined;
@@ -36,13 +36,13 @@
 
                 const obj = JSON.parse(json);
 
-                if (obj.data.isProcessed) {
+                if (obj.data.hasBeenProcessedByCallback) {
                     return undefined;
                 }
 
-                obj.data.isProcessed = true;
+                obj.data.hasBeenProcessedByCallback = true;
 
-                localStorage.setItem(KEY, JSON.stringify(obj));
+                sessionStorage.setItem(KEY, JSON.stringify(obj));
 
                 return obj.data;
 
