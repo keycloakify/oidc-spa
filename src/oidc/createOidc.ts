@@ -26,7 +26,7 @@ import { getConfigHash } from "./configHash";
 import { oidcClientTsUserToTokens } from "./oidcClientTsUserToTokens";
 import { loginOrLogoutSilent, authResponseToUrl } from "./loginOrLogoutSilent";
 import { setExpectedCallbackFileVersion } from "./expectedCallbackFileVersion";
-import { oidcCallbackPolyfill } from "./oidcCallbackPolyfill";
+import { handleOidcCallbackIfApplicable } from "./handleOidcCallback";
 import type { Oidc } from "./Oidc";
 
 // NOTE: Replaced at build time
@@ -290,9 +290,13 @@ export async function createOidc_nonMemoized<
         }
     })();
 
+    const debug: typeof console.log = (...args) => {
+        console.log(...[`createOidc ${issuerUri}:${clientId}`, ...args]);
+    };
+
     log?.(`Calling createOidc v${VERSION}`, { issuerUri, clientId, scopes, configHash, urls });
 
-    await oidcCallbackPolyfill({ hasDedicatedHtmFile: urls.hasDedicatedHtmFile });
+    await handleOidcCallbackIfApplicable({ hasDedicatedHtmFile: urls.hasDedicatedHtmFile });
 
     const oidcClientTsUserManager = new OidcClientTsUserManager({
         configHash,
@@ -543,6 +547,7 @@ export async function createOidc_nonMemoized<
             })();
 
             if (authResponse === undefined) {
+                debug("skip reading auth response");
                 break read_auth_response;
             }
 
@@ -553,12 +558,15 @@ export async function createOidc_nonMemoized<
             const stateData = getStateData({ configHash, isCallbackContext: false });
 
             if (stateData === undefined) {
+                debug("skip reading auth response because no state data");
                 break read_auth_response;
             }
 
             assert(!stateData.isSilentSso);
 
             log?.("Back from the auth server, with the following auth response", authResponse);
+
+            debug("Reading auth response");
 
             {
                 const error: string | undefined = authResponse["error"];
@@ -594,6 +602,8 @@ export async function createOidc_nonMemoized<
             } catch (error) {
                 assert(error instanceof Error);
 
+                debug("Error during signinRedirectCallback", error);
+
                 if (error.message === "Failed to fetch") {
                     return createFailedToFetchTokenEndpointInitializationError({
                         clientId,
@@ -605,6 +615,8 @@ export async function createOidc_nonMemoized<
                 //UPDATE: I don't remember how to reproduce this case and I don't know if it's still relevant.
                 return undefined;
             }
+
+            debug("Successful signed in using auth response");
 
             return {
                 oidcClientTsUser,
@@ -626,6 +638,8 @@ export async function createOidc_nonMemoized<
         restore_from_http_only_cookie: {
             log?.("Trying to restore the auth from the httpOnly cookie (silent signin with iframe)");
 
+            debug("trying to restore from the httpOnly cookie");
+
             const result_loginSilent = await loginOrLogoutSilent({
                 oidcClientTsUserManager,
                 configHash,
@@ -639,10 +653,14 @@ export async function createOidc_nonMemoized<
             if (!result_loginSilent.isSuccess) {
                 switch (result_loginSilent.cause) {
                     case "can't reach well-known oidc endpoint":
+                        debug("can't reach well-known oidc endpoint");
+
                         return createWellKnownOidcConfigurationEndpointUnreachableInitializationError({
                             issuerUri
                         });
                     case "timeout":
+                        debug("timeout");
+
                         return createIframeTimeoutInitializationError({
                             hasDedicatedHtmFile: urls.hasDedicatedHtmFile,
                             callbackUrl: urls.callbackUrl,
@@ -661,6 +679,7 @@ export async function createOidc_nonMemoized<
 
                 if (error !== undefined) {
                     // NOTE: This is a very expected case, it happens each time there's no active session.
+                    debug(`The auth server responded with: ${error}`);
                     log?.(`The auth server responded with: ${error}`);
                     break restore_from_http_only_cookie;
                 }
@@ -675,6 +694,8 @@ export async function createOidc_nonMemoized<
             } catch (error) {
                 assert(error instanceof Error);
 
+                debug("Error during signinRedirectCallback (silent sso)", error);
+
                 if (error.message === "Failed to fetch") {
                     return createFailedToFetchTokenEndpointInitializationError({
                         clientId,
@@ -686,6 +707,7 @@ export async function createOidc_nonMemoized<
             }
 
             log?.("Successful silent signed in");
+            debug("Successful silent signed in");
 
             return {
                 oidcClientTsUser,

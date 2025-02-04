@@ -1,6 +1,12 @@
 import { useEffect, useState, createContext, useContext, useReducer, type ReactNode } from "react";
 import type { JSX } from "../tools/JSX";
-import { type Oidc, createOidc, type ParamsOfCreateOidc, OidcInitializationError } from "../oidc";
+import {
+    type Oidc,
+    createOidc,
+    type ParamsOfCreateOidc,
+    OidcInitializationError,
+    handleOidcCallbackIfApplicable
+} from "../oidc";
 import { assert, type Equals } from "../vendor/frontend/tsafe";
 import { id } from "../vendor/frontend/tsafe";
 import { useGuaranteedMemo } from "../tools/powerhooks/useGuaranteedMemo";
@@ -102,6 +108,10 @@ export function createOidcReactApi_dependencyInjection<
     DecodedIdToken,
     ParamsOfCreateOidc extends { autoLogin?: true | undefined } ? true : false
 > {
+    // NOTE: We do it here for optimization reasons
+    // The params can be async, we don't want to wait for the server response to handle the auth response.
+    handleOidcCallbackIfApplicable({ hasDedicatedHtmFile: false });
+
     const dReadyToCreate = new Deferred<void>();
 
     let decodedIdTokenSchema: { parse: (data: unknown) => DecodedIdToken } | undefined = undefined;
