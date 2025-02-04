@@ -110,7 +110,7 @@ export function createOidcReactApi_dependencyInjection<
 > {
     // NOTE: We do it here for optimization reasons
     // The params can be async, we don't want to wait for the server response to handle the auth response.
-    handleOidcCallbackIfApplicable({ hasDedicatedHtmFile: false });
+    handleOidcCallbackIfApplicable();
 
     const dReadyToCreate = new Deferred<void>();
 

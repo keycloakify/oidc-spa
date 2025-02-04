@@ -60,7 +60,8 @@ export async function createMockOidc<
 
     const homeUrl = toFullyQualifiedUrl({
         urlish: homeUrl_params,
-        doAssertNoQueryParams: true
+        doAssertNoQueryParams: true,
+        doOutputWithTrailingSlash: true
     });
 
     const common: Oidc.Common = {

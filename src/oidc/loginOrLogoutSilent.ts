@@ -4,7 +4,6 @@ import { id } from "../vendor/frontend/tsafe";
 import { getStateData, type StateData } from "./StateData";
 import { addQueryParamToUrl } from "../tools/urlQueryParams";
 import { getDownlinkAndRtt } from "../tools/getDownlinkAndRtt";
-import { setExpectedCallbackFileVersion } from "./expectedCallbackFileVersion";
 
 export type AuthResponse = {
     state: string;
@@ -42,7 +41,6 @@ type ResultOfLoginOrLogoutSilent =
 export async function loginOrLogoutSilent(params: {
     oidcClientTsUserManager: OidcClientTsUserManager;
     configHash: string;
-    hasDedicatedHtmFile: boolean;
     action:
         | {
               type: "login";
@@ -52,7 +50,7 @@ export async function loginOrLogoutSilent(params: {
               type: "logout";
           };
 }): Promise<ResultOfLoginOrLogoutSilent> {
-    const { oidcClientTsUserManager, configHash, hasDedicatedHtmFile, action } = params;
+    const { oidcClientTsUserManager, configHash, action } = params;
 
     const dResult = new Deferred<ResultOfLoginOrLogoutSilent>();
 
@@ -119,10 +117,6 @@ export async function loginOrLogoutSilent(params: {
             }),
             silentRequestTimeoutInSeconds: timeoutDelayMs / 1000
         };
-
-        if (hasDedicatedHtmFile) {
-            setExpectedCallbackFileVersion();
-        }
 
         switch (action.type) {
             case "login":

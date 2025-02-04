@@ -1,12 +1,22 @@
-export function toFullyQualifiedUrl(params: { urlish: string; doAssertNoQueryParams: boolean }) {
-    const { urlish, doAssertNoQueryParams } = params;
+type Params = {
+    urlish: string;
+} & (
+    | {
+          doAssertNoQueryParams: true;
+          doOutputWithTrailingSlash: boolean;
+      }
+    | {
+          doAssertNoQueryParams: false;
+      }
+);
 
+export function toFullyQualifiedUrl(params: Params): string {
     let url: string;
 
-    if (urlish.startsWith("http")) {
-        url = urlish;
+    if (params.urlish.startsWith("http")) {
+        url = params.urlish;
     } else {
-        let path = urlish;
+        let path = params.urlish;
 
         if (!path.startsWith("/")) {
             path = `/${path}`;
@@ -25,21 +35,20 @@ export function toFullyQualifiedUrl(params: { urlish: string; doAssertNoQueryPar
         url = urlObj.href;
     }
 
-    // make sure no trailing slash
-    if (url.endsWith("/")) {
-        url = url.slice(0, -1);
-    }
-
-    throw_if_query_params: {
-        if (!doAssertNoQueryParams) {
-            break throw_if_query_params;
+    if (params.doAssertNoQueryParams) {
+        if (new URL(url).searchParams.size !== 0) {
+            throw new Error(`The ${params.urlish} URL should not have query parameters`);
         }
 
-        if (new URL(url).searchParams.size === 0) {
-            break throw_if_query_params;
+        if (params.doOutputWithTrailingSlash) {
+            if (!url.endsWith("/")) {
+                url = `${url}/`;
+            }
+        } else {
+            if (url.endsWith("/")) {
+                url = url.slice(0, -1);
+            }
         }
-
-        throw new Error(`The ${urlish} URL should not have query parameters`);
     }
 
     return url;

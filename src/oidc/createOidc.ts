@@ -25,7 +25,6 @@ import { notifyOtherTabOfLogout, getPrOtherTabLogout } from "./logoutPropagation
 import { getConfigHash } from "./configHash";
 import { oidcClientTsUserToTokens } from "./oidcClientTsUserToTokens";
 import { loginOrLogoutSilent, authResponseToUrl } from "./loginOrLogoutSilent";
-import { setExpectedCallbackFileVersion } from "./expectedCallbackFileVersion";
 import { handleOidcCallbackIfApplicable } from "./handleOidcCallback";
 import type { Oidc } from "./Oidc";
 
@@ -80,26 +79,12 @@ export type ParamsOfCreateOidc<
     postLoginRedirectUrl?: string;
 
     /**
-     * This parameter is used so that oidc-spa know where to find the oidc-callback.htm file
-     * that you have created in the `public` dir and where is the home page of your app (for logout({ redirectTo: "home" })).
-     *
      * What should you put in this parameter?
      *   - Vite project:             `BASE_URL: import.meta.env.BASE_URL`
      *   - Create React App project: `BASE_URL: process.env.PUBLIC_URL`
      *   - Other:                    `BASE_URL: "/"` (Usually, or `/dashboard` if your app is not at the root of the domain)
-     *
-     * If you do not have a dedicated oidc-callback.htm file, explicitly set `BASE_URL: undefined` and provide a `homeUrl`.
      */
-    BASE_URL: string | undefined;
-
-    /**
-     * This parameter is to be provided if and only if you have set `BASE_URL: undefined`.
-     * It should indicate the home page of your app.
-     * In the majority of cases it should be `homeUrl: "/"` but it could aso be something like `homeUrl: "/dashboard"`
-     * if your web app isn't hosted at the root of the domain.
-     * We need to know this only to know where to redirect when you call `logout({ redirectTo: "home"})`
-     */
-    homeUrl?: string;
+    homeUrl: string;
 
     decodedIdTokenSchema?: { parse: (data: unknown) => DecodedIdToken };
     /**
@@ -141,7 +126,8 @@ export async function createOidc<
 
     const issuerUri = toFullyQualifiedUrl({
         urlish: issuerUri_params,
-        doAssertNoQueryParams: true
+        doAssertNoQueryParams: true,
+        doOutputWithTrailingSlash: false
     });
 
     const log = (() => {
@@ -228,8 +214,7 @@ export async function createOidc_nonMemoized<
         transformUrlBeforeRedirect,
         extraQueryParams: extraQueryParamsOrGetter,
         extraTokenParams: extraTokenParamsOrGetter,
-        BASE_URL: BASE_URL_params,
-        homeUrl,
+        homeUrl: homeUrl_params,
         decodedIdTokenSchema,
         __unsafe_ssoSessionIdleSeconds,
         autoLogoutParams = { redirectTo: "current page" },
@@ -254,60 +239,32 @@ export async function createOidc_nonMemoized<
         return undefined;
     });
 
-    const urls = (() => {
-        if (homeUrl !== undefined) {
-            assert(
-                BASE_URL_params === undefined,
-                "If homeUrl is provided, BASE_URL must be explicitly set to undefined"
-            );
+    const homeAndCallbackUrl = toFullyQualifiedUrl({
+        urlish: homeUrl_params,
+        doAssertNoQueryParams: true,
+        doOutputWithTrailingSlash: true
+    });
 
-            const url = toFullyQualifiedUrl({
-                urlish: homeUrl,
-                doAssertNoQueryParams: true
-            });
+    log?.(`Calling createOidc v${VERSION}`, {
+        issuerUri,
+        clientId,
+        scopes,
+        configHash,
+        homeAndCallbackUrl
+    });
 
-            return {
-                hasDedicatedHtmFile: false,
-                callbackUrl: url,
-                homeUrl: url
-            };
-        } else {
-            assert(
-                BASE_URL_params !== undefined,
-                "If homeUrl is not provided, BASE_URL must be provided"
-            );
-
-            const url = toFullyQualifiedUrl({
-                urlish: BASE_URL_params,
-                doAssertNoQueryParams: true
-            });
-
-            return {
-                hasDedicatedHtmFile: true,
-                callbackUrl: `${url}/oidc-callback.htm`,
-                homeUrl: url
-            };
-        }
-    })();
-
-    const debug: typeof console.log = (...args) => {
-        console.log(...[`createOidc ${issuerUri}:${clientId}`, ...args]);
-    };
-
-    log?.(`Calling createOidc v${VERSION}`, { issuerUri, clientId, scopes, configHash, urls });
-
-    await handleOidcCallbackIfApplicable({ hasDedicatedHtmFile: urls.hasDedicatedHtmFile });
+    await handleOidcCallbackIfApplicable();
 
     const oidcClientTsUserManager = new OidcClientTsUserManager({
         configHash,
         authority: issuerUri,
         client_id: clientId,
-        redirect_uri: urls.callbackUrl,
+        redirect_uri: homeAndCallbackUrl,
+        silent_redirect_uri: homeAndCallbackUrl,
+        post_logout_redirect_uri: homeAndCallbackUrl,
         response_type: "code",
         scope: Array.from(new Set(["openid", ...scopes])).join(" "),
         automaticSilentRenew: false,
-        silent_redirect_uri: urls.callbackUrl,
-        post_logout_redirect_uri: urls.callbackUrl,
         userStore: new WebStorageStateStore({ store: new InMemoryWebStorage() }),
         stateStore: new WebStorageStateStore({ store: sessionStorage, prefix: STATE_STORE_KEY_PREFIX }),
         client_secret: __clientSecret_DO_NOT_USE_OR_YOU_WILL_BE_FIRED
@@ -489,10 +446,6 @@ export async function createOidc_nonMemoized<
             return { extraQueryParams };
         })();
 
-        if (urls.hasDedicatedHtmFile) {
-            setExpectedCallbackFileVersion();
-        }
-
         await oidcClientTsUserManager.signinRedirect({
             state: id<StateData>({
                 hasBeenProcessedByCallback: false,
@@ -547,7 +500,6 @@ export async function createOidc_nonMemoized<
             })();
 
             if (authResponse === undefined) {
-                debug("skip reading auth response");
                 break read_auth_response;
             }
 
@@ -558,15 +510,12 @@ export async function createOidc_nonMemoized<
             const stateData = getStateData({ configHash, isCallbackContext: false });
 
             if (stateData === undefined) {
-                debug("skip reading auth response because no state data");
                 break read_auth_response;
             }
 
             assert(!stateData.isSilentSso);
 
             log?.("Back from the auth server, with the following auth response", authResponse);
-
-            debug("Reading auth response");
 
             {
                 const error: string | undefined = authResponse["error"];
@@ -602,8 +551,6 @@ export async function createOidc_nonMemoized<
             } catch (error) {
                 assert(error instanceof Error);
 
-                debug("Error during signinRedirectCallback", error);
-
                 if (error.message === "Failed to fetch") {
                     return createFailedToFetchTokenEndpointInitializationError({
                         clientId,
@@ -615,8 +562,6 @@ export async function createOidc_nonMemoized<
                 //UPDATE: I don't remember how to reproduce this case and I don't know if it's still relevant.
                 return undefined;
             }
-
-            debug("Successful signed in using auth response");
 
             return {
                 oidcClientTsUser,
@@ -638,32 +583,24 @@ export async function createOidc_nonMemoized<
         restore_from_http_only_cookie: {
             log?.("Trying to restore the auth from the httpOnly cookie (silent signin with iframe)");
 
-            debug("trying to restore from the httpOnly cookie");
-
             const result_loginSilent = await loginOrLogoutSilent({
                 oidcClientTsUserManager,
                 configHash,
                 action: {
                     type: "login",
                     getExtraTokenParams
-                },
-                hasDedicatedHtmFile: urls.hasDedicatedHtmFile
+                }
             });
 
             if (!result_loginSilent.isSuccess) {
                 switch (result_loginSilent.cause) {
                     case "can't reach well-known oidc endpoint":
-                        debug("can't reach well-known oidc endpoint");
-
                         return createWellKnownOidcConfigurationEndpointUnreachableInitializationError({
                             issuerUri
                         });
                     case "timeout":
-                        debug("timeout");
-
                         return createIframeTimeoutInitializationError({
-                            hasDedicatedHtmFile: urls.hasDedicatedHtmFile,
-                            callbackUrl: urls.callbackUrl,
+                            homeAndCallbackUrl,
                             clientId,
                             issuerUri
                         });
@@ -679,7 +616,6 @@ export async function createOidc_nonMemoized<
 
                 if (error !== undefined) {
                     // NOTE: This is a very expected case, it happens each time there's no active session.
-                    debug(`The auth server responded with: ${error}`);
                     log?.(`The auth server responded with: ${error}`);
                     break restore_from_http_only_cookie;
                 }
@@ -694,8 +630,6 @@ export async function createOidc_nonMemoized<
             } catch (error) {
                 assert(error instanceof Error);
 
-                debug("Error during signinRedirectCallback (silent sso)", error);
-
                 if (error.message === "Failed to fetch") {
                     return createFailedToFetchTokenEndpointInitializationError({
                         clientId,
@@ -707,7 +641,6 @@ export async function createOidc_nonMemoized<
             }
 
             log?.("Successful silent signed in");
-            debug("Successful silent signed in");
 
             return {
                 oidcClientTsUser,
@@ -889,7 +822,6 @@ export async function createOidc_nonMemoized<
                 const result_logoutSilent = await loginOrLogoutSilent({
                     configHash,
                     oidcClientTsUserManager,
-                    hasDedicatedHtmFile: urls.hasDedicatedHtmFile,
                     action: {
                         type: "logout"
                     }
@@ -910,7 +842,7 @@ export async function createOidc_nonMemoized<
                     case "current page":
                         return window.location.href;
                     case "home":
-                        return urls.homeUrl;
+                        return homeAndCallbackUrl;
                     case "specific url":
                         return toFullyQualifiedUrl({
                             urlish: params.url,

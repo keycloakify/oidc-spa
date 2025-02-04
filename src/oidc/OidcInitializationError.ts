@@ -1,4 +1,3 @@
-import { assert } from "../vendor/frontend/tsafe";
 import { getIsValidRemoteJson } from "../tools/getIsValidRemoteJson";
 
 export class OidcInitializationError extends Error {
@@ -134,133 +133,19 @@ export async function createWellKnownOidcConfigurationEndpointUnreachableInitial
 }
 
 export async function createIframeTimeoutInitializationError(params: {
-    hasDedicatedHtmFile: boolean;
-    callbackUrl: string;
+    homeAndCallbackUrl: string;
     issuerUri: string;
     clientId: string;
 }): Promise<OidcInitializationError> {
-    const { hasDedicatedHtmFile, callbackUrl, issuerUri, clientId } = params;
-
-    oidc_callback_htm_unreachable: {
-        if (!hasDedicatedHtmFile) {
-            break oidc_callback_htm_unreachable;
-        }
-
-        const getHtmFileReachabilityStatus = async (ext?: "html") =>
-            fetch(`${callbackUrl}${ext === "html" ? "l" : ""}`).then(
-                async response => {
-                    if (!response.ok) {
-                        return "not reachable";
-                    }
-
-                    let content: string;
-
-                    try {
-                        content = await response.text();
-                    } catch {
-                        return "not reachable";
-                    }
-
-                    if (content.length > 3000 || !content.includes("oidc-spa.")) {
-                        return "reachable but does no contain the expected content";
-                    }
-
-                    return "seems ok";
-                },
-                () => "not reachable" as const
-            );
-
-        const status = await getHtmFileReachabilityStatus();
-
-        if (status === "seems ok") {
-            break oidc_callback_htm_unreachable;
-        }
-
-        const status_wrongExtension = await getHtmFileReachabilityStatus("html");
-
-        if (status_wrongExtension === "seems ok") {
-            return new OidcInitializationError({
-                isAuthServerLikelyDown: false,
-                messageOrCause: [
-                    "You have created the file oidc-callback.html instead of oidc-callback.htm.",
-                    "The expected extension is .htm not .html."
-                ].join("\n")
-            });
-        }
-
-        for (const legacyCallbackFileBasename of [".htm", ".html"].map(ext => `silent-sso${ext}`)) {
-            const legacyCallbackUrl = callbackUrl.replace("silent-sso.htm", legacyCallbackFileBasename);
-
-            const doesSeemsOk = await fetch(legacyCallbackUrl).then(
-                async response => {
-                    if (!response.ok) {
-                        return false;
-                    }
-
-                    let content: string;
-
-                    try {
-                        content = await response.text();
-                    } catch {
-                        return false;
-                    }
-
-                    if (
-                        content.length > 1200 ||
-                        !content.includes("parent.postMessage(location.href,")
-                    ) {
-                        return false;
-                    }
-
-                    return true;
-                },
-                () => false
-            );
-
-            if (!doesSeemsOk) {
-                continue;
-            }
-
-            return new OidcInitializationError({
-                isAuthServerLikelyDown: false,
-                messageOrCause: [
-                    `In oidc-spa v6 is no longer using the ${legacyCallbackFileBasename} file.`,
-                    `It is now oidc-callback.htm.`,
-                    `Check the documentation: https://docs.oidc-spa.dev/v/v6/installation`
-                ].join("\n")
-            });
-        }
-
-        if (status === "reachable but does no contain the expected content") {
-            return new OidcInitializationError({
-                isAuthServerLikelyDown: false,
-                messageOrCause: [
-                    "There is an issue with the content of the `oidc-callback.htm` file that you should have created in the public directory of your repository.",
-                    `The URL "${callbackUrl}" responds with a 200 status code, but the content is not as expected.`,
-                    "It seems you may have forgotten to create the file.",
-                    "Refer to the documentation: https://docs.oidc-spa.dev/v/v6/installation",
-                    "If you have created the file, verify your web server's configuration to ensure it isn't re-routing the GET request to something else, such as `index.html`."
-                ].join("\n")
-            });
-        }
-
-        assert(status === "not reachable");
-
-        return new OidcInitializationError({
-            isAuthServerLikelyDown: false,
-            messageOrCause: [
-                `You seem to have forgotten to create the oidc-callback.htm file in the public directory.`,
-                `${callbackUrl} is not reachable.`,
-                `Check the documentation: https://docs.oidc-spa.dev/v/v6/installation`
-            ].join("\n")
-        });
-    }
+    const { homeAndCallbackUrl, issuerUri, clientId } = params;
 
     frame_ancestors_none: {
-        const cspOrError = await fetch(callbackUrl).then(
+        const cspOrError = await fetch(homeAndCallbackUrl).then(
             response => {
                 if (!response.ok) {
-                    return new Error(`${callbackUrl} responded with a ${response.status} status code.`);
+                    return new Error(
+                        `${homeAndCallbackUrl} responded with a ${response.status} status code.`
+                    );
                 }
 
                 return response.headers.get("Content-Security-Policy");
@@ -298,20 +183,23 @@ export async function createIframeTimeoutInitializationError(params: {
         return new OidcInitializationError({
             isAuthServerLikelyDown: false,
             messageOrCause: [
-                hasDedicatedHtmFile ? `The oidc-callback.htm file,` : `The url used as OIDC callback,`,
-                "is served by your web server with the HTTP header `Content-Security-Policy: frame-ancestors none` in the response.\n",
+                `The home of your application ${homeAndCallbackUrl}, which is also used as the OIDC callback URL,`,
+                "is currently served by your web server with the HTTP header `Content-Security-Policy: frame-ancestors none`.\n",
                 "This header prevents the silent sign-in process from working.\n",
-                "To fix this issue, you should configure your web server not to send this header or to use `frame-ancestors self` instead of `frame-ancestors none`.\n",
-                "If you use Nginx, you can replace:\n",
-                `add_header Content-Security-Policy "frame-ancestors 'none'";\n`,
-                "with:\n",
-                `map $uri $add_content_security_policy {\n`,
-                `   "~*silent-sso\.html$" "frame-ancestors 'self'";\n`,
-                `   default "frame-ancestors 'none'";\n`,
-                `}\n`,
-                `add_header Content-Security-Policy $add_content_security_policy;\n`,
-                `\n`,
-                `The url in question is: ${callbackUrl}`
+                "To fix this issue, you need to allow your application's homepage to be iframed during the silent login flow. ",
+                "For example, replacing `frame-ancestors 'none'` with `frame-ancestors 'self'` ensures your app can be embedded in an iframe on the same domain.\n",
+                "However, if you are concerned about allowing the entire SPA to be iframed, you can selectively loosen the `frame-ancestors` policy only when the `state` parameter is present on the URL.\n",
+                "If you're using Nginx, a possible configuration might look like:\n",
+                "ngnix.conf:\n",
+                "```\n",
+                "map $query_string $add_content_security_policy {\n",
+                '    "~*state=" "frame-ancestors \'self\'";\n',
+                "    default      \"frame-ancestors 'none'\";\n",
+                "}\n",
+                "add_header Content-Security-Policy $add_content_security_policy;\n",
+                "```\n",
+                "This way, the homepage is only iframed when the `state` parameter is present, and remains protected in all other scenarios.\n",
+                `The URL in question is: ${homeAndCallbackUrl}`
             ].join(" ")
         });
     }
@@ -325,11 +213,11 @@ export async function createIframeTimeoutInitializationError(params: {
         isAuthServerLikelyDown: false,
         messageOrCause: [
             `The silent sign-in process timed out.\n`,
-            `Based on the diagnostic performed by oidc-spa:\n`,
+            `Based on the diagnostic performed by oidc-spa the more likely causes are:\n`,
             `- Either the client ID "${clientId}" does not exist, or\n`,
             `- You forgot to add the OIDC callback URL to the list of Valid Redirect URIs.\n`,
             `Client ID: "${clientId}"\n`,
-            `Callback URL to add to the list of Valid Redirect URIs: "${callbackUrl}"\n\n`,
+            `Callback URL to add to the list of Valid Redirect URIs: "${homeAndCallbackUrl}"\n\n`,
             ...(() => {
                 const issuerUriParsed = parseKeycloakIssuerUri(issuerUri);
 
@@ -345,7 +233,7 @@ export async function createIframeTimeoutInitializationError(params: {
                     `2. Log in as an admin user.\n`,
                     `3. In the left menu, click on "Clients".\n`,
                     `4. Locate the client "${clientId}" in the list and click on it.\n`,
-                    `5. Find "Valid Redirect URIs" and add "${callbackUrl}" to the list.\n`,
+                    `5. Find "Valid Redirect URIs" and add "${homeAndCallbackUrl}" to the list.\n`,
                     `6. Save the changes.\n\n`,
                     `For more information, refer to the documentation: https://docs.oidc-spa.dev/v/v6/resources/keycloak-configuration`
                 ];
