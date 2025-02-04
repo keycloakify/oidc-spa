@@ -26,8 +26,6 @@ export const {
     // KC_RELATIVE_PATH is by default "" in modern keycloak, on older keycloak it used to be "/auth" by default.
     issuerUri: import.meta.env.VITE_OIDC_ISSUER,
     clientId: import.meta.env.VITE_OIDC_CLIENT_ID,
-    //BASE_URL: import.meta.env.BASE_URL,
-    BASE_URL: undefined,
     homeUrl: import.meta.env.BASE_URL,
     /**
      * This parameter is optional.
