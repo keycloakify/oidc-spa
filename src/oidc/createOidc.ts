@@ -115,7 +115,7 @@ export async function createOidc<
 ): Promise<AutoLogin extends true ? Oidc.LoggedIn<DecodedIdToken> : Oidc<DecodedIdToken>> {
     for (const name of ["issuerUri", "clientId"] as const) {
         const value = params[name];
-        if (typeof value !== "string") {
+        if (!value) {
             throw new Error(
                 `The parameter "${name}" is required, you provided: ${value}. (Forgot a .env variable?)`
             );
