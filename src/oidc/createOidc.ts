@@ -25,7 +25,7 @@ import { notifyOtherTabOfLogout, getPrOtherTabLogout } from "./logoutPropagation
 import { getConfigHash } from "./configHash";
 import { oidcClientTsUserToTokens } from "./oidcClientTsUserToTokens";
 import { loginOrLogoutSilent, authResponseToUrl } from "./loginOrLogoutSilent";
-import { handleOidcCallbackIfApplicable } from "./handleOidcCallback";
+import { handleOidcCallback, AUTH_RESPONSE_KEY } from "./handleOidcCallback";
 import type { Oidc } from "./Oidc";
 
 // NOTE: Replaced at build time
@@ -253,7 +253,7 @@ export async function createOidc_nonMemoized<
         homeAndCallbackUrl
     });
 
-    await handleOidcCallbackIfApplicable();
+    await handleOidcCallback();
 
     const oidcClientTsUserManager = new OidcClientTsUserManager({
         configHash,
@@ -458,6 +458,8 @@ export async function createOidc_nonMemoized<
         return new Promise<never>(() => {});
     };
 
+    const BROWSER_SESSION_NOT_FIRST_INIT_KEY = `oidc-spa.browser-session-not-first-init:${configHash}`;
+
     const resultOfLoginProcess = await (async (): Promise<
         | undefined // User is currently not logged in
         | Error // Initialization error
@@ -468,15 +470,13 @@ export async function createOidc_nonMemoized<
     > => {
         read_auth_response: {
             const authResponse = (() => {
-                const KEY = "oidc-spa.authResponse";
-
-                const value = sessionStorage.getItem(KEY);
+                const value = sessionStorage.getItem(AUTH_RESPONSE_KEY);
 
                 if (value === null) {
                     return undefined;
                 }
 
-                sessionStorage.removeItem(KEY);
+                sessionStorage.removeItem(AUTH_RESPONSE_KEY);
 
                 let authResponse: unknown;
 
@@ -562,6 +562,8 @@ export async function createOidc_nonMemoized<
                 //UPDATE: I don't remember how to reproduce this case and I don't know if it's still relevant.
                 return undefined;
             }
+
+            sessionStorage.removeItem(BROWSER_SESSION_NOT_FIRST_INIT_KEY);
 
             return {
                 oidcClientTsUser,
@@ -919,10 +921,8 @@ export async function createOidc_nonMemoized<
         goToAuthServer: params => loginOrGoToAuthServer({ action: "go to auth server", ...params }),
         backFromAuthServer: resultOfLoginProcess.backFromAuthServer,
         isNewBrowserSession: (() => {
-            const key = `oidc-spa:browser-session:${configHash}`;
-
-            if (sessionStorage.getItem(key) === null) {
-                sessionStorage.setItem(key, "true");
+            if (sessionStorage.getItem(BROWSER_SESSION_NOT_FIRST_INIT_KEY) === null) {
+                sessionStorage.setItem(BROWSER_SESSION_NOT_FIRST_INIT_KEY, "true");
 
                 log?.("This is a new browser session");
 

@@ -4,15 +4,17 @@ import { getIsConfigHash } from "./configHash";
 
 let previousCall: Promise<void | never> | undefined = undefined;
 
-export function handleOidcCallbackIfApplicable(): Promise<void | never> {
+export function handleOidcCallback(): Promise<void | never> {
     if (previousCall !== undefined) {
         return previousCall;
     }
 
-    return (previousCall = handleOidcCallbackIfApplicable_nonMemoized());
+    return (previousCall = handleOidcCallback_nonMemoized());
 }
 
-async function handleOidcCallbackIfApplicable_nonMemoized(): Promise<void | never> {
+export const AUTH_RESPONSE_KEY = "oidc-spa.authResponse";
+
+async function handleOidcCallback_nonMemoized(): Promise<void | never> {
     const state = (() => {
         const result = retrieveQueryParamFromUrl({
             url: window.location.href,
@@ -94,7 +96,7 @@ async function handleOidcCallbackIfApplicable_nonMemoized(): Promise<void | neve
     } else {
         reloadOnRestore();
         clearBackForwardTracker();
-        sessionStorage.setItem("oidc-spa.authResponse", JSON.stringify(authResponse));
+        sessionStorage.setItem(AUTH_RESPONSE_KEY, JSON.stringify(authResponse));
         location.href = stateData.redirectUrl;
     }
 

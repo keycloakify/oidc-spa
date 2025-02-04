@@ -5,7 +5,7 @@ import {
     createOidc,
     type ParamsOfCreateOidc,
     OidcInitializationError,
-    handleOidcCallbackIfApplicable
+    handleOidcCallback
 } from "../oidc";
 import { assert, type Equals } from "../vendor/frontend/tsafe";
 import { id } from "../vendor/frontend/tsafe";
@@ -110,7 +110,7 @@ export function createOidcReactApi_dependencyInjection<
 > {
     // NOTE: We do it here for optimization reasons
     // The params can be async, we don't want to wait for the server response to handle the auth response.
-    handleOidcCallbackIfApplicable();
+    handleOidcCallback();
 
     const dReadyToCreate = new Deferred<void>();
 
