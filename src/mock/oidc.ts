@@ -165,7 +165,6 @@ export async function createMockOidc<
         subscribeToAutoLogoutCountdown: () => ({
             unsubscribeFromAutoLogoutCountdown: () => {}
         }),
-        //"loginScenario": isUserInitiallyLoggedIn ? "silentSignin" : "backFromLoginPages",
         goToAuthServer: async ({ redirectUrl }) => loginOrGoToAuthServer({ redirectUrl }),
         isNewBrowserSession: false,
         backFromAuthServer: undefined
