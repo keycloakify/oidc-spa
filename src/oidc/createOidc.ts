@@ -325,8 +325,15 @@ export async function createOidc_nonMemoized<
                             window.history.back();
                         }
                     } else {
-                        log?.("The current page doesn't require auth, we don't need to reload");
-                        hasLoginBeenCalled = false;
+                        log?.("The current page doesn't require auth...");
+
+                        if (getStateData({ configHash, isCallbackContext: false }) === undefined) {
+                            log?.("but the user is now authenticated, reloading the page");
+                            location.reload();
+                        } else {
+                            log?.("and the user doesn't seem to be authenticated, avoiding a reload");
+                            hasLoginBeenCalled = false;
+                        }
                     }
                 }
             };
