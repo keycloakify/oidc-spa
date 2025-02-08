@@ -266,7 +266,7 @@ export async function createOidc_nonMemoized<
         scope: Array.from(new Set(["openid", ...scopes])).join(" "),
         automaticSilentRenew: false,
         userStore: new WebStorageStateStore({ store: new InMemoryWebStorage() }),
-        stateStore: new WebStorageStateStore({ store: sessionStorage, prefix: STATE_STORE_KEY_PREFIX }),
+        stateStore: new WebStorageStateStore({ store: localStorage, prefix: STATE_STORE_KEY_PREFIX }),
         client_secret: __clientSecret_DO_NOT_USE_OR_YOU_WILL_BE_FIRED
     });
 
