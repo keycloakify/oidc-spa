@@ -50,7 +50,7 @@ export function getStateData(params: {
 
     const KEY = `${STATE_STORE_KEY_PREFIX}${configHash}`;
 
-    const lsItem = sessionStorage.getItem(KEY);
+    const lsItem = localStorage.getItem(KEY);
 
     if (lsItem === null) {
         return undefined;
@@ -71,7 +71,7 @@ export function getStateData(params: {
 
         data.hasBeenProcessedByCallback = true;
 
-        sessionStorage.setItem(KEY, JSON.stringify(obj));
+        localStorage.setItem(KEY, JSON.stringify(obj));
     }
 
     return data;
