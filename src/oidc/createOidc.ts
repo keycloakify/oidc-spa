@@ -114,13 +114,27 @@ handleOidcCallback();
 
 declare global {
     interface Window {
-        "__oidc-spa.prOidcByConfigId": Map<string, Promise<Oidc<any>>>;
-        "__oidc-spa.evtAuthResponseHandled": AwaitableEventEmitter<void>;
+        "__oidc-spa.createOidc.GlobalContext": {
+            prOidcByConfigId: Map<string, Promise<Oidc<any>>>;
+            evtAuthResponseHandled: AwaitableEventEmitter<void>;
+            URL_real: typeof URL;
+            $isUserActive: StatefulObservable<boolean> | undefined;
+            hasLoginBeenCalled: boolean;
+            hasLogoutBeenCalled: boolean;
+        };
     }
 }
 
-window["__oidc-spa.prOidcByConfigId"] ??= new Map();
-window["__oidc-spa.evtAuthResponseHandled"] ??= createAwaitableEventEmitter<void>();
+window["__oidc-spa.createOidc.GlobalContext"] ??= {
+    prOidcByConfigId: new Map(),
+    evtAuthResponseHandled: createAwaitableEventEmitter<void>(),
+    URL_real: window.URL,
+    $isUserActive: undefined,
+    hasLoginBeenCalled: false,
+    hasLogoutBeenCalled: false
+};
+
+const globalContext = window["__oidc-spa.createOidc.GlobalContext"];
 
 /** @see: https://docs.oidc-spa.dev/v/v6/usage */
 export async function createOidc<
@@ -164,8 +178,10 @@ export async function createOidc<
 
     const configId = getConfigId({ issuerUri, clientId });
 
+    const { prOidcByConfigId } = globalContext;
+
     use_previous_instance: {
-        const prOidc = window["__oidc-spa.prOidcByConfigId"].get(configId);
+        const prOidc = prOidcByConfigId.get(configId);
 
         if (prOidc === undefined) {
             break use_previous_instance;
@@ -188,7 +204,7 @@ export async function createOidc<
 
     const dOidc = new Deferred<Oidc<any>>();
 
-    window["__oidc-spa.prOidcByConfigId"].set(configId, dOidc.pr);
+    prOidcByConfigId.set(configId, dOidc.pr);
 
     const oidc = await createOidc_nonMemoized(rest, {
         issuerUri,
@@ -202,13 +218,6 @@ export async function createOidc<
 
     return oidc;
 }
-
-let $isUserActive: StatefulObservable<boolean> | undefined = undefined;
-
-const URL_real = window.URL;
-
-let hasLoginBeenCalled = false;
-let hasLogoutBeenCalled = false;
 
 export async function createOidc_nonMemoized<
     DecodedIdToken extends Record<string, unknown> = Record<string, unknown>,
@@ -323,12 +332,12 @@ export async function createOidc_nonMemoized<
         // When the app is hosted on https (so not in dev mode) the browser will restore the state of the app
         // instead of reloading the page.
         if (rest.action === "login") {
-            if (hasLoginBeenCalled) {
+            if (globalContext.hasLoginBeenCalled) {
                 log?.("login() has already been called, ignoring the call");
                 return new Promise<never>(() => {});
             }
 
-            hasLoginBeenCalled = true;
+            globalContext.hasLoginBeenCalled = true;
 
             const callback = () => {
                 if (document.visibilityState === "visible") {
@@ -354,7 +363,7 @@ export async function createOidc_nonMemoized<
                             location.reload();
                         } else {
                             log?.("and the user doesn't seem to be authenticated, avoiding a reload");
-                            hasLoginBeenCalled = false;
+                            globalContext.hasLoginBeenCalled = false;
                         }
                     }
                 }
@@ -380,6 +389,8 @@ export async function createOidc_nonMemoized<
         // used internally by oidc-client-ts. It's save to do so since this is the
         // last thing that will be done before the redirect.
         {
+            const { URL_real } = globalContext;
+
             const URL = (...args: ConstructorParameters<typeof URL_real>) => {
                 const urlInstance = new URL_real(...args);
 
@@ -537,8 +548,10 @@ export async function createOidc_nonMemoized<
             assert(stateData !== undefined);
             assert(stateData.context === "redirect");
 
+            const { evtAuthResponseHandled } = globalContext;
+
             if (stateData.configId !== configId) {
-                await window["__oidc-spa.evtAuthResponseHandled"].waitFor();
+                await evtAuthResponseHandled.waitFor();
                 break handle_redirect_auth_response;
             }
 
@@ -557,7 +570,7 @@ export async function createOidc_nonMemoized<
                             oidcClientTsUser = await oidcClientTsUserManager
                                 .signinRedirectCallback(authResponseUrl)
                                 .finally(() => {
-                                    window["__oidc-spa.evtAuthResponseHandled"].post();
+                                    evtAuthResponseHandled.post();
                                 });
                         } catch (error) {
                             assert(error instanceof Error);
@@ -612,7 +625,7 @@ export async function createOidc_nonMemoized<
                             await oidcClientTsUserManager.signoutRedirectCallback(authResponseUrl);
                         } catch {}
 
-                        window["__oidc-spa.evtAuthResponseHandled"].post();
+                        evtAuthResponseHandled.post();
 
                         notifyOtherTabOfLogout({
                             configId,
@@ -858,12 +871,12 @@ export async function createOidc_nonMemoized<
         isUserLoggedIn: true,
         getTokens: () => currentTokens,
         logout: async params => {
-            if (hasLogoutBeenCalled) {
+            if (globalContext.hasLogoutBeenCalled) {
                 log?.("logout() has already been called, ignoring the call");
                 return new Promise<never>(() => {});
             }
 
-            hasLogoutBeenCalled = true;
+            globalContext.hasLogoutBeenCalled = true;
 
             document.addEventListener("visibilitychange", () => {
                 if (document.visibilityState === "visible") {
@@ -1092,13 +1105,13 @@ export async function createOidc_nonMemoized<
 
         let stopCountdown: (() => void) | undefined = undefined;
 
-        if ($isUserActive === undefined) {
-            $isUserActive = createIsUserActive({
+        if (globalContext.$isUserActive === undefined) {
+            globalContext.$isUserActive = createIsUserActive({
                 theUserIsConsideredInactiveAfterMsOfInactivity: 5_000
             }).$isUserActive;
         }
 
-        $isUserActive.subscribe(isUserActive => {
+        globalContext.$isUserActive.subscribe(isUserActive => {
             if (isUserActive) {
                 if (stopCountdown !== undefined) {
                     stopCountdown();

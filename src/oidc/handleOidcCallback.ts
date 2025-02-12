@@ -3,15 +3,24 @@ import { getStateData, markStateDataAsProcessedByCallback, getIsStatQueryParamVa
 
 declare global {
     interface Window {
-        "__oidc-spa.handleOidcCallback.previousCall": Promise<void | never> | undefined;
+        "__oidc-spa.handleOidcCallback.globalContext": {
+            previousCall: Promise<void | never> | undefined;
+        };
     }
 }
 
+window["__oidc-spa.handleOidcCallback.globalContext"] ??= {
+    previousCall: undefined
+};
+
+const globalContext = window["__oidc-spa.handleOidcCallback.globalContext"];
+
 export function handleOidcCallback(): Promise<void | never> {
-    if (window["__oidc-spa.handleOidcCallback.previousCall"] !== undefined) {
-        return window["__oidc-spa.handleOidcCallback.previousCall"];
+    if (globalContext.previousCall !== undefined) {
+        return globalContext.previousCall;
     }
-    return (window["__oidc-spa.handleOidcCallback.previousCall"] = handleOidcCallback_nonMemoized());
+
+    return (globalContext.previousCall = handleOidcCallback_nonMemoized());
 }
 
 export const AUTH_RESPONSE_KEY = "oidc-spa.authResponse";
