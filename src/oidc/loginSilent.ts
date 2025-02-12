@@ -29,7 +29,7 @@ export function authResponseToUrl(authResponse: AuthResponse): string {
     return authResponseUrl;
 }
 
-type ResultOfLoginOrLogoutSilent =
+type ResultOfLoginSilent =
     | {
           isSuccess: true;
           authResponse: AuthResponse;
@@ -44,11 +44,11 @@ export async function loginSilent(params: {
     stateQueryParamValue_instance: string;
     configHash: string;
     getExtraTokenParams: (() => Record<string, string>) | undefined;
-}): Promise<ResultOfLoginOrLogoutSilent> {
+}): Promise<ResultOfLoginSilent> {
     const { oidcClientTsUserManager, stateQueryParamValue_instance, configHash, getExtraTokenParams } =
         params;
 
-    const dResult = new Deferred<ResultOfLoginOrLogoutSilent>();
+    const dResult = new Deferred<ResultOfLoginSilent>();
 
     const timeoutDelayMs: number = (() => {
         const downlinkAndRtt = getDownlinkAndRtt();
