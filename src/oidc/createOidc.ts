@@ -118,7 +118,7 @@ declare global {
 }
 
 window["__oidc-spa.prOidcByConfigHash"] ??= new Map();
-window["__oidc-spa.evtAuthResponseHandled"] = createAwaitableEventEmitter<void>();
+window["__oidc-spa.evtAuthResponseHandled"] ??= createAwaitableEventEmitter<void>();
 
 /** @see: https://docs.oidc-spa.dev/v/v6/usage */
 export async function createOidc<
