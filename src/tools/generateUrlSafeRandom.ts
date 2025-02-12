@@ -24,6 +24,3 @@ export function generateUrlSafeRandom(params: { length: number }): string {
 
     return base64url;
 }
-
-// Example usage
-console.log(generateUrlSafeRandom({ length: 32 })); // Exactly 32 characters

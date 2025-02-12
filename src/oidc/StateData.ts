@@ -36,7 +36,9 @@ const STATE_QUERY_PARAM_VALUE_IDENTIFIER_PREFIX = "b2lkYy1zcGEu";
 const RANDOM_STRING_LENGTH = 32 - STATE_QUERY_PARAM_VALUE_IDENTIFIER_PREFIX.length;
 
 export function generateStateQueryParamValue(): string {
-    return `${STATE_QUERY_PARAM_VALUE_IDENTIFIER_PREFIX}${generateUrlSafeRandom({ length: 32 })}`;
+    return `${STATE_QUERY_PARAM_VALUE_IDENTIFIER_PREFIX}${generateUrlSafeRandom({
+        length: RANDOM_STRING_LENGTH
+    })}`;
 }
 
 export function getIsStatQueryParamValue(params: { maybeStateQueryParamValue: string }): boolean {
