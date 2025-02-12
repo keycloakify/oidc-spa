@@ -110,6 +110,8 @@ export type ParamsOfCreateOidc<
     __clientSecret_DO_NOT_USE_OR_YOU_WILL_BE_FIRED?: string;
 };
 
+handleOidcCallback();
+
 declare global {
     interface Window {
         "__oidc-spa.prOidcByConfigHash": Map<string, Promise<Oidc<any>>>;
