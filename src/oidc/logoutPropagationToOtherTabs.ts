@@ -4,12 +4,12 @@ import { Deferred } from "../tools/Deferred";
 type Message = {
     appInstanceId: string;
     redirectUrl_initiator: string;
-    configHash: string;
+    configId: string;
 };
 
-function getChannelName(params: { sessionIdOrConfigHash: string }) {
-    const { sessionIdOrConfigHash } = params;
-    return `oidc-spa:logout-propagation:${sessionIdOrConfigHash}`;
+function getChannelName(params: { sessionIdOrConfigId: string }) {
+    const { sessionIdOrConfigId } = params;
+    return `oidc-spa:logout-propagation:${sessionIdOrConfigId}`;
 }
 
 const getAppInstanceId = (() => {
@@ -26,34 +26,32 @@ const getAppInstanceId = (() => {
 
 export function notifyOtherTabOfLogout(params: {
     redirectUrl: string;
-    configHash: string;
+    configId: string;
     sessionId: string | undefined;
 }) {
-    const { redirectUrl, configHash, sessionId } = params;
+    const { redirectUrl, configId, sessionId } = params;
 
     const message: Message = {
         redirectUrl_initiator: redirectUrl,
-        configHash,
+        configId,
         appInstanceId: getAppInstanceId()
     };
 
-    new BroadcastChannel(getChannelName({ sessionIdOrConfigHash: sessionId ?? configHash })).postMessage(
+    new BroadcastChannel(getChannelName({ sessionIdOrConfigId: sessionId ?? configId })).postMessage(
         message
     );
 }
 
 export function getPrOtherTabLogout(params: {
     sessionId: string | undefined;
-    configHash: string;
+    configId: string;
     homeUrl: string;
 }) {
-    const { sessionId, configHash, homeUrl } = params;
+    const { sessionId, configId, homeUrl } = params;
 
     const dOtherTabLogout = new Deferred<{ redirectUrl: string }>();
 
-    const channel = new BroadcastChannel(
-        getChannelName({ sessionIdOrConfigHash: sessionId ?? configHash })
-    );
+    const channel = new BroadcastChannel(getChannelName({ sessionIdOrConfigId: sessionId ?? configId }));
 
     channel.onmessage = ({ data: message }) => {
         assert(is<Message>(message));
@@ -65,7 +63,7 @@ export function getPrOtherTabLogout(params: {
         }
 
         const redirectUrl = (() => {
-            if (configHash === message.configHash) {
+            if (configId === message.configId) {
                 return message.redirectUrl_initiator;
             }
 

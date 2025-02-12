@@ -27,7 +27,7 @@ import {
     STATE_STORE_KEY_PREFIX
 } from "./StateData";
 import { notifyOtherTabOfLogout, getPrOtherTabLogout } from "./logoutPropagationToOtherTabs";
-import { getConfigHash } from "./configHash";
+import { getConfigId } from "./configId";
 import { oidcClientTsUserToTokens } from "./oidcClientTsUserToTokens";
 import { loginSilent, authResponseToUrl } from "./loginSilent";
 import { handleOidcCallback, AUTH_RESPONSE_KEY } from "./handleOidcCallback";
@@ -114,12 +114,12 @@ handleOidcCallback();
 
 declare global {
     interface Window {
-        "__oidc-spa.prOidcByConfigHash": Map<string, Promise<Oidc<any>>>;
+        "__oidc-spa.prOidcByConfigId": Map<string, Promise<Oidc<any>>>;
         "__oidc-spa.evtAuthResponseHandled": AwaitableEventEmitter<void>;
     }
 }
 
-window["__oidc-spa.prOidcByConfigHash"] ??= new Map();
+window["__oidc-spa.prOidcByConfigId"] ??= new Map();
 window["__oidc-spa.evtAuthResponseHandled"] ??= createAwaitableEventEmitter<void>();
 
 /** @see: https://docs.oidc-spa.dev/v/v6/usage */
@@ -162,10 +162,10 @@ export async function createOidc<
         });
     })();
 
-    const configHash = getConfigHash({ issuerUri, clientId });
+    const configId = getConfigId({ issuerUri, clientId });
 
     use_previous_instance: {
-        const prOidc = window["__oidc-spa.prOidcByConfigHash"].get(configHash);
+        const prOidc = window["__oidc-spa.prOidcByConfigId"].get(configId);
 
         if (prOidc === undefined) {
             break use_previous_instance;
@@ -188,13 +188,13 @@ export async function createOidc<
 
     const dOidc = new Deferred<Oidc<any>>();
 
-    window["__oidc-spa.prOidcByConfigHash"].set(configHash, dOidc.pr);
+    window["__oidc-spa.prOidcByConfigId"].set(configId, dOidc.pr);
 
     const oidc = await createOidc_nonMemoized(rest, {
         issuerUri,
         clientId,
         scopes,
-        configHash,
+        configId,
         log
     });
 
@@ -222,7 +222,7 @@ export async function createOidc_nonMemoized<
         issuerUri: string;
         clientId: string;
         scopes: string[];
-        configHash: string;
+        configId: string;
         log: typeof console.log | undefined;
     }
 ): Promise<AutoLogin extends true ? Oidc.LoggedIn<DecodedIdToken> : Oidc<DecodedIdToken>> {
@@ -239,7 +239,7 @@ export async function createOidc_nonMemoized<
         __clientSecret_DO_NOT_USE_OR_YOU_WILL_BE_FIRED
     } = params;
 
-    const { issuerUri, clientId, scopes, configHash, log } = preProcessedParams;
+    const { issuerUri, clientId, scopes, configId, log } = preProcessedParams;
 
     const [getExtraQueryParams, getExtraTokenParams] = (
         [extraQueryParamsOrGetter, extraTokenParamsOrGetter] as const
@@ -265,13 +265,13 @@ export async function createOidc_nonMemoized<
         issuerUri,
         clientId,
         scopes,
-        configHash,
+        configId,
         homeAndCallbackUrl
     });
 
     await handleOidcCallback();
 
-    const USER_LOGGED_IN_KEY = `oidc-spa.user-logged-in:${configHash}`;
+    const USER_LOGGED_IN_KEY = `oidc-spa.user-logged-in:${configId}`;
 
     localStorage.removeItem(USER_LOGGED_IN_KEY);
 
@@ -481,7 +481,7 @@ export async function createOidc_nonMemoized<
                 redirectUrl,
                 extraQueryParams,
                 hasBeenProcessedByCallback: false,
-                configHash,
+                configId,
                 action: "login"
             }),
             redirectMethod
@@ -489,7 +489,7 @@ export async function createOidc_nonMemoized<
         return new Promise<never>(() => {});
     };
 
-    const BROWSER_SESSION_NOT_FIRST_INIT_KEY = `oidc-spa.browser-session-not-first-init:${configHash}`;
+    const BROWSER_SESSION_NOT_FIRST_INIT_KEY = `oidc-spa.browser-session-not-first-init:${configId}`;
 
     const resultOfLoginProcess = await (async (): Promise<
         | undefined // User is currently not logged in
@@ -537,7 +537,7 @@ export async function createOidc_nonMemoized<
             assert(stateData !== undefined);
             assert(stateData.context === "redirect");
 
-            if (stateData.configHash !== configHash) {
+            if (stateData.configId !== configId) {
                 await window["__oidc-spa.evtAuthResponseHandled"].waitFor();
                 break handle_redirect_auth_response;
             }
@@ -615,7 +615,7 @@ export async function createOidc_nonMemoized<
                         window["__oidc-spa.evtAuthResponseHandled"].post();
 
                         notifyOtherTabOfLogout({
-                            configHash,
+                            configId,
                             redirectUrl: stateData.redirectUrl,
                             sessionId: stateData.sessionId
                         });
@@ -633,7 +633,7 @@ export async function createOidc_nonMemoized<
             const result_loginSilent = await loginSilent({
                 oidcClientTsUserManager,
                 stateQueryParamValue_instance,
-                configHash,
+                configId,
                 getExtraTokenParams
             });
 
@@ -889,7 +889,7 @@ export async function createOidc_nonMemoized<
 
             await oidcClientTsUserManager.signoutRedirect({
                 state: id<StateData>({
-                    configHash,
+                    configId,
                     context: "redirect",
                     redirectUrl: postLogoutRedirectUrl,
                     hasBeenProcessedByCallback: false,
@@ -968,7 +968,7 @@ export async function createOidc_nonMemoized<
 
     {
         const { prOtherTabLogout } = getPrOtherTabLogout({
-            configHash,
+            configId,
             homeUrl: homeAndCallbackUrl,
             sessionId: decodeJwt<{ sid?: string }>(oidc.getTokens().idToken).sid
         });

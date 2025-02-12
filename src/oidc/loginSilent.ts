@@ -42,10 +42,10 @@ type ResultOfLoginSilent =
 export async function loginSilent(params: {
     oidcClientTsUserManager: OidcClientTsUserManager;
     stateQueryParamValue_instance: string;
-    configHash: string;
+    configId: string;
     getExtraTokenParams: (() => Record<string, string>) | undefined;
 }): Promise<ResultOfLoginSilent> {
-    const { oidcClientTsUserManager, stateQueryParamValue_instance, configHash, getExtraTokenParams } =
+    const { oidcClientTsUserManager, stateQueryParamValue_instance, configId, getExtraTokenParams } =
         params;
 
     const dResult = new Deferred<ResultOfLoginSilent>();
@@ -90,7 +90,7 @@ export async function loginSilent(params: {
         assert(stateData !== undefined);
         assert(stateData.context === "iframe");
 
-        if (stateData.configHash !== configHash) {
+        if (stateData.configId !== configId) {
             return;
         }
 
@@ -110,7 +110,7 @@ export async function loginSilent(params: {
         .signinSilent({
             state: id<StateData.IFrame>({
                 context: "iframe",
-                configHash
+                configId
             }),
             silentRequestTimeoutInSeconds: timeoutDelayMs / 1000,
             extraTokenParams: getExtraTokenParams?.()

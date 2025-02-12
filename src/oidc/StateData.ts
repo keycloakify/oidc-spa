@@ -1,11 +1,11 @@
 import { typeGuard, assert } from "../vendor/frontend/tsafe";
-import { fnv1aHash } from "../tools/fnv1aHash";
+import { generateUrlSafeRandom } from "../tools/generateUrlSafeRandom";
 
 export type StateData = StateData.IFrame | StateData.Redirect;
 
 export namespace StateData {
     type Common = {
-        configHash: string;
+        configId: string;
     };
 
     export type IFrame = Common & {
@@ -32,16 +32,21 @@ export namespace StateData {
     }
 }
 
-const STATE_QUERY_PARAM_VALUE_IDENTIFIER_PREFIX = "fa93b2c1c";
+const STATE_QUERY_PARAM_VALUE_IDENTIFIER_PREFIX = "b2lkYy1zcGEu";
+const RANDOM_STRING_LENGTH = 32 - STATE_QUERY_PARAM_VALUE_IDENTIFIER_PREFIX.length;
 
 export function generateStateQueryParamValue(): string {
-    return `${STATE_QUERY_PARAM_VALUE_IDENTIFIER_PREFIX}${fnv1aHash(`${Math.random()}`)}`;
+    return `${STATE_QUERY_PARAM_VALUE_IDENTIFIER_PREFIX}${generateUrlSafeRandom({ length: 32 })}`;
 }
 
 export function getIsStatQueryParamValue(params: { maybeStateQueryParamValue: string }): boolean {
     const { maybeStateQueryParamValue } = params;
 
-    return maybeStateQueryParamValue.startsWith(STATE_QUERY_PARAM_VALUE_IDENTIFIER_PREFIX);
+    return (
+        maybeStateQueryParamValue.startsWith(STATE_QUERY_PARAM_VALUE_IDENTIFIER_PREFIX) &&
+        maybeStateQueryParamValue.length ===
+            STATE_QUERY_PARAM_VALUE_IDENTIFIER_PREFIX.length + RANDOM_STRING_LENGTH
+    );
 }
 
 export const STATE_STORE_KEY_PREFIX = "oidc.";
