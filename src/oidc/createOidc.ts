@@ -679,9 +679,11 @@ export async function createOidc_nonMemoized<
                         // NOTE: This is a very expected case, it happens each time there's no active session.
                         log?.(
                             [
-                                `The auth server responded with: ${error}`,
-                                `(authentication_required just means that there's no active session for the user)`
-                            ].join(" ")
+                                `The auth server responded with: ${error} `,
+                                "login_required" === error
+                                    ? `(authentication_required just means that there's no active session for the user)`
+                                    : ""
+                            ].join("")
                         );
                         break restore_from_http_only_cookie;
                     }
@@ -883,7 +885,7 @@ export async function createOidc_nonMemoized<
 
             const sessionId = decodeJwt<{ sid?: string }>(oidc.getTokens().idToken).sid;
 
-            await oidcClientTsUserManager.signinRedirect({
+            await oidcClientTsUserManager.signoutRedirect({
                 state: id<StateData>({
                     configHash,
                     context: "redirect",
