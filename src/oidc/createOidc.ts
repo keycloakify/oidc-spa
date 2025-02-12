@@ -20,13 +20,19 @@ import {
     createIframeTimeoutInitializationError,
     createWellKnownOidcConfigurationEndpointUnreachableInitializationError
 } from "./OidcInitializationError";
-import { getStateData, type StateData, STATE_STORE_KEY_PREFIX } from "./StateData";
+import {
+    getStateData,
+    type StateData,
+    generateStateQueryParamValue,
+    STATE_STORE_KEY_PREFIX
+} from "./StateData";
 import { notifyOtherTabOfLogout, getPrOtherTabLogout } from "./logoutPropagationToOtherTabs";
 import { getConfigHash } from "./configHash";
 import { oidcClientTsUserToTokens } from "./oidcClientTsUserToTokens";
-import { loginOrLogoutSilent, authResponseToUrl } from "./loginOrLogoutSilent";
+import { loginSilent, authResponseToUrl } from "./loginSilent";
 import { handleOidcCallback, AUTH_RESPONSE_KEY } from "./handleOidcCallback";
 import type { Oidc } from "./Oidc";
+import { type AwaitableEventEmitter, createAwaitableEventEmitter } from "../tools/AwaitableEventEmitter";
 
 // NOTE: Replaced at build time
 const VERSION = "{{OIDC_SPA_VERSION}}";
@@ -104,7 +110,15 @@ export type ParamsOfCreateOidc<
     __clientSecret_DO_NOT_USE_OR_YOU_WILL_BE_FIRED?: string;
 };
 
-const prOidcByConfigHash = new Map<string, Promise<Oidc<any>>>();
+declare global {
+    interface Window {
+        "__oidc-spa.prOidcByConfigHash": Map<string, Promise<Oidc<any>>>;
+        "__oidc-spa.evtAuthResponseHandled": AwaitableEventEmitter<void>;
+    }
+}
+
+window["__oidc-spa.prOidcByConfigHash"] ??= new Map();
+window["__oidc-spa.evtAuthResponseHandled"] = createAwaitableEventEmitter<void>();
 
 /** @see: https://docs.oidc-spa.dev/v/v6/usage */
 export async function createOidc<
@@ -149,7 +163,7 @@ export async function createOidc<
     const configHash = getConfigHash({ issuerUri, clientId });
 
     use_previous_instance: {
-        const prOidc = prOidcByConfigHash.get(configHash);
+        const prOidc = window["__oidc-spa.prOidcByConfigHash"].get(configHash);
 
         if (prOidc === undefined) {
             break use_previous_instance;
@@ -172,7 +186,7 @@ export async function createOidc<
 
     const dOidc = new Deferred<Oidc<any>>();
 
-    prOidcByConfigHash.set(configHash, dOidc.pr);
+    window["__oidc-spa.prOidcByConfigHash"].set(configHash, dOidc.pr);
 
     const oidc = await createOidc_nonMemoized(rest, {
         issuerUri,
@@ -255,8 +269,14 @@ export async function createOidc_nonMemoized<
 
     await handleOidcCallback();
 
+    const USER_LOGGED_IN_KEY = `oidc-spa.user-logged-in:${configHash}`;
+
+    localStorage.removeItem(USER_LOGGED_IN_KEY);
+
+    const stateQueryParamValue_instance = generateStateQueryParamValue();
+
     const oidcClientTsUserManager = new OidcClientTsUserManager({
-        configHash,
+        stateQueryParamValue: stateQueryParamValue_instance,
         authority: issuerUri,
         client_id: clientId,
         redirect_uri: homeAndCallbackUrl,
@@ -327,7 +347,7 @@ export async function createOidc_nonMemoized<
                     } else {
                         log?.("The current page doesn't require auth...");
 
-                        if (getStateData({ configHash, isCallbackContext: false }) === undefined) {
+                        if (localStorage.getItem(USER_LOGGED_IN_KEY)) {
                             log?.("but the user is now authenticated, reloading the page");
                             location.reload();
                         } else {
@@ -455,10 +475,11 @@ export async function createOidc_nonMemoized<
 
         await oidcClientTsUserManager.signinRedirect({
             state: id<StateData>({
-                hasBeenProcessedByCallback: false,
-                isSilentSso: false,
+                context: "redirect",
                 redirectUrl,
-                extraQueryParams
+                extraQueryParams,
+                hasBeenProcessedByCallback: false,
+                configHash
             }),
             redirectMethod
         });
@@ -475,7 +496,7 @@ export async function createOidc_nonMemoized<
               backFromAuthServer: Oidc.LoggedIn["backFromAuthServer"]; // Undefined is silent signin
           }
     > => {
-        read_auth_response: {
+        handle_redirect_auth_response: {
             const authResponse = (() => {
                 const value = sessionStorage.getItem(AUTH_RESPONSE_KEY);
 
@@ -483,15 +504,13 @@ export async function createOidc_nonMemoized<
                     return undefined;
                 }
 
-                sessionStorage.removeItem(AUTH_RESPONSE_KEY);
-
                 let authResponse: unknown;
 
                 try {
                     authResponse = JSON.parse(value);
 
                     assert(
-                        typeGuard<Record<string, string>>(
+                        typeGuard<{ state: string; [key: string]: string }>(
                             authResponse,
                             authResponse instanceof Object &&
                                 Object.values(authResponse).every(value => typeof value === "string")
@@ -507,54 +526,33 @@ export async function createOidc_nonMemoized<
             })();
 
             if (authResponse === undefined) {
-                break read_auth_response;
+                break handle_redirect_auth_response;
             }
 
-            if (authResponse["state"] !== configHash) {
-                break read_auth_response;
+            const stateData = getStateData({ stateQueryParamValue: authResponse["state"] });
+
+            assert(stateData !== undefined);
+            assert(stateData.context === "redirect");
+
+            if (stateData.configHash !== configHash) {
+                await window["__oidc-spa.evtAuthResponseHandled"].waitFor();
+                break handle_redirect_auth_response;
             }
 
-            const stateData = getStateData({ configHash, isCallbackContext: false });
+            log?.("Handling redirect auth response", authResponse);
 
-            if (stateData === undefined) {
-                break read_auth_response;
-            }
+            sessionStorage.removeItem(AUTH_RESPONSE_KEY);
 
-            assert(!stateData.isSilentSso);
-
-            log?.("Back from the auth server, with the following auth response", authResponse);
-
-            {
-                const error: string | undefined = authResponse["error"];
-
-                if (error !== undefined) {
-                    return new Error(
-                        [
-                            "The OIDC server responded with an error after the login process",
-                            `this error is: ${error}`
-                        ].join(" ")
-                    );
-                }
-            }
-
-            const { authResponseUrl } = (() => {
-                let authResponseUrl = "https://dummy.com";
-
-                for (const [name, value] of Object.entries(authResponse)) {
-                    authResponseUrl = addQueryParamToUrl({
-                        url: authResponseUrl,
-                        name,
-                        value
-                    }).newUrl;
-                }
-
-                return { authResponseUrl };
-            })();
+            const authResponseUrl = authResponseToUrl(authResponse);
 
             let oidcClientTsUser: OidcClientTsUser | undefined = undefined;
 
             try {
-                oidcClientTsUser = await oidcClientTsUserManager.signinRedirectCallback(authResponseUrl);
+                oidcClientTsUser = await oidcClientTsUserManager
+                    .signinRedirectCallback(authResponseUrl)
+                    .finally(() => {
+                        window["__oidc-spa.evtAuthResponseHandled"].post();
+                    });
             } catch (error) {
                 assert(error instanceof Error);
 
@@ -565,9 +563,18 @@ export async function createOidc_nonMemoized<
                     });
                 }
 
-                //NOTE: The user has likely pressed the back button just after logging in.
-                //UPDATE: I don't remember how to reproduce this case and I don't know if it's still relevant.
-                return undefined;
+                {
+                    const error: string | undefined = authResponse["error"];
+
+                    if (error !== undefined) {
+                        log?.(
+                            `The auth server responded with: ${error}, trying to restore from the http only cookie`
+                        );
+                        break handle_redirect_auth_response;
+                    }
+                }
+
+                return error;
             }
 
             sessionStorage.removeItem(BROWSER_SESSION_NOT_FIRST_INIT_KEY);
@@ -590,15 +597,13 @@ export async function createOidc_nonMemoized<
         }
 
         restore_from_http_only_cookie: {
-            log?.("Trying to restore the auth from the httpOnly cookie (silent signin with iframe)");
+            log?.("Trying to restore the auth from the http only cookie (silent signin with iframe)");
 
-            const result_loginSilent = await loginOrLogoutSilent({
+            const result_loginSilent = await loginSilent({
                 oidcClientTsUserManager,
+                stateQueryParamValue_instance,
                 configHash,
-                action: {
-                    type: "login",
-                    getExtraTokenParams
-                }
+                getExtraTokenParams
             });
 
             if (!result_loginSilent.isSuccess) {
@@ -620,15 +625,7 @@ export async function createOidc_nonMemoized<
 
             const { authResponse } = result_loginSilent;
 
-            {
-                const error: string | undefined = authResponse["error"];
-
-                if (error !== undefined) {
-                    // NOTE: This is a very expected case, it happens each time there's no active session.
-                    log?.(`The auth server responded with: ${error}`);
-                    break restore_from_http_only_cookie;
-                }
-            }
+            log?.("Silent signin auth response", authResponse);
 
             let oidcClientTsUser: OidcClientTsUser | undefined = undefined;
 
@@ -646,7 +643,22 @@ export async function createOidc_nonMemoized<
                     });
                 }
 
-                throw error;
+                {
+                    const error: string | undefined = authResponse["error"];
+
+                    if (error !== undefined) {
+                        // NOTE: This is a very expected case, it happens each time there's no active session.
+                        log?.(
+                            [
+                                `The auth server responded with: ${error}`,
+                                `(authentication_required just means that there's no active session for the user)`
+                            ].join(" ")
+                        );
+                        break restore_from_http_only_cookie;
+                    }
+                }
+
+                return error;
             }
 
             log?.("Successful silent signed in");
@@ -657,7 +669,7 @@ export async function createOidc_nonMemoized<
             };
         }
 
-        // NOTE: The user is not logged in, we had no error during the initialization
+        // NOTE: The user is not logged in.
         return undefined;
     })().then(result => {
         if (result === undefined) {
@@ -797,6 +809,8 @@ export async function createOidc_nonMemoized<
     }
 
     log?.("User is logged in");
+
+    localStorage.setItem(USER_LOGGED_IN_KEY, "true");
 
     {
         const { prOtherTabLogout } = getPrOtherTabLogout({ configHash });

@@ -1,7 +1,7 @@
 import type { UserManager as OidcClientTsUserManager } from "../vendor/frontend/oidc-client-ts-and-jwt-decode";
 import { Deferred } from "../tools/Deferred";
-import { id } from "../vendor/frontend/tsafe";
-import { getStateData, type StateData } from "./StateData";
+import { id, assert } from "../vendor/frontend/tsafe";
+import { getStateData, clearStateStore, type StateData } from "./StateData";
 import { addQueryParamToUrl } from "../tools/urlQueryParams";
 import { getDownlinkAndRtt } from "../tools/getDownlinkAndRtt";
 
@@ -38,19 +38,14 @@ type ResultOfLoginOrLogoutSilent =
           cause: "timeout" | "can't reach well-known oidc endpoint";
       };
 
-export async function loginOrLogoutSilent(params: {
+export async function loginSilent(params: {
     oidcClientTsUserManager: OidcClientTsUserManager;
+    stateQueryParamValue_instance: string;
     configHash: string;
-    action:
-        | {
-              type: "login";
-              getExtraTokenParams: (() => Record<string, string>) | undefined;
-          }
-        | {
-              type: "logout";
-          };
+    getExtraTokenParams: (() => Record<string, string>) | undefined;
 }): Promise<ResultOfLoginOrLogoutSilent> {
-    const { oidcClientTsUserManager, configHash, action } = params;
+    const { oidcClientTsUserManager, stateQueryParamValue_instance, configHash, getExtraTokenParams } =
+        params;
 
     const dResult = new Deferred<ResultOfLoginOrLogoutSilent>();
 
@@ -87,13 +82,12 @@ export async function loginOrLogoutSilent(params: {
 
         const authResponse = event.data;
 
-        if (authResponse.state !== configHash) {
-            return;
-        }
+        const stateData = getStateData({ stateQueryParamValue: authResponse.state });
 
-        const stateData = getStateData({ configHash: authResponse.state, isCallbackContext: false });
+        assert(stateData !== undefined);
+        assert(stateData.context === "iframe");
 
-        if (stateData === undefined) {
+        if (stateData.configHash !== configHash) {
             return;
         }
 
@@ -109,46 +103,41 @@ export async function loginOrLogoutSilent(params: {
 
     window.addEventListener("message", listener, false);
 
-    (() => {
-        const params_common = {
-            state: id<StateData>({
-                hasBeenProcessedByCallback: false,
-                isSilentSso: true
+    oidcClientTsUserManager
+        .signinSilent({
+            state: id<StateData.IFrame>({
+                context: "iframe",
+                configHash
             }),
-            silentRequestTimeoutInSeconds: timeoutDelayMs / 1000
-        };
+            silentRequestTimeoutInSeconds: timeoutDelayMs / 1000,
+            extraTokenParams: getExtraTokenParams?.()
+        })
+        .catch((error: Error) => {
+            if (error.message === "Failed to fetch") {
+                // NOTE: If we got an error here it means that the fetch to the
+                // well-known oidc endpoint failed.
+                // This usually means that the server is down or that the issuerUri
+                // is not pointing to a valid oidc server.
+                // It could be a CORS error on the well-known endpoint but it's unlikely.
 
-        switch (action.type) {
-            case "login":
-                return oidcClientTsUserManager.signinSilent({
-                    ...params_common,
-                    extraTokenParams: action.getExtraTokenParams?.()
+                clearTimeout(timeout);
+
+                dResult.resolve({
+                    isSuccess: false,
+                    cause: "can't reach well-known oidc endpoint"
                 });
-            case "logout":
-                return oidcClientTsUserManager.signoutSilent({
-                    ...params_common
-                });
+
+                return;
+            }
+
+            // NOTE: Here, except error on our understanding there can't be any other
+            // error than timeout so we fail silently and let the timeout expire.
+        });
+
+    dResult.pr.then(result => {
+        if (!result.isSuccess) {
+            clearStateStore({ stateQueryParamValue: stateQueryParamValue_instance });
         }
-    })().catch((error: Error) => {
-        if (error.message === "Failed to fetch") {
-            // NOTE: If we got an error here it means that the fetch to the
-            // well-known oidc endpoint failed.
-            // This usually means that the server is down or that the issuerUri
-            // is not pointing to a valid oidc server.
-            // It could be a CORS error on the well-known endpoint but it's unlikely.
-
-            clearTimeout(timeout);
-
-            dResult.resolve({
-                isSuccess: false,
-                cause: "can't reach well-known oidc endpoint"
-            });
-
-            return;
-        }
-
-        // NOTE: Here, except error on our understanding there can't be any other
-        // error than timeout so we fail silently and let the timeout expire.
     });
 
     return dResult.pr;

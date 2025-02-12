@@ -1,78 +1,98 @@
-export type StateData = {
-    hasBeenProcessedByCallback: boolean;
-} & (
-    | {
-          isSilentSso: false;
-          redirectUrl: string;
-          extraQueryParams: Record<string, string>;
-      }
-    | {
-          isSilentSso: true;
-      }
-);
+import { typeGuard, assert } from "../vendor/frontend/tsafe";
+import { fnv1aHash } from "../tools/fnv1aHash";
+
+export type StateData = StateData.IFrame | StateData.Redirect;
+
+export namespace StateData {
+    type Common = {
+        configHash: string;
+    };
+
+    export type IFrame = Common & {
+        context: "iframe";
+    };
+
+    export type Redirect = Common & {
+        context: "redirect";
+        redirectUrl: string;
+        extraQueryParams: Record<string, string>;
+        hasBeenProcessedByCallback: boolean;
+    };
+}
+
+const STATE_QUERY_PARAM_VALUE_IDENTIFIER_PREFIX = "fa93b2c1c1d12b1c";
+
+export function generateStateQueryParamValue(): string {
+    return `${STATE_QUERY_PARAM_VALUE_IDENTIFIER_PREFIX}${fnv1aHash(`${Math.random()}`)}`;
+}
+
+export function getIsStatQueryParamValue(params: { maybeStateQueryParamValue: string }): boolean {
+    const { maybeStateQueryParamValue } = params;
+
+    return maybeStateQueryParamValue.startsWith(STATE_QUERY_PARAM_VALUE_IDENTIFIER_PREFIX);
+}
 
 export const STATE_STORE_KEY_PREFIX = "oidc.";
 
-function getIsStateData(value: any): value is StateData {
-    if (typeof value !== "object" || value === null) {
-        return false;
-    }
+export function getKey(params: { stateQueryParamValue: string }) {
+    const { stateQueryParamValue } = params;
 
-    if (typeof value.hasBeenProcessedByCallback !== "boolean") {
-        return false;
-    }
-
-    if (value.isSilentSso === true) {
-        return true;
-    } else if (value.isSilentSso === false) {
-        if (typeof value.redirectUrl !== "string") {
-            return false;
-        }
-        if (typeof value.extraQueryParams !== "object" || value.extraQueryParams === null) {
-            return false;
-        }
-        for (const val of Object.values(value.extraQueryParams)) {
-            if (typeof val !== "string") {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    return false;
+    return `${STATE_STORE_KEY_PREFIX}${stateQueryParamValue}`;
 }
 
-export function getStateData(params: {
-    configHash: string;
-    isCallbackContext: boolean;
-}): StateData | undefined {
-    const { configHash, isCallbackContext } = params;
+function getStateStore(params: { stateQueryParamValue: string }): { data: StateData } | undefined {
+    const { stateQueryParamValue } = params;
 
-    const KEY = `${STATE_STORE_KEY_PREFIX}${configHash}`;
+    const item = localStorage.getItem(getKey({ stateQueryParamValue }));
 
-    const lsItem = localStorage.getItem(KEY);
-
-    if (lsItem === null) {
+    if (item === null) {
         return undefined;
     }
 
-    const obj = JSON.parse(lsItem);
+    const obj = JSON.parse(item);
 
-    const { data } = obj;
+    assert(
+        typeGuard<{ data: StateData }>(
+            obj,
+            obj instanceof Object && obj.data instanceof Object && typeof obj.data.context === "string"
+        )
+    );
 
-    if (!getIsStateData(data)) {
+    return obj;
+}
+
+function setStateStore(params: { stateQueryParamValue: string; obj: { data: StateData } }) {
+    const { stateQueryParamValue, obj } = params;
+
+    localStorage.setItem(getKey({ stateQueryParamValue }), JSON.stringify(obj));
+}
+
+export function clearStateStore(params: { stateQueryParamValue: string }) {
+    const { stateQueryParamValue } = params;
+    localStorage.removeItem(getKey({ stateQueryParamValue }));
+}
+
+export function getStateData(params: { stateQueryParamValue: string }): StateData | undefined {
+    const { stateQueryParamValue } = params;
+
+    const stateStore = getStateStore({ stateQueryParamValue });
+
+    if (stateStore === undefined) {
         return undefined;
     }
 
-    if (isCallbackContext) {
-        if (data.hasBeenProcessedByCallback) {
-            return undefined;
-        }
+    return stateStore.data;
+}
 
-        data.hasBeenProcessedByCallback = true;
+export function markStateDataAsProcessedByCallback(params: { stateQueryParamValue: string }) {
+    const { stateQueryParamValue } = params;
 
-        localStorage.setItem(KEY, JSON.stringify(obj));
-    }
+    const obj = getStateStore({ stateQueryParamValue });
 
-    return data;
+    assert(obj !== undefined);
+    assert(obj.data.context === "redirect");
+
+    obj.data.hasBeenProcessedByCallback = true;
+
+    setStateStore({ stateQueryParamValue, obj });
 }

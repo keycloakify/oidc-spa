@@ -1,21 +1,23 @@
 import { retrieveQueryParamFromUrl } from "../tools/urlQueryParams";
-import { getStateData } from "./StateData";
-import { getIsConfigHash } from "./configHash";
+import { getStateData, markStateDataAsProcessedByCallback, getIsStatQueryParamValue } from "./StateData";
 
-let previousCall: Promise<void | never> | undefined = undefined;
+declare global {
+    interface Window {
+        "__oidc-spa.handleOidcCallback.previousCall": Promise<void | never> | undefined;
+    }
+}
 
 export function handleOidcCallback(): Promise<void | never> {
-    if (previousCall !== undefined) {
-        return previousCall;
+    if (window["__oidc-spa.handleOidcCallback.previousCall"] !== undefined) {
+        return window["__oidc-spa.handleOidcCallback.previousCall"];
     }
-
-    return (previousCall = handleOidcCallback_nonMemoized());
+    return (window["__oidc-spa.handleOidcCallback.previousCall"] = handleOidcCallback_nonMemoized());
 }
 
 export const AUTH_RESPONSE_KEY = "oidc-spa.authResponse";
 
 async function handleOidcCallback_nonMemoized(): Promise<void | never> {
-    const state = (() => {
+    const stateQueryParamValue = (() => {
         const result = retrieveQueryParamFromUrl({
             url: window.location.href,
             name: "state"
@@ -25,14 +27,14 @@ async function handleOidcCallback_nonMemoized(): Promise<void | never> {
             return undefined;
         }
 
-        if (!getIsConfigHash({ maybeConfigHash: result.value })) {
+        if (!getIsStatQueryParamValue({ maybeStateQueryParamValue: result.value })) {
             return undefined;
         }
 
         return result.value;
     })();
 
-    if (state === undefined) {
+    if (stateQueryParamValue === undefined) {
         const backForwardTracker = readBackForwardTracker();
 
         if (backForwardTracker !== undefined) {
@@ -47,11 +49,12 @@ async function handleOidcCallback_nonMemoized(): Promise<void | never> {
         return;
     }
 
-    const stateData = getStateData({ configHash: state, isCallbackContext: true });
+    const stateData = getStateData({ stateQueryParamValue });
 
-    if (stateData === undefined) {
-        // Here we are almost certain that we navigated back or forward to the callback page.
-        // since we have a state and a code query param in the url.
+    if (
+        stateData === undefined ||
+        (stateData.context === "redirect" && stateData.hasBeenProcessedByCallback)
+    ) {
         reloadOnRestore();
 
         const historyMethod: "back" | "forward" = (() => {
@@ -91,13 +94,17 @@ async function handleOidcCallback_nonMemoized(): Promise<void | never> {
         authResponse[key] = value;
     }
 
-    if (stateData.isSilentSso) {
-        parent.postMessage(authResponse, location.origin);
-    } else {
-        reloadOnRestore();
-        clearBackForwardTracker();
-        sessionStorage.setItem(AUTH_RESPONSE_KEY, JSON.stringify(authResponse));
-        location.href = stateData.redirectUrl;
+    switch (stateData.context) {
+        case "iframe":
+            parent.postMessage(authResponse, location.origin);
+            break;
+        case "redirect":
+            reloadOnRestore();
+            markStateDataAsProcessedByCallback({ stateQueryParamValue });
+            clearBackForwardTracker();
+            sessionStorage.setItem(AUTH_RESPONSE_KEY, JSON.stringify(authResponse));
+            location.href = stateData.redirectUrl;
+            break;
     }
 
     return new Promise<never>(() => {});
