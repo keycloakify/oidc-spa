@@ -4,6 +4,7 @@ import { id, assert } from "../vendor/frontend/tsafe";
 import { getStateData, clearStateStore, type StateData } from "./StateData";
 import { addQueryParamToUrl } from "../tools/urlQueryParams";
 import { getDownlinkAndRtt } from "../tools/getDownlinkAndRtt";
+import { getIsDev } from "../tools/isDev";
 
 export type AuthResponse = {
     state: string;
@@ -51,19 +52,21 @@ export async function loginSilent(params: {
 
     const timeoutDelayMs: number = (() => {
         const downlinkAndRtt = getDownlinkAndRtt();
+        const isDev = getIsDev();
+
+        // Base delay is the minimum delay we should wait in any case
+        //const BASE_DELAY_MS = 3000;
+        const BASE_DELAY_MS = isDev ? 9_000 : 7_000;
 
         if (downlinkAndRtt === undefined) {
-            return 5000;
+            return BASE_DELAY_MS;
         }
 
         const { downlink, rtt } = downlinkAndRtt;
 
         // Calculate dynamic delay based on RTT and downlink
         // Add 1 to downlink to avoid division by zero
-        const dynamicDelay = rtt * 2.5 + 3000 / (downlink + 1);
-
-        // Base delay is the minimum delay we're willing to tolerate
-        const BASE_DELAY_MS = 3000;
+        const dynamicDelay = rtt * 2.5 + BASE_DELAY_MS / (downlink + 1);
 
         return Math.max(BASE_DELAY_MS, dynamicDelay);
     })();
