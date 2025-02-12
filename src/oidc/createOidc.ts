@@ -5,7 +5,7 @@ import {
     InMemoryWebStorage
 } from "../vendor/frontend/oidc-client-ts-and-jwt-decode";
 import { id, type Param0, assert, type Equals, typeGuard } from "../vendor/frontend/tsafe";
-import { setTimeout, clearTimeout } from "../vendor/frontend/worker-timers";
+import { setTimeout, clearTimeout } from "../tools/workerTimers";
 import { addQueryParamToUrl, retrieveAllQueryParamFromUrl } from "../tools/urlQueryParams";
 import { Deferred } from "../tools/Deferred";
 import { decodeJwt } from "../tools/decodeJwt";

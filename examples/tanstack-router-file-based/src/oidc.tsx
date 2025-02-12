@@ -88,7 +88,7 @@ export const {
         ui_locales: "en" // Here you would dynamically get the current language at the time of redirecting to the OIDC server
     }),
     // Remove this in your repo
-    debugLogs: true
+    debugLogs: false
 });
 
 // Using the mock adapter:

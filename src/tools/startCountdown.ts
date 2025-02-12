@@ -1,4 +1,4 @@
-import { setTimeout, clearTimeout } from "../vendor/frontend/worker-timers";
+import { setTimeout, clearTimeout } from "../tools/workerTimers";
 
 export function createStartCountdown(params: {
     tickCallback: (params: { secondsLeft: number | undefined }) => void;

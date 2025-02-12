@@ -1,7 +1,7 @@
 import { createStatefulObservable } from "./StatefulObservable";
 import { subscribeToUserInteraction } from "./subscribeToUserInteraction";
 import { assert } from "../vendor/frontend/tsafe";
-import { setTimeout, clearTimeout } from "../vendor/frontend/worker-timers";
+import { setTimeout, clearTimeout } from "../tools/workerTimers";
 
 export function createIsUserActive(params: { theUserIsConsideredInactiveAfterMsOfInactivity: number }) {
     const { theUserIsConsideredInactiveAfterMsOfInactivity } = params;
