@@ -12,15 +12,27 @@ export namespace StateData {
         context: "iframe";
     };
 
-    export type Redirect = Common & {
-        context: "redirect";
-        redirectUrl: string;
-        extraQueryParams: Record<string, string>;
-        hasBeenProcessedByCallback: boolean;
-    };
+    export type Redirect = Redirect.Login | Redirect.Logout;
+    export namespace Redirect {
+        type Common_Redirect = Common & {
+            context: "redirect";
+            redirectUrl: string;
+            hasBeenProcessedByCallback: boolean;
+        };
+
+        export type Login = Common_Redirect & {
+            action: "login";
+            extraQueryParams: Record<string, string>;
+        };
+
+        export type Logout = Common_Redirect & {
+            action: "logout";
+            sessionId: string | undefined;
+        };
+    }
 }
 
-const STATE_QUERY_PARAM_VALUE_IDENTIFIER_PREFIX = "fa93b2c1c1d12b1c";
+const STATE_QUERY_PARAM_VALUE_IDENTIFIER_PREFIX = "fa93b2c1c";
 
 export function generateStateQueryParamValue(): string {
     return `${STATE_QUERY_PARAM_VALUE_IDENTIFIER_PREFIX}${fnv1aHash(`${Math.random()}`)}`;

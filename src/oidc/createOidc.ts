@@ -479,7 +479,8 @@ export async function createOidc_nonMemoized<
                 redirectUrl,
                 extraQueryParams,
                 hasBeenProcessedByCallback: false,
-                configHash
+                configHash,
+                action: "login"
             }),
             redirectMethod
         });
@@ -539,61 +540,89 @@ export async function createOidc_nonMemoized<
                 break handle_redirect_auth_response;
             }
 
-            log?.("Handling redirect auth response", authResponse);
-
             sessionStorage.removeItem(AUTH_RESPONSE_KEY);
 
-            const authResponseUrl = authResponseToUrl(authResponse);
+            switch (stateData.action) {
+                case "login":
+                    {
+                        log?.("Handling login redirect auth response", authResponse);
 
-            let oidcClientTsUser: OidcClientTsUser | undefined = undefined;
+                        const authResponseUrl = authResponseToUrl(authResponse);
 
-            try {
-                oidcClientTsUser = await oidcClientTsUserManager
-                    .signinRedirectCallback(authResponseUrl)
-                    .finally(() => {
-                        window["__oidc-spa.evtAuthResponseHandled"].post();
-                    });
-            } catch (error) {
-                assert(error instanceof Error);
+                        let oidcClientTsUser: OidcClientTsUser | undefined = undefined;
 
-                if (error.message === "Failed to fetch") {
-                    return createFailedToFetchTokenEndpointInitializationError({
-                        clientId,
-                        issuerUri
-                    });
-                }
+                        try {
+                            oidcClientTsUser = await oidcClientTsUserManager
+                                .signinRedirectCallback(authResponseUrl)
+                                .finally(() => {
+                                    window["__oidc-spa.evtAuthResponseHandled"].post();
+                                });
+                        } catch (error) {
+                            assert(error instanceof Error);
 
-                {
-                    const error: string | undefined = authResponse["error"];
+                            if (error.message === "Failed to fetch") {
+                                return createFailedToFetchTokenEndpointInitializationError({
+                                    clientId,
+                                    issuerUri
+                                });
+                            }
 
-                    if (error !== undefined) {
-                        log?.(
-                            `The auth server responded with: ${error}, trying to restore from the http only cookie`
-                        );
-                        break handle_redirect_auth_response;
+                            {
+                                const error: string | undefined = authResponse["error"];
+
+                                if (error !== undefined) {
+                                    log?.(
+                                        `The auth server responded with: ${error}, trying to restore from the http only cookie`
+                                    );
+                                    break handle_redirect_auth_response;
+                                }
+                            }
+
+                            return error;
+                        }
+
+                        sessionStorage.removeItem(BROWSER_SESSION_NOT_FIRST_INIT_KEY);
+
+                        return {
+                            oidcClientTsUser,
+                            backFromAuthServer: {
+                                extraQueryParams: stateData.extraQueryParams,
+                                result: Object.fromEntries(
+                                    Object.entries(authResponse).filter(
+                                        ([name]) =>
+                                            name !== "state" &&
+                                            name !== "session_state" &&
+                                            name !== "iss" &&
+                                            name !== "code"
+                                    )
+                                )
+                            }
+                        };
                     }
-                }
+                    break;
+                case "logout":
+                    {
+                        log?.("Handling logout redirect auth response", authResponse);
 
-                return error;
+                        const authResponseUrl = authResponseToUrl(authResponse);
+
+                        try {
+                            await oidcClientTsUserManager.signoutRedirectCallback(authResponseUrl);
+                        } catch {}
+
+                        window["__oidc-spa.evtAuthResponseHandled"].post();
+
+                        notifyOtherTabOfLogout({
+                            configHash,
+                            redirectUrl: stateData.redirectUrl,
+                            sessionId: stateData.sessionId
+                        });
+
+                        // NOTE: The user is no longer logged in.
+                        return undefined;
+                    }
+                    break;
             }
-
-            sessionStorage.removeItem(BROWSER_SESSION_NOT_FIRST_INIT_KEY);
-
-            return {
-                oidcClientTsUser,
-                backFromAuthServer: {
-                    extraQueryParams: stateData.extraQueryParams,
-                    result: Object.fromEntries(
-                        Object.entries(authResponse).filter(
-                            ([name]) =>
-                                name !== "state" &&
-                                name !== "session_state" &&
-                                name !== "iss" &&
-                                name !== "code"
-                        )
-                    )
-                }
-            };
         }
 
         restore_from_http_only_cookie: {
@@ -812,15 +841,6 @@ export async function createOidc_nonMemoized<
 
     localStorage.setItem(USER_LOGGED_IN_KEY, "true");
 
-    {
-        const { prOtherTabLogout } = getPrOtherTabLogout({ configHash });
-
-        prOtherTabLogout.then(({ postLogoutRedirectUrl }) => {
-            log?.(`Other tab has logged out, redirecting to ${postLogoutRedirectUrl}`);
-            window.location.href = postLogoutRedirectUrl;
-        });
-    }
-
     let currentTokens = resultOfLoginProcess.tokens;
 
     const autoLogoutCountdownTickCallbacks = new Set<
@@ -841,24 +861,11 @@ export async function createOidc_nonMemoized<
 
             hasLogoutBeenCalled = true;
 
-            try {
-                const result_logoutSilent = await loginOrLogoutSilent({
-                    configHash,
-                    oidcClientTsUserManager,
-                    action: {
-                        type: "logout"
-                    }
-                });
-
-                assert(result_logoutSilent.isSuccess);
-
-                await oidcClientTsUserManager.signoutSilentCallback(
-                    authResponseToUrl(result_logoutSilent.authResponse)
-                );
-            } catch (error) {
-                // NOTE: We don't know very well what to do here.
-                log?.(`Error during silent logout: ${String(error)}`);
-            }
+            document.addEventListener("visibilitychange", () => {
+                if (document.visibilityState === "visible") {
+                    location.reload();
+                }
+            });
 
             const postLogoutRedirectUrl: string = (() => {
                 switch (params.redirectTo) {
@@ -874,20 +881,19 @@ export async function createOidc_nonMemoized<
                 }
             })();
 
-            notifyOtherTabOfLogout({
-                configHash,
-                postLogoutRedirectUrl
+            const sessionId = decodeJwt<{ sid?: string }>(oidc.getTokens().idToken).sid;
+
+            await oidcClientTsUserManager.signinRedirect({
+                state: id<StateData>({
+                    configHash,
+                    context: "redirect",
+                    redirectUrl: postLogoutRedirectUrl,
+                    hasBeenProcessedByCallback: false,
+                    action: "logout",
+                    sessionId
+                }),
+                redirectMethod: "assign"
             });
-
-            const listener = () => {
-                if (document.visibilityState === "visible") {
-                    document.removeEventListener("visibilitychange", listener);
-                    location.reload();
-                }
-            };
-            document.addEventListener("visibilitychange", listener);
-
-            window.location.href = postLogoutRedirectUrl;
 
             return new Promise<never>(() => {});
         },
@@ -955,6 +961,19 @@ export async function createOidc_nonMemoized<
             return false;
         })()
     });
+
+    {
+        const { prOtherTabLogout } = getPrOtherTabLogout({
+            configHash,
+            homeUrl: homeAndCallbackUrl,
+            sessionId: decodeJwt<{ sid?: string }>(oidc.getTokens().idToken).sid
+        });
+
+        prOtherTabLogout.then(({ redirectUrl }) => {
+            log?.(`Other tab has logged out, redirecting to ${redirectUrl}`);
+            window.location.href = redirectUrl;
+        });
+    }
 
     {
         const getMsBeforeExpiration = () => {

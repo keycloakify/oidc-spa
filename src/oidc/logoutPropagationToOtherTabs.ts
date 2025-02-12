@@ -2,13 +2,14 @@ import { assert, is } from "../vendor/frontend/tsafe";
 import { Deferred } from "../tools/Deferred";
 
 type Message = {
-    postLogoutRedirectUrl: string;
     appInstanceId: string;
+    redirectUrl_initiator: string;
+    configHash: string;
 };
 
-function getChannelName(params: { configHash: string }) {
-    const { configHash } = params;
-    return `oidc-spa:logout-propagation:${configHash}`;
+function getChannelName(params: { sessionIdOrConfigHash: string }) {
+    const { sessionIdOrConfigHash } = params;
+    return `oidc-spa:logout-propagation:${sessionIdOrConfigHash}`;
 }
 
 const getAppInstanceId = (() => {
@@ -23,23 +24,36 @@ const getAppInstanceId = (() => {
     };
 })();
 
-export function notifyOtherTabOfLogout(params: { configHash: string; postLogoutRedirectUrl: string }) {
-    const { configHash, postLogoutRedirectUrl } = params;
+export function notifyOtherTabOfLogout(params: {
+    redirectUrl: string;
+    configHash: string;
+    sessionId: string | undefined;
+}) {
+    const { redirectUrl, configHash, sessionId } = params;
 
     const message: Message = {
-        postLogoutRedirectUrl,
+        redirectUrl_initiator: redirectUrl,
+        configHash,
         appInstanceId: getAppInstanceId()
     };
 
-    new BroadcastChannel(getChannelName({ configHash })).postMessage(message);
+    new BroadcastChannel(getChannelName({ sessionIdOrConfigHash: sessionId ?? configHash })).postMessage(
+        message
+    );
 }
 
-export function getPrOtherTabLogout(params: { configHash: string }) {
-    const { configHash } = params;
+export function getPrOtherTabLogout(params: {
+    sessionId: string | undefined;
+    configHash: string;
+    homeUrl: string;
+}) {
+    const { sessionId, configHash, homeUrl } = params;
 
-    const dOtherTabLogout = new Deferred<{ postLogoutRedirectUrl: string }>();
+    const dOtherTabLogout = new Deferred<{ redirectUrl: string }>();
 
-    const channel = new BroadcastChannel(getChannelName({ configHash }));
+    const channel = new BroadcastChannel(
+        getChannelName({ sessionIdOrConfigHash: sessionId ?? configHash })
+    );
 
     channel.onmessage = ({ data: message }) => {
         assert(is<Message>(message));
@@ -50,9 +64,15 @@ export function getPrOtherTabLogout(params: { configHash: string }) {
             return;
         }
 
-        const { postLogoutRedirectUrl } = message;
+        const redirectUrl = (() => {
+            if (configHash === message.configHash) {
+                return message.redirectUrl_initiator;
+            }
 
-        dOtherTabLogout.resolve({ postLogoutRedirectUrl });
+            return homeUrl;
+        })();
+
+        dOtherTabLogout.resolve({ redirectUrl });
     };
 
     const prOtherTabLogout = dOtherTabLogout.pr;

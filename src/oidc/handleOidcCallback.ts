@@ -111,13 +111,11 @@ async function handleOidcCallback_nonMemoized(): Promise<void | never> {
 }
 
 function reloadOnRestore() {
-    const listener = () => {
+    document.addEventListener("visibilitychange", () => {
         if (document.visibilityState === "visible") {
-            document.removeEventListener("visibilitychange", listener);
             location.reload();
         }
-    };
-    document.addEventListener("visibilitychange", listener);
+    });
 }
 
 const { writeBackForwardTracker, readBackForwardTracker, clearBackForwardTracker } = (() => {
