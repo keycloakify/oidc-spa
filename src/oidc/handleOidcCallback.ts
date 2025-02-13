@@ -4,7 +4,7 @@ import { getStateData, markStateDataAsProcessedByCallback, getIsStatQueryParamVa
 declare global {
     interface Window {
         "__oidc-spa.handleOidcCallback.globalContext": {
-            previousCall: Promise<void | never> | undefined;
+            previousCall: Promise<never> | undefined;
         };
     }
 }
@@ -15,7 +15,7 @@ window["__oidc-spa.handleOidcCallback.globalContext"] ??= {
 
 const globalContext = window["__oidc-spa.handleOidcCallback.globalContext"];
 
-export function handleOidcCallback(): Promise<void | never> {
+export function handleOidcCallback(): Promise<never> | undefined {
     if (globalContext.previousCall !== undefined) {
         return globalContext.previousCall;
     }
@@ -25,7 +25,7 @@ export function handleOidcCallback(): Promise<void | never> {
 
 export const AUTH_RESPONSE_KEY = "oidc-spa.authResponse";
 
-async function handleOidcCallback_nonMemoized(): Promise<void | never> {
+function handleOidcCallback_nonMemoized(): Promise<never> | undefined {
     const stateQueryParamValue = (() => {
         const result = retrieveQueryParamFromUrl({
             url: window.location.href,
@@ -55,7 +55,7 @@ async function handleOidcCallback_nonMemoized(): Promise<void | never> {
             });
         }
 
-        return;
+        return undefined;
     }
 
     console.log = () => {};

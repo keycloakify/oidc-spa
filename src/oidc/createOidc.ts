@@ -278,7 +278,13 @@ export async function createOidc_nonMemoized<
         homeAndCallbackUrl
     });
 
-    await handleOidcCallback();
+    {
+        const prOrUndefined = handleOidcCallback();
+
+        if (prOrUndefined !== undefined) {
+            await prOrUndefined;
+        }
+    }
 
     const USER_LOGGED_IN_KEY = `oidc-spa.user-logged-in:${configId}`;
 
@@ -551,7 +557,14 @@ export async function createOidc_nonMemoized<
             const { evtAuthResponseHandled } = globalContext;
 
             if (stateData.configId !== configId) {
-                await evtAuthResponseHandled.waitFor();
+                // NOTE: Best attempt at letting the other client handle the request synchronously
+                // but we won't wait for it because the initialization of the other client might
+                // be contingent on the initialization of this client.
+                const prHandled = evtAuthResponseHandled.waitFor();
+                await Promise.resolve();
+                if (sessionStorage.getItem(AUTH_RESPONSE_KEY) === null) {
+                    await prHandled;
+                }
                 break handle_redirect_auth_response;
             }
 
