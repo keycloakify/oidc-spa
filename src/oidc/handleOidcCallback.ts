@@ -40,6 +40,24 @@ function handleOidcCallback_nonMemoized(): { isHandled: boolean } {
             return undefined;
         }
 
+        if (
+            retrieveQueryParamFromUrl({
+                url: window.location.href,
+                name: "client_id"
+            }).wasPresent &&
+            retrieveQueryParamFromUrl({
+                url: window.location.href,
+                name: "response_type"
+            }).wasPresent &&
+            retrieveQueryParamFromUrl({
+                url: window.location.href,
+                name: "redirect_uri"
+            }).wasPresent
+        ) {
+            // NOTE: We are probably in a Keycloakify theme and oidc-spa was loaded by mistake.
+            return undefined;
+        }
+
         return result.value;
     })();
 
