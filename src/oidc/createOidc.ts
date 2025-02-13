@@ -279,10 +279,10 @@ export async function createOidc_nonMemoized<
     });
 
     {
-        const prOrUndefined = handleOidcCallback();
+        const { isHandled } = handleOidcCallback();
 
-        if (prOrUndefined !== undefined) {
-            await prOrUndefined;
+        if (isHandled) {
+            await new Promise<never>(() => {});
         }
     }
 

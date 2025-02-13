@@ -4,7 +4,7 @@ import { getStateData, markStateDataAsProcessedByCallback, getIsStatQueryParamVa
 declare global {
     interface Window {
         "__oidc-spa.handleOidcCallback.globalContext": {
-            previousCall: Promise<never> | undefined;
+            previousCall: { isHandled: boolean } | undefined;
         };
     }
 }
@@ -15,7 +15,7 @@ window["__oidc-spa.handleOidcCallback.globalContext"] ??= {
 
 const globalContext = window["__oidc-spa.handleOidcCallback.globalContext"];
 
-export function handleOidcCallback(): Promise<never> | undefined {
+export function handleOidcCallback(): { isHandled: boolean } {
     if (globalContext.previousCall !== undefined) {
         return globalContext.previousCall;
     }
@@ -25,7 +25,7 @@ export function handleOidcCallback(): Promise<never> | undefined {
 
 export const AUTH_RESPONSE_KEY = "oidc-spa.authResponse";
 
-function handleOidcCallback_nonMemoized(): Promise<never> | undefined {
+function handleOidcCallback_nonMemoized(): { isHandled: boolean } {
     const stateQueryParamValue = (() => {
         const result = retrieveQueryParamFromUrl({
             url: window.location.href,
@@ -55,8 +55,10 @@ function handleOidcCallback_nonMemoized(): Promise<never> | undefined {
             });
         }
 
-        return undefined;
+        return { isHandled: false };
     }
+
+    const isHandled = true;
 
     console.log = () => {};
     console.warn = () => {};
@@ -99,7 +101,7 @@ function handleOidcCallback_nonMemoized(): Promise<never> | undefined {
 
         window.history[historyMethod]();
 
-        return new Promise<never>(() => {});
+        return { isHandled };
     }
 
     const authResponse: Record<string, string> = {};
@@ -121,7 +123,7 @@ function handleOidcCallback_nonMemoized(): Promise<never> | undefined {
             break;
     }
 
-    return new Promise<never>(() => {});
+    return { isHandled };
 }
 
 function reloadOnRestore() {
