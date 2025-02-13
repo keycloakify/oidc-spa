@@ -58,6 +58,11 @@ async function handleOidcCallback_nonMemoized(): Promise<void | never> {
         return;
     }
 
+    console.log = () => {};
+    console.warn = () => {};
+    console.error = () => {};
+    console.debug = () => {};
+
     const stateData = getStateData({ stateQueryParamValue });
 
     if (
