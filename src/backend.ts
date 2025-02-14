@@ -1,5 +1,5 @@
 import { fetch } from "./vendor/backend/node-fetch";
-import { assert, isAmong, id } from "./vendor/backend/tsafe";
+import { assert, isAmong, id, type Equals, is } from "./vendor/backend/tsafe";
 import * as jwt from "./vendor/backend/jsonwebtoken";
 import { z } from "./vendor/backend/zod";
 import { Evt } from "./vendor/backend/evt";
@@ -148,37 +148,97 @@ export async function createOidcBackend<DecodedAccessToken extends Record<string
 async function fetchPublicKeyAndSigningAlgorithm(params: { issuerUri: string }) {
     const { issuerUri } = params;
 
-    const certUri = `${issuerUri.replace(/\/$/, "")}/protocol/openid-connect/certs`;
+    const { jwks_uri } = await (async () => {
+        const url = `${issuerUri.replace(/\/$/, "")}/.well-known/openid-configuration`;
 
-    const response = await fetch(certUri);
+        const response = await fetch(url);
+
+        if (!response.ok) {
+            throw new Error(
+                `Failed to fetch openid configuration of the issuerUri: ${issuerUri} (${url}): ${response.statusText}`
+            );
+        }
+
+        let data: unknown;
+
+        try {
+            data = await response.json();
+        } catch (error) {
+            throw new Error(`Failed to parse json from ${url}: ${String(error)}`);
+        }
+
+        {
+            type WellKnownConfiguration = {
+                jwks_uri: string;
+            };
+
+            const zWellKnownConfiguration = z.object({
+                jwks_uri: z.string()
+            });
+
+            assert<Equals<WellKnownConfiguration, z.infer<typeof zWellKnownConfiguration>>>();
+
+            try {
+                zWellKnownConfiguration.parse(data);
+            } catch {
+                throw new Error(`${url} does not have a jwks_uri property`);
+            }
+
+            assert(is<WellKnownConfiguration>(data));
+        }
+
+        const { jwks_uri } = data;
+
+        return { jwks_uri };
+    })();
+
+    const response = await fetch(jwks_uri);
 
     if (!response.ok) {
         throw new Error(
-            `Failed to fetch public key and algorithm from ${certUri}: ${response.statusText}`
+            `Failed to fetch public key and algorithm from ${jwks_uri}: ${response.statusText}`
         );
     }
 
-    let data;
+    let data: unknown;
 
     try {
         data = await response.json();
     } catch (error) {
-        throw new Error(`Failed to parse json from ${certUri}: ${String(error)}`);
+        throw new Error(`Failed to parse json from ${jwks_uri}: ${String(error)}`);
     }
 
-    const { keys } = z
-        .object({
+    {
+        type Jwks = {
+            keys: {
+                use: string;
+                alg: string;
+                x5c: [string, ...string[]];
+            }[];
+        };
+
+        const zJwks = z.object({
             keys: z.array(
                 z.object({
                     use: z.string(),
                     alg: z.string(),
-                    x5c: z.tuple([z.string()])
+                    x5c: z.tuple([z.string()]).rest(z.string())
                 })
             )
-        })
-        .parse(data);
+        });
 
-    const signatureKey = keys.find(({ use }) => use === "sig");
+        assert<Equals<Jwks, z.infer<typeof zJwks>>>();
+
+        try {
+            zJwks.parse(data);
+        } catch {
+            throw new Error(`${jwks_uri} does not have the expected shape`);
+        }
+
+        assert(is<Jwks>(data));
+    }
+
+    const signatureKey = data.keys.find(({ use }) => use === "sig");
 
     assert(signatureKey !== undefined, "No signature key found");
 
