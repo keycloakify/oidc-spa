@@ -8,6 +8,7 @@ import { throttleTime } from "./vendor/backend/evt";
 export type ParamsOfCreateOidcBackend<DecodedAccessToken extends Record<string, unknown>> = {
     issuerUri: string;
     decodedAccessTokenSchema?: { parse: (data: unknown) => DecodedAccessToken };
+    certificateUri?: string;
 };
 
 export type OidcBackend<DecodedAccessToken extends Record<string, unknown>> = {
@@ -41,9 +42,9 @@ export namespace ResultOfAccessTokenVerify {
 export async function createOidcBackend<DecodedAccessToken extends Record<string, unknown>>(
     params: ParamsOfCreateOidcBackend<DecodedAccessToken>
 ): Promise<OidcBackend<DecodedAccessToken>> {
-    const { issuerUri, decodedAccessTokenSchema = z.record(z.unknown()) } = params;
+    const { issuerUri, decodedAccessTokenSchema = z.record(z.unknown()), certificateUri } = params;
 
-    let { publicKey, signingAlgorithm } = await fetchPublicKeyAndSigningAlgorithm({ issuerUri });
+    let { publicKey, signingAlgorithm } = await fetchPublicKeyAndSigningAlgorithm({ issuerUri, certificateUri });
 
     const evtInvalidSignature = Evt.create<void>();
 
@@ -145,10 +146,10 @@ export async function createOidcBackend<DecodedAccessToken extends Record<string
     };
 }
 
-async function fetchPublicKeyAndSigningAlgorithm(params: { issuerUri: string }) {
-    const { issuerUri } = params;
+async function fetchPublicKeyAndSigningAlgorithm(params: { issuerUri: string, certificateUri?: string }) {
+    const { issuerUri, certificateUri } = params;
 
-    const certUri = `${issuerUri.replace(/\/$/, "")}/protocol/openid-connect/certs`;
+    const certUri = certificateUri ?? `${issuerUri.replace(/\/$/, "")}/protocol/openid-connect/certs`;
 
     const response = await fetch(certUri);
 
