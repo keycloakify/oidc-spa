@@ -1,5 +1,6 @@
 import { fetch } from "./vendor/backend/node-fetch";
-import { assert, isAmong, id, type Equals, is } from "./vendor/backend/tsafe";
+import { assert, isAmong, id, type Equals, is, exclude } from "./vendor/backend/tsafe";
+import { JWK } from "./vendor/backend/node-jose";
 import * as jwt from "./vendor/backend/jsonwebtoken";
 import { z } from "./vendor/backend/zod";
 import { Evt } from "./vendor/backend/evt";
@@ -43,18 +44,18 @@ export async function createOidcBackend<DecodedAccessToken extends Record<string
 ): Promise<OidcBackend<DecodedAccessToken>> {
     const { issuerUri, decodedAccessTokenSchema = z.record(z.unknown()) } = params;
 
-    let { publicKey, signingAlgorithm } = await fetchPublicKeyAndSigningAlgorithm({ issuerUri });
+    let publicSigningKeys = await fetchPublicSigningKeys({ issuerUri });
 
     const evtInvalidSignature = Evt.create<void>();
 
     evtInvalidSignature.pipe(throttleTime(3600_000)).attach(async () => {
-        const wrap = await (async function callee(
+        const publicSigningKeys_new = await (async function callee(
             count: number
-        ): Promise<ReturnType<typeof fetchPublicKeyAndSigningAlgorithm> | undefined> {
+        ): Promise<PublicSigningKey[] | undefined> {
             let wrap;
 
             try {
-                wrap = await fetchPublicKeyAndSigningAlgorithm({ issuerUri });
+                wrap = await fetchPublicSigningKeys({ issuerUri });
             } catch (error) {
                 if (count === 9) {
                     console.warn(
@@ -80,63 +81,135 @@ export async function createOidcBackend<DecodedAccessToken extends Record<string
             return wrap;
         })(0);
 
-        if (wrap === undefined) {
+        if (publicSigningKeys_new === undefined) {
             return;
         }
 
-        publicKey = wrap.publicKey;
-        signingAlgorithm = wrap.signingAlgorithm;
+        publicSigningKeys = publicSigningKeys_new;
     });
 
     return {
         verifyAndDecodeAccessToken: ({ accessToken }) => {
+            let kid: string;
+
+            {
+                const jwtHeader_b64 = accessToken.split(".")[0];
+
+                let jwtHeader: string;
+
+                try {
+                    jwtHeader = Buffer.from(jwtHeader_b64, "base64").toString("utf8");
+                } catch {
+                    return {
+                        isValid: false,
+                        errorCase: "invalid signature",
+                        errorMessage: "Failed to decode the JWT header as a base64 string"
+                    };
+                }
+
+                let decodedHeader: unknown;
+
+                try {
+                    decodedHeader = JSON.parse(jwtHeader);
+                } catch {
+                    return {
+                        isValid: false,
+                        errorCase: "invalid signature",
+                        errorMessage: "Failed to parse the JWT header as a JSON"
+                    };
+                }
+
+                type DecodedHeader = {
+                    kid: string;
+                };
+
+                const zDecodedHeader = z.object({
+                    kid: z.string()
+                });
+
+                assert<Equals<DecodedHeader, z.infer<typeof zDecodedHeader>>>();
+
+                try {
+                    zDecodedHeader.parse(decodedHeader);
+                } catch {
+                    return {
+                        isValid: false,
+                        errorCase: "invalid signature",
+                        errorMessage: "The decoded JWT header does not have a kid property"
+                    };
+                }
+
+                assert(is<DecodedHeader>(decodedHeader));
+
+                kid = decodedHeader.kid;
+            }
+
+            const publicSigningKey = publicSigningKeys.find(
+                publicSigningKey => publicSigningKey.kid === kid
+            );
+
+            if (publicSigningKey === undefined) {
+                return {
+                    isValid: false,
+                    errorCase: "invalid signature",
+                    errorMessage: `No public signing key found with kid ${kid}`
+                };
+            }
+
             let result = id<ResultOfAccessTokenVerify<DecodedAccessToken> | undefined>(undefined);
 
-            jwt.verify(accessToken, publicKey, { algorithms: [signingAlgorithm] }, (err, decoded) => {
-                invalid: {
-                    if (!err) {
-                        break invalid;
-                    }
+            jwt.verify(
+                accessToken,
+                publicSigningKey.publicKey,
+                { algorithms: [publicSigningKey.alg] },
+                (err, decoded) => {
+                    invalid: {
+                        if (!err) {
+                            break invalid;
+                        }
 
-                    if (err.name === "TokenExpiredError") {
+                        if (err.name === "TokenExpiredError") {
+                            result = id<ResultOfAccessTokenVerify.Invalid>({
+                                isValid: false,
+                                errorCase: "expired",
+                                errorMessage: err.message
+                            });
+                            return;
+                        }
+
+                        evtInvalidSignature.post();
+
                         result = id<ResultOfAccessTokenVerify.Invalid>({
                             isValid: false,
-                            errorCase: "expired",
+                            errorCase: "invalid signature",
                             errorMessage: err.message
                         });
+
                         return;
                     }
 
-                    evtInvalidSignature.post();
+                    let decodedAccessToken: DecodedAccessToken;
 
-                    result = id<ResultOfAccessTokenVerify.Invalid>({
-                        isValid: false,
-                        errorCase: "invalid signature",
-                        errorMessage: err.message
+                    try {
+                        decodedAccessToken = decodedAccessTokenSchema.parse(
+                            decoded
+                        ) as DecodedAccessToken;
+                    } catch (error) {
+                        result = id<ResultOfAccessTokenVerify.Invalid>({
+                            isValid: false,
+                            errorCase: "does not respect schema",
+                            errorMessage: String(error)
+                        });
+
+                        return;
+                    }
+
+                    result = id<ResultOfAccessTokenVerify.Valid<DecodedAccessToken>>({
+                        isValid: true,
+                        decodedAccessToken: decodedAccessToken
                     });
-
-                    return;
                 }
-
-                let decodedAccessToken: DecodedAccessToken;
-
-                try {
-                    decodedAccessToken = decodedAccessTokenSchema.parse(decoded) as DecodedAccessToken;
-                } catch (error) {
-                    result = id<ResultOfAccessTokenVerify.Invalid>({
-                        isValid: false,
-                        errorCase: "does not respect schema",
-                        errorMessage: String(error)
-                    });
-
-                    return;
-                }
-
-                result = id<ResultOfAccessTokenVerify.Valid<DecodedAccessToken>>({
-                    isValid: true,
-                    decodedAccessToken: decodedAccessToken
-                });
-            });
+            );
 
             assert(result !== undefined);
 
@@ -145,7 +218,13 @@ export async function createOidcBackend<DecodedAccessToken extends Record<string
     };
 }
 
-async function fetchPublicKeyAndSigningAlgorithm(params: { issuerUri: string }) {
+type PublicSigningKey = {
+    kid: string;
+    alg: "RS256" | "RS384" | "RS512";
+    publicKey: string;
+};
+
+async function fetchPublicSigningKeys(params: { issuerUri: string }): Promise<PublicSigningKey[]> {
     const { issuerUri } = params;
 
     const { jwks_uri } = await (async () => {
@@ -192,68 +271,98 @@ async function fetchPublicKeyAndSigningAlgorithm(params: { issuerUri: string }) 
         return { jwks_uri };
     })();
 
-    const response = await fetch(jwks_uri);
+    const { jwks } = await (async () => {
+        const response = await fetch(jwks_uri);
 
-    if (!response.ok) {
-        throw new Error(
-            `Failed to fetch public key and algorithm from ${jwks_uri}: ${response.statusText}`
-        );
-    }
-
-    let data: unknown;
-
-    try {
-        data = await response.json();
-    } catch (error) {
-        throw new Error(`Failed to parse json from ${jwks_uri}: ${String(error)}`);
-    }
-
-    {
-        type Jwks = {
-            keys: {
-                use: string;
-                alg: string;
-                x5c: [string, ...string[]];
-            }[];
-        };
-
-        const zJwks = z.object({
-            keys: z.array(
-                z.object({
-                    use: z.string(),
-                    alg: z.string(),
-                    x5c: z.tuple([z.string()]).rest(z.string())
-                })
-            )
-        });
-
-        assert<Equals<Jwks, z.infer<typeof zJwks>>>();
-
-        try {
-            zJwks.parse(data);
-        } catch {
-            throw new Error(`${jwks_uri} does not have the expected shape`);
+        if (!response.ok) {
+            throw new Error(
+                `Failed to fetch public key and algorithm from ${jwks_uri}: ${response.statusText}`
+            );
         }
 
-        assert(is<Jwks>(data));
-    }
+        let jwks: unknown;
 
-    const signatureKey = data.keys.find(({ use }) => use === "sig");
+        try {
+            jwks = await response.json();
+        } catch (error) {
+            throw new Error(`Failed to parse json from ${jwks_uri}: ${String(error)}`);
+        }
 
-    assert(signatureKey !== undefined, "No signature key found");
+        {
+            type Jwks = {
+                keys: {
+                    kid: string;
+                    kty: string;
+                    e?: string;
+                    n?: string;
+                    use: string;
+                    alg: string;
+                }[];
+            };
 
-    const signingAlgorithm = signatureKey["alg"];
+            const zJwks = z.object({
+                keys: z.array(
+                    z.object({
+                        kid: z.string(),
+                        kty: z.string(),
+                        e: z.string().optional(),
+                        n: z.string().optional(),
+                        use: z.string(),
+                        alg: z.string()
+                    })
+                )
+            });
 
-    assert(
-        isAmong(["RS256", "RS384", "RS512"], signingAlgorithm),
-        `Unsupported algorithm ${signingAlgorithm}`
+            assert<Equals<Jwks, z.infer<typeof zJwks>>>();
+
+            try {
+                zJwks.parse(jwks);
+            } catch {
+                throw new Error(`${jwks_uri} does not have the expected shape`);
+            }
+
+            assert(is<Jwks>(jwks));
+        }
+
+        return { jwks };
+    })();
+
+    const publicSigningKeys: PublicSigningKey[] = await Promise.all(
+        jwks.keys
+            .filter(({ use }) => use === "sig")
+            .map(({ alg, kid, kty, use, e, n }) => {
+                if (kty !== "RSA") {
+                    return undefined;
+                }
+
+                assert(e !== undefined, "e is undefined");
+                assert(n !== undefined, "n is undefined");
+
+                return { alg, kid, kty, use, e, n };
+            })
+            .filter(exclude(undefined))
+            .map(async ({ alg, kid, e, n }) => {
+                const supportedAlgs = ["RS256", "RS384", "RS512"] as const;
+
+                assert<Equals<(typeof supportedAlgs)[number], PublicSigningKey["alg"]>>();
+
+                assert(isAmong(supportedAlgs, alg), `Unsupported or too week algorithm ${alg}`);
+
+                const key = await JWK.asKey({ kty: "RSA", e, n });
+                const publicKey = key.toPEM(false);
+
+                return {
+                    kid,
+                    alg,
+                    publicKey
+                };
+            })
     );
 
-    const publicKey = [
-        "-----BEGIN CERTIFICATE-----",
-        signatureKey.x5c[0],
-        "-----END CERTIFICATE-----"
-    ].join("\n");
+    assert(
+        publicSigningKeys.length !== 0,
+        `No public signing key found at ${jwks_uri}, ${JSON.stringify(jwks, null, 2)}`
+    );
 
-    return { publicKey, signingAlgorithm };
+    return publicSigningKeys;
 }
