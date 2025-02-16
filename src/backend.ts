@@ -91,7 +91,7 @@ export async function createOidcBackend<DecodedAccessToken extends Record<string
     return {
         verifyAndDecodeAccessToken: ({ accessToken }) => {
             let kid: string;
-            let alg: "RS256" | "RS384" | "RS512";
+            let alg: jwt.Algorithm;
 
             {
                 const jwtHeader_b64 = accessToken.split(".")[0];
@@ -145,9 +145,24 @@ export async function createOidcBackend<DecodedAccessToken extends Record<string
                 assert(is<DecodedHeader>(decodedHeader));
 
                 {
-                    const supportedAlgs = ["RS256", "RS384", "RS512"] as const;
+                    const supportedAlgs = [
+                        "RS256",
+                        "RS384",
+                        "RS512",
+                        "ES256",
+                        "ES384",
+                        "ES512",
+                        "PS256",
+                        "PS384",
+                        "PS512"
+                    ] as const;
 
-                    assert<Equals<(typeof supportedAlgs)[number], typeof alg>>();
+                    assert<
+                        Equals<
+                            (typeof supportedAlgs)[number] | "none" | "HS256" | "HS384" | "HS512",
+                            jwt.Algorithm
+                        >
+                    >();
 
                     if (!isAmong(supportedAlgs, decodedHeader.alg)) {
                         return {
