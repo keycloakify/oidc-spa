@@ -91,6 +91,7 @@ export async function createOidcBackend<DecodedAccessToken extends Record<string
     return {
         verifyAndDecodeAccessToken: ({ accessToken }) => {
             let kid: string;
+            let alg: "RS256" | "RS384" | "RS512";
 
             {
                 const jwtHeader_b64 = accessToken.split(".")[0];
@@ -121,10 +122,12 @@ export async function createOidcBackend<DecodedAccessToken extends Record<string
 
                 type DecodedHeader = {
                     kid: string;
+                    alg: string;
                 };
 
                 const zDecodedHeader = z.object({
-                    kid: z.string()
+                    kid: z.string(),
+                    alg: z.string()
                 });
 
                 assert<Equals<DecodedHeader, z.infer<typeof zDecodedHeader>>>();
@@ -141,7 +144,22 @@ export async function createOidcBackend<DecodedAccessToken extends Record<string
 
                 assert(is<DecodedHeader>(decodedHeader));
 
+                {
+                    const supportedAlgs = ["RS256", "RS384", "RS512"] as const;
+
+                    assert<Equals<(typeof supportedAlgs)[number], typeof alg>>();
+
+                    if (!isAmong(supportedAlgs, decodedHeader.alg)) {
+                        return {
+                            isValid: false,
+                            errorCase: "invalid signature",
+                            errorMessage: `Unsupported or too week algorithm ${decodedHeader.alg}`
+                        };
+                    }
+                }
+
                 kid = decodedHeader.kid;
+                alg = decodedHeader.alg;
             }
 
             const publicSigningKey = publicSigningKeys.find(
@@ -161,7 +179,7 @@ export async function createOidcBackend<DecodedAccessToken extends Record<string
             jwt.verify(
                 accessToken,
                 publicSigningKey.publicKey,
-                { algorithms: [publicSigningKey.alg] },
+                { algorithms: [alg] },
                 (err, decoded) => {
                     invalid: {
                         if (!err) {
@@ -220,7 +238,6 @@ export async function createOidcBackend<DecodedAccessToken extends Record<string
 
 type PublicSigningKey = {
     kid: string;
-    alg: "RS256" | "RS384" | "RS512";
     publicKey: string;
 };
 
@@ -296,7 +313,6 @@ async function fetchPublicSigningKeys(params: { issuerUri: string }): Promise<Pu
                     e?: string;
                     n?: string;
                     use: string;
-                    alg: string;
                 }[];
             };
 
@@ -307,8 +323,7 @@ async function fetchPublicSigningKeys(params: { issuerUri: string }): Promise<Pu
                         kty: z.string(),
                         e: z.string().optional(),
                         n: z.string().optional(),
-                        use: z.string(),
-                        alg: z.string()
+                        use: z.string()
                     })
                 )
             });
@@ -330,7 +345,7 @@ async function fetchPublicSigningKeys(params: { issuerUri: string }): Promise<Pu
     const publicSigningKeys: PublicSigningKey[] = await Promise.all(
         jwks.keys
             .filter(({ use }) => use === "sig")
-            .map(({ alg, kid, kty, use, e, n }) => {
+            .map(({ kid, kty, e, n }) => {
                 if (kty !== "RSA") {
                     return undefined;
                 }
@@ -338,22 +353,15 @@ async function fetchPublicSigningKeys(params: { issuerUri: string }): Promise<Pu
                 assert(e !== undefined, "e is undefined");
                 assert(n !== undefined, "n is undefined");
 
-                return { alg, kid, kty, use, e, n };
+                return { kid, e, n };
             })
             .filter(exclude(undefined))
-            .map(async ({ alg, kid, e, n }) => {
-                const supportedAlgs = ["RS256", "RS384", "RS512"] as const;
-
-                assert<Equals<(typeof supportedAlgs)[number], PublicSigningKey["alg"]>>();
-
-                assert(isAmong(supportedAlgs, alg), `Unsupported or too week algorithm ${alg}`);
-
+            .map(async ({ kid, e, n }) => {
                 const key = await JWK.asKey({ kty: "RSA", e, n });
                 const publicKey = key.toPEM(false);
 
                 return {
                     kid,
-                    alg,
                     publicKey
                 };
             })
