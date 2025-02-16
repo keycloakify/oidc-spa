@@ -35,21 +35,23 @@ When used in conjunction with Keycloak (for example),
 it enables you to offer a modern and secure authentication experience with minimal coding effort.  
 This includes options for signing in via Google, X, GitHub, or other social media platforms. We provide comprehensive guidance from beginning to end.
 
--   🎓 Accessible to all skill levels; no need to be an authentication expert. And we are here to help [on Discord](https://discord.gg/mJdYJSdcm4).
--   🛠️ Easy to set up; eliminates the need for creating special `/login` `/logout` routes. You don't need to think about refreshing the tokens.
--   💬 Helpful debug message telling you what's wrong in your server configuration and how to fix it.
--   🕣 Easy implementation of auto logout. _Are you still there? You will be logged out in 10...9..._
--   ✨ Robust yet optional React integration.
--   📖 Comprehensive documentation and project examples.
--   ✅ Best in class type safety, optional Zod integration to validate the shape of the JWT token.
--   🔒 Compliance with the highest security standards. Authorization Code Flow + PKCE.
-    No token persistence in `localStorage` or `sessionStorage`. Auditors will have nothing to say about your auth.
+-   🎓 **Accessible to all skill levels**: No need to be an authentication expert. And we're happy to help [on Discord](https://discord.gg/mJdYJSdcm4)!
+-   🛠️ **Simple setup**: No need to define `/login` or `/logout` routes. Token refreshing is handled automatically.
+-   💬 **Debug messages**: Provides clear feedback on misconfigurations and how to resolve them.
+-   🕣 **Auto logout**: Supports session expiration with automatic logout prompts.
+-   🚪 **Logout propagation**: Logging out in one tab automatically logs out all others.
+-   ✨ **React integration**: Includes React utilities but works independently as well.
+-   📖 **Documentation & examples**: Covers setup, usage, and common scenarios.
+-   ✅ **Type safety**: Strong TypeScript support with optional Zod integration for JWT validation.
+-   🔒 **Security**: Uses Authorization Code Flow + PKCE. No token storage in `localStorage` or `sessionStorage`.
+-   🖥️ **Optional Backend tooling**: Provides utilities for access token validation in JavaScript backends (Node, Deno, WebWorker).
+-   🔗 **Multi-instance support**: Allows authentication against multiple APIs (using different OIDC clients) within the same application.
 
 ## Comparison with Existing Libraries
 
 ### [oidc-client-ts](https://github.com/authts/oidc-client-ts)
 
-While `oidc-client-ts` serves as a comprehensive toolkit to support all sort of applications, our library aims to provide a simplified, ready-to-use adapter
+While `oidc-client-ts` serves as a comprehensive toolkit to support all sort of applications, our library aims to provide a simplified, easy-to-setup adapter
 specifically tailored for SPAs.
 
 ### [react-oidc-context](https://github.com/authts/react-oidc-context)
