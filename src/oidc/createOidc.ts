@@ -663,7 +663,9 @@ export async function createOidc_nonMemoized<
                 getExtraTokenParams
             });
 
-            if (!result_loginSilent.isSuccess) {
+            assert(result_loginSilent.outcome !== "refresh token used");
+
+            if (result_loginSilent.outcome === "failure") {
                 switch (result_loginSilent.cause) {
                     case "can't reach well-known oidc endpoint":
                         return createWellKnownOidcConfigurationEndpointUnreachableInitializationError({
@@ -679,6 +681,8 @@ export async function createOidc_nonMemoized<
 
                 assert<Equals<typeof result_loginSilent.cause, never>>(false);
             }
+
+            assert<Equals<typeof result_loginSilent.outcome, "success iframe">>();
 
             const { authResponse } = result_loginSilent;
 
@@ -930,14 +934,46 @@ export async function createOidc_nonMemoized<
         renewTokens: async params => {
             const { extraTokenParams: extraTokenParams_local } = params ?? {};
 
-            const oidcClientTsUser = await oidcClientTsUserManager.signinSilent({
-                extraTokenParams: {
+            log?.("Renewing tokens");
+
+            const result_loginSilent = await loginSilent({
+                oidcClientTsUserManager,
+                stateQueryParamValue_instance,
+                configId,
+                getExtraTokenParams: () => ({
                     ...getExtraTokenParams?.(),
                     ...extraTokenParams_local
-                }
+                })
             });
 
-            assert(oidcClientTsUser !== null);
+            if (result_loginSilent.outcome === "failure") {
+                throw new Error(result_loginSilent.cause);
+            }
+
+            let oidcClientTsUser: OidcClientTsUser;
+
+            switch (result_loginSilent.outcome) {
+                case "refresh token used":
+                    {
+                        log?.("Refresh token used");
+                        oidcClientTsUser = result_loginSilent.oidcClientTsUser;
+                    }
+                    break;
+                case "success iframe":
+                    {
+                        const { authResponse } = result_loginSilent;
+
+                        log?.("Tokens refresh using iframe", authResponse);
+
+                        oidcClientTsUser = await oidcClientTsUserManager.signinRedirectCallback(
+                            authResponseToUrl(authResponse)
+                        );
+                    }
+                    break;
+                default:
+                    assert<Equals<typeof result_loginSilent, never>>(false);
+                    break;
+            }
 
             const decodedIdTokenPropertyDescriptor = Object.getOwnPropertyDescriptor(
                 currentTokens,
@@ -1080,7 +1116,12 @@ export async function createOidc_nonMemoized<
         })();
     }
 
-    {
+    auto_logout: {
+        if (currentTokens.refreshToken === "" && __unsafe_ssoSessionIdleSeconds === undefined) {
+            log?.("No refresh token, auto logout non applicable");
+            break auto_logout;
+        }
+
         const { startCountdown } = createStartCountdown({
             getCountdownEndTime: (() => {
                 const getCountdownEndTime = () =>

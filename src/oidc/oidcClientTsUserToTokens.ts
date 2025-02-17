@@ -39,9 +39,11 @@ export function oidcClientTsUserToTokens<DecodedIdToken extends Record<string, u
 
     const refreshToken = oidcClientTsUser.refresh_token;
 
-    assert(refreshToken !== undefined, "No refresh token provided by the oidc server");
-
     const refreshTokenExpirationTime = (() => {
+        if (refreshToken === undefined) {
+            return Number.POSITIVE_INFINITY;
+        }
+
         read_from_jwt: {
             const expirationTime = readExpirationTimeInJwt(refreshToken);
 
@@ -71,7 +73,7 @@ export function oidcClientTsUserToTokens<DecodedIdToken extends Record<string, u
     const tokens: Oidc.Tokens<DecodedIdToken> = {
         accessToken,
         accessTokenExpirationTime,
-        refreshToken,
+        refreshToken: refreshToken ?? "",
         refreshTokenExpirationTime,
         idToken,
         decodedIdToken: null as any

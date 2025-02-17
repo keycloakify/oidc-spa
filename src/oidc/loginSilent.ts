@@ -5,6 +5,7 @@ import { getStateData, clearStateStore, type StateData } from "./StateData";
 import { addQueryParamToUrl } from "../tools/urlQueryParams";
 import { getDownlinkAndRtt } from "../tools/getDownlinkAndRtt";
 import { getIsDev } from "../tools/isDev";
+import type { User as OidcClientTsUser } from "../vendor/frontend/oidc-client-ts-and-jwt-decode";
 
 export type AuthResponse = {
     state: string;
@@ -31,12 +32,16 @@ export function authResponseToUrl(authResponse: AuthResponse): string {
 
 type ResultOfLoginSilent =
     | {
-          isSuccess: true;
+          outcome: "success iframe";
           authResponse: AuthResponse;
       }
     | {
-          isSuccess: false;
+          outcome: "failure";
           cause: "timeout" | "can't reach well-known oidc endpoint";
+      }
+    | {
+          outcome: "refresh token used";
+          oidcClientTsUser: OidcClientTsUser;
       };
 
 export async function loginSilent(params: {
@@ -73,7 +78,7 @@ export async function loginSilent(params: {
 
     const timeout = setTimeout(async () => {
         dResult.resolve({
-            isSuccess: false,
+            outcome: "failure",
             cause: "timeout"
         });
     }, timeoutDelayMs);
@@ -99,7 +104,7 @@ export async function loginSilent(params: {
         window.removeEventListener("message", listener);
 
         dResult.resolve({
-            isSuccess: true,
+            outcome: "success iframe",
             authResponse
         });
     };
@@ -115,30 +120,42 @@ export async function loginSilent(params: {
             silentRequestTimeoutInSeconds: timeoutDelayMs / 1000,
             extraTokenParams: getExtraTokenParams?.()
         })
-        .catch((error: Error) => {
-            if (error.message === "Failed to fetch") {
-                // NOTE: If we got an error here it means that the fetch to the
-                // well-known oidc endpoint failed.
-                // This usually means that the server is down or that the issuerUri
-                // is not pointing to a valid oidc server.
-                // It could be a CORS error on the well-known endpoint but it's unlikely.
+        .then(
+            oidcClientTsUser => {
+                assert(oidcClientTsUser !== null);
 
                 clearTimeout(timeout);
 
                 dResult.resolve({
-                    isSuccess: false,
-                    cause: "can't reach well-known oidc endpoint"
+                    outcome: "refresh token used",
+                    oidcClientTsUser
                 });
+            },
+            (error: Error) => {
+                if (error.message === "Failed to fetch") {
+                    // NOTE: If we got an error here it means that the fetch to the
+                    // well-known oidc endpoint failed.
+                    // This usually means that the server is down or that the issuerUri
+                    // is not pointing to a valid oidc server.
+                    // It could be a CORS error on the well-known endpoint but it's unlikely.
 
-                return;
+                    clearTimeout(timeout);
+
+                    dResult.resolve({
+                        outcome: "failure",
+                        cause: "can't reach well-known oidc endpoint"
+                    });
+
+                    return;
+                }
+
+                // NOTE: Here, except error on our understanding there can't be any other
+                // error than timeout so we fail silently and let the timeout expire.
             }
-
-            // NOTE: Here, except error on our understanding there can't be any other
-            // error than timeout so we fail silently and let the timeout expire.
-        });
+        );
 
     dResult.pr.then(result => {
-        if (!result.isSuccess) {
+        if (result.outcome === "failure") {
             clearStateStore({ stateQueryParamValue: stateQueryParamValue_instance });
         }
     });
