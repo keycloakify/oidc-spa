@@ -21,7 +21,9 @@ export const Route = createFileRoute("/protected")({
 
 function ProtectedPage() {
     // Here we can safely assume that the user is logged in.
-    const { oidcTokens, goToAuthServer, backFromAuthServer } = useOidc({ assert: "user logged in" });
+    const { oidcTokens, goToAuthServer, backFromAuthServer, renewTokens } = useOidc({
+        assert: "user logged in"
+    });
 
     return (
         <h4>
@@ -67,6 +69,9 @@ function ProtectedPage() {
             >
                 Delete account
             </button>
+            <br />
+            <br />
+            <button onClick={() => renewTokens()}>Renew tokens</button>
         </h4>
     );
 }

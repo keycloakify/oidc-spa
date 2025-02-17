@@ -4,7 +4,7 @@ import {
     type User as OidcClientTsUser,
     InMemoryWebStorage
 } from "../vendor/frontend/oidc-client-ts-and-jwt-decode";
-import { id, type Param0, assert, type Equals, typeGuard } from "../vendor/frontend/tsafe";
+import { id, type Param0, assert, is, type Equals, typeGuard } from "../vendor/frontend/tsafe";
 import { setTimeout, clearTimeout } from "../tools/workerTimers";
 import { addQueryParamToUrl, retrieveAllQueryParamFromUrl } from "../tools/urlQueryParams";
 import { Deferred } from "../tools/Deferred";
@@ -31,6 +31,11 @@ import { getConfigId } from "./configId";
 import { oidcClientTsUserToTokens } from "./oidcClientTsUserToTokens";
 import { loginSilent, authResponseToUrl } from "./loginSilent";
 import { handleOidcCallback, AUTH_RESPONSE_KEY } from "./handleOidcCallback";
+import {
+    clearPersistedLogoutState,
+    getIsPersistedLogoutState,
+    persistLogoutState
+} from "./persistedLogoutState";
 import type { Oidc } from "./Oidc";
 import { type AwaitableEventEmitter, createAwaitableEventEmitter } from "../tools/AwaitableEventEmitter";
 
@@ -501,7 +506,8 @@ export async function createOidc_nonMemoized<
                 configId,
                 action: "login"
             }),
-            redirectMethod
+            redirectMethod,
+            prompt: getIsPersistedLogoutState({ configId }) ? "consent" : undefined
         });
         return new Promise<never>(() => {});
     };
@@ -610,6 +616,7 @@ export async function createOidc_nonMemoized<
                         }
 
                         sessionStorage.removeItem(BROWSER_SESSION_NOT_FIRST_INIT_KEY);
+                        clearPersistedLogoutState({ configId });
 
                         return {
                             oidcClientTsUser,
@@ -655,6 +662,11 @@ export async function createOidc_nonMemoized<
 
         restore_from_http_only_cookie: {
             log?.("Trying to restore the auth from the http only cookie (silent signin with iframe)");
+
+            if (getIsPersistedLogoutState({ configId })) {
+                log?.("Skipping silent signin with iframe, the user has logged out");
+                break restore_from_http_only_cookie;
+            }
 
             const result_loginSilent = await loginSilent({
                 oidcClientTsUserManager,
@@ -917,17 +929,30 @@ export async function createOidc_nonMemoized<
 
             const sessionId = decodeJwt<{ sid?: string }>(oidc.getTokens().idToken).sid;
 
-            await oidcClientTsUserManager.signoutRedirect({
-                state: id<StateData>({
-                    configId,
-                    context: "redirect",
-                    redirectUrl: postLogoutRedirectUrl,
-                    hasBeenProcessedByCallback: false,
-                    action: "logout",
-                    sessionId
-                }),
-                redirectMethod: "assign"
-            });
+            try {
+                await oidcClientTsUserManager.signoutRedirect({
+                    state: id<StateData>({
+                        configId,
+                        context: "redirect",
+                        redirectUrl: postLogoutRedirectUrl,
+                        hasBeenProcessedByCallback: false,
+                        action: "logout",
+                        sessionId
+                    }),
+                    redirectMethod: "assign"
+                });
+            } catch (error) {
+                assert(is<Error>(error));
+
+                if (error.message !== "No end session endpoint") {
+                    throw error;
+                }
+
+                log?.("No end session endpoint, managing logging state locally");
+
+                persistLogoutState({ configId });
+                window.location.href = postLogoutRedirectUrl;
+            }
 
             return new Promise<never>(() => {});
         },
