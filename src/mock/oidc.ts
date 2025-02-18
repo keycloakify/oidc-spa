@@ -1,8 +1,6 @@
 import type { Oidc } from "../oidc";
-import { retrieveQueryParamFromUrl, addQueryParamToUrl } from "../tools/urlQueryParams";
 import { createObjectThatThrowsIfAccessed } from "../tools/createObjectThatThrowsIfAccessed";
 import { id } from "../vendor/frontend/tsafe";
-import { assert, type Equals } from "../vendor/frontend/tsafe";
 import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";
 
 export type ParamsOfCreateMockOidc<
@@ -44,18 +42,19 @@ export async function createMockOidc<
     } = params;
 
     const isUserLoggedIn = (() => {
-        const result = retrieveQueryParamFromUrl({
-            url: window.location.href,
-            name: urlParamName
-        });
+        const newUrl = new URL(window.location.href);
 
-        if (!result.wasPresent) {
+        const urlParamValue = newUrl.searchParams.get(urlParamName);
+
+        if (urlParamValue === null) {
             return isUserInitiallyLoggedIn;
         }
 
-        window.history.replaceState({}, "", result.newUrl);
+        newUrl.searchParams.delete(urlParamName);
 
-        return result.value === "true";
+        window.history.replaceState({}, "", newUrl.href);
+
+        return urlParamValue === "true";
     })();
 
     const homeUrl = toFullyQualifiedUrl({
@@ -76,20 +75,20 @@ export async function createMockOidc<
     }): Promise<never> => {
         const { redirectUrl } = params;
 
-        const { newUrl } = addQueryParamToUrl({
-            url: (() => {
+        const newUrl = new URL(
+            (() => {
                 if (redirectUrl === undefined) {
                     return window.location.href;
                 }
                 return redirectUrl.startsWith("/")
                     ? `${window.location.origin}${redirectUrl}`
                     : redirectUrl;
-            })(),
-            name: urlParamName,
-            value: "true"
-        });
+            })()
+        );
 
-        window.location.href = newUrl;
+        newUrl.searchParams.set(urlParamName, "true");
+
+        window.location.href = newUrl.href;
 
         return new Promise<never>(() => {});
     };
@@ -139,8 +138,8 @@ export async function createMockOidc<
             unsubscribe: () => {}
         }),
         logout: params => {
-            const { newUrl } = addQueryParamToUrl({
-                url: (() => {
+            const newUrl = new URL(
+                (() => {
                     switch (params.redirectTo) {
                         case "current page":
                             return window.location.href;
@@ -152,13 +151,12 @@ export async function createMockOidc<
                                 doAssertNoQueryParams: false
                             });
                     }
-                    assert<Equals<typeof params, never>>(false);
-                })(),
-                name: urlParamName,
-                value: "false"
-            });
+                })()
+            );
 
-            window.location.href = newUrl;
+            newUrl.searchParams.set(urlParamName, "false");
+
+            window.location.href = newUrl.href;
 
             return new Promise<never>(() => {});
         },

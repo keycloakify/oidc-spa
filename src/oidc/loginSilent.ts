@@ -2,7 +2,6 @@ import type { UserManager as OidcClientTsUserManager } from "../vendor/frontend/
 import { Deferred } from "../tools/Deferred";
 import { id, assert } from "../vendor/frontend/tsafe";
 import { getStateData, clearStateStore, type StateData } from "./StateData";
-import { addQueryParamToUrl } from "../tools/urlQueryParams";
 import { getDownlinkAndRtt } from "../tools/getDownlinkAndRtt";
 import { getIsDev } from "../tools/isDev";
 import type { User as OidcClientTsUser } from "../vendor/frontend/oidc-client-ts-and-jwt-decode";
@@ -17,17 +16,13 @@ function getIsAuthResponse(data: any): data is AuthResponse {
 }
 
 export function authResponseToUrl(authResponse: AuthResponse): string {
-    let authResponseUrl = "https://dummy.com";
+    const authResponseUrl = new URL("https://dummy.com");
 
     for (const [name, value] of Object.entries(authResponse)) {
-        authResponseUrl = addQueryParamToUrl({
-            url: authResponseUrl,
-            name,
-            value
-        }).newUrl;
+        authResponseUrl.searchParams.set(name, value);
     }
 
-    return authResponseUrl;
+    return authResponseUrl.href;
 }
 
 type ResultOfLoginSilent =

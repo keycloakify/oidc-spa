@@ -1,4 +1,3 @@
-import { retrieveQueryParamFromUrl } from "../tools/urlQueryParams";
 import { getStateData, markStateDataAsProcessedByCallback, getIsStatQueryParamValue } from "./StateData";
 
 declare global {
@@ -26,39 +25,29 @@ export function handleOidcCallback(): { isHandled: boolean } {
 export const AUTH_RESPONSE_KEY = "oidc-spa.authResponse";
 
 function handleOidcCallback_nonMemoized(): { isHandled: boolean } {
-    const stateQueryParamValue = (() => {
-        const result = retrieveQueryParamFromUrl({
-            url: window.location.href,
-            name: "state"
-        });
+    const locationUrl = new URL(window.location.href);
 
-        if (!result.wasPresent) {
+    const stateQueryParamValue = (() => {
+        const stateQueryParamValue = locationUrl.searchParams.get("state");
+
+        if (stateQueryParamValue === null) {
             return undefined;
         }
 
-        if (!getIsStatQueryParamValue({ maybeStateQueryParamValue: result.value })) {
+        if (!getIsStatQueryParamValue({ maybeStateQueryParamValue: stateQueryParamValue })) {
             return undefined;
         }
 
         if (
-            retrieveQueryParamFromUrl({
-                url: window.location.href,
-                name: "client_id"
-            }).wasPresent &&
-            retrieveQueryParamFromUrl({
-                url: window.location.href,
-                name: "response_type"
-            }).wasPresent &&
-            retrieveQueryParamFromUrl({
-                url: window.location.href,
-                name: "redirect_uri"
-            }).wasPresent
+            locationUrl.searchParams.get("client_id") !== null &&
+            locationUrl.searchParams.get("response_type") !== null &&
+            locationUrl.searchParams.get("redirect_uri") !== null
         ) {
             // NOTE: We are probably in a Keycloakify theme and oidc-spa was loaded by mistake.
             return undefined;
         }
 
-        return result.value;
+        return stateQueryParamValue;
     })();
 
     if (stateQueryParamValue === undefined) {
@@ -124,7 +113,7 @@ function handleOidcCallback_nonMemoized(): { isHandled: boolean } {
 
     const authResponse: Record<string, string> = {};
 
-    for (const [key, value] of new URL(location.href).searchParams) {
+    for (const [key, value] of locationUrl.searchParams) {
         authResponse[key] = value;
     }
 

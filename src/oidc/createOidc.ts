@@ -6,7 +6,6 @@ import {
 } from "../vendor/frontend/oidc-client-ts-and-jwt-decode";
 import { id, type Param0, assert, is, type Equals, typeGuard } from "../vendor/frontend/tsafe";
 import { setTimeout, clearTimeout } from "../tools/workerTimers";
-import { addQueryParamToUrl, retrieveAllQueryParamFromUrl } from "../tools/urlQueryParams";
 import { Deferred } from "../tools/Deferred";
 import { decodeJwt } from "../tools/decodeJwt";
 import { createIsUserActive } from "../tools/createIsUserActive";
@@ -426,14 +425,13 @@ export async function createOidc_nonMemoized<
                                         break add_extra_query_params;
                                     }
 
-                                    Object.entries(extraQueryParams).forEach(
-                                        ([name, value]) =>
-                                            (url = addQueryParamToUrl({
-                                                url,
-                                                name,
-                                                value
-                                            }).newUrl)
-                                    );
+                                    const url_obj = new URL_real(url);
+
+                                    for (const [name, value] of Object.entries(extraQueryParams)) {
+                                        url_obj.searchParams.set(name, value);
+                                    }
+
+                                    url = url_obj.href;
                                 }
 
                                 apply_transform_before_redirect: {
@@ -486,10 +484,7 @@ export async function createOidc_nonMemoized<
                     break read_query_params_added_by_transform_before_redirect;
                 }
 
-                const { values: queryParamsAddedByTransformBeforeRedirect } =
-                    retrieveAllQueryParamFromUrl({ url: url_afterTransform });
-
-                for (const [name, value] of Object.entries(queryParamsAddedByTransformBeforeRedirect)) {
+                for (const [name, value] of new URL(url_afterTransform).searchParams) {
                     extraQueryParams[name] = value;
                 }
             }
