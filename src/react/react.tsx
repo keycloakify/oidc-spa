@@ -349,14 +349,7 @@ export function createOidcReactApi_dependencyInjection<
                     break wait_for_token_renewal_if_waking_up_from_sleep;
                 }
 
-                const dTokenRenewed = new Deferred<void>();
-
-                const { unsubscribe } = oidc.subscribeToTokensChange(() => {
-                    unsubscribe();
-                    dTokenRenewed.resolve();
-                });
-
-                await dTokenRenewed.pr;
+                await oidc.renewTokens();
             }
 
             return oidc;

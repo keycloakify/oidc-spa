@@ -951,68 +951,129 @@ export async function createOidc_nonMemoized<
 
             return new Promise<never>(() => {});
         },
-        renewTokens: async params => {
-            const { extraTokenParams: extraTokenParams_local } = params ?? {};
+        renewTokens: (() => {
+            async function renewTokens_nonMutexed(params: { extraTokenParams: Record<string, string> }) {
+                const { extraTokenParams } = params;
 
-            log?.("Renewing tokens");
+                log?.("Renewing tokens");
 
-            const result_loginSilent = await loginSilent({
-                oidcClientTsUserManager,
-                stateQueryParamValue_instance,
-                configId,
-                getExtraTokenParams: () => ({
+                const result_loginSilent = await loginSilent({
+                    oidcClientTsUserManager,
+                    stateQueryParamValue_instance,
+                    configId,
+                    getExtraTokenParams: () => extraTokenParams
+                });
+
+                if (result_loginSilent.outcome === "failure") {
+                    throw new Error(result_loginSilent.cause);
+                }
+
+                let oidcClientTsUser: OidcClientTsUser;
+
+                switch (result_loginSilent.outcome) {
+                    case "refresh token used":
+                        {
+                            log?.("Refresh token used");
+                            oidcClientTsUser = result_loginSilent.oidcClientTsUser;
+                        }
+                        break;
+                    case "success iframe":
+                        {
+                            const { authResponse } = result_loginSilent;
+
+                            log?.("Tokens refresh using iframe", authResponse);
+
+                            oidcClientTsUser = await oidcClientTsUserManager.signinRedirectCallback(
+                                authResponseToUrl(authResponse)
+                            );
+                        }
+                        break;
+                    default:
+                        assert<Equals<typeof result_loginSilent, never>>(false);
+                        break;
+                }
+
+                const decodedIdTokenPropertyDescriptor = Object.getOwnPropertyDescriptor(
+                    currentTokens,
+                    "decodedIdToken"
+                );
+
+                assert(decodedIdTokenPropertyDescriptor !== undefined);
+
+                currentTokens = oidcClientTsUserToTokens({
+                    oidcClientTsUser,
+                    decodedIdTokenSchema,
+                    log
+                });
+
+                // NOTE: We do that to preserve the cache and the object reference.
+                Object.defineProperty(currentTokens, "decodedIdToken", decodedIdTokenPropertyDescriptor);
+
+                Array.from(onTokenChanges).forEach(onTokenChange => onTokenChange());
+            }
+
+            let ongoingCall:
+                | {
+                      pr: Promise<void>;
+                      extraTokenParams: Record<string, string>;
+                  }
+                | undefined = undefined;
+
+            function handleFinally() {
+                assert(ongoingCall !== undefined);
+
+                const { pr } = ongoingCall;
+
+                pr.finally(() => {
+                    assert(ongoingCall !== undefined);
+
+                    if (ongoingCall.pr !== pr) {
+                        return;
+                    }
+
+                    ongoingCall = undefined;
+                });
+            }
+
+            return async params => {
+                const { extraTokenParams: extraTokenParams_local } = params ?? {};
+
+                const extraTokenParams = {
                     ...getExtraTokenParams?.(),
                     ...extraTokenParams_local
-                })
-            });
+                };
 
-            if (result_loginSilent.outcome === "failure") {
-                throw new Error(result_loginSilent.cause);
-            }
+                if (ongoingCall === undefined) {
+                    ongoingCall = {
+                        pr: renewTokens_nonMutexed({ extraTokenParams }),
+                        extraTokenParams
+                    };
 
-            let oidcClientTsUser: OidcClientTsUser;
+                    handleFinally();
 
-            switch (result_loginSilent.outcome) {
-                case "refresh token used":
-                    {
-                        log?.("Refresh token used");
-                        oidcClientTsUser = result_loginSilent.oidcClientTsUser;
-                    }
-                    break;
-                case "success iframe":
-                    {
-                        const { authResponse } = result_loginSilent;
+                    return ongoingCall.pr;
+                }
 
-                        log?.("Tokens refresh using iframe", authResponse);
+                if (JSON.stringify(extraTokenParams) === JSON.stringify(ongoingCall.extraTokenParams)) {
+                    return ongoingCall.pr;
+                }
 
-                        oidcClientTsUser = await oidcClientTsUserManager.signinRedirectCallback(
-                            authResponseToUrl(authResponse)
-                        );
-                    }
-                    break;
-                default:
-                    assert<Equals<typeof result_loginSilent, never>>(false);
-                    break;
-            }
+                ongoingCall = {
+                    pr: (async () => {
+                        try {
+                            await ongoingCall.pr;
+                        } catch {}
 
-            const decodedIdTokenPropertyDescriptor = Object.getOwnPropertyDescriptor(
-                currentTokens,
-                "decodedIdToken"
-            );
+                        return renewTokens_nonMutexed({ extraTokenParams });
+                    })(),
+                    extraTokenParams
+                };
 
-            assert(decodedIdTokenPropertyDescriptor !== undefined);
+                handleFinally();
 
-            currentTokens = oidcClientTsUserToTokens({
-                oidcClientTsUser,
-                decodedIdTokenSchema,
-                log
-            });
-
-            // NOTE: We do that to preserve the cache and the object reference.
-            Object.defineProperty(currentTokens, "decodedIdToken", decodedIdTokenPropertyDescriptor);
-
-            Array.from(onTokenChanges).forEach(onTokenChange => onTokenChange());
-        },
+                return ongoingCall.pr;
+            };
+        })(),
         subscribeToTokensChange: onTokenChange => {
             onTokenChanges.add(onTokenChange);
 
