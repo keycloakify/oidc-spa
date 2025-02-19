@@ -334,9 +334,32 @@ export function createOidcReactApi_dependencyInjection<
         // @ts-expect-error: We know what we are doing
         useOidc,
         // @ts-expect-error: We know what we are doing
-        getOidc: () => {
+        getOidc: async () => {
             dReadyToCreate.resolve();
-            return prOidc;
+            const oidc = await prOidc;
+
+            wait_for_token_renewal_if_waking_up_from_sleep: {
+                if (!oidc.isUserLoggedIn) {
+                    break wait_for_token_renewal_if_waking_up_from_sleep;
+                }
+
+                const tokens = oidc.getTokens();
+
+                if (tokens.accessTokenExpirationTime > Date.now()) {
+                    break wait_for_token_renewal_if_waking_up_from_sleep;
+                }
+
+                const dTokenRenewed = new Deferred<void>();
+
+                const { unsubscribe } = oidc.subscribeToTokensChange(() => {
+                    unsubscribe();
+                    dTokenRenewed.resolve();
+                });
+
+                await dTokenRenewed.pr;
+            }
+
+            return oidc;
         }
     };
 }
