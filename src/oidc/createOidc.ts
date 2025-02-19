@@ -111,7 +111,7 @@ export type ParamsOfCreateOidc<
     autoLogin?: AutoLogin;
     debugLogs?: boolean;
 
-    __clientSecret_DO_NOT_USE_OR_YOU_WILL_BE_FIRED?: string;
+    __clientSecret?: string;
 };
 
 handleOidcCallback();
@@ -249,7 +249,7 @@ export async function createOidc_nonMemoized<
         autoLogoutParams = { redirectTo: "current page" },
         autoLogin = false,
         postLoginRedirectUrl,
-        __clientSecret_DO_NOT_USE_OR_YOU_WILL_BE_FIRED
+        __clientSecret
     } = params;
 
     const { issuerUri, clientId, scopes, configId, log } = preProcessedParams;
@@ -308,7 +308,7 @@ export async function createOidc_nonMemoized<
         automaticSilentRenew: false,
         userStore: new WebStorageStateStore({ store: new InMemoryWebStorage() }),
         stateStore: new WebStorageStateStore({ store: localStorage, prefix: STATE_STORE_KEY_PREFIX }),
-        client_secret: __clientSecret_DO_NOT_USE_OR_YOU_WILL_BE_FIRED
+        client_secret: __clientSecret
     });
 
     let lastPublicRoute: string | undefined = undefined;
