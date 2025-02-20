@@ -1,18 +1,20 @@
 import { getStateData, markStateDataAsProcessedByCallback, getIsStatQueryParamValue } from "./StateData";
 
+const GLOBAL_CONTEXT_KEY = "__oidc-spa.handleOidcCallback.globalContext";
+
 declare global {
     interface Window {
-        "__oidc-spa.handleOidcCallback.globalContext": {
+        [GLOBAL_CONTEXT_KEY]: {
             previousCall: { isHandled: boolean } | undefined;
         };
     }
 }
 
-window["__oidc-spa.handleOidcCallback.globalContext"] ??= {
+window[GLOBAL_CONTEXT_KEY] ??= {
     previousCall: undefined
 };
 
-const globalContext = window["__oidc-spa.handleOidcCallback.globalContext"];
+const globalContext = window[GLOBAL_CONTEXT_KEY];
 
 export function handleOidcCallback(): { isHandled: boolean } {
     if (globalContext.previousCall !== undefined) {

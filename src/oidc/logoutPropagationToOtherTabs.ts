@@ -1,6 +1,22 @@
 import { assert, is } from "../vendor/frontend/tsafe";
 import { Deferred } from "../tools/Deferred";
 
+const GLOBAL_CONTEXT_KEY = "__oidc-spa.logoutPropagationToOtherTabs.globalContext";
+
+declare global {
+    interface Window {
+        [GLOBAL_CONTEXT_KEY]: {
+            appInstanceId: string;
+        };
+    }
+}
+
+window[GLOBAL_CONTEXT_KEY] ??= {
+    appInstanceId: Math.random().toString(36).slice(2)
+};
+
+const globalContext = window[GLOBAL_CONTEXT_KEY];
+
 type Message = {
     appInstanceId: string;
     redirectUrl_initiator: string;
@@ -12,19 +28,7 @@ function getChannelName(params: { sessionIdOrConfigId: string }) {
     return `oidc-spa:logout-propagation:${sessionIdOrConfigId}`;
 }
 
-const getAppInstanceId = (() => {
-    let appInstanceId: string | undefined;
-
-    return () => {
-        if (appInstanceId === undefined) {
-            appInstanceId = Math.random().toString(36).slice(2);
-        }
-
-        return appInstanceId;
-    };
-})();
-
-export function notifyOtherTabOfLogout(params: {
+export function notifyOtherTabsOfLogout(params: {
     redirectUrl: string;
     configId: string;
     sessionId: string | undefined;
@@ -34,7 +38,7 @@ export function notifyOtherTabOfLogout(params: {
     const message: Message = {
         redirectUrl_initiator: redirectUrl,
         configId,
-        appInstanceId: getAppInstanceId()
+        appInstanceId: globalContext.appInstanceId
     };
 
     new BroadcastChannel(getChannelName({ sessionIdOrConfigId: sessionId ?? configId })).postMessage(
@@ -58,7 +62,7 @@ export function getPrOtherTabLogout(params: {
 
         channel.close();
 
-        if (message.appInstanceId === getAppInstanceId()) {
+        if (message.appInstanceId === globalContext.appInstanceId) {
             return;
         }
 

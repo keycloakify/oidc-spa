@@ -8,7 +8,7 @@ import { id, type Param0, assert, is, type Equals, typeGuard } from "../vendor/f
 import { setTimeout, clearTimeout } from "../tools/workerTimers";
 import { Deferred } from "../tools/Deferred";
 import { decodeJwt } from "../tools/decodeJwt";
-import { createIsUserActive } from "../tools/createIsUserActive";
+import { create$isUserActive } from "./createIsUserActive";
 import { createStartCountdown } from "../tools/startCountdown";
 import type { StatefulObservable } from "../tools/StatefulObservable";
 import { toHumanReadableDuration } from "../tools/toHumanReadableDuration";
@@ -25,7 +25,7 @@ import {
     generateStateQueryParamValue,
     STATE_STORE_KEY_PREFIX
 } from "./StateData";
-import { notifyOtherTabOfLogout, getPrOtherTabLogout } from "./logoutPropagationToOtherTabs";
+import { notifyOtherTabsOfLogout, getPrOtherTabLogout } from "./logoutPropagationToOtherTabs";
 import { getConfigId } from "./configId";
 import { oidcClientTsUserToTokens } from "./oidcClientTsUserToTokens";
 import { loginSilent, authResponseToUrl } from "./loginSilent";
@@ -116,9 +116,11 @@ export type ParamsOfCreateOidc<
 
 handleOidcCallback();
 
+const GLOBAL_CONTEXT_KEY = "__oidc-spa.createOidc.globalContext";
+
 declare global {
     interface Window {
-        "__oidc-spa.createOidc.GlobalContext": {
+        [GLOBAL_CONTEXT_KEY]: {
             prOidcByConfigId: Map<string, Promise<Oidc<any>>>;
             evtAuthResponseHandled: AwaitableEventEmitter<void>;
             URL_real: typeof URL;
@@ -129,7 +131,7 @@ declare global {
     }
 }
 
-window["__oidc-spa.createOidc.GlobalContext"] ??= {
+window[GLOBAL_CONTEXT_KEY] ??= {
     prOidcByConfigId: new Map(),
     evtAuthResponseHandled: createAwaitableEventEmitter<void>(),
     URL_real: window.URL,
@@ -138,7 +140,7 @@ window["__oidc-spa.createOidc.GlobalContext"] ??= {
     hasLogoutBeenCalled: false
 };
 
-const globalContext = window["__oidc-spa.createOidc.GlobalContext"];
+const globalContext = window[GLOBAL_CONTEXT_KEY];
 
 /** @see: https://docs.oidc-spa.dev/v/v6/usage */
 export async function createOidc<
@@ -641,7 +643,7 @@ export async function createOidc_nonMemoized<
 
                         evtAuthResponseHandled.post();
 
-                        notifyOtherTabOfLogout({
+                        notifyOtherTabsOfLogout({
                             configId,
                             redirectUrl: stateData.redirectUrl,
                             sessionId: stateData.sessionId
@@ -1108,11 +1110,13 @@ export async function createOidc_nonMemoized<
         })()
     });
 
+    const sessionId = decodeJwt<{ sid?: string }>(oidc.getTokens().idToken).sid;
+
     {
         const { prOtherTabLogout } = getPrOtherTabLogout({
             configId,
             homeUrl: homeAndCallbackUrl,
-            sessionId: decodeJwt<{ sid?: string }>(oidc.getTokens().idToken).sid
+            sessionId
         });
 
         prOtherTabLogout.then(({ redirectUrl }) => {
@@ -1198,7 +1202,9 @@ export async function createOidc_nonMemoized<
 
     auto_logout: {
         if (currentTokens.refreshToken === "" && __unsafe_ssoSessionIdleSeconds === undefined) {
-            log?.("No refresh token, auto logout non applicable");
+            log?.(
+                "No refresh token, and ____unsafe_ssoSessionIdleSeconds was not set, auto logout non applicable"
+            );
             break auto_logout;
         }
 
@@ -1240,9 +1246,10 @@ export async function createOidc_nonMemoized<
         let stopCountdown: (() => void) | undefined = undefined;
 
         if (globalContext.$isUserActive === undefined) {
-            globalContext.$isUserActive = createIsUserActive({
-                theUserIsConsideredInactiveAfterMsOfInactivity: 5_000
-            }).$isUserActive;
+            globalContext.$isUserActive = create$isUserActive({
+                configId,
+                sessionId
+            });
         }
 
         globalContext.$isUserActive.subscribe(isUserActive => {
