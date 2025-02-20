@@ -1,4 +1,5 @@
 import { getIsValidRemoteJson } from "../tools/getIsValidRemoteJson";
+import { parseKeycloakIssuerUri } from "../tools/parseKeycloakIssuerUri";
 
 export class OidcInitializationError extends Error {
     public readonly isAuthServerLikelyDown: boolean;
@@ -18,33 +19,6 @@ export class OidcInitializationError extends Error {
         this.isAuthServerLikelyDown = params.isAuthServerLikelyDown;
         Object.setPrototypeOf(this, new.target.prototype);
     }
-}
-
-function parseKeycloakIssuerUri(issuerUri: string):
-    | undefined
-    | {
-          origin: string;
-          realm: string;
-          // If defined must start with / and end with no /
-          kcHttpRelativePath: string | undefined;
-          adminConsoleUrl: string;
-      } {
-    const url = new URL(issuerUri);
-
-    const split = url.pathname.split("/realms/");
-
-    if (split.length !== 2) {
-        return undefined;
-    }
-
-    const [kcHttpRelativePath, realm] = split;
-
-    return {
-        origin: url.origin,
-        realm,
-        kcHttpRelativePath: kcHttpRelativePath === "" ? undefined : kcHttpRelativePath,
-        adminConsoleUrl: `${url.origin}${kcHttpRelativePath}/admin/${realm}/console`
-    };
 }
 
 export async function createWellKnownOidcConfigurationEndpointUnreachableInitializationError(params: {
