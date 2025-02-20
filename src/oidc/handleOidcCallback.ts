@@ -128,7 +128,13 @@ function handleOidcCallback_nonMemoized(): { isHandled: boolean } {
             markStateDataAsProcessedByCallback({ stateQueryParamValue });
             clearBackForwardTracker();
             sessionStorage.setItem(AUTH_RESPONSE_KEY, JSON.stringify(authResponse));
-            location.href = stateData.redirectUrl;
+            location.href = (() => {
+                if (stateData.action === "login" && authResponse.error === "consent_required") {
+                    return stateData.redirectUrl_consentRequiredCase;
+                }
+
+                return stateData.redirectUrl;
+            })();
             break;
     }
 

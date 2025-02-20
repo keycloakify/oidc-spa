@@ -22,6 +22,7 @@ export namespace StateData {
 
         export type Login = Common_Redirect & {
             action: "login";
+            redirectUrl_consentRequiredCase: string;
             extraQueryParams: Record<string, string>;
         };
 

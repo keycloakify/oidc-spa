@@ -312,13 +312,13 @@ export async function createOidc_nonMemoized<
         client_secret: __clientSecret
     });
 
-    let lastPublicRoute: string | undefined = undefined;
+    let lastPublicUrl: string | undefined = undefined;
 
     // NOTE: To call only if not logged in.
-    const startTrackingLastPublicRoute = () => {
+    const startTrackingLastPublicUrl = () => {
         const realPushState = history.pushState.bind(history);
         history.pushState = function pushState(...args) {
-            lastPublicRoute = window.location.href;
+            lastPublicUrl = window.location.href;
             return realPushState(...args);
         };
     };
@@ -359,9 +359,9 @@ export async function createOidc_nonMemoized<
                     );
 
                     if (rest.doesCurrentHrefRequiresAuth) {
-                        if (lastPublicRoute !== undefined) {
-                            log?.(`Loading last public route: ${lastPublicRoute}`);
-                            window.location.href = lastPublicRoute;
+                        if (lastPublicUrl !== undefined) {
+                            log?.(`Loading last public route: ${lastPublicUrl}`);
+                            window.location.href = lastPublicUrl;
                         } else {
                             log?.("We don't know the last public route, navigating back in history");
                             window.history.back();
@@ -500,7 +500,15 @@ export async function createOidc_nonMemoized<
                 extraQueryParams,
                 hasBeenProcessedByCallback: false,
                 configId,
-                action: "login"
+                action: "login",
+                redirectUrl_consentRequiredCase: (() => {
+                    switch (rest.action) {
+                        case "login":
+                            return lastPublicUrl ?? homeAndCallbackUrl;
+                        case "go to auth server":
+                            return redirectUrl;
+                    }
+                })()
             }),
             redirectMethod,
             prompt: getIsPersistedLogoutState({ configId }) ? "consent" : undefined
@@ -837,7 +845,7 @@ export async function createOidc_nonMemoized<
             ].join("\n")
         );
 
-        startTrackingLastPublicRoute();
+        startTrackingLastPublicUrl();
 
         const oidc = id<Oidc.NotLoggedIn>({
             ...common,
@@ -866,7 +874,7 @@ export async function createOidc_nonMemoized<
             // Never here
         }
 
-        startTrackingLastPublicRoute();
+        startTrackingLastPublicUrl();
 
         const oidc = id<Oidc.NotLoggedIn>({
             ...common,
