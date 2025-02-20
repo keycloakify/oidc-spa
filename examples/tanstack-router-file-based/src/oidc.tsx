@@ -24,8 +24,12 @@ export const {
     // NOTE: If you are using keycloak, the issuerUri should be formatted like this:
     // issuerUri: https://<YOUR_KEYCLOAK_DOMAIN><KC_RELATIVE_PATH>/realms/<REALM_NAME>
     // KC_RELATIVE_PATH is by default "" in modern keycloak, on older keycloak it used to be "/auth" by default.
-    issuerUri: import.meta.env.VITE_OIDC_ISSUER,
+    issuerUri: import.meta.env.VITE_OIDC_ISSUER_URI,
     clientId: import.meta.env.VITE_OIDC_CLIENT_ID,
+    // NOTE: Only for Google OAuth, see
+    __clientSecret: import.meta.env.VITE_OIDC_CLIENT_SECRET || undefined,
+    // NOTE: For Microsoft Entra ID
+    scopes: (import.meta.env.VITE_OIDC_SCOPE || undefined)?.split(" "),
     homeUrl: import.meta.env.BASE_URL,
     /**
      * This parameter is optional.
