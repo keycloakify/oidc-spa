@@ -195,10 +195,9 @@ export async function createOidc<
             [
                 `createOidc was called again with the same config (${JSON.stringify({
                     issuerUri,
-                    clientId,
-                    scopes
+                    clientId
                 })})`,
-                `probably due to a hot module replacement. Returning the previous instance.`
+                `Returning the previous instance. All potential different parameters are ignored.`
             ].join(" ")
         );
 
