@@ -53,7 +53,7 @@ function LoggedInAuthButton() {
 
     return (
         <div>
-            <span>Hello {oidcTokens.decodedIdToken.preferred_username}</span>
+            <span>Hello {oidcTokens.decodedIdToken.name}</span>
             &nbsp; &nbsp;
             <button onClick={() => logout({ redirectTo: "home" })}>Logout</button>
         </div>

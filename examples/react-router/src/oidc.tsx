@@ -26,9 +26,8 @@ export const {
     // KC_RELATIVE_PATH is by default "" in modern keycloak, on older keycloak it used to be "/auth" by default.
     issuerUri: import.meta.env.VITE_OIDC_ISSUER_URI,
     clientId: import.meta.env.VITE_OIDC_CLIENT_ID,
-    // NOTE: Only for Google OAuth, see
-    __clientSecret: import.meta.env.VITE_OIDC_CLIENT_SECRET || undefined,
-    // NOTE: For Microsoft Entra ID
+    __unsafe_clientSecret: import.meta.env.VITE_OIDC_CLIENT_SECRET || undefined,
+    __unsafe_useIdTokenAsAccessToken: import.meta.env.VITE_OIDC_USE_ID_TOKEN_AS_ACCESS_TOKEN === "true",
     scopes: (import.meta.env.VITE_OIDC_SCOPE || undefined)?.split(" "),
     homeUrl: import.meta.env.BASE_URL,
     /**
@@ -80,7 +79,7 @@ export const {
     */
     decodedIdTokenSchema: z.object({
         sub: z.string(),
-        preferred_username: z.string()
+        name: z.string()
     }),
     //autoLogoutParams: { redirectTo: "current page" } // Default
     //autoLogoutParams: { redirectTo: "home" }
