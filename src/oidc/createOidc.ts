@@ -1032,12 +1032,7 @@ export async function createOidc_nonMemoized<
                         break;
                 }
 
-                const decodedIdTokenPropertyDescriptor = Object.getOwnPropertyDescriptor(
-                    currentTokens,
-                    "decodedIdToken"
-                );
-
-                assert(decodedIdTokenPropertyDescriptor !== undefined);
+                const decodedIdToken_before = currentTokens.decodedIdToken;
 
                 currentTokens = oidcClientTsUserToTokens({
                     oidcClientTsUser,
@@ -1045,8 +1040,13 @@ export async function createOidc_nonMemoized<
                     log
                 });
 
-                // NOTE: We do that to preserve the cache and the object reference.
-                Object.defineProperty(currentTokens, "decodedIdToken", decodedIdTokenPropertyDescriptor);
+                if (
+                    JSON.stringify(currentTokens.decodedIdToken) ===
+                    JSON.stringify(decodedIdToken_before)
+                ) {
+                    id<{ decodedIdToken: DecodedIdToken }>(currentTokens).decodedIdToken =
+                        decodedIdToken_before;
+                }
 
                 Array.from(onTokenChanges).forEach(onTokenChange => onTokenChange());
             }

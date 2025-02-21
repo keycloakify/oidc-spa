@@ -3,7 +3,6 @@ import type { JSX } from "../tools/JSX";
 import { type Oidc, createOidc, type ParamsOfCreateOidc, OidcInitializationError } from "../oidc";
 import { assert, type Equals } from "../vendor/frontend/tsafe";
 import { id } from "../vendor/frontend/tsafe";
-import { useGuaranteedMemo } from "../tools/powerhooks/useGuaranteedMemo";
 import type { ValueOrAsyncGetter } from "../tools/ValueOrAsyncGetter";
 import { Deferred } from "../tools/Deferred";
 
@@ -55,14 +54,6 @@ export namespace OidcReact {
     };
 }
 
-const oidcContext = createContext<
-    | {
-          oidc: Oidc;
-          decodedIdTokenSchema: { parse: (data: unknown) => Record<string, unknown> } | undefined;
-      }
-    | undefined
->(undefined);
-
 type OidcReactApi<DecodedIdToken extends Record<string, unknown>, AutoLogin extends boolean> = {
     OidcProvider: AutoLogin extends true
         ? (props: {
@@ -104,7 +95,7 @@ export function createOidcReactApi_dependencyInjection<
 > {
     const dReadyToCreate = new Deferred<void>();
 
-    let decodedIdTokenSchema: { parse: (data: unknown) => DecodedIdToken } | undefined = undefined;
+    const oidcContext = createContext<Oidc<DecodedIdToken> | undefined>(undefined);
 
     // NOTE: It can be InitializationError only if autoLogin is true
     const prOidcOrInitializationError = (async () => {
@@ -124,11 +115,7 @@ export function createOidcReactApi_dependencyInjection<
             return params;
         })();
 
-        if ("decodedIdTokenSchema" in params) {
-            decodedIdTokenSchema = params.decodedIdTokenSchema;
-        }
-
-        let oidc;
+        let oidc: Oidc<DecodedIdToken>;
 
         try {
             oidc = await createOidc(params);
@@ -151,7 +138,7 @@ export function createOidcReactApi_dependencyInjection<
         const { fallback, ErrorFallback, children } = props;
 
         const [oidcOrInitializationError, setOidcOrInitializationError] = useState<
-            Oidc | OidcInitializationError | undefined
+            Oidc<DecodedIdToken> | OidcInitializationError | undefined
         >(undefined);
 
         useEffect(() => {
@@ -180,11 +167,9 @@ export function createOidcReactApi_dependencyInjection<
             );
         }
 
-        return (
-            <oidcContext.Provider value={{ oidc: oidcOrInitializationError, decodedIdTokenSchema }}>
-                {children}
-            </oidcContext.Provider>
-        );
+        const oidc = oidcOrInitializationError;
+
+        return <oidcContext.Provider value={oidc}>{children}</oidcContext.Provider>;
     }
 
     function useOidc(params?: {
@@ -192,13 +177,9 @@ export function createOidcReactApi_dependencyInjection<
     }): OidcReact<DecodedIdToken> {
         const { assert: assert_params } = params ?? {};
 
-        const { oidc, decodedIdTokenSchema: decodedIdTokenSchema_context } = (function useClosure() {
-            const context = useContext(oidcContext);
+        const oidc = useContext(oidcContext);
 
-            assert(context !== undefined, "You must use useOidc inside a OidcProvider");
-
-            return context;
-        })();
+        assert(oidc !== undefined, "You must use useOidc inside the corresponding OidcProvider");
 
         const [, forceUpdate] = useReducer(() => [], []);
 
@@ -240,77 +221,22 @@ export function createOidcReactApi_dependencyInjection<
             }
         }
 
-        const { oidcTokens } = (function useClosure() {
-            const tokens = oidc.isUserLoggedIn ? oidc.getTokens() : undefined;
-
-            const oidcTokens = useGuaranteedMemo(() => {
-                if (tokens === undefined) {
-                    return undefined;
-                }
-
-                const oidcTokens: Oidc.Tokens<DecodedIdToken> = {
-                    accessToken: tokens.accessToken,
-                    accessTokenExpirationTime: tokens.accessTokenExpirationTime,
-                    idToken: tokens.idToken,
-                    refreshToken: tokens.refreshToken,
-                    refreshTokenExpirationTime: tokens.refreshTokenExpirationTime,
-                    decodedIdToken: null as any
-                };
-
-                let cache: { decodedIdToken: Record<string, unknown> } | undefined = undefined;
-
-                Object.defineProperty(oidcTokens, "decodedIdToken", {
-                    get: () => {
-                        if (cache !== undefined) {
-                            return cache.decodedIdToken;
-                        }
-
-                        let { decodedIdToken } = tokens;
-
-                        if (
-                            decodedIdTokenSchema !== undefined &&
-                            decodedIdTokenSchema !== decodedIdTokenSchema_context
-                        ) {
-                            decodedIdToken = decodedIdTokenSchema.parse(decodedIdToken);
-                        }
-
-                        cache = { decodedIdToken };
-
-                        return decodedIdToken;
-                    }
-                });
-
-                return oidcTokens;
-            }, [
-                tokens?.accessToken,
-                tokens?.accessTokenExpirationTime,
-                tokens?.idToken,
-                tokens?.refreshToken,
-                tokens?.refreshTokenExpirationTime
-            ]);
-
-            return { oidcTokens };
-        })();
-
         const common: OidcReact.Common = {
             params: oidc.params
         };
 
         return oidc.isUserLoggedIn
-            ? id<OidcReact.LoggedIn<DecodedIdToken>>(
-                  (assert(oidcTokens !== undefined),
-                  {
-                      ...common,
-                      isUserLoggedIn: true,
-                      oidcTokens,
-                      logout: oidc.logout,
-                      renewTokens: oidc.renewTokens,
-                      subscribeToAutoLogoutCountdown: oidc.subscribeToAutoLogoutCountdown,
-                      goToAuthServer: oidc.goToAuthServer,
-                      isNewBrowserSession: oidc.isNewBrowserSession,
-                      backFromAuthServer: oidc.backFromAuthServer
-                  })
-              )
+            ? id<OidcReact.LoggedIn<DecodedIdToken>>({
+                  ...common,
+                  isUserLoggedIn: true,
+                  oidcTokens: oidc.getTokens(),
+                  logout: oidc.logout,
+                  renewTokens: oidc.renewTokens,
+                  subscribeToAutoLogoutCountdown: oidc.subscribeToAutoLogoutCountdown,
+                  goToAuthServer: oidc.goToAuthServer,
+                  isNewBrowserSession: oidc.isNewBrowserSession,
+                  backFromAuthServer: oidc.backFromAuthServer
+              })
             : id<OidcReact.NotLoggedIn>({
                   ...common,
                   isUserLoggedIn: false,
