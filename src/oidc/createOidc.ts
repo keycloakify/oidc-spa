@@ -111,14 +111,14 @@ export type ParamsOfCreateOidc<
     autoLogin?: AutoLogin;
     debugLogs?: boolean;
 
-    __clientSecret?: string;
+    __unsafe_clientSecret?: string;
 
     /**
      *  WARNING: Setting this to true is a workaround for provider
      *  like Google OAuth that don't support JWT access token.
      *  Use at your own risk, this is a hack.
      */
-    __substituteAccessTokenByIdToken?: boolean;
+    __unsafe_useIdTokenAsAccessToken?: boolean;
 };
 
 handleOidcCallback();
@@ -257,8 +257,8 @@ export async function createOidc_nonMemoized<
         autoLogoutParams = { redirectTo: "current page" },
         autoLogin = false,
         postLoginRedirectUrl,
-        __clientSecret,
-        __substituteAccessTokenByIdToken = false
+        __unsafe_clientSecret,
+        __unsafe_useIdTokenAsAccessToken = false
     } = params;
 
     const { issuerUri, clientId, scopes, configId, log } = preProcessedParams;
@@ -317,7 +317,7 @@ export async function createOidc_nonMemoized<
         automaticSilentRenew: false,
         userStore: new WebStorageStateStore({ store: new InMemoryWebStorage() }),
         stateStore: new WebStorageStateStore({ store: localStorage, prefix: STATE_STORE_KEY_PREFIX }),
-        client_secret: __clientSecret
+        client_secret: __unsafe_clientSecret
     });
 
     let lastPublicUrl: string | undefined = undefined;
@@ -804,7 +804,7 @@ export async function createOidc_nonMemoized<
         const tokens = oidcClientTsUserToTokens({
             oidcClientTsUser,
             decodedIdTokenSchema,
-            __substituteAccessTokenByIdToken,
+            __unsafe_useIdTokenAsAccessToken,
             log
         });
 
@@ -1046,7 +1046,7 @@ export async function createOidc_nonMemoized<
                 currentTokens = oidcClientTsUserToTokens({
                     oidcClientTsUser,
                     decodedIdTokenSchema,
-                    __substituteAccessTokenByIdToken,
+                    __unsafe_useIdTokenAsAccessToken,
                     log
                 });
 

@@ -7,10 +7,10 @@ import type { Oidc } from "./Oidc";
 export function oidcClientTsUserToTokens<DecodedIdToken extends Record<string, unknown>>(params: {
     oidcClientTsUser: OidcClientTsUser;
     decodedIdTokenSchema?: { parse: (data: unknown) => DecodedIdToken };
-    __substituteAccessTokenByIdToken: boolean;
+    __unsafe_useIdTokenAsAccessToken: boolean;
     log: ((message: string) => void) | undefined;
 }): Oidc.Tokens<DecodedIdToken> {
-    const { oidcClientTsUser, decodedIdTokenSchema, __substituteAccessTokenByIdToken, log } = params;
+    const { oidcClientTsUser, decodedIdTokenSchema, __unsafe_useIdTokenAsAccessToken, log } = params;
 
     const accessToken = oidcClientTsUser.access_token;
 
@@ -72,7 +72,7 @@ export function oidcClientTsUserToTokens<DecodedIdToken extends Record<string, u
     assert(idToken !== undefined, "No id token provided by the oidc server");
 
     const tokens: Oidc.Tokens<DecodedIdToken> = {
-        ...(__substituteAccessTokenByIdToken
+        ...(__unsafe_useIdTokenAsAccessToken
             ? {
                   accessToken: idToken,
                   accessTokenExpirationTime: (() => {
