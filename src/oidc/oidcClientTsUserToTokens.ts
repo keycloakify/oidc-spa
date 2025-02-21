@@ -7,9 +7,10 @@ import type { Oidc } from "./Oidc";
 export function oidcClientTsUserToTokens<DecodedIdToken extends Record<string, unknown>>(params: {
     oidcClientTsUser: OidcClientTsUser;
     decodedIdTokenSchema?: { parse: (data: unknown) => DecodedIdToken };
+    __substituteAccessTokenByIdToken: boolean;
     log: ((message: string) => void) | undefined;
 }): Oidc.Tokens<DecodedIdToken> {
-    const { oidcClientTsUser, decodedIdTokenSchema, log } = params;
+    const { oidcClientTsUser, decodedIdTokenSchema, __substituteAccessTokenByIdToken, log } = params;
 
     const accessToken = oidcClientTsUser.access_token;
 
@@ -71,8 +72,21 @@ export function oidcClientTsUserToTokens<DecodedIdToken extends Record<string, u
     assert(idToken !== undefined, "No id token provided by the oidc server");
 
     const tokens: Oidc.Tokens<DecodedIdToken> = {
-        accessToken,
-        accessTokenExpirationTime,
+        ...(__substituteAccessTokenByIdToken
+            ? {
+                  accessToken: idToken,
+                  accessTokenExpirationTime: (() => {
+                      const expirationTime = readExpirationTimeInJwt(idToken);
+
+                      assert(
+                          expirationTime !== undefined,
+                          "Failed to get id token expiration time while trying to substitute the access token by the id token"
+                      );
+
+                      return expirationTime;
+                  })()
+              }
+            : { accessToken, accessTokenExpirationTime }),
         refreshToken: refreshToken ?? "",
         refreshTokenExpirationTime,
         idToken,

@@ -112,6 +112,13 @@ export type ParamsOfCreateOidc<
     debugLogs?: boolean;
 
     __clientSecret?: string;
+
+    /**
+     *  WARNING: Setting this to true is a workaround for provider
+     *  like Google OAuth that don't support JWT access token.
+     *  Use at your own risk, this is a hack.
+     */
+    __substituteAccessTokenByIdToken?: boolean;
 };
 
 handleOidcCallback();
@@ -250,7 +257,8 @@ export async function createOidc_nonMemoized<
         autoLogoutParams = { redirectTo: "current page" },
         autoLogin = false,
         postLoginRedirectUrl,
-        __clientSecret
+        __clientSecret,
+        __substituteAccessTokenByIdToken = false
     } = params;
 
     const { issuerUri, clientId, scopes, configId, log } = preProcessedParams;
@@ -796,6 +804,7 @@ export async function createOidc_nonMemoized<
         const tokens = oidcClientTsUserToTokens({
             oidcClientTsUser,
             decodedIdTokenSchema,
+            __substituteAccessTokenByIdToken,
             log
         });
 
@@ -1037,6 +1046,7 @@ export async function createOidc_nonMemoized<
                 currentTokens = oidcClientTsUserToTokens({
                     oidcClientTsUser,
                     decodedIdTokenSchema,
+                    __substituteAccessTokenByIdToken,
                     log
                 });
 
