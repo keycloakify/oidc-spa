@@ -111,7 +111,7 @@ export async function createMockOidc<
         return oidc;
     }
 
-    return id<Oidc.LoggedIn<DecodedIdToken>>({
+    const oidc: Oidc.LoggedIn<DecodedIdToken> = {
         ...common,
         isUserLoggedIn: true,
         renewTokens: async () => {},
@@ -134,6 +134,7 @@ export async function createMockOidc<
 
             return () => tokens;
         })(),
+        getTokens_next: () => Promise.resolve(oidc.getTokens()),
         subscribeToTokensChange: () => ({
             unsubscribe: () => {}
         }),
@@ -166,5 +167,7 @@ export async function createMockOidc<
         goToAuthServer: async ({ redirectUrl }) => loginOrGoToAuthServer({ redirectUrl }),
         isNewBrowserSession: false,
         backFromAuthServer: undefined
-    });
+    };
+
+    return oidc;
 }

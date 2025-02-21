@@ -893,6 +893,31 @@ export async function createOidc_nonMemoized<
 
     let currentTokens = resultOfLoginProcess.tokens;
 
+    function getMsBeforeExpiration() {
+        // NOTE: In general the access token is supposed to have a shorter
+        // lifespan than the refresh token but we don't want to make any
+        // assumption here.
+        const tokenExpirationTime = Math.min(
+            currentTokens.accessTokenExpirationTime,
+            currentTokens.refreshTokenExpirationTime
+        );
+
+        const msBeforeExpiration = Math.min(
+            tokenExpirationTime - Date.now(),
+            // NOTE: We want to make sure we do not overflow the setTimeout
+            // that must be a 32 bit unsigned integer.
+            // This can happen if the tokenExpirationTime is more than 24.8 days in the future.
+            Math.pow(2, 31) - 1
+        );
+
+        if (msBeforeExpiration < 0) {
+            log?.("Token has already expired");
+            return 0;
+        }
+
+        return msBeforeExpiration;
+    }
+
     const autoLogoutCountdownTickCallbacks = new Set<
         (params: { secondsLeft: number | undefined }) => void
     >();
@@ -903,6 +928,13 @@ export async function createOidc_nonMemoized<
         ...common,
         isUserLoggedIn: true,
         getTokens: () => currentTokens,
+        getTokens_next: async () => {
+            if (getMsBeforeExpiration() <= 5_000) {
+                await oidc.renewTokens();
+            }
+
+            return currentTokens;
+        },
         logout: async params => {
             if (globalContext.hasLogoutBeenCalled) {
                 log?.("logout() has already been called, ignoring the call");
@@ -930,8 +962,6 @@ export async function createOidc_nonMemoized<
                         });
                 }
             })();
-
-            const sessionId = decodeJwt<{ sid?: string }>(oidc.getTokens().idToken).sid;
 
             try {
                 await oidcClientTsUserManager.signoutRedirect({
@@ -1118,7 +1148,7 @@ export async function createOidc_nonMemoized<
         })()
     });
 
-    const sessionId = decodeJwt<{ sid?: string }>(oidc.getTokens().idToken).sid;
+    const sessionId = decodeJwt<{ sid?: string }>(currentTokens.idToken).sid;
 
     {
         const { prOtherTabLogout } = getPrOtherTabLogout({
@@ -1133,80 +1163,63 @@ export async function createOidc_nonMemoized<
         });
     }
 
-    {
-        const getMsBeforeExpiration = () => {
-            // NOTE: In general the access token is supposed to have a shorter
-            // lifespan than the refresh token but we don't want to make any
-            // assumption here.
-            const tokenExpirationTime = Math.min(
-                currentTokens.accessTokenExpirationTime,
-                currentTokens.refreshTokenExpirationTime
-            );
+    (function scheduleRenew() {
+        const msBeforeExpiration = getMsBeforeExpiration();
 
-            const msBeforeExpiration = Math.min(
-                tokenExpirationTime - Date.now(),
-                // NOTE: We want to make sure we do not overflow the setTimeout
-                // that must be a 32 bit unsigned integer.
-                // This can happen if the tokenExpirationTime is more than 24.8 days in the future.
-                Math.pow(2, 31) - 1
-            );
+        // NOTE: We refresh the token 25 seconds before it expires.
+        // If the token expiration time is less than 25 seconds we refresh the token when
+        // only 1/10 of the token time is left.
+        const renewMsBeforeExpires = Math.min(25_000, msBeforeExpiration * 0.1);
 
-            if (msBeforeExpiration < 0) {
-                log?.("Token has already expired");
-                return 0;
-            }
+        log?.(
+            [
+                toHumanReadableDuration(msBeforeExpiration),
+                `before expiration of the access token.`,
+                `Scheduling renewal ${toHumanReadableDuration(renewMsBeforeExpires)} before expiration`
+            ].join(" ")
+        );
 
-            return msBeforeExpiration;
-        };
-
-        (function scheduleRenew() {
-            const msBeforeExpiration = getMsBeforeExpiration();
-
-            // NOTE: We refresh the token 25 seconds before it expires.
-            // If the token expiration time is less than 25 seconds we refresh the token when
-            // only 1/10 of the token time is left.
-            const renewMsBeforeExpires = Math.min(25_000, msBeforeExpiration * 0.1);
-
+        const timer = setTimeout(async () => {
             log?.(
-                [
-                    toHumanReadableDuration(msBeforeExpiration),
-                    `before expiration of the access token.`,
-                    `Scheduling renewal ${toHumanReadableDuration(
-                        renewMsBeforeExpires
-                    )} before expiration`
-                ].join(" ")
+                `Renewing the access token now as it will expires in ${toHumanReadableDuration(
+                    renewMsBeforeExpires
+                )}`
             );
 
-            const timer = setTimeout(async () => {
-                log?.(
-                    `Renewing the access token now as it will expires in ${toHumanReadableDuration(
-                        renewMsBeforeExpires
-                    )}`
-                );
+            const shouldRedirectToLogin = await (async () => {
+                if (getMsBeforeExpiration() <= 2_000) {
+                    return true;
+                }
 
                 try {
                     await oidc.renewTokens();
                 } catch {
-                    // NOTE: Here semantically `"doesCurrentHrefRequiresAuth": false` is wrong.
-                    // The user may very well be on a page that require auth.
-                    // However there's no way to enforce the browser to redirect back to
-                    // the last public route if the user press back on the login page.
-                    // This is due to the fact that pushing to history only works if it's
-                    // triggered by a user interaction.
-                    await loginOrGoToAuthServer({
-                        action: "login",
-                        doesCurrentHrefRequiresAuth: false
-                    });
+                    return true;
                 }
-            }, msBeforeExpiration - renewMsBeforeExpires);
 
-            const { unsubscribe: tokenChangeUnsubscribe } = oidc.subscribeToTokensChange(() => {
-                clearTimeout(timer);
-                tokenChangeUnsubscribe();
-                scheduleRenew();
-            });
-        })();
-    }
+                return false;
+            })();
+
+            if (shouldRedirectToLogin) {
+                // NOTE: Here semantically `"doesCurrentHrefRequiresAuth": false` is wrong.
+                // The user may very well be on a page that require auth.
+                // However there's no way to enforce the browser to redirect back to
+                // the last public route if the user press back on the login page.
+                // This is due to the fact that pushing to history only works if it's
+                // triggered by a user interaction.
+                await loginOrGoToAuthServer({
+                    action: "login",
+                    doesCurrentHrefRequiresAuth: false
+                });
+            }
+        }, msBeforeExpiration - renewMsBeforeExpires);
+
+        const { unsubscribe: tokenChangeUnsubscribe } = oidc.subscribeToTokensChange(() => {
+            clearTimeout(timer);
+            tokenChangeUnsubscribe();
+            scheduleRenew();
+        });
+    })();
 
     auto_logout: {
         if (currentTokens.refreshToken === "" && __unsafe_ssoSessionIdleSeconds === undefined) {

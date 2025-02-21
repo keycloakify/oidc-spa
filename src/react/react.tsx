@@ -338,18 +338,8 @@ export function createOidcReactApi_dependencyInjection<
             dReadyToCreate.resolve();
             const oidc = await prOidc;
 
-            wait_for_token_renewal_if_waking_up_from_sleep: {
-                if (!oidc.isUserLoggedIn) {
-                    break wait_for_token_renewal_if_waking_up_from_sleep;
-                }
-
-                const tokens = oidc.getTokens();
-
-                if (tokens.accessTokenExpirationTime > Date.now()) {
-                    break wait_for_token_renewal_if_waking_up_from_sleep;
-                }
-
-                await oidc.renewTokens();
+            if (oidc.isUserLoggedIn) {
+                await oidc.getTokens_next();
             }
 
             return oidc;
