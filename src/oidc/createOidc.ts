@@ -1166,6 +1166,25 @@ export async function createOidc_nonMemoized<
     (function scheduleRenew() {
         const msBeforeExpiration = getMsBeforeExpiration();
 
+        // NOTE: Here semantically `"doesCurrentHrefRequiresAuth": false` is wrong.
+        // The user may very well be on a page that require auth.
+        // However there's no way to enforce the browser to redirect back to
+        // the last public route if the user press back on the login page.
+        // This is due to the fact that pushing to history only works if it's
+        // triggered by a user interaction.
+        const login_dueToExpiration = () =>
+            loginOrGoToAuthServer({
+                action: "login",
+                doesCurrentHrefRequiresAuth: false
+            });
+
+        if (msBeforeExpiration <= 2_000) {
+            // NOTE: We just got a new token that is about to expire. This means that
+            // the refresh token has reached it's max SSO time.
+            login_dueToExpiration();
+            return;
+        }
+
         // NOTE: We refresh the token 25 seconds before it expires.
         // If the token expiration time is less than 25 seconds we refresh the token when
         // only 1/10 of the token time is left.
@@ -1186,31 +1205,10 @@ export async function createOidc_nonMemoized<
                 )}`
             );
 
-            const shouldRedirectToLogin = await (async () => {
-                if (getMsBeforeExpiration() <= 2_000) {
-                    return true;
-                }
-
-                try {
-                    await oidc.renewTokens();
-                } catch {
-                    return true;
-                }
-
-                return false;
-            })();
-
-            if (shouldRedirectToLogin) {
-                // NOTE: Here semantically `"doesCurrentHrefRequiresAuth": false` is wrong.
-                // The user may very well be on a page that require auth.
-                // However there's no way to enforce the browser to redirect back to
-                // the last public route if the user press back on the login page.
-                // This is due to the fact that pushing to history only works if it's
-                // triggered by a user interaction.
-                await loginOrGoToAuthServer({
-                    action: "login",
-                    doesCurrentHrefRequiresAuth: false
-                });
+            try {
+                await oidc.renewTokens();
+            } catch {
+                await login_dueToExpiration();
             }
         }, msBeforeExpiration - renewMsBeforeExpires);
 
