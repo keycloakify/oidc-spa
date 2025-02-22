@@ -1,4 +1,12 @@
-import { useEffect, useState, createContext, useContext, useReducer, type ReactNode } from "react";
+import {
+    useEffect,
+    useState,
+    createContext,
+    useContext,
+    useReducer,
+    useRef,
+    type ReactNode
+} from "react";
 import type { JSX } from "../tools/JSX";
 import { type Oidc, createOidc, type ParamsOfCreateOidc, OidcInitializationError } from "../oidc";
 import { assert, type Equals } from "../vendor/frontend/tsafe";
@@ -18,7 +26,10 @@ export namespace OidcReact {
         login: Oidc.NotLoggedIn["login"];
         initializationError: OidcInitializationError | undefined;
 
+        /** @deprecated: Use `const { decodedIdToken, tokens} = useOidc();` */
         oidcTokens?: never;
+        decodedIdToken?: never;
+        tokens?: never;
         logout?: never;
         subscribeToAutoLogoutCountdown?: never;
         goToAuthServer?: never;
@@ -28,7 +39,10 @@ export namespace OidcReact {
 
     export type LoggedIn<DecodedIdToken extends Record<string, unknown>> = Common & {
         isUserLoggedIn: true;
+        /** @deprecated: Use `const { decodedIdToken, tokens} = useOidc();` */
         oidcTokens: Oidc.Tokens<DecodedIdToken>;
+        decodedIdToken: DecodedIdToken;
+        tokens: Oidc.Tokens<DecodedIdToken> | undefined;
         logout: Oidc.LoggedIn["logout"];
         renewTokens: Oidc.LoggedIn["renewTokens"];
         subscribeToAutoLogoutCountdown: (
@@ -181,18 +195,6 @@ export function createOidcReactApi_dependencyInjection<
 
         assert(oidc !== undefined, "You must use useOidc inside the corresponding OidcProvider");
 
-        const [, forceUpdate] = useReducer(() => [], []);
-
-        useEffect(() => {
-            if (!oidc.isUserLoggedIn) {
-                return;
-            }
-
-            const { unsubscribe } = oidc.subscribeToTokensChange(forceUpdate);
-
-            return unsubscribe;
-        }, [oidc]);
-
         check_assertion: {
             if (assert_params === undefined) {
                 break check_assertion;
@@ -221,28 +223,104 @@ export function createOidcReactApi_dependencyInjection<
             }
         }
 
+        const [, forceUpdate] = useReducer(() => [], []);
+        // TODO: Remove in next major version
+        useEffect(() => {
+            if (!oidc.isUserLoggedIn) {
+                return;
+            }
+
+            const { unsubscribe } = oidc.subscribeToTokensChange(forceUpdate);
+
+            return unsubscribe;
+        }, [oidc]);
+
+        const refTokensState = useRef<{
+            isConsumerReadingTokens: boolean;
+            tokens: Oidc.Tokens<DecodedIdToken> | undefined;
+        }>({
+            isConsumerReadingTokens: false,
+            tokens: undefined
+        });
+
+        const tokensPropertyDescriptorGetter = () => {
+            const tokenState = refTokensState.current;
+            tokenState.isConsumerReadingTokens = true;
+            return tokenState.tokens;
+        };
+
+        useEffect(() => {
+            if (!oidc.isUserLoggedIn) {
+                return;
+            }
+
+            const updateTokens = (tokens: Oidc.Tokens<DecodedIdToken>) => {
+                if (tokens === refTokensState.current.tokens) {
+                    return;
+                }
+
+                const tokenState = refTokensState.current;
+
+                tokenState.tokens = tokens;
+
+                if (tokenState.isConsumerReadingTokens) {
+                    forceUpdate();
+                }
+            };
+
+            let isActive = true;
+
+            oidc.getTokens_next().then(tokens => {
+                if (!isActive) {
+                    return;
+                }
+                updateTokens(tokens);
+            });
+
+            const { unsubscribe } = oidc.subscribeToTokensChange(tokens => {
+                updateTokens(tokens);
+            });
+
+            return () => {
+                isActive = false;
+                unsubscribe();
+            };
+        }, []);
+
         const common: OidcReact.Common = {
             params: oidc.params
         };
 
-        return oidc.isUserLoggedIn
-            ? id<OidcReact.LoggedIn<DecodedIdToken>>({
-                  ...common,
-                  isUserLoggedIn: true,
-                  oidcTokens: oidc.getTokens(),
-                  logout: oidc.logout,
-                  renewTokens: oidc.renewTokens,
-                  subscribeToAutoLogoutCountdown: oidc.subscribeToAutoLogoutCountdown,
-                  goToAuthServer: oidc.goToAuthServer,
-                  isNewBrowserSession: oidc.isNewBrowserSession,
-                  backFromAuthServer: oidc.backFromAuthServer
-              })
-            : id<OidcReact.NotLoggedIn>({
-                  ...common,
-                  isUserLoggedIn: false,
-                  login: oidc.login,
-                  initializationError: oidc.initializationError
-              });
+        if (!oidc.isUserLoggedIn) {
+            return id<OidcReact.NotLoggedIn>({
+                ...common,
+                isUserLoggedIn: false,
+                login: oidc.login,
+                initializationError: oidc.initializationError
+            });
+        }
+
+        const oidcReact: OidcReact.LoggedIn<DecodedIdToken> = {
+            ...common,
+            isUserLoggedIn: true,
+            oidcTokens: oidc.getTokens(),
+            decodedIdToken: oidc.getDecodedIdToken(),
+            tokens: null as any,
+            logout: oidc.logout,
+            renewTokens: oidc.renewTokens,
+            subscribeToAutoLogoutCountdown: oidc.subscribeToAutoLogoutCountdown,
+            goToAuthServer: oidc.goToAuthServer,
+            isNewBrowserSession: oidc.isNewBrowserSession,
+            backFromAuthServer: oidc.backFromAuthServer
+        };
+
+        Object.defineProperty(oidcReact, "tokens", {
+            get: tokensPropertyDescriptorGetter,
+            enumerable: true,
+            configurable: true
+        });
+
+        return oidcReact;
     }
 
     const prOidc = prOidcOrInitializationError.then(oidcOrInitializationError => {
@@ -262,6 +340,8 @@ export function createOidcReactApi_dependencyInjection<
         // @ts-expect-error: We know what we are doing
         getOidc: async () => {
             dReadyToCreate.resolve();
+
+            // TODO: Directly return oidc in next major version
             const oidc = await prOidc;
 
             if (oidc.isUserLoggedIn) {

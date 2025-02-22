@@ -135,6 +135,7 @@ export async function createMockOidc<
             return () => tokens;
         })(),
         getTokens_next: () => Promise.resolve(oidc.getTokens()),
+        getDecodedIdToken: () => oidc.getTokens().decodedIdToken,
         subscribeToTokensChange: () => ({
             unsubscribe: () => {}
         }),

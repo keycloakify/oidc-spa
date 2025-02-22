@@ -945,6 +945,7 @@ export async function createOidc_nonMemoized<
 
             return currentTokens;
         },
+        getDecodedIdToken: () => currentTokens.decodedIdToken,
         logout: async params => {
             if (globalContext.hasLogoutBeenCalled) {
                 log?.("logout() has already been called, ignoring the call");
