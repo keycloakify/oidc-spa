@@ -9,7 +9,8 @@ import { parseKeycloakIssuerUri } from "oidc-spa/tools/parseKeycloakIssuerUri";
 export function ProtectedPage() {
     // Here we can safely assume that the user is logged in.
     const {
-        oidcTokens,
+        tokens,
+        decodedIdToken,
         goToAuthServer,
         backFromAuthServer,
         renewTokens,
@@ -21,18 +22,21 @@ export function ProtectedPage() {
     // WARNING: You are not supposed to decode the accessToken on the client side.
     // We are doing it here only for debugging purposes.
     const decodedAccessToken = useMemo(() => {
+        if (tokens === undefined) {
+            return undefined;
+        }
         try {
-            return decodeJwt(oidcTokens.accessToken);
+            return decodeJwt(tokens.accessToken);
         } catch {
             return undefined;
         }
-    }, [oidcTokens.accessToken]);
+    }, [tokens]);
 
     const parsedKeycloakIssuerUri = parseKeycloakIssuerUri(issuerUri);
 
     return (
         <h4>
-            Hello {oidcTokens.decodedIdToken.name}
+            Hello {decodedIdToken.name}
             <br />
             <br />
             {decodedAccessToken !== undefined ? (

@@ -49,11 +49,11 @@ export function Header() {
 }
 
 function LoggedInAuthButton() {
-    const { oidcTokens, logout } = useOidc({ assert: "user logged in" });
+    const { decodedIdToken, logout } = useOidc({ assert: "user logged in" });
 
     return (
         <div>
-            <span>Hello {oidcTokens.decodedIdToken.name}</span>
+            <span>Hello {decodedIdToken.name}</span>
             &nbsp; &nbsp;
             <button onClick={() => logout({ redirectTo: "home" })}>Logout</button>
         </div>
