@@ -8,9 +8,16 @@ export function oidcClientTsUserToTokens<DecodedIdToken extends Record<string, u
     oidcClientTsUser: OidcClientTsUser;
     decodedIdTokenSchema?: { parse: (data: unknown) => DecodedIdToken };
     __unsafe_useIdTokenAsAccessToken: boolean;
+    decodedIdToken_previous: DecodedIdToken | undefined;
     log: ((message: string) => void) | undefined;
 }): Oidc.Tokens<DecodedIdToken> {
-    const { oidcClientTsUser, decodedIdTokenSchema, __unsafe_useIdTokenAsAccessToken, log } = params;
+    const {
+        oidcClientTsUser,
+        decodedIdTokenSchema,
+        __unsafe_useIdTokenAsAccessToken,
+        decodedIdToken_previous,
+        log
+    } = params;
 
     const accessToken = oidcClientTsUser.access_token;
 
@@ -95,6 +102,13 @@ export function oidcClientTsUserToTokens<DecodedIdToken extends Record<string, u
 
             if (decodedIdTokenSchema !== undefined) {
                 decodedIdToken = decodedIdTokenSchema.parse(decodedIdToken);
+            }
+
+            if (
+                decodedIdToken_previous !== undefined &&
+                JSON.stringify(decodedIdToken) === JSON.stringify(decodedIdToken_previous)
+            ) {
+                return decodedIdToken_previous;
             }
 
             return decodedIdToken;

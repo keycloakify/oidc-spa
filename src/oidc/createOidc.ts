@@ -805,6 +805,7 @@ export async function createOidc_nonMemoized<
             oidcClientTsUser,
             decodedIdTokenSchema,
             __unsafe_useIdTokenAsAccessToken,
+            decodedIdToken_previous: undefined,
             log
         });
 
@@ -1041,22 +1042,13 @@ export async function createOidc_nonMemoized<
                         break;
                 }
 
-                const decodedIdToken_before = currentTokens.decodedIdToken;
-
                 currentTokens = oidcClientTsUserToTokens({
                     oidcClientTsUser,
                     decodedIdTokenSchema,
                     __unsafe_useIdTokenAsAccessToken,
+                    decodedIdToken_previous: currentTokens.decodedIdToken,
                     log
                 });
-
-                if (
-                    JSON.stringify(currentTokens.decodedIdToken) ===
-                    JSON.stringify(decodedIdToken_before)
-                ) {
-                    id<{ decodedIdToken: DecodedIdToken }>(currentTokens).decodedIdToken =
-                        decodedIdToken_before;
-                }
 
                 Array.from(onTokenChanges).forEach(onTokenChange => onTokenChange());
             }
