@@ -51,7 +51,9 @@ export declare namespace Oidc {
              * */
             getTokens: () => Tokens<DecodedIdToken>;
             getTokens_next: () => Promise<Tokens<DecodedIdToken>>;
-            subscribeToTokensChange: (onTokenChange: () => void) => { unsubscribe: () => void };
+            subscribeToTokensChange: (onTokenChange: (tokens: Tokens<DecodedIdToken>) => void) => {
+                unsubscribe: () => void;
+            };
             logout: (
                 params:
                     | { redirectTo: "home" | "current page" }

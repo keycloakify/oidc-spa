@@ -932,7 +932,7 @@ export async function createOidc_nonMemoized<
         (params: { secondsLeft: number | undefined }) => void
     >();
 
-    const onTokenChanges = new Set<() => void>();
+    const onTokenChanges = new Set<(tokens: Oidc.Tokens<DecodedIdToken>) => void>();
 
     const oidc = id<Oidc.LoggedIn<DecodedIdToken>>({
         ...common,
@@ -1050,7 +1050,7 @@ export async function createOidc_nonMemoized<
                     log
                 });
 
-                Array.from(onTokenChanges).forEach(onTokenChange => onTokenChange());
+                Array.from(onTokenChanges).forEach(onTokenChange => onTokenChange(currentTokens));
             }
 
             let ongoingCall:
