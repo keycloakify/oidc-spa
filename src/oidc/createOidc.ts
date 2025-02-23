@@ -144,6 +144,8 @@ window[GLOBAL_CONTEXT_KEY] ??= {
 
 const globalContext = window[GLOBAL_CONTEXT_KEY];
 
+const MIN_RENEW_BEFORE_EXPIRE_MS = 2_000;
+
 /** @see: https://docs.oidc-spa.dev/v/v6/usage */
 export async function createOidc<
     DecodedIdToken extends Record<string, unknown> = Record<string, unknown>,
@@ -811,7 +813,7 @@ export async function createOidc_nonMemoized<
         isUserLoggedIn: true,
         getTokens: () => currentTokens,
         getTokens_next: async () => {
-            if (getMsBeforeExpiration(currentTokens) <= 5_000) {
+            if (getMsBeforeExpiration(currentTokens) <= MIN_RENEW_BEFORE_EXPIRE_MS) {
                 await oidc_loggedIn.renewTokens();
             }
 
@@ -1087,7 +1089,7 @@ export async function createOidc_nonMemoized<
         const login_dueToExpiration = () => {
             persistAuthState({ configId, state: undefined });
 
-            loginOrGoToAuthServer({
+            return loginOrGoToAuthServer({
                 action: "login",
                 redirectUrl: window.location.href,
                 doForceReloadOnBfCache: true,
@@ -1102,7 +1104,7 @@ export async function createOidc_nonMemoized<
 
         const msBeforeExpiration = getMsBeforeExpiration(currentTokens);
 
-        if (msBeforeExpiration <= 2_000) {
+        if (msBeforeExpiration <= MIN_RENEW_BEFORE_EXPIRE_MS) {
             // NOTE: We just got a new token that is about to expire. This means that
             // the refresh token has reached it's max SSO time.
             login_dueToExpiration();
@@ -1112,7 +1114,10 @@ export async function createOidc_nonMemoized<
         // NOTE: We refresh the token 25 seconds before it expires.
         // If the token expiration time is less than 25 seconds we refresh the token when
         // only 1/10 of the token time is left.
-        const renewMsBeforeExpires = Math.min(25_000, msBeforeExpiration * 0.1);
+        const renewMsBeforeExpires = Math.max(
+            Math.min(25_000, msBeforeExpiration * 0.1),
+            MIN_RENEW_BEFORE_EXPIRE_MS
+        );
 
         log?.(
             [
