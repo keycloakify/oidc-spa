@@ -27,7 +27,7 @@ export function authResponseToUrl(authResponse: AuthResponse): string {
 
 type ResultOfLoginSilent =
     | {
-          outcome: "success iframe";
+          outcome: "got auth response from iframe";
           authResponse: AuthResponse;
       }
     | {
@@ -35,7 +35,7 @@ type ResultOfLoginSilent =
           cause: "timeout" | "can't reach well-known oidc endpoint";
       }
     | {
-          outcome: "refresh token used";
+          outcome: "token refreshed using refresh token";
           oidcClientTsUser: OidcClientTsUser;
       };
 
@@ -99,7 +99,7 @@ export async function loginSilent(params: {
         window.removeEventListener("message", listener);
 
         dResult.resolve({
-            outcome: "success iframe",
+            outcome: "got auth response from iframe",
             authResponse
         });
     };
@@ -122,7 +122,7 @@ export async function loginSilent(params: {
                 clearTimeout(timeout);
 
                 dResult.resolve({
-                    outcome: "refresh token used",
+                    outcome: "token refreshed using refresh token",
                     oidcClientTsUser
                 });
             },
