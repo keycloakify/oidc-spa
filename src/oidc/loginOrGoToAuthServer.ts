@@ -146,62 +146,37 @@ export function createLoginOrGoToAuthServer(params: {
 
         log?.(`redirectUrl: ${redirectUrl}`);
 
-        //NOTE: We know there is a extraQueryParameter option but it doesn't allow
-        // to control the encoding so we have to highjack global URL Class that is
-        // used internally by oidc-client-ts. It's save to do so since this is the
-        // last thing that will be done before the redirect.
-        {
-            const { URL_real } = globalContext;
-
-            const URL = (...args: ConstructorParameters<typeof URL_real>) => {
-                const urlInstance = new URL_real(...args);
-
-                return new Proxy(urlInstance, {
-                    get: (target, prop) => {
-                        if (prop === "href") {
-                            Object.defineProperty(window, "URL", { value: URL_real });
-
-                            let url = urlInstance.href;
-
-                            (
-                                [
-                                    [getExtraQueryParams?.(), transformUrlBeforeRedirect],
-                                    [extraQueryParams_local, transformUrlBeforeRedirect_local]
-                                ] as const
-                            ).forEach(([extraQueryParams, transformUrlBeforeRedirect]) => {
-                                add_extra_query_params: {
-                                    if (extraQueryParams === undefined) {
-                                        break add_extra_query_params;
-                                    }
-
-                                    const url_obj = new URL_real(url);
-
-                                    for (const [name, value] of Object.entries(extraQueryParams)) {
-                                        url_obj.searchParams.set(name, value);
-                                    }
-
-                                    url = url_obj.href;
-                                }
-
-                                apply_transform_before_redirect: {
-                                    if (transformUrlBeforeRedirect === undefined) {
-                                        break apply_transform_before_redirect;
-                                    }
-                                    url = transformUrlBeforeRedirect(url);
-                                }
-                            });
-
-                            return url;
-                        }
-
-                        //@ts-expect-error
-                        return target[prop];
+        const transformUrl_oidcClientTs = (url: string) => {
+            (
+                [
+                    [getExtraQueryParams?.(), transformUrlBeforeRedirect],
+                    [extraQueryParams_local, transformUrlBeforeRedirect_local]
+                ] as const
+            ).forEach(([extraQueryParams, transformUrlBeforeRedirect]) => {
+                add_extra_query_params: {
+                    if (extraQueryParams === undefined) {
+                        break add_extra_query_params;
                     }
-                });
-            };
 
-            Object.defineProperty(window, "URL", { value: URL });
-        }
+                    const url_obj = new URL(url);
+
+                    for (const [name, value] of Object.entries(extraQueryParams)) {
+                        url_obj.searchParams.set(name, value);
+                    }
+
+                    url = url_obj.href;
+                }
+
+                apply_transform_before_redirect: {
+                    if (transformUrlBeforeRedirect === undefined) {
+                        break apply_transform_before_redirect;
+                    }
+                    url = transformUrlBeforeRedirect(url);
+                }
+            });
+
+            return url;
+        };
 
         const redirectMethod = (() => {
             switch (rest.action) {
@@ -266,7 +241,8 @@ export function createLoginOrGoToAuthServer(params: {
                         return rest.doForceInteraction ? "consent" : undefined;
                 }
                 assert<Equals<typeof rest, never>>;
-            })()
+            })(),
+            transformUrl: transformUrl_oidcClientTs
         });
         return new Promise<never>(() => {});
     }
