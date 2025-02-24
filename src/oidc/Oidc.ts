@@ -100,12 +100,27 @@ export declare namespace Oidc {
         };
 
     export type Tokens<DecodedIdToken extends Record<string, unknown> = Record<string, unknown>> =
-        Readonly<{
+        | Tokens.WithRefreshToken<DecodedIdToken>
+        | Tokens.WithoutRefreshToken<DecodedIdToken>;
+
+    export namespace Tokens {
+        export type Common<DecodedIdToken> = {
             accessToken: string;
             accessTokenExpirationTime: number;
             idToken: string;
-            refreshToken: string;
-            refreshTokenExpirationTime: number;
             decodedIdToken: DecodedIdToken;
-        }>;
+        };
+
+        export type WithRefreshToken<DecodedIdToken> = Common<DecodedIdToken> & {
+            hasRefreshToken: true;
+            refreshToken: string;
+            refreshTokenExpirationTime: number | undefined;
+        };
+
+        export type WithoutRefreshToken<DecodedIdToken> = Common<DecodedIdToken> & {
+            hasRefreshToken: false;
+            refreshToken?: never;
+            refreshTokenExpirationTime?: never;
+        };
+    }
 }

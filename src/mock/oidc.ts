@@ -116,12 +116,10 @@ export async function createMockOidc<
         isUserLoggedIn: true,
         renewTokens: async () => {},
         getTokens: (() => {
-            const tokens: Oidc.Tokens<DecodedIdToken> = {
+            const tokens_common: Oidc.Tokens.Common<DecodedIdToken> = {
                 accessToken: mockedTokens.accessToken ?? "mocked-access-token",
                 accessTokenExpirationTime: mockedTokens.accessTokenExpirationTime ?? Infinity,
                 idToken: mockedTokens.idToken ?? "mocked-id-token",
-                refreshToken: mockedTokens.refreshToken ?? "mocked-refresh-token",
-                refreshTokenExpirationTime: mockedTokens.refreshTokenExpirationTime ?? Infinity,
                 decodedIdToken:
                     mockedTokens.decodedIdToken ??
                     createObjectThatThrowsIfAccessed<DecodedIdToken>({
@@ -131,6 +129,19 @@ export async function createMockOidc<
                         ].join("\n")
                     })
             };
+
+            const tokens: Oidc.Tokens<DecodedIdToken> =
+                mockedTokens.refreshToken !== undefined || mockedTokens.hasRefreshToken === true
+                    ? id<Oidc.Tokens.WithRefreshToken<DecodedIdToken>>({
+                          ...tokens_common,
+                          hasRefreshToken: true,
+                          refreshToken: mockedTokens.refreshToken ?? "mocked-refresh-token",
+                          refreshTokenExpirationTime: mockedTokens.refreshTokenExpirationTime
+                      })
+                    : id<Oidc.Tokens.WithoutRefreshToken<DecodedIdToken>>({
+                          ...tokens_common,
+                          hasRefreshToken: false
+                      });
 
             return () => tokens;
         })(),

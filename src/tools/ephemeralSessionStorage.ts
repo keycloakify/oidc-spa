@@ -1,14 +1,10 @@
 import { assert, typeGuard, id } from "../vendor/frontend/tsafe";
 
 type SessionStorageItem_Parsed = {
-    __brand: typeof SessionStorageItem_Parsed.brand;
+    __brand: "SessionStorageItem_Parsed-v1";
     value: string;
     expiresAtTime: number;
 };
-
-namespace SessionStorageItem_Parsed {
-    export const brand = "SessionStorageItem_Parsed";
-}
 
 function parseSessionStorageItem(
     sessionStorageItemValue: string
@@ -26,7 +22,7 @@ function parseSessionStorageItem(
             json,
             json instanceof Object &&
                 "__brand" in json &&
-                json.__brand === SessionStorageItem_Parsed.brand
+                json.__brand === id<SessionStorageItem_Parsed["__brand"]>("SessionStorageItem_Parsed-v1")
         )
     ) {
         return undefined;
@@ -72,7 +68,7 @@ function createStoreInSessionStorageAndScheduleRemovalInMemoryItem(params: {
         sessionStorageKey,
         JSON.stringify(
             id<SessionStorageItem_Parsed>({
-                __brand: "SessionStorageItem_Parsed",
+                __brand: "SessionStorageItem_Parsed-v1",
                 value,
                 expiresAtTime: Date.now() + remainingTtlMs
             })

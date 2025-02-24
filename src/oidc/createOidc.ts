@@ -690,16 +690,19 @@ export async function createOidc_nonMemoized<
             oidcClientTsUser,
             decodedIdTokenSchema,
             __unsafe_useIdTokenAsAccessToken,
-            decodedIdToken_previous: undefined,
-            log
+            decodedIdToken_previous: undefined
         });
 
-        if (tokens.refreshTokenExpirationTime < tokens.accessTokenExpirationTime) {
+        if (
+            tokens.hasRefreshToken &&
+            tokens.refreshTokenExpirationTime !== undefined &&
+            tokens.refreshTokenExpirationTime < tokens.accessTokenExpirationTime
+        ) {
             console.warn(
                 [
                     "The OIDC refresh token shorter than the one of the access token.",
                     "This is very unusual and probably a misconfiguration.",
-                    `Check your oidc server configuration for ${clientId} ${issuerUri}`
+                    `Check your oidc server configuration for ${issuerUri}:${clientId} `
                 ].join(" ")
             );
         }
@@ -866,7 +869,7 @@ export async function createOidc_nonMemoized<
                 if (error.message === "No end session endpoint") {
                     log?.("No end session endpoint, managing logging state locally");
 
-                    persistAuthState({ configId, state: "explicitly logged out" });
+                    persistAuthState({ configId, state: { stateDescription: "explicitly logged out" } });
 
                     try {
                         await oidcClientTsUserManager.removeUser();
@@ -960,9 +963,18 @@ export async function createOidc_nonMemoized<
                     oidcClientTsUser,
                     decodedIdTokenSchema,
                     __unsafe_useIdTokenAsAccessToken,
-                    decodedIdToken_previous: currentTokens.decodedIdToken,
-                    log
+                    decodedIdToken_previous: currentTokens.decodedIdToken
                 });
+
+                if (getPersistedAuthState({ configId }) !== undefined) {
+                    persistAuthState({
+                        configId,
+                        state: {
+                            stateDescription: "logged in",
+                            untilTime: currentTokens.refreshTokenExpirationTime
+                        }
+                    });
+                }
 
                 Array.from(onTokenChanges).forEach(onTokenChange => onTokenChange(currentTokens));
             }
@@ -1149,9 +1161,16 @@ export async function createOidc_nonMemoized<
     })();
 
     auto_logout: {
-        if (currentTokens.refreshToken === "" && __unsafe_ssoSessionIdleSeconds === undefined) {
+        if (
+            (!currentTokens.hasRefreshToken || currentTokens.refreshTokenExpirationTime === undefined) &&
+            __unsafe_ssoSessionIdleSeconds === undefined
+        ) {
             log?.(
-                "No refresh token, and ____unsafe_ssoSessionIdleSeconds was not set, auto logout non applicable"
+                `${
+                    currentTokens.hasRefreshToken
+                        ? "The refresh token is opaque, we can't read it's expiration time"
+                        : "No refresh token"
+                }, and __unsafe_ssoSessionIdleSeconds was not set, can't implement auto logout mechanism`
             );
             break auto_logout;
         }
@@ -1161,7 +1180,9 @@ export async function createOidc_nonMemoized<
                 const getCountdownEndTime = () =>
                     __unsafe_ssoSessionIdleSeconds !== undefined
                         ? Date.now() + __unsafe_ssoSessionIdleSeconds * 1000
-                        : currentTokens.refreshTokenExpirationTime;
+                        : (assert(currentTokens.hasRefreshToken),
+                          assert(currentTokens.refreshTokenExpirationTime !== undefined),
+                          currentTokens.refreshTokenExpirationTime);
 
                 const durationBeforeAutoLogout = toHumanReadableDuration(
                     getCountdownEndTime() - Date.now()
@@ -1219,7 +1240,13 @@ export async function createOidc_nonMemoized<
         }
 
         if (!areThirdPartyCookiesAllowed) {
-            persistAuthState({ configId, state: "logged in" });
+            persistAuthState({
+                configId,
+                state: {
+                    stateDescription: "logged in",
+                    untilTime: currentTokens.refreshTokenExpirationTime
+                }
+            });
         }
     }
 

@@ -1,5 +1,5 @@
 import type { User as OidcClientTsUser } from "../vendor/frontend/oidc-client-ts-and-jwt-decode";
-import { assert } from "../vendor/frontend/tsafe";
+import { assert, id } from "../vendor/frontend/tsafe";
 import { readExpirationTimeInJwt } from "../tools/readExpirationTimeInJwt";
 import { decodeJwt } from "../tools/decodeJwt";
 import type { Oidc } from "./Oidc";
@@ -9,24 +9,22 @@ export function oidcClientTsUserToTokens<DecodedIdToken extends Record<string, u
     decodedIdTokenSchema?: { parse: (data: unknown) => DecodedIdToken };
     __unsafe_useIdTokenAsAccessToken: boolean;
     decodedIdToken_previous: DecodedIdToken | undefined;
-    log: ((message: string) => void) | undefined;
 }): Oidc.Tokens<DecodedIdToken> {
     const {
         oidcClientTsUser,
         decodedIdTokenSchema,
         __unsafe_useIdTokenAsAccessToken,
-        decodedIdToken_previous,
-        log
+        decodedIdToken_previous
     } = params;
 
     const accessToken = oidcClientTsUser.access_token;
 
     const accessTokenExpirationTime = (() => {
-        read_from_metadata: {
+        read_from_token_response: {
             const { expires_at } = oidcClientTsUser;
 
             if (expires_at === undefined) {
-                break read_from_metadata;
+                break read_from_token_response;
             }
 
             return expires_at * 1000;
@@ -49,7 +47,7 @@ export function oidcClientTsUserToTokens<DecodedIdToken extends Record<string, u
 
     const refreshTokenExpirationTime = (() => {
         if (refreshToken === undefined) {
-            return Number.POSITIVE_INFINITY;
+            return undefined;
         }
 
         read_from_jwt: {
@@ -62,23 +60,31 @@ export function oidcClientTsUserToTokens<DecodedIdToken extends Record<string, u
             return expirationTime;
         }
 
-        log?.(
-            [
-                "Couldn't read the expiration time of the refresh token from the jwt",
-                "It's ok. Some OIDC server like Microsoft Entra ID does not use JWT for the refresh token.",
-                "Be aware that it prevent you from implementing the auto logout mechanism: https://docs.oidc-spa.dev/v/v6/auto-logout",
-                "If you need auto logout you'll have to provide use the __unsafe_ssoSessionIdleSeconds param."
-            ].join("\n")
-        );
-
-        return Number.POSITIVE_INFINITY;
+        return undefined;
     })();
 
     const idToken = oidcClientTsUser.id_token;
 
     assert(idToken !== undefined, "No id token provided by the oidc server");
 
-    const tokens: Oidc.Tokens<DecodedIdToken> = {
+    const decodedIdToken = (() => {
+        let decodedIdToken = decodeJwt(idToken) as DecodedIdToken;
+
+        if (decodedIdTokenSchema !== undefined) {
+            decodedIdToken = decodedIdTokenSchema.parse(decodedIdToken);
+        }
+
+        if (
+            decodedIdToken_previous !== undefined &&
+            JSON.stringify(decodedIdToken) === JSON.stringify(decodedIdToken_previous)
+        ) {
+            return decodedIdToken_previous;
+        }
+
+        return decodedIdToken;
+    })();
+
+    const tokens_common: Oidc.Tokens.Common<DecodedIdToken> = {
         ...(__unsafe_useIdTokenAsAccessToken
             ? {
                   accessToken: idToken,
@@ -94,28 +100,23 @@ export function oidcClientTsUserToTokens<DecodedIdToken extends Record<string, u
                   })()
               }
             : { accessToken, accessTokenExpirationTime }),
-        refreshToken: refreshToken ?? "",
-        refreshTokenExpirationTime,
         idToken,
-        decodedIdToken: (() => {
-            let decodedIdToken = decodeJwt(idToken) as DecodedIdToken;
-
-            if (decodedIdTokenSchema !== undefined) {
-                decodedIdToken = decodedIdTokenSchema.parse(decodedIdToken);
-            }
-
-            if (
-                decodedIdToken_previous !== undefined &&
-                JSON.stringify(decodedIdToken) === JSON.stringify(decodedIdToken_previous)
-            ) {
-                return decodedIdToken_previous;
-            }
-
-            return decodedIdToken;
-        })()
+        decodedIdToken
     };
 
-    return tokens;
+    if (refreshToken === undefined) {
+        return id<Oidc.Tokens.WithoutRefreshToken<DecodedIdToken>>({
+            ...tokens_common,
+            hasRefreshToken: false
+        });
+    } else {
+        return id<Oidc.Tokens.WithRefreshToken<DecodedIdToken>>({
+            ...tokens_common,
+            hasRefreshToken: true,
+            refreshToken,
+            refreshTokenExpirationTime
+        });
+    }
 }
 
 export function getMsBeforeExpiration(tokens: Oidc.Tokens): number {
@@ -124,7 +125,7 @@ export function getMsBeforeExpiration(tokens: Oidc.Tokens): number {
     // assumption here.
     const tokenExpirationTime = Math.min(
         tokens.accessTokenExpirationTime,
-        tokens.refreshTokenExpirationTime
+        tokens.refreshTokenExpirationTime ?? Number.POSITIVE_INFINITY
     );
 
     const msBeforeExpiration = Math.min(
