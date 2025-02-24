@@ -4,11 +4,11 @@ import {
     type User as OidcClientTsUser,
     InMemoryWebStorage
 } from "../vendor/frontend/oidc-client-ts-and-jwt-decode";
-import { id, type Param0, assert, is, type Equals, typeGuard } from "../vendor/frontend/tsafe";
+import { id, assert, is, type Equals, typeGuard } from "../vendor/frontend/tsafe";
 import { setTimeout, clearTimeout } from "../tools/workerTimers";
 import { Deferred } from "../tools/Deferred";
 import { decodeJwt } from "../tools/decodeJwt";
-import { create$isUserActive } from "./createIsUserActive";
+import { create$isUserActive } from "./isUserActive";
 import { createStartCountdown } from "../tools/startCountdown";
 import type { StatefulObservable } from "../tools/StatefulObservable";
 import { toHumanReadableDuration } from "../tools/toHumanReadableDuration";
@@ -27,16 +27,15 @@ import {
 } from "./StateData";
 import { notifyOtherTabsOfLogout, getPrOtherTabLogout } from "./logoutPropagationToOtherTabs";
 import { getConfigId } from "./configId";
-import { oidcClientTsUserToTokens } from "./oidcClientTsUserToTokens";
+import { oidcClientTsUserToTokens, getMsBeforeExpiration } from "./oidcClientTsUserToTokens";
 import { loginSilent, authResponseToUrl } from "./loginSilent";
 import { handleOidcCallback, AUTH_RESPONSE_KEY } from "./handleOidcCallback";
-import {
-    clearPersistedLogoutState,
-    getIsPersistedLogoutState,
-    persistLogoutState
-} from "./persistedLogoutState";
+import { getPersistedAuthState, persistAuthState } from "./persistedAuthState";
 import type { Oidc } from "./Oidc";
 import { type AwaitableEventEmitter, createAwaitableEventEmitter } from "../tools/AwaitableEventEmitter";
+import { getHaveSharedParentDomain } from "../tools/haveSharedParentDomain";
+import { createLoginOrGoToAuthServer } from "./loginOrGoToAuthServer";
+import { createEphemeralSessionStorage } from "../tools/ephemeralSessionStorage";
 
 // NOTE: Replaced at build time
 const VERSION = "{{OIDC_SPA_VERSION}}";
@@ -130,9 +129,7 @@ declare global {
         [GLOBAL_CONTEXT_KEY]: {
             prOidcByConfigId: Map<string, Promise<Oidc<any>>>;
             evtAuthResponseHandled: AwaitableEventEmitter<void>;
-            URL_real: typeof URL;
             $isUserActive: StatefulObservable<boolean> | undefined;
-            hasLoginBeenCalled: boolean;
             hasLogoutBeenCalled: boolean;
         };
     }
@@ -141,13 +138,13 @@ declare global {
 window[GLOBAL_CONTEXT_KEY] ??= {
     prOidcByConfigId: new Map(),
     evtAuthResponseHandled: createAwaitableEventEmitter<void>(),
-    URL_real: window.URL,
     $isUserActive: undefined,
-    hasLoginBeenCalled: false,
     hasLogoutBeenCalled: false
 };
 
 const globalContext = window[GLOBAL_CONTEXT_KEY];
+
+const MIN_RENEW_BEFORE_EXPIRE_MS = 2_000;
 
 /** @see: https://docs.oidc-spa.dev/v/v6/usage */
 export async function createOidc<
@@ -256,7 +253,7 @@ export async function createOidc_nonMemoized<
         __unsafe_ssoSessionIdleSeconds,
         autoLogoutParams = { redirectTo: "current page" },
         autoLogin = false,
-        postLoginRedirectUrl,
+        postLoginRedirectUrl: postLoginRedirectUrl_default,
         __unsafe_clientSecret,
         __unsafe_useIdTokenAsAccessToken = false
     } = params;
@@ -299,11 +296,32 @@ export async function createOidc_nonMemoized<
         }
     }
 
-    const USER_LOGGED_IN_KEY = `oidc-spa.user-logged-in:${configId}`;
-
-    localStorage.removeItem(USER_LOGGED_IN_KEY);
-
     const stateQueryParamValue_instance = generateStateQueryParamValue();
+
+    let areThirdPartyCookiesAllowed: boolean;
+    {
+        const url1 = window.location.origin;
+        const url2 = issuerUri;
+
+        areThirdPartyCookiesAllowed = getHaveSharedParentDomain({
+            url1,
+            url2
+        });
+
+        if (areThirdPartyCookiesAllowed) {
+            log?.(`${url1} and ${url2} have shared parent domain, third party cookies are allowed`);
+        } else {
+            log?.(
+                [
+                    `${url1} and ${url2} don't have shared parent domain, setting third party cookies`,
+                    `on the auth server domain might not work. Making sure that everything works smoothly regardless`,
+                    `by allowing oidc-spa to store the auth state in the session storage for a limited period of time.`
+                ].join(" ")
+            );
+        }
+    }
+
+    const isUserStorePersistent = !areThirdPartyCookiesAllowed;
 
     const oidcClientTsUserManager = new OidcClientTsUserManager({
         stateQueryParamValue: stateQueryParamValue_instance,
@@ -315,214 +333,29 @@ export async function createOidc_nonMemoized<
         response_type: "code",
         scope: Array.from(new Set(["openid", ...scopes])).join(" "),
         automaticSilentRenew: false,
-        userStore: new WebStorageStateStore({ store: new InMemoryWebStorage() }),
+        userStore: new WebStorageStateStore({
+            store: areThirdPartyCookiesAllowed
+                ? new InMemoryWebStorage()
+                : createEphemeralSessionStorage({
+                      sessionStorageTtlMs: 3 * 60_1000
+                  })
+        }),
         stateStore: new WebStorageStateStore({ store: localStorage, prefix: STATE_STORE_KEY_PREFIX }),
         client_secret: __unsafe_clientSecret
     });
 
-    let lastPublicUrl: string | undefined = undefined;
-
-    // NOTE: To call only if not logged in.
-    const startTrackingLastPublicUrl = () => {
-        const realPushState = history.pushState.bind(history);
-        history.pushState = function pushState(...args) {
-            lastPublicUrl = window.location.href;
-            return realPushState(...args);
-        };
-    };
-
-    type ParamsOfLoginOrGoToAuthServer = Omit<
-        Param0<Oidc.NotLoggedIn["login"]>,
-        "doesCurrentHrefRequiresAuth"
-    > &
-        ({ action: "login"; doesCurrentHrefRequiresAuth: boolean } | { action: "go to auth server" });
-
-    const loginOrGoToAuthServer = async (params: ParamsOfLoginOrGoToAuthServer): Promise<never> => {
-        const {
-            extraQueryParams: extraQueryParams_fromLoginFn,
-            redirectUrl: redirectUrl_params,
-            transformUrlBeforeRedirect: transformUrlBeforeRedirect_fromLoginFn,
-            ...rest
-        } = params;
-
-        log?.("Calling loginOrGoToAuthServer", { params });
-
-        // NOTE: This is for handling cases when user press the back button on the login pages.
-        // When the app is hosted on https (so not in dev mode) the browser will restore the state of the app
-        // instead of reloading the page.
-        if (rest.action === "login") {
-            if (globalContext.hasLoginBeenCalled) {
-                log?.("login() has already been called, ignoring the call");
-                return new Promise<never>(() => {});
-            }
-
-            globalContext.hasLoginBeenCalled = true;
-
-            const callback = () => {
-                if (document.visibilityState === "visible") {
-                    document.removeEventListener("visibilitychange", callback);
-
-                    log?.(
-                        "We came back from the login pages and the state of the app has been restored"
-                    );
-
-                    if (rest.doesCurrentHrefRequiresAuth) {
-                        if (lastPublicUrl !== undefined) {
-                            log?.(`Loading last public route: ${lastPublicUrl}`);
-                            window.location.href = lastPublicUrl;
-                        } else {
-                            log?.("We don't know the last public route, navigating back in history");
-                            window.history.back();
-                        }
-                    } else {
-                        log?.("The current page doesn't require auth...");
-
-                        if (localStorage.getItem(USER_LOGGED_IN_KEY)) {
-                            log?.("but the user is now authenticated, reloading the page");
-                            location.reload();
-                        } else {
-                            log?.("and the user doesn't seem to be authenticated, avoiding a reload");
-                            globalContext.hasLoginBeenCalled = false;
-                        }
-                    }
-                }
-            };
-
-            log?.("Start listening to visibility change event");
-
-            document.addEventListener("visibilitychange", callback);
-        }
-
-        const redirectUrl =
-            redirectUrl_params === undefined
-                ? window.location.href
-                : toFullyQualifiedUrl({
-                      urlish: redirectUrl_params,
-                      doAssertNoQueryParams: false
-                  });
-
-        log?.(`redirectUrl: ${redirectUrl}`);
-
-        //NOTE: We know there is a extraQueryParameter option but it doesn't allow
-        // to control the encoding so we have to highjack global URL Class that is
-        // used internally by oidc-client-ts. It's save to do so since this is the
-        // last thing that will be done before the redirect.
-        {
-            const { URL_real } = globalContext;
-
-            const URL = (...args: ConstructorParameters<typeof URL_real>) => {
-                const urlInstance = new URL_real(...args);
-
-                return new Proxy(urlInstance, {
-                    get: (target, prop) => {
-                        if (prop === "href") {
-                            Object.defineProperty(window, "URL", { value: URL_real });
-
-                            let url = urlInstance.href;
-
-                            (
-                                [
-                                    [getExtraQueryParams?.(), transformUrlBeforeRedirect],
-                                    [
-                                        extraQueryParams_fromLoginFn,
-                                        transformUrlBeforeRedirect_fromLoginFn
-                                    ]
-                                ] as const
-                            ).forEach(([extraQueryParams, transformUrlBeforeRedirect]) => {
-                                add_extra_query_params: {
-                                    if (extraQueryParams === undefined) {
-                                        break add_extra_query_params;
-                                    }
-
-                                    const url_obj = new URL_real(url);
-
-                                    for (const [name, value] of Object.entries(extraQueryParams)) {
-                                        url_obj.searchParams.set(name, value);
-                                    }
-
-                                    url = url_obj.href;
-                                }
-
-                                apply_transform_before_redirect: {
-                                    if (transformUrlBeforeRedirect === undefined) {
-                                        break apply_transform_before_redirect;
-                                    }
-                                    url = transformUrlBeforeRedirect(url);
-                                }
-                            });
-
-                            return url;
-                        }
-
-                        //@ts-expect-error
-                        return target[prop];
-                    }
-                });
-            };
-
-            Object.defineProperty(window, "URL", { value: URL });
-        }
-
-        // NOTE: This is for the behavior when the use presses the back button on the login pages.
-        // This is what happens when the user gave up the login process.
-        // We want to that to redirect to the last public page.
-        const redirectMethod = (() => {
-            switch (rest.action) {
-                case "login":
-                    return rest.doesCurrentHrefRequiresAuth ? "replace" : "assign";
-                case "go to auth server":
-                    return "assign";
-            }
-        })();
-
-        log?.(`redirectMethod: ${redirectMethod}`);
-
-        const { extraQueryParams } = (() => {
-            const extraQueryParams: Record<string, string> = extraQueryParams_fromLoginFn ?? {};
-
-            read_query_params_added_by_transform_before_redirect: {
-                if (transformUrlBeforeRedirect_fromLoginFn === undefined) {
-                    break read_query_params_added_by_transform_before_redirect;
-                }
-
-                let url_afterTransform;
-
-                try {
-                    url_afterTransform = transformUrlBeforeRedirect_fromLoginFn("https://dummy.com");
-                } catch {
-                    break read_query_params_added_by_transform_before_redirect;
-                }
-
-                for (const [name, value] of new URL(url_afterTransform).searchParams) {
-                    extraQueryParams[name] = value;
-                }
-            }
-
-            return { extraQueryParams };
-        })();
-
-        await oidcClientTsUserManager.signinRedirect({
-            state: id<StateData>({
-                context: "redirect",
-                redirectUrl,
-                extraQueryParams,
-                hasBeenProcessedByCallback: false,
-                configId,
-                action: "login",
-                redirectUrl_consentRequiredCase: (() => {
-                    switch (rest.action) {
-                        case "login":
-                            return lastPublicUrl ?? homeAndCallbackUrl;
-                        case "go to auth server":
-                            return redirectUrl;
-                    }
-                })()
-            }),
-            redirectMethod,
-            prompt: getIsPersistedLogoutState({ configId }) ? "consent" : undefined
-        });
-        return new Promise<never>(() => {});
-    };
+    const {
+        loginOrGoToAuthServer,
+        toCallBeforeReturningOidcLoggedIn,
+        toCallBeforeReturningOidcNotLoggedIn
+    } = createLoginOrGoToAuthServer({
+        configId,
+        oidcClientTsUserManager,
+        getExtraQueryParams,
+        transformUrlBeforeRedirect,
+        homeAndCallbackUrl,
+        log
+    });
 
     const BROWSER_SESSION_NOT_FIRST_INIT_KEY = `oidc-spa.browser-session-not-first-init:${configId}`;
 
@@ -628,7 +461,6 @@ export async function createOidc_nonMemoized<
                         }
 
                         sessionStorage.removeItem(BROWSER_SESSION_NOT_FIRST_INIT_KEY);
-                        clearPersistedLogoutState({ configId });
 
                         return {
                             oidcClientTsUser,
@@ -672,10 +504,41 @@ export async function createOidc_nonMemoized<
             }
         }
 
+        restore_from_session_storage: {
+            if (!isUserStorePersistent) {
+                break restore_from_session_storage;
+            }
+
+            let oidcClientTsUser: OidcClientTsUser | null;
+
+            try {
+                oidcClientTsUser = await oidcClientTsUserManager.getUser();
+            } catch {
+                // NOTE: Not sure if it can throw, but let's be safe.
+                oidcClientTsUser = null;
+                try {
+                    await oidcClientTsUserManager.removeUser();
+                } catch {}
+            }
+
+            if (oidcClientTsUser === null) {
+                break restore_from_session_storage;
+            }
+
+            log?.("Restored the auth from ephemeral session storage");
+
+            return {
+                oidcClientTsUser,
+                backFromAuthServer: undefined
+            };
+        }
+
         restore_from_http_only_cookie: {
             log?.("Trying to restore the auth from the http only cookie (silent signin with iframe)");
 
-            if (getIsPersistedLogoutState({ configId })) {
+            const persistedAuthState = getPersistedAuthState({ configId });
+
+            if (persistedAuthState === "explicitly logged out") {
                 log?.("Skipping silent signin with iframe, the user has logged out");
                 break restore_from_http_only_cookie;
             }
@@ -687,7 +550,7 @@ export async function createOidc_nonMemoized<
                 getExtraTokenParams
             });
 
-            assert(result_loginSilent.outcome !== "refresh token used");
+            assert(result_loginSilent.outcome !== "token refreshed using refresh token");
 
             if (result_loginSilent.outcome === "failure") {
                 switch (result_loginSilent.cause) {
@@ -706,12 +569,13 @@ export async function createOidc_nonMemoized<
                 assert<Equals<typeof result_loginSilent.cause, never>>(false);
             }
 
-            assert<Equals<typeof result_loginSilent.outcome, "success iframe">>();
+            assert<Equals<typeof result_loginSilent.outcome, "got auth response from iframe">>();
 
             const { authResponse } = result_loginSilent;
 
             log?.("Silent signin auth response", authResponse);
 
+            const authResponse_error: string | undefined = authResponse["error"];
             let oidcClientTsUser: OidcClientTsUser | undefined = undefined;
 
             try {
@@ -728,24 +592,45 @@ export async function createOidc_nonMemoized<
                     });
                 }
 
-                {
-                    const error: string | undefined = authResponse["error"];
+                if (authResponse_error === undefined) {
+                    return error;
+                }
+            }
 
-                    if (error !== undefined) {
-                        // NOTE: This is a very expected case, it happens each time there's no active session.
-                        log?.(
-                            [
-                                `The auth server responded with: ${error} `,
-                                "login_required" === error
-                                    ? `(authentication_required just means that there's no active session for the user)`
-                                    : ""
-                            ].join("")
-                        );
-                        break restore_from_http_only_cookie;
-                    }
+            if (oidcClientTsUser === undefined) {
+                if (
+                    autoLogin ||
+                    (persistedAuthState === "logged in" &&
+                        (authResponse_error === "interaction_required" ||
+                            authResponse_error === "login_required" ||
+                            authResponse_error === "consent_required" ||
+                            authResponse_error === "account_selection_required"))
+                ) {
+                    persistAuthState({ configId, state: undefined });
+
+                    await loginOrGoToAuthServer({
+                        action: "login",
+                        doForceReloadOnBfCache: true,
+                        redirectUrl: window.location.href,
+                        doNavigateBackToLastPublicUrlIfTheTheUserNavigateBack: autoLogin,
+                        extraQueryParams_local: undefined,
+                        transformUrlBeforeRedirect_local: undefined,
+                        doForceInteraction: false
+                    });
+
+                    // NOTE: Never here
                 }
 
-                return error;
+                log?.(
+                    [
+                        `The auth server responded with: ${authResponse_error} `,
+                        "login_required" === authResponse_error
+                            ? `(login_required just means that there's no active session for the user)`
+                            : ""
+                    ].join("")
+                );
+
+                break restore_from_http_only_cookie;
             }
 
             log?.("Successful silent signed in");
@@ -829,104 +714,93 @@ export async function createOidc_nonMemoized<
         }
     };
 
-    if (resultOfLoginProcess instanceof Error) {
-        log?.("User not logged in and there was an initialization error");
-
-        const error = resultOfLoginProcess;
-
-        const initializationError =
-            error instanceof OidcInitializationError
-                ? error
-                : new OidcInitializationError({
-                      isAuthServerLikelyDown: false,
-                      messageOrCause: error
-                  });
-
-        if (autoLogin) {
-            throw initializationError;
+    not_loggedIn_case: {
+        if (!(resultOfLoginProcess instanceof Error) && resultOfLoginProcess !== undefined) {
+            break not_loggedIn_case;
         }
 
-        console.error(
-            [
-                `oidc-spa Initialization Error: `,
-                `isAuthServerLikelyDown: ${initializationError.isAuthServerLikelyDown}`,
-                ``,
-                initializationError.message
-            ].join("\n")
-        );
+        const oidc_notLoggedIn: Oidc.NotLoggedIn = (() => {
+            if (resultOfLoginProcess instanceof Error) {
+                log?.("User not logged in and there was an initialization error");
 
-        startTrackingLastPublicUrl();
+                const error = resultOfLoginProcess;
 
-        const oidc = id<Oidc.NotLoggedIn>({
-            ...common,
-            isUserLoggedIn: false,
-            login: async () => {
-                alert("Authentication is currently unavailable. Please try again later.");
-                return new Promise<never>(() => {});
-            },
-            initializationError
-        });
+                const initializationError =
+                    error instanceof OidcInitializationError
+                        ? error
+                        : new OidcInitializationError({
+                              isAuthServerLikelyDown: false,
+                              messageOrCause: error
+                          });
 
-        // @ts-expect-error: We know what we are doing.
-        return oidc;
-    }
+                if (autoLogin) {
+                    throw initializationError;
+                }
 
-    if (resultOfLoginProcess === undefined) {
-        log?.("User not logged in");
+                console.error(
+                    [
+                        `oidc-spa Initialization Error: `,
+                        `isAuthServerLikelyDown: ${initializationError.isAuthServerLikelyDown}`,
+                        ``,
+                        initializationError.message
+                    ].join("\n")
+                );
 
-        if (autoLogin) {
-            log?.("Authentication is required everywhere on this app, redirecting to the login page");
-            await loginOrGoToAuthServer({
-                action: "login",
-                doesCurrentHrefRequiresAuth: true,
-                redirectUrl: postLoginRedirectUrl
-            });
-            // Never here
+                return id<Oidc.NotLoggedIn>({
+                    ...common,
+                    isUserLoggedIn: false,
+                    login: async () => {
+                        alert("Authentication is currently unavailable. Please try again later.");
+                        return new Promise<never>(() => {});
+                    },
+                    initializationError
+                });
+            }
+
+            if (resultOfLoginProcess === undefined) {
+                log?.("User not logged in");
+
+                return id<Oidc.NotLoggedIn>({
+                    ...common,
+                    isUserLoggedIn: false,
+                    login: ({
+                        doesCurrentHrefRequiresAuth,
+                        extraQueryParams,
+                        redirectUrl,
+                        transformUrlBeforeRedirect
+                    }) =>
+                        loginOrGoToAuthServer({
+                            action: "login",
+                            doNavigateBackToLastPublicUrlIfTheTheUserNavigateBack:
+                                doesCurrentHrefRequiresAuth,
+                            doForceReloadOnBfCache: false,
+                            redirectUrl:
+                                redirectUrl ?? postLoginRedirectUrl_default ?? window.location.href,
+                            extraQueryParams_local: extraQueryParams,
+                            transformUrlBeforeRedirect_local: transformUrlBeforeRedirect,
+                            doForceInteraction:
+                                getPersistedAuthState({ configId }) === "explicitly logged out"
+                        }),
+                    initializationError: undefined
+                });
+            }
+
+            assert<Equals<typeof resultOfLoginProcess, never>>(false);
+        })();
+
+        if (getPersistedAuthState({ configId }) !== "explicitly logged out") {
+            persistAuthState({ configId, state: undefined });
         }
 
-        startTrackingLastPublicUrl();
+        toCallBeforeReturningOidcNotLoggedIn();
 
-        const oidc = id<Oidc.NotLoggedIn>({
-            ...common,
-            isUserLoggedIn: false,
-            login: params => loginOrGoToAuthServer({ action: "login", ...params }),
-            initializationError: undefined
-        });
-
-        // @ts-expect-error: We know what we are doing.
-        return oidc;
+        // @ts-expect-error: We know what we're doing
+        return oidc_notLoggedIn;
     }
 
     log?.("User is logged in");
 
-    localStorage.setItem(USER_LOGGED_IN_KEY, "true");
-
     let currentTokens = resultOfLoginProcess.tokens;
-
-    function getMsBeforeExpiration() {
-        // NOTE: In general the access token is supposed to have a shorter
-        // lifespan than the refresh token but we don't want to make any
-        // assumption here.
-        const tokenExpirationTime = Math.min(
-            currentTokens.accessTokenExpirationTime,
-            currentTokens.refreshTokenExpirationTime
-        );
-
-        const msBeforeExpiration = Math.min(
-            tokenExpirationTime - Date.now(),
-            // NOTE: We want to make sure we do not overflow the setTimeout
-            // that must be a 32 bit unsigned integer.
-            // This can happen if the tokenExpirationTime is more than 24.8 days in the future.
-            Math.pow(2, 31) - 1
-        );
-
-        if (msBeforeExpiration < 0) {
-            log?.("Token has already expired");
-            return 0;
-        }
-
-        return msBeforeExpiration;
-    }
 
     const autoLogoutCountdownTickCallbacks = new Set<
         (params: { secondsLeft: number | undefined }) => void
@@ -934,13 +808,13 @@ export async function createOidc_nonMemoized<
 
     const onTokenChanges = new Set<(tokens: Oidc.Tokens<DecodedIdToken>) => void>();
 
-    const oidc = id<Oidc.LoggedIn<DecodedIdToken>>({
+    const oidc_loggedIn = id<Oidc.LoggedIn<DecodedIdToken>>({
         ...common,
         isUserLoggedIn: true,
         getTokens: () => currentTokens,
         getTokens_next: async () => {
-            if (getMsBeforeExpiration() <= 5_000) {
-                await oidc.renewTokens();
+            if (getMsBeforeExpiration(currentTokens) <= MIN_RENEW_BEFORE_EXPIRE_MS) {
+                await oidc_loggedIn.renewTokens();
             }
 
             return currentTokens;
@@ -989,14 +863,21 @@ export async function createOidc_nonMemoized<
             } catch (error) {
                 assert(is<Error>(error));
 
-                if (error.message !== "No end session endpoint") {
+                if (error.message === "No end session endpoint") {
+                    log?.("No end session endpoint, managing logging state locally");
+
+                    persistAuthState({ configId, state: "explicitly logged out" });
+
+                    try {
+                        await oidcClientTsUserManager.removeUser();
+                    } catch {
+                        // NOTE: Not sure if it can throw
+                    }
+
+                    window.location.href = postLogoutRedirectUrl;
+                } else {
                     throw error;
                 }
-
-                log?.("No end session endpoint, managing logging state locally");
-
-                persistLogoutState({ configId });
-                window.location.href = postLogoutRedirectUrl;
             }
 
             return new Promise<never>(() => {});
@@ -1021,21 +902,53 @@ export async function createOidc_nonMemoized<
                 let oidcClientTsUser: OidcClientTsUser;
 
                 switch (result_loginSilent.outcome) {
-                    case "refresh token used":
+                    case "token refreshed using refresh token":
                         {
                             log?.("Refresh token used");
                             oidcClientTsUser = result_loginSilent.oidcClientTsUser;
                         }
                         break;
-                    case "success iframe":
+                    case "got auth response from iframe":
                         {
                             const { authResponse } = result_loginSilent;
 
                             log?.("Tokens refresh using iframe", authResponse);
 
-                            oidcClientTsUser = await oidcClientTsUserManager.signinRedirectCallback(
-                                authResponseToUrl(authResponse)
-                            );
+                            const authResponse_error: string | undefined = authResponse["error"];
+
+                            let oidcClientTsUser_scope: OidcClientTsUser | undefined = undefined;
+
+                            try {
+                                oidcClientTsUser_scope =
+                                    await oidcClientTsUserManager.signinRedirectCallback(
+                                        authResponseToUrl(authResponse)
+                                    );
+                            } catch (error) {
+                                assert(error instanceof Error);
+
+                                if (authResponse_error === undefined) {
+                                    throw error;
+                                }
+
+                                oidcClientTsUser_scope = undefined;
+                            }
+
+                            if (oidcClientTsUser_scope === undefined) {
+                                persistAuthState({ configId, state: undefined });
+
+                                await loginOrGoToAuthServer({
+                                    action: "login",
+                                    redirectUrl: window.location.href,
+                                    doForceReloadOnBfCache: true,
+                                    extraQueryParams_local: undefined,
+                                    transformUrlBeforeRedirect_local: undefined,
+                                    doNavigateBackToLastPublicUrlIfTheTheUserNavigateBack: false,
+                                    doForceInteraction: false
+                                });
+                                assert(false);
+                            }
+
+                            oidcClientTsUser = oidcClientTsUser_scope;
                         }
                         break;
                     default:
@@ -1134,7 +1047,13 @@ export async function createOidc_nonMemoized<
 
             return { unsubscribeFromAutoLogoutCountdown };
         },
-        goToAuthServer: params => loginOrGoToAuthServer({ action: "go to auth server", ...params }),
+        goToAuthServer: ({ extraQueryParams, redirectUrl, transformUrlBeforeRedirect }) =>
+            loginOrGoToAuthServer({
+                action: "go to auth server",
+                redirectUrl: redirectUrl ?? window.location.href,
+                extraQueryParams_local: extraQueryParams,
+                transformUrlBeforeRedirect_local: transformUrlBeforeRedirect
+            }),
         backFromAuthServer: resultOfLoginProcess.backFromAuthServer,
         isNewBrowserSession: (() => {
             if (sessionStorage.getItem(BROWSER_SESSION_NOT_FIRST_INIT_KEY) === null) {
@@ -1167,21 +1086,25 @@ export async function createOidc_nonMemoized<
     }
 
     (function scheduleRenew() {
-        const msBeforeExpiration = getMsBeforeExpiration();
+        const login_dueToExpiration = () => {
+            persistAuthState({ configId, state: undefined });
 
-        // NOTE: Here semantically `"doesCurrentHrefRequiresAuth": false` is wrong.
-        // The user may very well be on a page that require auth.
-        // However there's no way to enforce the browser to redirect back to
-        // the last public route if the user press back on the login page.
-        // This is due to the fact that pushing to history only works if it's
-        // triggered by a user interaction.
-        const login_dueToExpiration = () =>
-            loginOrGoToAuthServer({
+            return loginOrGoToAuthServer({
                 action: "login",
-                doesCurrentHrefRequiresAuth: false
+                redirectUrl: window.location.href,
+                doForceReloadOnBfCache: true,
+                extraQueryParams_local: undefined,
+                transformUrlBeforeRedirect_local: undefined,
+                // NOTE: Wether or not it's the preferred behavior, pushing to history
+                // only works on user interaction so it have to be false
+                doNavigateBackToLastPublicUrlIfTheTheUserNavigateBack: false,
+                doForceInteraction: true
             });
+        };
 
-        if (msBeforeExpiration <= 2_000) {
+        const msBeforeExpiration = getMsBeforeExpiration(currentTokens);
+
+        if (msBeforeExpiration <= MIN_RENEW_BEFORE_EXPIRE_MS) {
             // NOTE: We just got a new token that is about to expire. This means that
             // the refresh token has reached it's max SSO time.
             login_dueToExpiration();
@@ -1191,7 +1114,10 @@ export async function createOidc_nonMemoized<
         // NOTE: We refresh the token 25 seconds before it expires.
         // If the token expiration time is less than 25 seconds we refresh the token when
         // only 1/10 of the token time is left.
-        const renewMsBeforeExpires = Math.min(25_000, msBeforeExpiration * 0.1);
+        const renewMsBeforeExpires = Math.max(
+            Math.min(25_000, msBeforeExpiration * 0.1),
+            MIN_RENEW_BEFORE_EXPIRE_MS
+        );
 
         log?.(
             [
@@ -1209,13 +1135,13 @@ export async function createOidc_nonMemoized<
             );
 
             try {
-                await oidc.renewTokens();
+                await oidc_loggedIn.renewTokens();
             } catch {
                 await login_dueToExpiration();
             }
         }, msBeforeExpiration - renewMsBeforeExpires);
 
-        const { unsubscribe: tokenChangeUnsubscribe } = oidc.subscribeToTokensChange(() => {
+        const { unsubscribe: tokenChangeUnsubscribe } = oidc_loggedIn.subscribeToTokensChange(() => {
             clearTimeout(timer);
             tokenChangeUnsubscribe();
             scheduleRenew();
@@ -1260,7 +1186,7 @@ export async function createOidc_nonMemoized<
                 );
 
                 if (secondsLeft === 0) {
-                    oidc.logout(autoLogoutParams);
+                    oidc_loggedIn.logout(autoLogoutParams);
                 }
             }
         });
@@ -1287,5 +1213,17 @@ export async function createOidc_nonMemoized<
         });
     }
 
-    return oidc;
+    {
+        if (getPersistedAuthState({ configId }) !== undefined) {
+            persistAuthState({ configId, state: undefined });
+        }
+
+        if (!areThirdPartyCookiesAllowed) {
+            persistAuthState({ configId, state: "logged in" });
+        }
+    }
+
+    toCallBeforeReturningOidcLoggedIn();
+
+    return oidc_loggedIn;
 }

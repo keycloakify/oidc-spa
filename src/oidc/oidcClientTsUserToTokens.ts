@@ -117,3 +117,27 @@ export function oidcClientTsUserToTokens<DecodedIdToken extends Record<string, u
 
     return tokens;
 }
+
+export function getMsBeforeExpiration(tokens: Oidc.Tokens): number {
+    // NOTE: In general the access token is supposed to have a shorter
+    // lifespan than the refresh token but we don't want to make any
+    // assumption here.
+    const tokenExpirationTime = Math.min(
+        tokens.accessTokenExpirationTime,
+        tokens.refreshTokenExpirationTime
+    );
+
+    const msBeforeExpiration = Math.min(
+        tokenExpirationTime - Date.now(),
+        // NOTE: We want to make sure we do not overflow the setTimeout
+        // that must be a 32 bit unsigned integer.
+        // This can happen if the tokenExpirationTime is more than 24.8 days in the future.
+        Math.pow(2, 31) - 1
+    );
+
+    if (msBeforeExpiration < 0) {
+        return 0;
+    }
+
+    return msBeforeExpiration;
+}
