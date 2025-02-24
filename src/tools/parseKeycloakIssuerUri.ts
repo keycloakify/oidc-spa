@@ -1,3 +1,5 @@
+import { toFullyQualifiedUrl } from "./toFullyQualifiedUrl";
+
 /**
  * Return undefined if the issuerUri doesn't match the expected shape of a Keycloak issuerUri
  *
@@ -45,7 +47,13 @@ export function parseKeycloakIssuerUri(issuerUri: string):
         getAccountUrl: ({ clientId, backToAppFromAccountUrl, locale }) => {
             const accountUrlObj = new URL(`${url.origin}${kcHttpRelativePath}/realms/${realm}/account`);
             accountUrlObj.searchParams.set("referrer", clientId);
-            accountUrlObj.searchParams.set("referrer_uri", backToAppFromAccountUrl);
+            accountUrlObj.searchParams.set(
+                "referrer_uri",
+                toFullyQualifiedUrl({
+                    urlish: backToAppFromAccountUrl,
+                    doAssertNoQueryParams: false
+                })
+            );
             if (locale !== undefined) {
                 accountUrlObj.searchParams.set("kc_locale", locale);
             }

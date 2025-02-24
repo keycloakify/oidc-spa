@@ -111,7 +111,7 @@ function ProtectedPage() {
                     <a
                         href={parsedKeycloakIssuerUri.getAccountUrl({
                             clientId,
-                            backToAppFromAccountUrl: `${location.href}${import.meta.env.BASE_URL}`
+                            backToAppFromAccountUrl: import.meta.env.BASE_URL
                         })}
                     >
                         Go to Keycloak Account Management Console
