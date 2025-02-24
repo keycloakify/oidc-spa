@@ -1,5 +1,6 @@
 import { useOidc } from "oidc";
 import { Link, useLocation } from "react-router-dom";
+import { parseKeycloakIssuerUri } from "oidc-spa/tools/parseKeycloakIssuerUri";
 
 export function Header() {
     const { isUserLoggedIn, initializationError } = useOidc();
@@ -61,27 +62,31 @@ function LoggedInAuthButton() {
 }
 
 function NotLoggedInAuthButton() {
-    const { login } = useOidc({ assert: "user not logged in" });
+    const { login, params } = useOidc({ assert: "user not logged in" });
+
+    const isKeycloak = parseKeycloakIssuerUri(params.issuerUri) !== undefined;
 
     return (
         <div>
             <button onClick={() => login({ doesCurrentHrefRequiresAuth: false })}>Login</button>{" "}
-            <button
-                onClick={() =>
-                    login({
-                        doesCurrentHrefRequiresAuth: false,
-                        transformUrlBeforeRedirect: url => {
-                            const urlObj = new URL(url);
+            {isKeycloak && (
+                <button
+                    onClick={() =>
+                        login({
+                            doesCurrentHrefRequiresAuth: false,
+                            transformUrlBeforeRedirect: url => {
+                                const urlObj = new URL(url);
 
-                            urlObj.pathname = urlObj.pathname.replace(/\/auth$/, "/registrations");
+                                urlObj.pathname = urlObj.pathname.replace(/\/auth$/, "/registrations");
 
-                            return urlObj.href;
-                        }
-                    })
-                }
-            >
-                Register
-            </button>
+                                return urlObj.href;
+                            }
+                        })
+                    }
+                >
+                    Register
+                </button>
+            )}
         </div>
     );
 }
