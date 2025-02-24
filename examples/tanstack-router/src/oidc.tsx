@@ -42,25 +42,7 @@ export const {
      * validation library or write your own validation function.
      *
      * Note that zod will strip out all the fields that are not defined in the
-     * schema, so to know exactly what is inside the idToken you can do:
-     * decodedIdTokenSchema: {
-     *   parse: (decodedIdToken)=> {
-     *     console.log(decodedIdToken);
-     *     return z.object({
-     *       sub: z.string(),
-     *       preferred_username: z.string()
-     *     }).parse(decodedIdToken);
-     *   }
-     * }
-     *
-     * If you want to specify the type of the decodedIdToken but do not care
-     * about validating the shape of the decoded idToken at runtime you can
-     * call `createUseOidc<DecodedIdToken>()` without passing any parameter.
-     *
-     * Note however that in most webapp you do not need to look into the JWT
-     * of the idToken on the frontend side, you usually obtain the user info
-     * by querying a GET /user endpoint with a authorization header
-     * like `Bearer <accessToken>`.
+     * schema, you can use `debugLogs: true` to get the raw decodedIdToken.
      */
     /*
     decodedIdTokenSchema: {
