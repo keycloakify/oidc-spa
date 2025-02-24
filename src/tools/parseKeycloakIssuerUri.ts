@@ -21,7 +21,11 @@ export function parseKeycloakIssuerUri(issuerUri: string):
           /** If defined starts with / and end with no `/` */
           kcHttpRelativePath: string | undefined;
           adminConsoleUrl: string;
-          getAccountUrl: (params: { clientId: string; backToAppFromAccountUrl: string }) => string;
+          getAccountUrl: (params: {
+              clientId: string;
+              backToAppFromAccountUrl: string;
+              locale?: string;
+          }) => string;
       } {
     const url = new URL(issuerUri);
 
@@ -38,10 +42,13 @@ export function parseKeycloakIssuerUri(issuerUri: string):
         realm,
         kcHttpRelativePath: kcHttpRelativePath === "" ? undefined : kcHttpRelativePath,
         adminConsoleUrl: `${url.origin}${kcHttpRelativePath}/admin/${realm}/console`,
-        getAccountUrl: ({ clientId, backToAppFromAccountUrl }) => {
+        getAccountUrl: ({ clientId, backToAppFromAccountUrl, locale }) => {
             const accountUrlObj = new URL(`${url.origin}${kcHttpRelativePath}/realms/${realm}/account`);
             accountUrlObj.searchParams.set("referrer", clientId);
             accountUrlObj.searchParams.set("referrer_uri", backToAppFromAccountUrl);
+            if (locale !== undefined) {
+                accountUrlObj.searchParams.set("kc_locale", locale);
+            }
             return accountUrlObj.href;
         }
     };
