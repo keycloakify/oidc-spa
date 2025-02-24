@@ -831,10 +831,8 @@ export async function createOidc_nonMemoized<
 
             globalContext.hasLogoutBeenCalled = true;
 
-            document.addEventListener("visibilitychange", () => {
-                if (document.visibilityState === "visible") {
-                    location.reload();
-                }
+            window.addEventListener("pageshow", () => {
+                location.reload();
             });
 
             const postLogoutRedirectUrl: string = (() => {

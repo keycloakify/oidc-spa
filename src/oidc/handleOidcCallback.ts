@@ -80,7 +80,7 @@ function handleOidcCallback_nonMemoized(): { isHandled: boolean } {
         stateData === undefined ||
         (stateData.context === "redirect" && stateData.hasBeenProcessedByCallback)
     ) {
-        reloadOnRestore();
+        reloadOnBfCacheNavigation();
 
         const historyMethod: "back" | "forward" = (() => {
             const backForwardTracker = readBackForwardTracker();
@@ -124,7 +124,7 @@ function handleOidcCallback_nonMemoized(): { isHandled: boolean } {
             parent.postMessage(authResponse, location.origin);
             break;
         case "redirect":
-            reloadOnRestore();
+            reloadOnBfCacheNavigation();
             markStateDataAsProcessedByCallback({ stateQueryParamValue });
             clearBackForwardTracker();
             sessionStorage.setItem(AUTH_RESPONSE_KEY, JSON.stringify(authResponse));
@@ -141,11 +141,9 @@ function handleOidcCallback_nonMemoized(): { isHandled: boolean } {
     return { isHandled };
 }
 
-function reloadOnRestore() {
-    document.addEventListener("visibilitychange", () => {
-        if (document.visibilityState === "visible") {
-            location.reload();
-        }
+function reloadOnBfCacheNavigation() {
+    window.addEventListener("pageshow", () => {
+        location.reload();
     });
 }
 

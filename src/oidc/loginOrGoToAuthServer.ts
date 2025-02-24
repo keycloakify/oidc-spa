@@ -87,10 +87,8 @@ export function createLoginOrGoToAuthServer(params: {
 
             bf_cache_handling: {
                 if (rest.doForceReloadOnBfCache) {
-                    document.removeEventListener("visibilitychange", () => {
-                        if (document.visibilityState === "visible") {
-                            location.reload();
-                        }
+                    window.removeEventListener("pageshow", () => {
+                        location.reload();
                     });
                     break bf_cache_handling;
                 }
@@ -98,44 +96,38 @@ export function createLoginOrGoToAuthServer(params: {
                 localStorage.setItem(LOCAL_STORAGE_KEY_TO_CLEAR_WHEN_RETURNING_OIDC_LOGGED_IN, "true");
 
                 const callback = () => {
-                    if (document.visibilityState === "visible") {
-                        document.removeEventListener("visibilitychange", callback);
+                    window.removeEventListener("pageshow", callback);
 
-                        log?.(
-                            "We came back from the login pages and the state of the app has been restored"
-                        );
+                    log?.(
+                        "We came back from the login pages and the state of the app has been restored"
+                    );
 
-                        if (rest.doNavigateBackToLastPublicUrlIfTheTheUserNavigateBack) {
-                            if (lastPublicUrl !== undefined) {
-                                log?.(`Loading last public route: ${lastPublicUrl}`);
-                                window.location.href = lastPublicUrl;
-                            } else {
-                                log?.("We don't know the last public route, navigating back in history");
-                                window.history.back();
-                            }
+                    if (rest.doNavigateBackToLastPublicUrlIfTheTheUserNavigateBack) {
+                        if (lastPublicUrl !== undefined) {
+                            log?.(`Loading last public route: ${lastPublicUrl}`);
+                            window.location.href = lastPublicUrl;
                         } else {
-                            log?.("The current page doesn't require auth...");
+                            log?.("We don't know the last public route, navigating back in history");
+                            window.history.back();
+                        }
+                    } else {
+                        log?.("The current page doesn't require auth...");
 
-                            if (
-                                localStorage.getItem(
-                                    LOCAL_STORAGE_KEY_TO_CLEAR_WHEN_RETURNING_OIDC_LOGGED_IN
-                                ) === null
-                            ) {
-                                log?.("but the user is now authenticated, reloading the page");
-                                location.reload();
-                            } else {
-                                log?.(
-                                    "and the user doesn't seem to be authenticated, avoiding a reload"
-                                );
-                                globalContext.hasLoginBeenCalled = false;
-                            }
+                        if (
+                            localStorage.getItem(
+                                LOCAL_STORAGE_KEY_TO_CLEAR_WHEN_RETURNING_OIDC_LOGGED_IN
+                            ) === null
+                        ) {
+                            log?.("but the user is now authenticated, reloading the page");
+                            location.reload();
+                        } else {
+                            log?.("and the user doesn't seem to be authenticated, avoiding a reload");
+                            globalContext.hasLoginBeenCalled = false;
                         }
                     }
                 };
 
-                log?.("Start listening to visibility change event");
-
-                document.addEventListener("visibilitychange", callback);
+                window.addEventListener("pageshow", callback);
             }
         }
 
