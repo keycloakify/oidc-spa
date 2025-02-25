@@ -9,13 +9,17 @@ export function oidcClientTsUserToTokens<DecodedIdToken extends Record<string, u
     decodedIdTokenSchema?: { parse: (data: unknown) => DecodedIdToken };
     __unsafe_useIdTokenAsAccessToken: boolean;
     decodedIdToken_previous: DecodedIdToken | undefined;
+    log: typeof console.log | undefined;
 }): Oidc.Tokens<DecodedIdToken> {
     const {
         oidcClientTsUser,
         decodedIdTokenSchema,
         __unsafe_useIdTokenAsAccessToken,
-        decodedIdToken_previous
+        decodedIdToken_previous,
+        log
     } = params;
+
+    const isFirstInit = decodedIdToken_previous === undefined;
 
     const accessToken = oidcClientTsUser.access_token;
 
@@ -70,8 +74,27 @@ export function oidcClientTsUserToTokens<DecodedIdToken extends Record<string, u
     const decodedIdToken = (() => {
         let decodedIdToken = decodeJwt(idToken) as DecodedIdToken;
 
+        if (isFirstInit) {
+            log?.(
+                [
+                    `Decoded ID token`,
+                    decodedIdTokenSchema === undefined ? "" : " before `decodedIdTokenSchema.parse()`\n",
+                    JSON.stringify(decodedIdToken, null, 2)
+                ].join("")
+            );
+        }
+
         if (decodedIdTokenSchema !== undefined) {
             decodedIdToken = decodedIdTokenSchema.parse(decodedIdToken);
+
+            if (isFirstInit) {
+                log?.(
+                    [
+                        "Decoded ID token after `decodedIdTokenSchema.parse()`\n",
+                        JSON.stringify(decodedIdToken, null, 2)
+                    ].join("")
+                );
+            }
         }
 
         if (
@@ -104,19 +127,34 @@ export function oidcClientTsUserToTokens<DecodedIdToken extends Record<string, u
         decodedIdToken
     };
 
-    if (refreshToken === undefined) {
-        return id<Oidc.Tokens.WithoutRefreshToken<DecodedIdToken>>({
-            ...tokens_common,
-            hasRefreshToken: false
-        });
-    } else {
-        return id<Oidc.Tokens.WithRefreshToken<DecodedIdToken>>({
-            ...tokens_common,
-            hasRefreshToken: true,
-            refreshToken,
-            refreshTokenExpirationTime
-        });
+    const tokens: Oidc.Tokens<DecodedIdToken> =
+        refreshToken === undefined
+            ? id<Oidc.Tokens.WithoutRefreshToken<DecodedIdToken>>({
+                  ...tokens_common,
+                  hasRefreshToken: false
+              })
+            : id<Oidc.Tokens.WithRefreshToken<DecodedIdToken>>({
+                  ...tokens_common,
+                  hasRefreshToken: true,
+                  refreshToken,
+                  refreshTokenExpirationTime
+              });
+
+    if (
+        isFirstInit &&
+        tokens.hasRefreshToken &&
+        tokens.refreshTokenExpirationTime !== undefined &&
+        tokens.refreshTokenExpirationTime < tokens.accessTokenExpirationTime
+    ) {
+        console.warn(
+            [
+                "The OIDC refresh token shorter than the one of the access token.",
+                "This is very unusual and probably a misconfiguration."
+            ].join(" ")
+        );
     }
+
+    return tokens;
 }
 
 export function getMsBeforeExpiration(tokens: Oidc.Tokens): number {

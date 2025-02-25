@@ -668,94 +668,9 @@ export async function createOidc_nonMemoized<
 
         // NOTE: The user is not logged in.
         return undefined;
-    })().then(result => {
-        if (result === undefined || result instanceof Error) {
-            if (getPersistedAuthState({ configId }) !== "explicitly logged out") {
-                persistAuthState({ configId, state: undefined });
-            }
+    })();
 
-            toCallBeforeReturningOidcNotLoggedIn();
-
-            return result;
-        }
-
-        const { oidcClientTsUser, backFromAuthServer } = result;
-
-        log_real_decoded_id_token: {
-            if (log === undefined) {
-                break log_real_decoded_id_token;
-            }
-            const idToken = oidcClientTsUser.id_token;
-
-            if (idToken === undefined) {
-                break log_real_decoded_id_token;
-            }
-
-            const decodedIdToken = decodeJwt(idToken);
-
-            log(
-                [
-                    `Decoded ID token`,
-                    decodedIdTokenSchema === undefined ? "" : " before `decodedIdTokenSchema.parse()`\n",
-                    JSON.stringify(decodedIdToken, null, 2)
-                ].join("")
-            );
-
-            if (decodedIdTokenSchema === undefined) {
-                break log_real_decoded_id_token;
-            }
-
-            log(
-                [
-                    "Decoded ID token after `decodedIdTokenSchema.parse()`\n",
-                    JSON.stringify(decodedIdTokenSchema.parse(decodedIdToken), null, 2)
-                ].join("")
-            );
-        }
-
-        const tokens = oidcClientTsUserToTokens({
-            oidcClientTsUser,
-            decodedIdTokenSchema,
-            __unsafe_useIdTokenAsAccessToken,
-            decodedIdToken_previous: undefined
-        });
-
-        if (
-            tokens.hasRefreshToken &&
-            tokens.refreshTokenExpirationTime !== undefined &&
-            tokens.refreshTokenExpirationTime < tokens.accessTokenExpirationTime
-        ) {
-            console.warn(
-                [
-                    "The OIDC refresh token shorter than the one of the access token.",
-                    "This is very unusual and probably a misconfiguration.",
-                    `Check your oidc server configuration for ${issuerUri}:${clientId} `
-                ].join(" ")
-            );
-        }
-
-        {
-            if (getPersistedAuthState({ configId }) !== undefined) {
-                persistAuthState({ configId, state: undefined });
-            }
-
-            if (!areThirdPartyCookiesAllowed) {
-                persistAuthState({
-                    configId,
-                    state: {
-                        stateDescription: "logged in",
-                        untilTime: currentTokens.refreshTokenExpirationTime
-                    }
-                });
-            }
-        }
-
-        toCallBeforeReturningOidcLoggedIn();
-
-        return { tokens, backFromAuthServer };
-    });
-
-    const common: Oidc.Common = {
+    const oidc_common: Oidc.Common = {
         params: {
             issuerUri,
             clientId
@@ -766,6 +681,12 @@ export async function createOidc_nonMemoized<
         if (!(resultOfLoginProcess instanceof Error) && resultOfLoginProcess !== undefined) {
             break not_loggedIn_case;
         }
+
+        if (getPersistedAuthState({ configId }) !== "explicitly logged out") {
+            persistAuthState({ configId, state: undefined });
+        }
+
+        toCallBeforeReturningOidcNotLoggedIn();
 
         const oidc_notLoggedIn: Oidc.NotLoggedIn = (() => {
             if (resultOfLoginProcess instanceof Error) {
@@ -795,7 +716,7 @@ export async function createOidc_nonMemoized<
                 );
 
                 return id<Oidc.NotLoggedIn>({
-                    ...common,
+                    ...oidc_common,
                     isUserLoggedIn: false,
                     login: async () => {
                         alert("Authentication is currently unavailable. Please try again later.");
@@ -809,7 +730,7 @@ export async function createOidc_nonMemoized<
                 log?.("User not logged in");
 
                 return id<Oidc.NotLoggedIn>({
-                    ...common,
+                    ...oidc_common,
                     isUserLoggedIn: false,
                     login: ({
                         doesCurrentHrefRequiresAuth,
@@ -842,7 +763,31 @@ export async function createOidc_nonMemoized<
 
     log?.("User is logged in");
 
-    let currentTokens = resultOfLoginProcess.tokens;
+    let currentTokens = oidcClientTsUserToTokens({
+        oidcClientTsUser: resultOfLoginProcess.oidcClientTsUser,
+        decodedIdTokenSchema,
+        __unsafe_useIdTokenAsAccessToken,
+        decodedIdToken_previous: undefined,
+        log
+    });
+
+    {
+        if (getPersistedAuthState({ configId }) !== undefined) {
+            persistAuthState({ configId, state: undefined });
+        }
+
+        if (!areThirdPartyCookiesAllowed) {
+            persistAuthState({
+                configId,
+                state: {
+                    stateDescription: "logged in",
+                    untilTime: currentTokens.refreshTokenExpirationTime
+                }
+            });
+        }
+    }
+
+    toCallBeforeReturningOidcLoggedIn();
 
     const autoLogoutCountdownTickCallbacks = new Set<
         (params: { secondsLeft: number | undefined }) => void
@@ -851,7 +796,7 @@ export async function createOidc_nonMemoized<
     const onTokenChanges = new Set<(tokens: Oidc.Tokens<DecodedIdToken>) => void>();
 
     const oidc_loggedIn = id<Oidc.LoggedIn<DecodedIdToken>>({
-        ...common,
+        ...oidc_common,
         isUserLoggedIn: true,
         getTokens: () => currentTokens,
         getTokens_next: async () => {
@@ -1000,7 +945,8 @@ export async function createOidc_nonMemoized<
                     oidcClientTsUser,
                     decodedIdTokenSchema,
                     __unsafe_useIdTokenAsAccessToken,
-                    decodedIdToken_previous: currentTokens.decodedIdToken
+                    decodedIdToken_previous: currentTokens.decodedIdToken,
+                    log
                 });
 
                 if (getPersistedAuthState({ configId }) !== undefined) {
