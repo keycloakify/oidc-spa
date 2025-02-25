@@ -78,8 +78,17 @@ function createStoreInSessionStorageAndScheduleRemovalInMemoryItem(params: {
     return inMemoryItem;
 }
 
-type EphemeralSessionStorage = Storage & {
-    enableEphemeralPersistence: () => void;
+export type EphemeralSessionStorage = {
+    // `Storage` methods, we don't use the type directly because it has [name: string]: any;
+    readonly length: number;
+    clear(): void;
+    getItem(key: string): string | null;
+    key(index: number): string | null;
+    removeItem(key: string): void;
+    setItem(key: string, value: string): void;
+
+    // Custom method
+    persistCurrentStateAndSubsequentChanges: () => void;
 };
 
 export function createEphemeralSessionStorage(params: {
@@ -125,11 +134,7 @@ export function createEphemeralSessionStorage(params: {
     let isPersistenceEnabled = false;
 
     const storage: EphemeralSessionStorage = {
-        enableEphemeralPersistence: () => {
-            if (isPersistenceEnabled) {
-                return;
-            }
-
+        persistCurrentStateAndSubsequentChanges: () => {
             isPersistenceEnabled = true;
 
             for (let i = 0; i < storage.length; i++) {

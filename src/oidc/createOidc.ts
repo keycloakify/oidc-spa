@@ -129,7 +129,7 @@ declare global {
             prOidcByConfigId: Map<string, Promise<Oidc<any>>>;
             evtAuthResponseHandled: Evt<void>;
             hasLogoutBeenCalled: boolean;
-            evtInstantiationWithNonAllowedThirdPartyCookies: Evt<void>;
+            evtRequestToPersistTokens: Evt<{ configIdOfInstancePostingTheRequest: string }>;
             prLoginProcessOngoingByConfigId: Map<string, Promise<void>>;
         };
     }
@@ -139,7 +139,7 @@ window[GLOBAL_CONTEXT_KEY] ??= {
     prOidcByConfigId: new Map(),
     evtAuthResponseHandled: createEvt<void>(),
     hasLogoutBeenCalled: false,
-    evtInstantiationWithNonAllowedThirdPartyCookies: createEvt<void>(),
+    evtRequestToPersistTokens: createEvt(),
     prLoginProcessOngoingByConfigId: new Map()
 };
 
@@ -347,19 +347,21 @@ export async function createOidc_nonMemoized<
                     sessionStorageTtlMs: 3 * 60_000
                 });
 
-                const { evtInstantiationWithNonAllowedThirdPartyCookies } = globalContext;
+                const { evtRequestToPersistTokens } = globalContext;
 
-                if (evtInstantiationWithNonAllowedThirdPartyCookies.postCount !== 0) {
-                    storage.enableEphemeralPersistence();
-                    evtInstantiationWithNonAllowedThirdPartyCookies.post();
-                } else {
-                    const { unsubscribe } = evtInstantiationWithNonAllowedThirdPartyCookies.subscribe(
-                        () => {
-                            unsubscribe();
-                            storage.enableEphemeralPersistence();
-                        }
-                    );
+                evtRequestToPersistTokens.subscribe(({ configIdOfInstancePostingTheRequest }) => {
+                    if (configIdOfInstancePostingTheRequest === configId) {
+                        return;
+                    }
+
+                    storage.persistCurrentStateAndSubsequentChanges();
+                });
+
+                if (evtRequestToPersistTokens.postCount !== 0) {
+                    storage.persistCurrentStateAndSubsequentChanges();
                 }
+
+                evtRequestToPersistTokens.post({ configIdOfInstancePostingTheRequest: configId });
 
                 return storage;
             })()
@@ -933,6 +935,10 @@ export async function createOidc_nonMemoized<
 
                             if (oidcClientTsUser_scope === undefined) {
                                 persistAuthState({ configId, state: undefined });
+
+                                globalContext.evtRequestToPersistTokens.post({
+                                    configIdOfInstancePostingTheRequest: configId
+                                });
 
                                 await loginOrGoToAuthServer({
                                     action: "login",
