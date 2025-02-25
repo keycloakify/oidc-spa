@@ -235,7 +235,7 @@ export function createOidcReactApi_dependencyInjection<
             return unsubscribe;
         }, [oidc]);
 
-        const refTokensState = useRef<{
+        const tokensState_ref = useRef<{
             isConsumerReadingTokens: boolean;
             tokens: Oidc.Tokens<DecodedIdToken> | undefined;
         }>({
@@ -243,23 +243,17 @@ export function createOidcReactApi_dependencyInjection<
             tokens: undefined
         });
 
-        const tokensPropertyDescriptorGetter = () => {
-            const tokenState = refTokensState.current;
-            tokenState.isConsumerReadingTokens = true;
-            return tokenState.tokens;
-        };
-
         useEffect(() => {
             if (!oidc.isUserLoggedIn) {
                 return;
             }
 
             const updateTokens = (tokens: Oidc.Tokens<DecodedIdToken>) => {
-                if (tokens === refTokensState.current.tokens) {
+                if (tokens === tokensState_ref.current.tokens) {
                     return;
                 }
 
-                const tokenState = refTokensState.current;
+                const tokenState = tokensState_ref.current;
 
                 tokenState.tokens = tokens;
 
@@ -305,7 +299,11 @@ export function createOidcReactApi_dependencyInjection<
             isUserLoggedIn: true,
             oidcTokens: oidc.getTokens(),
             decodedIdToken: oidc.getDecodedIdToken(),
-            tokens: null as any,
+            get tokens() {
+                const tokensState = tokensState_ref.current;
+                tokensState.isConsumerReadingTokens = true;
+                return tokensState.tokens;
+            },
             logout: oidc.logout,
             renewTokens: oidc.renewTokens,
             subscribeToAutoLogoutCountdown: oidc.subscribeToAutoLogoutCountdown,
@@ -313,12 +311,6 @@ export function createOidcReactApi_dependencyInjection<
             isNewBrowserSession: oidc.isNewBrowserSession,
             backFromAuthServer: oidc.backFromAuthServer
         };
-
-        Object.defineProperty(oidcReact, "tokens", {
-            get: tokensPropertyDescriptorGetter,
-            enumerable: true,
-            configurable: true
-        });
 
         return oidcReact;
     }

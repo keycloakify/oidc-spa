@@ -1,26 +1,45 @@
-import { createStatefulObservable } from "../tools/StatefulObservable";
+import { createEvt, type NonPostableEvt } from "../tools/Evt";
 import { subscribeToUserInteraction } from "../tools/subscribeToUserInteraction";
 import { assert, is, id } from "../vendor/frontend/tsafe";
 import { setTimeout, clearTimeout } from "../tools/workerTimers";
 
-const GLOBAL_CONTEXT_KEY = "__oidc-spa.createIsUserActive.globalContext";
+const GLOBAL_CONTEXT_KEY = "__oidc-spa.evtIsUserActive.globalContext";
 
 declare global {
     interface Window {
         [GLOBAL_CONTEXT_KEY]: {
             appInstanceId: string;
+            evtIsUserActiveBySessionId: Map<string, NonPostableEvt<boolean>>;
         };
     }
 }
 
 window[GLOBAL_CONTEXT_KEY] ??= {
-    appInstanceId: Math.random().toString(36).slice(2)
+    appInstanceId: Math.random().toString(36).slice(2),
+    evtIsUserActiveBySessionId: new Map()
 };
 
 const globalContext = window[GLOBAL_CONTEXT_KEY];
 
-export function create$isUserActive(params: { configId: string; sessionId: string | undefined }) {
+export function createEvtIsUserActive(params: {
+    configId: string;
+    sessionId: string | undefined;
+}): NonPostableEvt<boolean> {
     const { configId, sessionId } = params;
+
+    use_existing_instance: {
+        if (sessionId === undefined) {
+            break use_existing_instance;
+        }
+
+        const evtIsUserActive = globalContext.evtIsUserActiveBySessionId.get(sessionId);
+
+        if (evtIsUserActive === undefined) {
+            break use_existing_instance;
+        }
+
+        return evtIsUserActive;
+    }
 
     const { notifyOtherTabsOfUserInteraction, subscribeToUserInteractionOnOtherTabs } = (() => {
         type Message = {
@@ -54,12 +73,14 @@ export function create$isUserActive(params: { configId: string; sessionId: strin
         return { notifyOtherTabsOfUserInteraction, subscribeToUserInteractionOnOtherTabs };
     })();
 
-    const $isUserActive = createStatefulObservable(() => true);
+    const evtIsUserActive = createEvt<boolean>();
+    let isUserActive = true;
 
     const scheduleSetInactive = () => {
         const timer = setTimeout(() => {
-            assert($isUserActive.current);
-            $isUserActive.current = false;
+            assert(isUserActive);
+            isUserActive = false;
+            evtIsUserActive.post(isUserActive);
         }, 5_000);
         return () => {
             clearTimeout(timer);
@@ -79,8 +100,9 @@ export function create$isUserActive(params: { configId: string; sessionId: strin
             notifyOtherTabsOfUserInteraction();
         }
 
-        if (!$isUserActive.current) {
-            $isUserActive.current = true;
+        if (!isUserActive) {
+            isUserActive = true;
+            evtIsUserActive.post(isUserActive);
         }
     };
 
@@ -91,5 +113,9 @@ export function create$isUserActive(params: { configId: string; sessionId: strin
 
     subscribeToUserInteractionOnOtherTabs(() => onUserActivity({ isInteractionOnCurrentTab: false }));
 
-    return $isUserActive;
+    if (sessionId !== undefined) {
+        globalContext.evtIsUserActiveBySessionId.set(sessionId, evtIsUserActive);
+    }
+
+    return evtIsUserActive;
 }

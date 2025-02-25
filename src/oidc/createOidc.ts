@@ -8,9 +8,8 @@ import { id, assert, is, type Equals, typeGuard } from "../vendor/frontend/tsafe
 import { setTimeout, clearTimeout } from "../tools/workerTimers";
 import { Deferred } from "../tools/Deferred";
 import { decodeJwt } from "../tools/decodeJwt";
-import { create$isUserActive } from "./isUserActive";
+import { createEvtIsUserActive } from "./evtIsUserActive";
 import { createStartCountdown } from "../tools/startCountdown";
-import type { StatefulObservable } from "../tools/StatefulObservable";
 import { toHumanReadableDuration } from "../tools/toHumanReadableDuration";
 import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";
 import {
@@ -32,10 +31,12 @@ import { loginSilent, authResponseToUrl } from "./loginSilent";
 import { handleOidcCallback, AUTH_RESPONSE_KEY } from "./handleOidcCallback";
 import { getPersistedAuthState, persistAuthState } from "./persistedAuthState";
 import type { Oidc } from "./Oidc";
-import { type AwaitableEventEmitter, createAwaitableEventEmitter } from "../tools/AwaitableEventEmitter";
+import { createEvt, type Evt } from "../tools/Evt";
 import { getHaveSharedParentDomain } from "../tools/haveSharedParentDomain";
 import { createLoginOrGoToAuthServer } from "./loginOrGoToAuthServer";
 import { createEphemeralSessionStorage } from "../tools/ephemeralSessionStorage";
+
+handleOidcCallback();
 
 // NOTE: Replaced at build time
 const VERSION = "{{OIDC_SPA_VERSION}}";
@@ -120,26 +121,24 @@ export type ParamsOfCreateOidc<
     __unsafe_useIdTokenAsAccessToken?: boolean;
 };
 
-handleOidcCallback();
-
 const GLOBAL_CONTEXT_KEY = "__oidc-spa.createOidc.globalContext";
 
 declare global {
     interface Window {
         [GLOBAL_CONTEXT_KEY]: {
             prOidcByConfigId: Map<string, Promise<Oidc<any>>>;
-            evtAuthResponseHandled: AwaitableEventEmitter<void>;
-            $isUserActive: StatefulObservable<boolean> | undefined;
+            evtAuthResponseHandled: Evt<void>;
             hasLogoutBeenCalled: boolean;
+            evtInstantiationWithNonAllowedThirdPartyCookies: Evt<void>;
         };
     }
 }
 
 window[GLOBAL_CONTEXT_KEY] ??= {
     prOidcByConfigId: new Map(),
-    evtAuthResponseHandled: createAwaitableEventEmitter<void>(),
-    $isUserActive: undefined,
-    hasLogoutBeenCalled: false
+    evtAuthResponseHandled: createEvt<void>(),
+    hasLogoutBeenCalled: false,
+    evtInstantiationWithNonAllowedThirdPartyCookies: createEvt<void>()
 };
 
 const globalContext = window[GLOBAL_CONTEXT_KEY];
@@ -321,7 +320,7 @@ export async function createOidc_nonMemoized<
         }
     }
 
-    const isUserStorePersistent = !areThirdPartyCookiesAllowed;
+    let isUserStoreInMemoryOnly: boolean;
 
     const oidcClientTsUserManager = new OidcClientTsUserManager({
         stateQueryParamValue: stateQueryParamValue_instance,
@@ -334,11 +333,35 @@ export async function createOidc_nonMemoized<
         scope: Array.from(new Set(["openid", ...scopes])).join(" "),
         automaticSilentRenew: false,
         userStore: new WebStorageStateStore({
-            store: areThirdPartyCookiesAllowed
-                ? new InMemoryWebStorage()
-                : createEphemeralSessionStorage({
-                      sessionStorageTtlMs: 3 * 60_1000
-                  })
+            store: (() => {
+                if (areThirdPartyCookiesAllowed) {
+                    isUserStoreInMemoryOnly = true;
+                    return new InMemoryWebStorage();
+                }
+
+                isUserStoreInMemoryOnly = false;
+
+                const storage = createEphemeralSessionStorage({
+                    sessionStorageTtlMs: 3 * 60_000
+                });
+
+                const { evtInstantiationWithNonAllowedThirdPartyCookies } = globalContext;
+
+                if (evtInstantiationWithNonAllowedThirdPartyCookies.postCount !== 0) {
+                    storage.enableEphemeralPersistence();
+                } else {
+                    const { unsubscribe } = evtInstantiationWithNonAllowedThirdPartyCookies.subscribe(
+                        () => {
+                            unsubscribe();
+                            storage.enableEphemeralPersistence();
+                        }
+                    );
+                }
+
+                evtInstantiationWithNonAllowedThirdPartyCookies.post();
+
+                return storage;
+            })()
         }),
         stateStore: new WebStorageStateStore({ store: localStorage, prefix: STATE_STORE_KEY_PREFIX }),
         client_secret: __unsafe_clientSecret
@@ -505,7 +528,7 @@ export async function createOidc_nonMemoized<
         }
 
         restore_from_session_storage: {
-            if (!isUserStorePersistent) {
+            if (isUserStoreInMemoryOnly) {
                 break restore_from_session_storage;
             }
 
@@ -607,6 +630,8 @@ export async function createOidc_nonMemoized<
                             authResponse_error === "account_selection_required"))
                 ) {
                     persistAuthState({ configId, state: undefined });
+
+                    // TODO: Aquire mutex
 
                     await loginOrGoToAuthServer({
                         action: "login",
@@ -1212,14 +1237,12 @@ export async function createOidc_nonMemoized<
 
         let stopCountdown: (() => void) | undefined = undefined;
 
-        if (globalContext.$isUserActive === undefined) {
-            globalContext.$isUserActive = create$isUserActive({
-                configId,
-                sessionId
-            });
-        }
+        const evtIsUserActive = createEvtIsUserActive({
+            configId,
+            sessionId
+        });
 
-        globalContext.$isUserActive.subscribe(isUserActive => {
+        evtIsUserActive.subscribe(isUserActive => {
             if (isUserActive) {
                 if (stopCountdown !== undefined) {
                     stopCountdown();

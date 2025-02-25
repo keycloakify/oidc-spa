@@ -78,7 +78,13 @@ function createStoreInSessionStorageAndScheduleRemovalInMemoryItem(params: {
     return inMemoryItem;
 }
 
-export function createEphemeralSessionStorage(params: { sessionStorageTtlMs: number }): Storage {
+type EphemeralSessionStorage = Storage & {
+    enableEphemeralPersistence: () => void;
+};
+
+export function createEphemeralSessionStorage(params: {
+    sessionStorageTtlMs: number;
+}): EphemeralSessionStorage {
     const { sessionStorageTtlMs } = params;
 
     const inMemoryItems: InMemoryItem[] = [];
@@ -117,11 +123,20 @@ export function createEphemeralSessionStorage(params: { sessionStorageTtlMs: num
         );
     }
 
-    const storage = {
+    let isEnabled = false;
+
+    const storage: EphemeralSessionStorage = {
+        enableEphemeralPersistence: () => {
+            if (isEnabled) {
+                return;
+            }
+
+            isEnabled = true;
+        },
         get length() {
             return inMemoryItems.length;
         },
-        key(index: number) {
+        key: index => {
             const inMemoryItem = inMemoryItems[index];
 
             if (inMemoryItem === undefined) {
@@ -130,7 +145,7 @@ export function createEphemeralSessionStorage(params: { sessionStorageTtlMs: num
 
             return inMemoryItem.key;
         },
-        removeItem(key: string) {
+        removeItem: key => {
             const inMemoryItem = inMemoryItems.find(item => item.key === key);
 
             if (inMemoryItem === undefined) {
@@ -143,21 +158,21 @@ export function createEphemeralSessionStorage(params: { sessionStorageTtlMs: num
 
             inMemoryItems.splice(index, 1);
         },
-        clear() {
+        clear: () => {
             for (let i = 0; i < storage.length; i++) {
                 const key = storage.key(i);
                 assert(key !== null);
                 storage.removeItem(key);
             }
         },
-        getItem(key: string) {
+        getItem: key => {
             const inMemoryItem = inMemoryItems.find(item => item.key === key);
             if (inMemoryItem === undefined) {
                 return null;
             }
             return inMemoryItem.value;
         },
-        setItem(key: string, value: string) {
+        setItem: (key, value) => {
             let existingInMemoryItemIndex: number | undefined = undefined;
 
             {

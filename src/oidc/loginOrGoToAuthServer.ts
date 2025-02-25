@@ -9,14 +9,12 @@ declare global {
     interface Window {
         [GLOBAL_CONTEXT_KEY]: {
             hasLoginBeenCalled: boolean;
-            URL_real: typeof URL;
         };
     }
 }
 
 window[GLOBAL_CONTEXT_KEY] ??= {
-    hasLoginBeenCalled: false,
-    URL_real: window.URL
+    hasLoginBeenCalled: false
 };
 
 const globalContext = window[GLOBAL_CONTEXT_KEY];
