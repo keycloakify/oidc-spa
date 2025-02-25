@@ -109,29 +109,39 @@ export function createEphemeralSessionStorage(params: {
 
         const remainingTtlMs = sessionStorageItem_parsed.expiresAtTime - Date.now();
 
+        sessionStorage.removeItem(sessionStorageKey);
+
         if (remainingTtlMs <= 0) {
-            sessionStorage.removeItem(sessionStorageKey);
             continue;
         }
 
-        inMemoryItems.push(
-            createStoreInSessionStorageAndScheduleRemovalInMemoryItem({
-                key: sessionStorageKey.slice(SESSION_STORAGE_PREFIX.length),
-                value: sessionStorageItem_parsed.value,
-                remainingTtlMs
-            })
-        );
+        inMemoryItems.push({
+            key: sessionStorageKey.slice(SESSION_STORAGE_PREFIX.length),
+            value: sessionStorageItem_parsed.value,
+            removeFromSessionStorage: undefined
+        });
     }
 
-    let isEnabled = false;
+    let isPersistenceEnabled = false;
 
     const storage: EphemeralSessionStorage = {
         enableEphemeralPersistence: () => {
-            if (isEnabled) {
+            if (isPersistenceEnabled) {
                 return;
             }
 
-            isEnabled = true;
+            isPersistenceEnabled = true;
+
+            for (let i = 0; i < storage.length; i++) {
+                const key = storage.key(i);
+                assert(key !== null);
+
+                const value = storage.getItem(key);
+
+                assert(value !== null);
+
+                storage.setItem(key, value);
+            }
         },
         get length() {
             return inMemoryItems.length;
@@ -184,11 +194,17 @@ export function createEphemeralSessionStorage(params: {
                 }
             }
 
-            const inMemoryItem_new = createStoreInSessionStorageAndScheduleRemovalInMemoryItem({
-                key,
-                value,
-                remainingTtlMs: sessionStorageTtlMs
-            });
+            const inMemoryItem_new = isPersistenceEnabled
+                ? createStoreInSessionStorageAndScheduleRemovalInMemoryItem({
+                      key,
+                      value,
+                      remainingTtlMs: sessionStorageTtlMs
+                  })
+                : id<InMemoryItem>({
+                      key,
+                      value,
+                      removeFromSessionStorage: undefined
+                  });
 
             if (existingInMemoryItemIndex !== undefined) {
                 inMemoryItems[existingInMemoryItemIndex] = inMemoryItem_new;
