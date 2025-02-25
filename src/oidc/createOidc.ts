@@ -367,16 +367,15 @@ export async function createOidc_nonMemoized<
         client_secret: __unsafe_clientSecret
     });
 
-    const {
-        loginOrGoToAuthServer,
-        toCallBeforeReturningOidcLoggedIn,
-        toCallBeforeReturningOidcNotLoggedIn
-    } = createLoginOrGoToAuthServer({
+    const evtIsUserLoggedIn = createEvt<boolean>();
+
+    const { loginOrGoToAuthServer } = createLoginOrGoToAuthServer({
         configId,
         oidcClientTsUserManager,
         getExtraQueryParams,
         transformUrlBeforeRedirect,
         homeAndCallbackUrl,
+        evtIsUserLoggedIn,
         log
     });
 
@@ -682,11 +681,11 @@ export async function createOidc_nonMemoized<
             break not_loggedIn_case;
         }
 
+        evtIsUserLoggedIn.post(false);
+
         if (getPersistedAuthState({ configId }) !== "explicitly logged out") {
             persistAuthState({ configId, state: undefined });
         }
-
-        toCallBeforeReturningOidcNotLoggedIn();
 
         const oidc_notLoggedIn: Oidc.NotLoggedIn = (() => {
             if (resultOfLoginProcess instanceof Error) {
@@ -763,6 +762,8 @@ export async function createOidc_nonMemoized<
 
     log?.("User is logged in");
 
+    evtIsUserLoggedIn.post(true);
+
     let currentTokens = oidcClientTsUserToTokens({
         oidcClientTsUser: resultOfLoginProcess.oidcClientTsUser,
         decodedIdTokenSchema,
@@ -786,8 +787,6 @@ export async function createOidc_nonMemoized<
             });
         }
     }
-
-    toCallBeforeReturningOidcLoggedIn();
 
     const autoLogoutCountdownTickCallbacks = new Set<
         (params: { secondsLeft: number | undefined }) => void

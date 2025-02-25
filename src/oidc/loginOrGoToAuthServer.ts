@@ -2,6 +2,7 @@ import type { UserManager as OidcClientTsUserManager } from "../vendor/frontend/
 import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";
 import { id, assert, type Equals } from "../vendor/frontend/tsafe";
 import type { StateData } from "./StateData";
+import type { NonPostableEvt } from "../tools/Evt";
 
 const GLOBAL_CONTEXT_KEY = "__oidc-spa.loginOrGoToAuthSever.globalContext";
 
@@ -46,6 +47,7 @@ export function createLoginOrGoToAuthServer(params: {
     getExtraQueryParams: (() => Record<string, string>) | undefined;
     transformUrlBeforeRedirect: ((url: string) => string) | undefined;
     homeAndCallbackUrl: string;
+    evtIsUserLoggedIn: NonPostableEvt<boolean>;
     log: typeof console.log | undefined;
 }) {
     const {
@@ -54,10 +56,11 @@ export function createLoginOrGoToAuthServer(params: {
         getExtraQueryParams,
         transformUrlBeforeRedirect,
         homeAndCallbackUrl,
+        evtIsUserLoggedIn,
         log
     } = params;
 
-    const LOCAL_STORAGE_KEY_TO_CLEAR_WHEN_RETURNING_OIDC_LOGGED_IN = `oidc-spa.login-redirect-initiated:${configId}`;
+    const LOCAL_STORAGE_KEY_TO_CLEAR_WHEN_USER_LOGGED_IN = `oidc-spa.login-redirect-initiated:${configId}`;
 
     let lastPublicUrl: string | undefined = undefined;
 
@@ -91,7 +94,7 @@ export function createLoginOrGoToAuthServer(params: {
                     break bf_cache_handling;
                 }
 
-                localStorage.setItem(LOCAL_STORAGE_KEY_TO_CLEAR_WHEN_RETURNING_OIDC_LOGGED_IN, "true");
+                localStorage.setItem(LOCAL_STORAGE_KEY_TO_CLEAR_WHEN_USER_LOGGED_IN, "true");
 
                 const callback = () => {
                     window.removeEventListener("pageshow", callback);
@@ -112,9 +115,7 @@ export function createLoginOrGoToAuthServer(params: {
                         log?.("The current page doesn't require auth...");
 
                         if (
-                            localStorage.getItem(
-                                LOCAL_STORAGE_KEY_TO_CLEAR_WHEN_RETURNING_OIDC_LOGGED_IN
-                            ) === null
+                            localStorage.getItem(LOCAL_STORAGE_KEY_TO_CLEAR_WHEN_USER_LOGGED_IN) === null
                         ) {
                             log?.("but the user is now authenticated, reloading the page");
                             location.reload();
@@ -237,21 +238,21 @@ export function createLoginOrGoToAuthServer(params: {
         return new Promise<never>(() => {});
     }
 
-    function toCallBeforeReturningOidcLoggedIn() {
-        localStorage.removeItem(LOCAL_STORAGE_KEY_TO_CLEAR_WHEN_RETURNING_OIDC_LOGGED_IN);
-    }
+    const { unsubscribe } = evtIsUserLoggedIn.subscribe(isLoggedIn => {
+        unsubscribe();
 
-    function toCallBeforeReturningOidcNotLoggedIn() {
-        const realPushState = history.pushState.bind(history);
-        history.pushState = function pushState(...args) {
-            lastPublicUrl = window.location.href;
-            return realPushState(...args);
-        };
-    }
+        if (isLoggedIn) {
+            localStorage.removeItem(LOCAL_STORAGE_KEY_TO_CLEAR_WHEN_USER_LOGGED_IN);
+        } else {
+            const realPushState = history.pushState.bind(history);
+            history.pushState = function pushState(...args) {
+                lastPublicUrl = window.location.href;
+                return realPushState(...args);
+            };
+        }
+    });
 
     return {
-        loginOrGoToAuthServer,
-        toCallBeforeReturningOidcLoggedIn,
-        toCallBeforeReturningOidcNotLoggedIn
+        loginOrGoToAuthServer
     };
 }
