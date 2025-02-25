@@ -669,11 +669,13 @@ export async function createOidc_nonMemoized<
         // NOTE: The user is not logged in.
         return undefined;
     })().then(result => {
-        if (result === undefined) {
-            return undefined;
-        }
+        if (result === undefined || result instanceof Error) {
+            if (getPersistedAuthState({ configId }) !== "explicitly logged out") {
+                persistAuthState({ configId, state: undefined });
+            }
 
-        if (result instanceof Error) {
+            toCallBeforeReturningOidcNotLoggedIn();
+
             return result;
         }
 
@@ -731,6 +733,24 @@ export async function createOidc_nonMemoized<
                 ].join(" ")
             );
         }
+
+        {
+            if (getPersistedAuthState({ configId }) !== undefined) {
+                persistAuthState({ configId, state: undefined });
+            }
+
+            if (!areThirdPartyCookiesAllowed) {
+                persistAuthState({
+                    configId,
+                    state: {
+                        stateDescription: "logged in",
+                        untilTime: currentTokens.refreshTokenExpirationTime
+                    }
+                });
+            }
+        }
+
+        toCallBeforeReturningOidcLoggedIn();
 
         return { tokens, backFromAuthServer };
     });
@@ -815,12 +835,6 @@ export async function createOidc_nonMemoized<
 
             assert<Equals<typeof resultOfLoginProcess, never>>(false);
         })();
-
-        if (getPersistedAuthState({ configId }) !== "explicitly logged out") {
-            persistAuthState({ configId, state: undefined });
-        }
-
-        toCallBeforeReturningOidcNotLoggedIn();
 
         // @ts-expect-error: We know what we're doing
         return oidc_notLoggedIn;
@@ -1254,24 +1268,6 @@ export async function createOidc_nonMemoized<
             }
         });
     }
-
-    {
-        if (getPersistedAuthState({ configId }) !== undefined) {
-            persistAuthState({ configId, state: undefined });
-        }
-
-        if (!areThirdPartyCookiesAllowed) {
-            persistAuthState({
-                configId,
-                state: {
-                    stateDescription: "logged in",
-                    untilTime: currentTokens.refreshTokenExpirationTime
-                }
-            });
-        }
-    }
-
-    toCallBeforeReturningOidcLoggedIn();
 
     return oidc_loggedIn;
 }
