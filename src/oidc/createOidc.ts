@@ -34,7 +34,7 @@ import type { Oidc } from "./Oidc";
 import { createEvt, type Evt } from "../tools/Evt";
 import { getHaveSharedParentDomain } from "../tools/haveSharedParentDomain";
 import { createLoginOrGoToAuthServer } from "./loginOrGoToAuthServer";
-import { createEphemeralSessionStorage } from "../tools/ephemeralSessionStorage";
+import { createEphemeralSessionStorage } from "../tools/EphemeralSessionStorage";
 
 handleOidcCallback();
 
@@ -351,6 +351,7 @@ export async function createOidc_nonMemoized<
 
                 if (evtInstantiationWithNonAllowedThirdPartyCookies.postCount !== 0) {
                     storage.enableEphemeralPersistence();
+                    evtInstantiationWithNonAllowedThirdPartyCookies.post();
                 } else {
                     const { unsubscribe } = evtInstantiationWithNonAllowedThirdPartyCookies.subscribe(
                         () => {
@@ -359,8 +360,6 @@ export async function createOidc_nonMemoized<
                         }
                     );
                 }
-
-                evtInstantiationWithNonAllowedThirdPartyCookies.post();
 
                 return storage;
             })()
