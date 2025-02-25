@@ -130,6 +130,7 @@ declare global {
             evtAuthResponseHandled: Evt<void>;
             hasLogoutBeenCalled: boolean;
             evtInstantiationWithNonAllowedThirdPartyCookies: Evt<void>;
+            prLoginProcessOngoingByConfigId: Map<string, Promise<void>>;
         };
     }
 }
@@ -138,7 +139,8 @@ window[GLOBAL_CONTEXT_KEY] ??= {
     prOidcByConfigId: new Map(),
     evtAuthResponseHandled: createEvt<void>(),
     hasLogoutBeenCalled: false,
-    evtInstantiationWithNonAllowedThirdPartyCookies: createEvt<void>()
+    evtInstantiationWithNonAllowedThirdPartyCookies: createEvt<void>(),
+    prLoginProcessOngoingByConfigId: new Map()
 };
 
 const globalContext = window[GLOBAL_CONTEXT_KEY];
@@ -380,6 +382,10 @@ export async function createOidc_nonMemoized<
     });
 
     const BROWSER_SESSION_NOT_FIRST_INIT_KEY = `oidc-spa.browser-session-not-first-init:${configId}`;
+
+    const dLoginProcessOngoing = new Deferred<void>();
+
+    globalContext.prLoginProcessOngoingByConfigId.set(configId, dLoginProcessOngoing.pr);
 
     const resultOfLoginProcess = await (async (): Promise<
         | undefined // User is currently not logged in
@@ -630,8 +636,17 @@ export async function createOidc_nonMemoized<
                 ) {
                     persistAuthState({ configId, state: undefined });
 
-                    // TODO: Aquire mutex
+                    dLoginProcessOngoing.resolve();
 
+                    {
+                        const prs = Array.from(globalContext.prLoginProcessOngoingByConfigId.entries())
+                            .filter(([configId]) => configId !== configId)
+                            .map(([, prLoginProcessOngoing]) => prLoginProcessOngoing);
+
+                        if (prs.length !== 0) {
+                            await Promise.all(prs);
+                        }
+                    }
                     await loginOrGoToAuthServer({
                         action: "login",
                         doForceReloadOnBfCache: true,
@@ -641,8 +656,6 @@ export async function createOidc_nonMemoized<
                         transformUrlBeforeRedirect_local: undefined,
                         doForceInteraction: false
                     });
-
-                    // NOTE: Never here
                 }
 
                 log?.(
@@ -668,6 +681,8 @@ export async function createOidc_nonMemoized<
         // NOTE: The user is not logged in.
         return undefined;
     })();
+
+    dLoginProcessOngoing.resolve();
 
     const oidc_common: Oidc.Common = {
         params: {

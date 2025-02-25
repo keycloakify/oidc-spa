@@ -117,7 +117,7 @@ export async function loginSilent(params: {
         })
         .then(
             oidcClientTsUser => {
-                assert(oidcClientTsUser !== null);
+                assert(oidcClientTsUser !== null, "oidcClientTsUser is not supposed to be null here");
 
                 clearTimeout(timeout);
 
