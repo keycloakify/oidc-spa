@@ -1,7 +1,7 @@
 // NOTE: Absolute imports are possible due to the following configuration:
 // - tsconfig.json: "baseUrl": "./src"
 // - vite.config.ts: usage of the "vite-tsconfig-paths" plugin
-import { getOidc, useOidc } from "oidc";
+import { useOidc, beforeLoadProtectedRoute } from "oidc";
 import { useMemo } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { decodeJwt } from "oidc-spa/tools/decodeJwt";
@@ -9,17 +9,7 @@ import { parseKeycloakIssuerUri } from "oidc-spa/tools/parseKeycloakIssuerUri";
 
 export const Route = createFileRoute("/protected")({
     component: ProtectedPage,
-    beforeLoad: async () => {
-        const oidc = await getOidc();
-
-        if (oidc.isUserLoggedIn) {
-            return;
-        }
-
-        await oidc.login({
-            doesCurrentHrefRequiresAuth: true
-        });
-    }
+    beforeLoad: beforeLoadProtectedRoute
 });
 
 function ProtectedPage() {

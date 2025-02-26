@@ -76,6 +76,17 @@ export const {
     debugLogs: true
 });
 
+export async function beforeLoadProtectedRoute() {
+    const oidc = await getOidc();
+
+    if (!oidc.isUserLoggedIn) {
+        await oidc.login({
+            doesCurrentHrefRequiresAuth: true
+        });
+        // Never here
+    }
+}
+
 // Using the mock adapter:
 // To use this, just remove the code above and uncomment the code below.
 // The mock oidc adapter will be enabled if the OIDC_ISSUER environment variable is not set.
