@@ -1095,7 +1095,11 @@ export async function createOidc_nonMemoized<
     }
 
     (function scheduleRenew() {
-        const login_dueToExpiration = () => {
+        const login_dueToExpiration = async () => {
+            await waitForAllOtherOngoingLoginOrRefreshProcessesToComplete({
+                prUnlock: new Promise<never>(() => {})
+            });
+
             persistAuthState({ configId, state: undefined });
 
             return loginOrGoToAuthServer({
