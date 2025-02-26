@@ -1079,8 +1079,17 @@ export async function createOidc_nonMemoized<
             sessionId
         });
 
-        prOtherTabLogout.then(({ redirectUrl }) => {
+        prOtherTabLogout.then(async ({ redirectUrl }) => {
             log?.(`Other tab has logged out, redirecting to ${redirectUrl}`);
+
+            await waitForAllOtherOngoingLoginOrRefreshProcessesToComplete({
+                prUnlock: new Promise<never>(() => {})
+            });
+
+            window.addEventListener("pageshow", () => {
+                location.reload();
+            });
+
             window.location.href = redirectUrl;
         });
     }
