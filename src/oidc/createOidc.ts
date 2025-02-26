@@ -842,7 +842,11 @@ export async function createOidc_nonMemoized<
                         // NOTE: Not sure if it can throw
                     }
 
-                    // TODO: Notify logout to other tabs
+                    notifyOtherTabsOfLogout({
+                        configId,
+                        redirectUrl: postLogoutRedirectUrl,
+                        sessionId
+                    });
 
                     window.location.href = postLogoutRedirectUrl;
                 } else {
