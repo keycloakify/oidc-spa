@@ -15,32 +15,24 @@ type DecodedIdToken = z.infer<typeof decodedIdTokenSchema>;
 
 const homeUrl = import.meta.env.BASE_URL;
 
-const google = createReactOidc(async () => {
-    await new Promise(resolve => setTimeout(resolve, 0));
-
-    return {
-        issuerUri: import.meta.env.VITE_OIDC_ISSUER_URI_GOOGLE,
-        clientId: import.meta.env.VITE_OIDC_CLIENT_ID_GOOGLE,
-        __unsafe_clientSecret: import.meta.env.VITE_OIDC_CLIENT_SECRET_GOOGLE,
-        __unsafe_useIdTokenAsAccessToken: true,
-        scopes: import.meta.env.VITE_OIDC_SCOPE_GOOGLE.split(" "),
-        homeUrl,
-        decodedIdTokenSchema,
-        debugLogs: true
-    };
+const google = createReactOidc({
+    issuerUri: import.meta.env.VITE_OIDC_ISSUER_URI_GOOGLE,
+    clientId: import.meta.env.VITE_OIDC_CLIENT_ID_GOOGLE,
+    __unsafe_clientSecret: import.meta.env.VITE_OIDC_CLIENT_SECRET_GOOGLE,
+    __unsafe_useIdTokenAsAccessToken: true,
+    scopes: import.meta.env.VITE_OIDC_SCOPE_GOOGLE.split(" "),
+    homeUrl,
+    decodedIdTokenSchema,
+    debugLogs: true
 });
 
-const microsoft = createReactOidc(async () => {
-    await new Promise(resolve => setTimeout(resolve, 0));
-
-    return {
-        issuerUri: import.meta.env.VITE_OIDC_ISSUER_URI_MICROSOFT,
-        clientId: import.meta.env.VITE_OIDC_CLIENT_ID_MICROSOFT,
-        scopes: import.meta.env.VITE_OIDC_SCOPE_MICROSOFT.split(" "),
-        homeUrl,
-        decodedIdTokenSchema,
-        debugLogs: true
-    };
+const microsoft = createReactOidc({
+    issuerUri: import.meta.env.VITE_OIDC_ISSUER_URI_MICROSOFT,
+    clientId: import.meta.env.VITE_OIDC_CLIENT_ID_MICROSOFT,
+    scopes: import.meta.env.VITE_OIDC_SCOPE_MICROSOFT.split(" "),
+    homeUrl,
+    decodedIdTokenSchema,
+    debugLogs: true
 });
 
 export async function getOidc(): Promise<
