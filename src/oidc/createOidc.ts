@@ -31,6 +31,10 @@ import { createEvt, type Evt } from "../tools/Evt";
 import { getHaveSharedParentDomain } from "../tools/haveSharedParentDomain";
 import { createLoginOrGoToAuthServer } from "./loginOrGoToAuthServer";
 import { createEphemeralSessionStorage } from "../tools/EphemeralSessionStorage";
+import {
+    startLoginOrRefreshProcess,
+    waitForAllOtherOngoingLoginOrRefreshProcessesToComplete
+} from "./ongoingLoginOrRefreshProcesses";
 
 handleOidcCallback();
 
@@ -125,7 +129,6 @@ declare global {
             prOidcByConfigId: Map<string, Promise<Oidc<any>>>;
             hasLogoutBeenCalled: boolean;
             evtRequestToPersistTokens: Evt<{ configIdOfInstancePostingTheRequest: string }>;
-            prLoginProcessOngoingByConfigId: Map<string, Promise<void>>;
         };
     }
 }
@@ -133,8 +136,7 @@ declare global {
 window[GLOBAL_CONTEXT_KEY] ??= {
     prOidcByConfigId: new Map(),
     hasLogoutBeenCalled: false,
-    evtRequestToPersistTokens: createEvt(),
-    prLoginProcessOngoingByConfigId: new Map()
+    evtRequestToPersistTokens: createEvt()
 };
 
 const globalContext = window[GLOBAL_CONTEXT_KEY];
@@ -372,9 +374,7 @@ export async function createOidc_nonMemoized<
 
     const BROWSER_SESSION_NOT_FIRST_INIT_KEY = `oidc-spa.browser-session-not-first-init:${configId}`;
 
-    const dLoginProcessOngoing = new Deferred<void>();
-
-    globalContext.prLoginProcessOngoingByConfigId.set(configId, dLoginProcessOngoing.pr);
+    const { completeLoginOrRefreshProcess } = startLoginOrRefreshProcess();
 
     const resultOfLoginProcess = await (async (): Promise<
         | undefined // User is currently not logged in
@@ -587,13 +587,9 @@ export async function createOidc_nonMemoized<
                 ) {
                     persistAuthState({ configId, state: undefined });
 
-                    dLoginProcessOngoing.resolve();
+                    completeLoginOrRefreshProcess();
 
-                    await Promise.all(
-                        Array.from(globalContext.prLoginProcessOngoingByConfigId.entries())
-                            .filter(([configId]) => configId !== configId)
-                            .map(([, prLoginProcessOngoing]) => prLoginProcessOngoing)
-                    );
+                    await waitForAllOtherOngoingLoginOrRefreshProcessesToComplete();
 
                     if (persistedAuthState === "logged in") {
                         globalContext.evtRequestToPersistTokens.post({
@@ -637,13 +633,9 @@ export async function createOidc_nonMemoized<
         return undefined;
     })();
 
-    dLoginProcessOngoing.resolve();
+    completeLoginOrRefreshProcess();
 
-    await Promise.all(
-        Array.from(globalContext.prLoginProcessOngoingByConfigId.entries())
-            .filter(([configId]) => configId !== configId)
-            .map(([, prLoginProcessOngoing]) => prLoginProcessOngoing)
-    );
+    await waitForAllOtherOngoingLoginOrRefreshProcessesToComplete();
 
     const oidc_common: Oidc.Common = {
         params: {
@@ -707,13 +699,15 @@ export async function createOidc_nonMemoized<
                 return id<Oidc.NotLoggedIn>({
                     ...oidc_common,
                     isUserLoggedIn: false,
-                    login: ({
+                    login: async ({
                         doesCurrentHrefRequiresAuth,
                         extraQueryParams,
                         redirectUrl,
                         transformUrlBeforeRedirect
-                    }) =>
-                        loginOrGoToAuthServer({
+                    }) => {
+                        await waitForAllOtherOngoingLoginOrRefreshProcessesToComplete();
+
+                        return loginOrGoToAuthServer({
                             action: "login",
                             doNavigateBackToLastPublicUrlIfTheTheUserNavigateBack:
                                 doesCurrentHrefRequiresAuth,
@@ -724,7 +718,8 @@ export async function createOidc_nonMemoized<
                             transformUrlBeforeRedirect_local: transformUrlBeforeRedirect,
                             doForceInteraction:
                                 getPersistedAuthState({ configId }) === "explicitly logged out"
-                        }),
+                        });
+                    },
                     initializationError: undefined
                 });
             }
@@ -808,6 +803,8 @@ export async function createOidc_nonMemoized<
                 }
             })();
 
+            await waitForAllOtherOngoingLoginOrRefreshProcessesToComplete();
+
             try {
                 await oidcClientTsUserManager.signoutRedirect({
                     state: id<StateData>({
@@ -848,6 +845,8 @@ export async function createOidc_nonMemoized<
 
                 log?.("Renewing tokens");
 
+                const { completeLoginOrRefreshProcess } = startLoginOrRefreshProcess();
+
                 const result_loginSilent = await loginSilent({
                     oidcClientTsUserManager,
                     stateQueryParamValue_instance,
@@ -856,6 +855,7 @@ export async function createOidc_nonMemoized<
                 });
 
                 if (result_loginSilent.outcome === "failure") {
+                    completeLoginOrRefreshProcess();
                     throw new Error(result_loginSilent.cause);
                 }
 
@@ -887,6 +887,7 @@ export async function createOidc_nonMemoized<
                                 assert(error instanceof Error);
 
                                 if (authResponse_error === undefined) {
+                                    completeLoginOrRefreshProcess();
                                     throw error;
                                 }
 
@@ -895,6 +896,10 @@ export async function createOidc_nonMemoized<
 
                             if (oidcClientTsUser_scope === undefined) {
                                 persistAuthState({ configId, state: undefined });
+
+                                completeLoginOrRefreshProcess();
+
+                                await waitForAllOtherOngoingLoginOrRefreshProcessesToComplete();
 
                                 globalContext.evtRequestToPersistTokens.post({
                                     configIdOfInstancePostingTheRequest: configId
@@ -939,6 +944,8 @@ export async function createOidc_nonMemoized<
                 }
 
                 Array.from(onTokenChanges).forEach(onTokenChange => onTokenChange(currentTokens));
+
+                completeLoginOrRefreshProcess();
             }
 
             let ongoingCall:

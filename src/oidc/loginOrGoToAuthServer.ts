@@ -64,7 +64,7 @@ export function createLoginOrGoToAuthServer(params: {
 
     let lastPublicUrl: string | undefined = undefined;
 
-    async function loginOrGoToAuthServer(params: Params): Promise<never> {
+    function loginOrGoToAuthServer(params: Params): Promise<never> {
         const {
             redirectUrl: redirectUrl_params,
             extraQueryParams_local,
@@ -206,36 +206,37 @@ export function createLoginOrGoToAuthServer(params: {
             return { extraQueryParams };
         })();
 
-        await oidcClientTsUserManager.signinRedirect({
-            state: id<StateData>({
-                context: "redirect",
-                redirectUrl,
-                extraQueryParams,
-                hasBeenProcessedByCallback: false,
-                configId,
-                action: "login",
-                redirectUrl_consentRequiredCase: (() => {
+        return oidcClientTsUserManager
+            .signinRedirect({
+                state: id<StateData>({
+                    context: "redirect",
+                    redirectUrl,
+                    extraQueryParams,
+                    hasBeenProcessedByCallback: false,
+                    configId,
+                    action: "login",
+                    redirectUrl_consentRequiredCase: (() => {
+                        switch (rest.action) {
+                            case "login":
+                                return lastPublicUrl ?? homeAndCallbackUrl;
+                            case "go to auth server":
+                                return redirectUrl;
+                        }
+                    })()
+                }),
+                redirectMethod,
+                prompt: (() => {
                     switch (rest.action) {
-                        case "login":
-                            return lastPublicUrl ?? homeAndCallbackUrl;
                         case "go to auth server":
-                            return redirectUrl;
+                            return undefined;
+                        case "login":
+                            return rest.doForceInteraction ? "consent" : undefined;
                     }
-                })()
-            }),
-            redirectMethod,
-            prompt: (() => {
-                switch (rest.action) {
-                    case "go to auth server":
-                        return undefined;
-                    case "login":
-                        return rest.doForceInteraction ? "consent" : undefined;
-                }
-                assert<Equals<typeof rest, never>>;
-            })(),
-            transformUrl: transformUrl_oidcClientTs
-        });
-        return new Promise<never>(() => {});
+                    assert<Equals<typeof rest, never>>;
+                })(),
+                transformUrl: transformUrl_oidcClientTs
+            })
+            .then(() => new Promise<never>(() => {}));
     }
 
     const { unsubscribe } = evtIsUserLoggedIn.subscribe(isLoggedIn => {
