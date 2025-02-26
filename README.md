@@ -30,7 +30,7 @@
 A fully-featured OpenID Connect client for single-page applications (SPAs).
 
 With `oidc-spa`, you can integrate your application with authentication providers like [Keycloak](https://www.keycloak.org/), [Auth0](https://auth0.com/), or [Okta](https://www.okta.com/).  
-If you don’t have a dedicated provider, you can also implement a simple [**"Login with Google/Microsoft/GitHub/X/..."**](https://example-multi-providers.oidc-spa.dev/) button.
+If you don’t have a dedicated provider, you can also implement a simple [**"Login with Google/Microsoft..."**](https://example-multi-providers.oidc-spa.dev/) button.
 
 In **simple terms**, `oidc-spa` is a library that lets you **add authentication** to your Vite (or Create-React-App) project.  
 When a user clicks the **"Login"** button in your app's header, call the `login()` method—it's that easy! 😄
