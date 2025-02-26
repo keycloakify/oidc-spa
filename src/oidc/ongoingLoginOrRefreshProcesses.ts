@@ -7,17 +7,23 @@ declare global {
     interface Window {
         [GLOBAL_CONTEXT_KEY]: {
             prDone_arr: Promise<void>[];
+            prUnlock: Promise<void>;
         };
     }
 }
 
 window[GLOBAL_CONTEXT_KEY] ??= {
-    prDone_arr: []
+    prDone_arr: [],
+    prUnlock: Promise.resolve()
 };
 
 const globalContext = window[GLOBAL_CONTEXT_KEY];
 
-export function startLoginOrRefreshProcess() {
+export async function startLoginOrRefreshProcess(): Promise<{
+    completeLoginOrRefreshProcess: () => void;
+}> {
+    await globalContext.prUnlock;
+
     const dDone = new Deferred<void>();
 
     const { prDone_arr } = globalContext;
@@ -34,11 +40,21 @@ export function startLoginOrRefreshProcess() {
         dDone.resolve();
     }
 
-    return {
-        completeLoginOrRefreshProcess
-    };
+    return { completeLoginOrRefreshProcess };
 }
 
-export async function waitForAllOtherOngoingLoginOrRefreshProcessesToComplete(): Promise<void> {
+export async function waitForAllOtherOngoingLoginOrRefreshProcessesToComplete(params: {
+    prUnlock: Promise<void>;
+}): Promise<void> {
+    const { prUnlock } = params;
+
+    const prUnlock_current = globalContext.prUnlock;
+
+    globalContext.prUnlock = (async () => {
+        await prUnlock_current;
+
+        await prUnlock;
+    })();
+
     await Promise.all(globalContext.prDone_arr);
 }

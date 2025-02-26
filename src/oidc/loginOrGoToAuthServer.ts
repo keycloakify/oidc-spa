@@ -3,19 +3,21 @@ import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";
 import { id, assert, type Equals } from "../vendor/frontend/tsafe";
 import type { StateData } from "./StateData";
 import type { NonPostableEvt } from "../tools/Evt";
+import { type StatefulEvt, createStatefulEvt } from "../tools/StatefulEvt";
+import { Deferred } from "../tools/Deferred";
 
 const GLOBAL_CONTEXT_KEY = "__oidc-spa.loginOrGoToAuthSever.globalContext";
 
 declare global {
     interface Window {
         [GLOBAL_CONTEXT_KEY]: {
-            hasLoginBeenCalled: boolean;
+            evtHasLoginBeenCalled: StatefulEvt<boolean>;
         };
     }
 }
 
 window[GLOBAL_CONTEXT_KEY] ??= {
-    hasLoginBeenCalled: false
+    evtHasLoginBeenCalled: createStatefulEvt(() => false)
 };
 
 const globalContext = window[GLOBAL_CONTEXT_KEY];
@@ -39,6 +41,19 @@ namespace Params {
     export type GoToAuthServer = Common & {
         action: "go to auth server";
     };
+}
+
+export function getPrSafelyRestoredFromBfCacheAfterLoginBackNavigation() {
+    const dOut = new Deferred<void>();
+
+    const { unsubscribe } = globalContext.evtHasLoginBeenCalled.subscribe(hasLoginBeenCalled => {
+        if (!hasLoginBeenCalled) {
+            unsubscribe();
+            dOut.resolve();
+        }
+    });
+
+    return dOut.pr;
 }
 
 export function createLoginOrGoToAuthServer(params: {
@@ -79,12 +94,12 @@ export function createLoginOrGoToAuthServer(params: {
                 break login_specific_handling;
             }
 
-            if (globalContext.hasLoginBeenCalled) {
+            if (globalContext.evtHasLoginBeenCalled.current) {
                 log?.("login() has already been called, ignoring the call");
                 return new Promise<never>(() => {});
             }
 
-            globalContext.hasLoginBeenCalled = true;
+            globalContext.evtHasLoginBeenCalled.current = true;
 
             bf_cache_handling: {
                 if (rest.doForceReloadOnBfCache) {
@@ -121,7 +136,7 @@ export function createLoginOrGoToAuthServer(params: {
                             location.reload();
                         } else {
                             log?.("and the user doesn't seem to be authenticated, avoiding a reload");
-                            globalContext.hasLoginBeenCalled = false;
+                            globalContext.evtHasLoginBeenCalled.current = false;
                         }
                     }
                 };
