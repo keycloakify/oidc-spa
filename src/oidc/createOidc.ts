@@ -20,6 +20,7 @@ import {
 } from "./OidcInitializationError";
 import { type StateData, generateStateQueryParamValue, STATE_STORE_KEY_PREFIX } from "./StateData";
 import { notifyOtherTabsOfLogout, getPrOtherTabLogout } from "./logoutPropagationToOtherTabs";
+import { notifyOtherTabsOfLogin, getPrOtherTabLogin } from "./loginPropagationToOtherTabs";
 import { getConfigId } from "./configId";
 import { oidcClientTsUserToTokens, getMsBeforeExpiration } from "./oidcClientTsUserToTokens";
 import { loginSilent } from "./loginSilent";
@@ -435,6 +436,8 @@ export async function createOidc_nonMemoized<
 
                         sessionStorage.removeItem(BROWSER_SESSION_NOT_FIRST_INIT_KEY);
 
+                        notifyOtherTabsOfLogin({ configId });
+
                         return {
                             oidcClientTsUser,
                             backFromAuthServer: {
@@ -735,6 +738,22 @@ export async function createOidc_nonMemoized<
 
             assert<Equals<typeof resultOfLoginProcess, never>>(false);
         })();
+
+        {
+            const { prOtherTabLogin } = getPrOtherTabLogin({
+                configId
+            });
+
+            prOtherTabLogin.then(async () => {
+                log?.(`Other tab has logged in, reloading this tab`);
+
+                await waitForAllOtherOngoingLoginOrRefreshProcessesToComplete({
+                    prUnlock: new Promise<never>(() => {})
+                });
+
+                window.location.reload();
+            });
+        }
 
         // @ts-expect-error: We know what we're doing
         return oidc_notLoggedIn;

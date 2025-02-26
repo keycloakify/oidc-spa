@@ -60,11 +60,11 @@ export function getPrOtherTabLogout(params: {
     channel.onmessage = ({ data: message }) => {
         assert(is<Message>(message));
 
-        channel.close();
-
         if (message.appInstanceId === globalContext.appInstanceId) {
             return;
         }
+
+        channel.close();
 
         const redirectUrl = (() => {
             if (configId === message.configId) {
