@@ -518,67 +518,77 @@ export async function createOidc_nonMemoized<
             };
         }
 
-        restore_from_http_only_cookie: {
+        silent_login_if_possible_and_auto_login: {
             log?.("Trying to restore the auth from the http only cookie (silent signin with iframe)");
 
             const persistedAuthState = getPersistedAuthState({ configId });
 
-            if (persistedAuthState === "explicitly logged out") {
+            if (persistedAuthState === "explicitly logged out" && !autoLogin) {
                 log?.("Skipping silent signin with iframe, the user has logged out");
-                break restore_from_http_only_cookie;
+                break silent_login_if_possible_and_auto_login;
             }
 
-            const result_loginSilent = await loginSilent({
-                oidcClientTsUserManager,
-                stateQueryParamValue_instance,
-                configId,
-                getExtraTokenParams
-            });
+            let authResponse_error: string | undefined = undefined;
+            let oidcClientTsUser: OidcClientTsUser | undefined = undefined;
 
-            assert(result_loginSilent.outcome !== "token refreshed using refresh token");
+            actual_silent_signin: {
+                if (persistedAuthState === "explicitly logged out") {
+                    break actual_silent_signin;
+                }
 
-            if (result_loginSilent.outcome === "failure") {
-                switch (result_loginSilent.cause) {
-                    case "can't reach well-known oidc endpoint":
-                        return createWellKnownOidcConfigurationEndpointUnreachableInitializationError({
-                            issuerUri
-                        });
-                    case "timeout":
-                        return createIframeTimeoutInitializationError({
-                            homeAndCallbackUrl,
+                const result_loginSilent = await loginSilent({
+                    oidcClientTsUserManager,
+                    stateQueryParamValue_instance,
+                    configId,
+                    getExtraTokenParams
+                });
+
+                assert(result_loginSilent.outcome !== "token refreshed using refresh token");
+
+                if (result_loginSilent.outcome === "failure") {
+                    switch (result_loginSilent.cause) {
+                        case "can't reach well-known oidc endpoint":
+                            return createWellKnownOidcConfigurationEndpointUnreachableInitializationError(
+                                {
+                                    issuerUri
+                                }
+                            );
+                        case "timeout":
+                            return createIframeTimeoutInitializationError({
+                                homeAndCallbackUrl,
+                                clientId,
+                                issuerUri
+                            });
+                    }
+
+                    assert<Equals<typeof result_loginSilent.cause, never>>(false);
+                }
+
+                assert<Equals<typeof result_loginSilent.outcome, "got auth response from iframe">>();
+
+                const { authResponse } = result_loginSilent;
+
+                log?.("Silent signin auth response", authResponse);
+
+                authResponse_error = authResponse.error;
+
+                try {
+                    oidcClientTsUser = await oidcClientTsUserManager.signinRedirectCallback(
+                        authResponseToUrl(authResponse)
+                    );
+                } catch (error) {
+                    assert(error instanceof Error);
+
+                    if (error.message === "Failed to fetch") {
+                        return createFailedToFetchTokenEndpointInitializationError({
                             clientId,
                             issuerUri
                         });
-                }
+                    }
 
-                assert<Equals<typeof result_loginSilent.cause, never>>(false);
-            }
-
-            assert<Equals<typeof result_loginSilent.outcome, "got auth response from iframe">>();
-
-            const { authResponse } = result_loginSilent;
-
-            log?.("Silent signin auth response", authResponse);
-
-            const authResponse_error = authResponse.error;
-            let oidcClientTsUser: OidcClientTsUser | undefined = undefined;
-
-            try {
-                oidcClientTsUser = await oidcClientTsUserManager.signinRedirectCallback(
-                    authResponseToUrl(authResponse)
-                );
-            } catch (error) {
-                assert(error instanceof Error);
-
-                if (error.message === "Failed to fetch") {
-                    return createFailedToFetchTokenEndpointInitializationError({
-                        clientId,
-                        issuerUri
-                    });
-                }
-
-                if (authResponse_error === undefined) {
-                    return error;
+                    if (authResponse_error === undefined) {
+                        return error;
+                    }
                 }
             }
 
@@ -612,7 +622,7 @@ export async function createOidc_nonMemoized<
                         doNavigateBackToLastPublicUrlIfTheTheUserNavigateBack: autoLogin,
                         extraQueryParams_local: undefined,
                         transformUrlBeforeRedirect_local: undefined,
-                        doForceInteraction: false
+                        doForceInteraction: persistedAuthState === "explicitly logged out"
                     });
                     assert(false);
                 }
@@ -626,7 +636,7 @@ export async function createOidc_nonMemoized<
                     ].join("")
                 );
 
-                break restore_from_http_only_cookie;
+                break silent_login_if_possible_and_auto_login;
             }
 
             log?.("Successful silent signed in");
