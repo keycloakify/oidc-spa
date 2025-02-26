@@ -1,9 +1,13 @@
 import { Link } from "@tanstack/react-router";
-import { useOidc } from "oidc";
-import { parseKeycloakIssuerUri } from "oidc-spa/tools/parseKeycloakIssuerUri";
+import {
+    useIsUserLoggedIn,
+    useOidc_assertUserLoggedIn,
+    useOidc_assertUserNotLoggedIn,
+    askUserToSelectProvider
+} from "oidc";
 
 export function Header() {
-    const { isUserLoggedIn, initializationError } = useOidc();
+    const isUserLoggedIn = useIsUserLoggedIn();
 
     return (
         <div
@@ -17,17 +21,7 @@ export function Header() {
                 width: "100%"
             }}
         >
-            <span>OIDC-SPA + Tanstack-router Starter</span>
-            {/* You do not have to display an error here, it's just to show that if you want you can
-                But it's best to enable the user to navigate unauthenticated and to display an error
-                only if he attempt to login (by default it display an alert) */}
-            {initializationError !== undefined && (
-                <div style={{ color: "red" }}>
-                    {initializationError.isAuthServerLikelyDown
-                        ? "Sorry our Keycloak server is down"
-                        : `Initialization error: ${initializationError.message}`}
-                </div>
-            )}
+            <span>oidc-spa: Login with Google or Microsoft example</span>
 
             <div>
                 <Link to="/">
@@ -51,7 +45,7 @@ export function Header() {
 }
 
 function LoggedInAuthButton() {
-    const { decodedIdToken, logout } = useOidc({ assert: "user logged in" });
+    const { decodedIdToken, logout } = useOidc_assertUserLoggedIn();
 
     return (
         <div>
@@ -63,31 +57,25 @@ function LoggedInAuthButton() {
 }
 
 function NotLoggedInAuthButton() {
-    const { login, params } = useOidc({ assert: "user not logged in" });
-
-    const isKeycloak = parseKeycloakIssuerUri(params.issuerUri) !== undefined;
+    const oidcByProvider = useOidc_assertUserNotLoggedIn();
 
     return (
         <div>
-            <button onClick={() => login({ doesCurrentHrefRequiresAuth: false })}>Login</button>{" "}
-            {isKeycloak && (
-                <button
-                    onClick={() =>
-                        login({
-                            doesCurrentHrefRequiresAuth: false,
-                            transformUrlBeforeRedirect: url => {
-                                const urlObj = new URL(url);
+            <button
+                onClick={async () => {
+                    const provider = await askUserToSelectProvider();
 
-                                urlObj.pathname = urlObj.pathname.replace(/\/auth$/, "/registrations");
-
-                                return urlObj.href;
-                            }
-                        })
+                    if (provider === undefined) {
+                        return;
                     }
-                >
-                    Register
-                </button>
-            )}
+
+                    await oidcByProvider[provider].login({
+                        doesCurrentHrefRequiresAuth: false
+                    });
+                }}
+            >
+                Login with Google or Microsoft
+            </button>{" "}
         </div>
     );
 }

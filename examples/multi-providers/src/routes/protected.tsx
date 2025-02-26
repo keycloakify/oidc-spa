@@ -1,39 +1,19 @@
 // NOTE: Absolute imports are possible due to the following configuration:
 // - tsconfig.json: "baseUrl": "./src"
 // - vite.config.ts: usage of the "vite-tsconfig-paths" plugin
-import { getOidc, useOidc } from "oidc";
+import { useOidc_assertUserLoggedIn, beforeLoad_protectedRoute } from "oidc";
 import { useMemo } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { decodeJwt } from "oidc-spa/tools/decodeJwt";
-import { parseKeycloakIssuerUri } from "oidc-spa/tools/parseKeycloakIssuerUri";
 
 export const Route = createFileRoute("/protected")({
     component: ProtectedPage,
-    beforeLoad: async () => {
-        const oidc = await getOidc();
-
-        if (oidc.isUserLoggedIn) {
-            return;
-        }
-
-        await oidc.login({
-            doesCurrentHrefRequiresAuth: true
-        });
-    }
+    beforeLoad: beforeLoad_protectedRoute
 });
 
 function ProtectedPage() {
     // Here we can safely assume that the user is logged in.
-    const {
-        tokens,
-        decodedIdToken,
-        goToAuthServer,
-        backFromAuthServer,
-        renewTokens,
-        params: { issuerUri, clientId }
-    } = useOidc({
-        assert: "user logged in"
-    });
+    const { provider, tokens, decodedIdToken, renewTokens } = useOidc_assertUserLoggedIn();
 
     // WARNING: You are not supposed to decode the accessToken on the client side.
     // We are doing it here only for debugging purposes.
@@ -49,11 +29,9 @@ function ProtectedPage() {
         }
     }, [tokens]);
 
-    const parsedKeycloakIssuerUri = parseKeycloakIssuerUri(issuerUri);
-
     return (
         <h4>
-            Hello {decodedIdToken.name}
+            Hello {decodedIdToken.name} (Logged in with {provider})
             <br />
             <br />
             {decodedAccessToken !== undefined ? (
@@ -68,56 +46,6 @@ function ProtectedPage() {
             )}
             <br />
             <button onClick={() => renewTokens()}>Renew tokens </button>
-            <br />
-            {parsedKeycloakIssuerUri !== undefined && (
-                <>
-                    <br />
-                    <button
-                        onClick={() =>
-                            goToAuthServer({
-                                extraQueryParams: { kc_action: "UPDATE_PASSWORD" }
-                            })
-                        }
-                    >
-                        Change password
-                    </button>
-                    {backFromAuthServer?.extraQueryParams.kc_action === "UPDATE_PASSWORD" && (
-                        <p>Result: {backFromAuthServer.result.kc_action_status}</p>
-                    )}
-                    <br />
-                    <button
-                        onClick={() =>
-                            goToAuthServer({
-                                extraQueryParams: { kc_action: "UPDATE_PROFILE" }
-                            })
-                        }
-                    >
-                        Update profile
-                    </button>
-                    {backFromAuthServer?.extraQueryParams.kc_action === "UPDATE_PROFILE" && (
-                        <p>Result: {backFromAuthServer.result.kc_action_status}</p>
-                    )}
-                    <br />
-                    <button
-                        onClick={() =>
-                            goToAuthServer({
-                                extraQueryParams: { kc_action: "delete_account" }
-                            })
-                        }
-                    >
-                        Delete account
-                    </button>
-                    <br />
-                    <a
-                        href={parsedKeycloakIssuerUri.getAccountUrl({
-                            clientId,
-                            backToAppFromAccountUrl: import.meta.env.BASE_URL
-                        })}
-                    >
-                        Go to Keycloak Account Management Console
-                    </a>
-                </>
-            )}
         </h4>
     );
 }

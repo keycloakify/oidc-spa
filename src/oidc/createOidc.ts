@@ -4,7 +4,7 @@ import {
     type User as OidcClientTsUser,
     InMemoryWebStorage
 } from "../vendor/frontend/oidc-client-ts-and-jwt-decode";
-import { id, assert, is, type Equals, typeGuard } from "../vendor/frontend/tsafe";
+import { id, assert, is, type Equals } from "../vendor/frontend/tsafe";
 import { setTimeout, clearTimeout } from "../tools/workerTimers";
 import { Deferred } from "../tools/Deferred";
 import { decodeJwt } from "../tools/decodeJwt";
@@ -18,17 +18,13 @@ import {
     createIframeTimeoutInitializationError,
     createWellKnownOidcConfigurationEndpointUnreachableInitializationError
 } from "./OidcInitializationError";
-import {
-    getStateData,
-    type StateData,
-    generateStateQueryParamValue,
-    STATE_STORE_KEY_PREFIX
-} from "./StateData";
+import { type StateData, generateStateQueryParamValue, STATE_STORE_KEY_PREFIX } from "./StateData";
 import { notifyOtherTabsOfLogout, getPrOtherTabLogout } from "./logoutPropagationToOtherTabs";
 import { getConfigId } from "./configId";
 import { oidcClientTsUserToTokens, getMsBeforeExpiration } from "./oidcClientTsUserToTokens";
-import { loginSilent, authResponseToUrl } from "./loginSilent";
-import { handleOidcCallback, AUTH_RESPONSE_KEY } from "./handleOidcCallback";
+import { loginSilent } from "./loginSilent";
+import { authResponseToUrl } from "./AuthResponse";
+import { handleOidcCallback, retrieveRedirectAuthResponseAndStateData } from "./handleOidcCallback";
 import { getPersistedAuthState, persistAuthState } from "./persistedAuthState";
 import type { Oidc } from "./Oidc";
 import { createEvt, type Evt } from "../tools/Evt";
@@ -127,7 +123,6 @@ declare global {
     interface Window {
         [GLOBAL_CONTEXT_KEY]: {
             prOidcByConfigId: Map<string, Promise<Oidc<any>>>;
-            evtAuthResponseHandled: Evt<void>;
             hasLogoutBeenCalled: boolean;
             evtRequestToPersistTokens: Evt<{ configIdOfInstancePostingTheRequest: string }>;
             prLoginProcessOngoingByConfigId: Map<string, Promise<void>>;
@@ -137,7 +132,6 @@ declare global {
 
 window[GLOBAL_CONTEXT_KEY] ??= {
     prOidcByConfigId: new Map(),
-    evtAuthResponseHandled: createEvt<void>(),
     hasLogoutBeenCalled: false,
     evtRequestToPersistTokens: createEvt(),
     prLoginProcessOngoingByConfigId: new Map()
@@ -357,12 +351,6 @@ export async function createOidc_nonMemoized<
                     storage.persistCurrentStateAndSubsequentChanges();
                 });
 
-                if (evtRequestToPersistTokens.postCount !== 0) {
-                    storage.persistCurrentStateAndSubsequentChanges();
-                }
-
-                evtRequestToPersistTokens.post({ configIdOfInstancePostingTheRequest: configId });
-
                 return storage;
             })()
         }),
@@ -397,58 +385,13 @@ export async function createOidc_nonMemoized<
           }
     > => {
         handle_redirect_auth_response: {
-            const authResponse = (() => {
-                const value = sessionStorage.getItem(AUTH_RESPONSE_KEY);
+            const authResponseAndStateData = retrieveRedirectAuthResponseAndStateData({ configId });
 
-                if (value === null) {
-                    return undefined;
-                }
-
-                let authResponse: unknown;
-
-                try {
-                    authResponse = JSON.parse(value);
-
-                    assert(
-                        typeGuard<{ state: string; [key: string]: string }>(
-                            authResponse,
-                            authResponse instanceof Object &&
-                                Object.values(authResponse).every(value => typeof value === "string")
-                        ),
-                        "Valid json but not expected shape"
-                    );
-                } catch (error) {
-                    console.error(`Failed to parse auth response from callback URL ${String(error)}`);
-                    return undefined;
-                }
-
-                return authResponse;
-            })();
-
-            if (authResponse === undefined) {
+            if (authResponseAndStateData === undefined) {
                 break handle_redirect_auth_response;
             }
 
-            const stateData = getStateData({ stateQueryParamValue: authResponse["state"] });
-
-            assert(stateData !== undefined);
-            assert(stateData.context === "redirect");
-
-            const { evtAuthResponseHandled } = globalContext;
-
-            if (stateData.configId !== configId) {
-                // NOTE: Best attempt at letting the other client handle the request synchronously
-                // but we won't wait for it because the initialization of the other client might
-                // be contingent on the initialization of this client.
-                const prHandled = evtAuthResponseHandled.waitFor();
-                await Promise.resolve();
-                if (sessionStorage.getItem(AUTH_RESPONSE_KEY) === null) {
-                    await prHandled;
-                }
-                break handle_redirect_auth_response;
-            }
-
-            sessionStorage.removeItem(AUTH_RESPONSE_KEY);
+            const { authResponse, stateData } = authResponseAndStateData;
 
             switch (stateData.action) {
                 case "login":
@@ -460,11 +403,9 @@ export async function createOidc_nonMemoized<
                         let oidcClientTsUser: OidcClientTsUser | undefined = undefined;
 
                         try {
-                            oidcClientTsUser = await oidcClientTsUserManager
-                                .signinRedirectCallback(authResponseUrl)
-                                .finally(() => {
-                                    evtAuthResponseHandled.post();
-                                });
+                            oidcClientTsUser = await oidcClientTsUserManager.signinRedirectCallback(
+                                authResponseUrl
+                            );
                         } catch (error) {
                             assert(error instanceof Error);
 
@@ -476,11 +417,11 @@ export async function createOidc_nonMemoized<
                             }
 
                             {
-                                const error: string | undefined = authResponse["error"];
+                                const authResponse_error = authResponse.error;
 
-                                if (error !== undefined) {
+                                if (authResponse_error !== undefined) {
                                     log?.(
-                                        `The auth server responded with: ${error}, trying to restore from the http only cookie`
+                                        `The auth server responded with: ${authResponse_error}, trying to restore from the http only cookie`
                                     );
                                     break handle_redirect_auth_response;
                                 }
@@ -496,13 +437,24 @@ export async function createOidc_nonMemoized<
                             backFromAuthServer: {
                                 extraQueryParams: stateData.extraQueryParams,
                                 result: Object.fromEntries(
-                                    Object.entries(authResponse).filter(
-                                        ([name]) =>
-                                            name !== "state" &&
-                                            name !== "session_state" &&
-                                            name !== "iss" &&
-                                            name !== "code"
-                                    )
+                                    Object.entries(authResponse)
+                                        .map(([name, value]) => {
+                                            if (
+                                                name === "state" ||
+                                                name === "session_state" ||
+                                                name === "iss" ||
+                                                name === "code"
+                                            ) {
+                                                return undefined;
+                                            }
+
+                                            if (value === undefined) {
+                                                return undefined;
+                                            }
+
+                                            return [name, value];
+                                        })
+                                        .filter(entry => entry !== undefined)
                                 )
                             }
                         };
@@ -517,8 +469,6 @@ export async function createOidc_nonMemoized<
                         try {
                             await oidcClientTsUserManager.signoutRedirectCallback(authResponseUrl);
                         } catch {}
-
-                        evtAuthResponseHandled.post();
 
                         notifyOtherTabsOfLogout({
                             configId,
@@ -604,7 +554,7 @@ export async function createOidc_nonMemoized<
 
             log?.("Silent signin auth response", authResponse);
 
-            const authResponse_error: string | undefined = authResponse["error"];
+            const authResponse_error = authResponse.error;
             let oidcClientTsUser: OidcClientTsUser | undefined = undefined;
 
             try {
@@ -639,15 +589,18 @@ export async function createOidc_nonMemoized<
 
                     dLoginProcessOngoing.resolve();
 
-                    {
-                        const prs = Array.from(globalContext.prLoginProcessOngoingByConfigId.entries())
+                    await Promise.all(
+                        Array.from(globalContext.prLoginProcessOngoingByConfigId.entries())
                             .filter(([configId]) => configId !== configId)
-                            .map(([, prLoginProcessOngoing]) => prLoginProcessOngoing);
+                            .map(([, prLoginProcessOngoing]) => prLoginProcessOngoing)
+                    );
 
-                        if (prs.length !== 0) {
-                            await Promise.all(prs);
-                        }
+                    if (persistedAuthState === "logged in") {
+                        globalContext.evtRequestToPersistTokens.post({
+                            configIdOfInstancePostingTheRequest: configId
+                        });
                     }
+
                     await loginOrGoToAuthServer({
                         action: "login",
                         doForceReloadOnBfCache: true,
@@ -657,6 +610,7 @@ export async function createOidc_nonMemoized<
                         transformUrlBeforeRedirect_local: undefined,
                         doForceInteraction: false
                     });
+                    assert(false);
                 }
 
                 log?.(
@@ -684,6 +638,12 @@ export async function createOidc_nonMemoized<
     })();
 
     dLoginProcessOngoing.resolve();
+
+    await Promise.all(
+        Array.from(globalContext.prLoginProcessOngoingByConfigId.entries())
+            .filter(([configId]) => configId !== configId)
+            .map(([, prLoginProcessOngoing]) => prLoginProcessOngoing)
+    );
 
     const oidc_common: Oidc.Common = {
         params: {
@@ -914,7 +874,7 @@ export async function createOidc_nonMemoized<
 
                             log?.("Tokens refresh using iframe", authResponse);
 
-                            const authResponse_error: string | undefined = authResponse["error"];
+                            const authResponse_error = authResponse.error;
 
                             let oidcClientTsUser_scope: OidcClientTsUser | undefined = undefined;
 
