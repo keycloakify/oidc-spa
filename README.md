@@ -27,32 +27,61 @@
   <a href="https://docs.oidc-spa.dev">Documentation</a>
 </p>
 
-An Open ID Connect client for single page applications, particularly suitable for [Vite](https://vitejs.dev/) projects.  
-This library is for integrating your application with OIDC Server like [Keycloak](https://www.keycloak.org/), [Ory Hydra](https://www.ory.sh/hydra/) or [Dex](https://dexidp.io/). &#x20;
+A fully-featured OpenID Connect client for single-page applications (SPAs).
 
-In straightforward terms, oidc-spa enable login/registration in your web application.  
-When used in conjunction with Keycloak (for example),
-it enables you to offer a modern and secure authentication experience with minimal coding effort.  
-This includes options for signing in via Google, X, GitHub, or other social media platforms. We provide comprehensive guidance from beginning to end.
+With `oidc-spa`, you can integrate your application with authentication providers like [Keycloak](https://www.keycloak.org/), [Auth0](https://auth0.com/), or [Okta](https://www.okta.com/).  
+If you don’t have a dedicated provider, you can also implement a simple [**"Login with Google/Microsoft/GitHub/X/..."**](https://example-multi-providers.oidc-spa.dev/) button.
 
--   🎓 **Accessible to all skill levels**: No need to be an authentication expert. And we're happy to help [on Discord](https://discord.gg/mJdYJSdcm4)!
--   🛠️ **Simple setup**: No need to define `/login` or `/logout` routes. Token refreshing is handled automatically.
--   💬 **Debug messages**: Provides clear feedback on misconfigurations and how to resolve them.
--   🕣 **Auto logout**: Supports session expiration with automatic logout prompts.
--   🚪 **Logout propagation**: Logging out in one tab automatically logs out all others.
--   ✨ **React integration**: Includes React utilities but works independently as well.
--   📖 **Documentation & examples**: Covers setup, usage, and common scenarios.
--   ✅ **Type safety**: Strong TypeScript support with optional Zod integration for JWT validation.
--   🔒 **Security**: Uses Authorization Code Flow + PKCE. No token storage in `localStorage` or `sessionStorage`.
--   🖥️ **Optional Backend tooling**: Provides utilities for access token validation in JavaScript backends (Node, Deno, WebWorker).
--   🔗 **Multi-instance support**: Allows authentication against multiple APIs (using different OIDC clients) within the same application.
+In **simple terms**, `oidc-spa` is a library that lets you **add authentication** to your Vite (or Create-React-App) project.  
+When a user clicks the **"Login"** button in your app's header, call the `login()` method—it's that easy! 😄
+
+## Why `oidc-spa`?
+
+Most OIDC providers push their own client libraries:
+
+-   **Auth0** → `auth0-spa-js`
+-   **Okta** → `okta-auth-js`
+-   **Microsoft Entra ID** → `MSAL.js`
+-   **Keycloak** → `keycloak-js` (no longer actively promoted, planned for deprecation)
+-   **... and so on.**
+
+These libraries are **tied to a specific provider**. But what if you want to:
+
+✅ Switch OIDC providers without rewriting your authentication logic?  
+✅ Develop software that must support multiple environments, where the authentication provider is unknown beforehand.  
+✅ Support multiple OIDC providers in the same app?
+
+Well, we needed a solution so we built one, `oidc-spa`!
+
+## Features
+
+-   🎓 **No OIDC/OAuth2 expertise required**: Easy to setup and use. If you need help we're here to help [on Discord](https://discord.gg/mJdYJSdcm4)!
+-   🛠️ **Simple setup**: No need to define `/login` or `/logout` routes—token refreshing is automatic, it just works.
+-   🔥 **If an OIDC provider’s official SDK can do it, `oidc-spa` can do it too**- For example, everything you could do with `keycloak-js`, you can do with `oidc-spa`.
+-   💬 **Detailed debug messages**: If your OIDC server is not properly configured, it tells you precisely what’s wrong and what you need to do to fix it.
+-   🕣 **Auto logout with countdown**: "You will be logged out in 10... 9... 8..."—users see exactly when their session expires.
+-   🚪 **Logout propagation**: Logging out in one tab logs out all others.
+-   ✨ **Framework-agnostic API**: Works with any UI framework (React, Angular, Vue, Svelte...) and includes an optional React adapter for convenience.
+-   📖 **Comprehensive documentation**: Guides and examples for common scenarios.
+-   ✅ **Type safety**: Strong TypeScript support with optional [Zod](https://zod.dev/) integration validating the expected shape of the ID token.
+-   🔒 **Security-first**: Uses **Authorization Code Flow + PKCE**—No token persistence in `localStorage` or `sessionStorage`.
+-   🖥️ **Optional backend utilities**: Provides tools for token validation in JavaScript backends (Node.js, Deno, Web Workers).
+-   🔗 **Multi-instance support**: Run multiple `oidc-spa` instances—for example, to offer **Login with Google OR Microsoft** in the same app.
+-   🍪 **No third-party cookie issues**: Third-party cookies blocked? No problem—`oidc-spa` works around it automatically with no special measures needed on your side.
 
 ## Comparison with Existing Libraries
 
 ### [oidc-client-ts](https://github.com/authts/oidc-client-ts)
 
-While `oidc-client-ts` serves as a comprehensive toolkit to support all sort of applications, our library aims to provide a simplified, easy-to-setup adapter
-specifically tailored for SPAs.
+While `oidc-client-ts` is a comprehensive toolkit designed for various applications, `oidc-spa` is specifically built for SPAs with an easy-to-set-up API.  
+But **ease of use** isn't the only difference—`oidc-spa` also provides **out-of-the-box** solutions for features that `oidc-client-ts` leaves up to you to implement, such as:
+
+-   **Login/logout propagation** across tabs
+-   **Graceful fallback when third-party cookies are blocked**
+-   **Seamless browser back/forward cache (bfcache) management**
+-   **Auto logout countdown** so users can be automatically logged out after a set period of inactivity.
+-   **Ensuring you never get an expired access token error**—even after the computer wakes up from sleep.
+-   **Gracefully handles scenarios where the provider does not issue a refresh token or lacks a logout endpoint** (e.g., Google OAuth)
 
 ### [react-oidc-context](https://github.com/authts/react-oidc-context)
 
@@ -65,18 +94,18 @@ integration with:
 
 ### [keycloak-js](https://www.npmjs.com/package/keycloak-js)
 
-The official OIDC Client for Keycloak. It only works with Keycloak and [will eventually be deprecated](https://www.keycloak.org/2023/03/adapter-deprecation-update).
+The official OIDC Client for Keycloak. It only works with Keycloak and [will eventually be deprecated](https://www.keycloak.org/2023/03/adapter-deprecation-update).  
+Beyond that, achieving the same seamless user experience as `oidc-spa` with `keycloak-js` requires writing a lot of custom code—code that really **shouldn’t** be handled at the application level.
 
 ### [NextAuth.js](https://next-auth.js.org/)
 
-NextAuth.js is a authentication solution for Next.js and features a [Keycloak adapter](https://next-auth.js.org/providers/keycloak).  
-`oidc-spa` is specifically designed for Single Page Applications, Next.js projects **do not** fall in this category, so NextAuth.js is what you should use if you're using Next.js.
+Since oidc-spa is built for true SPAs, Next.js applications should use NextAuth.js instead.
 
 > _NOTE: We might create in the future a `oidc-mpa` library for Multi Page Applications that would aim at supporting Next.js projects._
 
 ## 🚀 Quick start
 
-Heads over to [the documentation website](https://docs.oidc-spa.dev) 📘!
+Head over to [the documentation website](https://docs.oidc-spa.dev) 📘!
 
 ## Sponsors
 
