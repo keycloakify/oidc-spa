@@ -4,13 +4,12 @@ import {
     type User as OidcClientTsUser,
     InMemoryWebStorage
 } from "../vendor/frontend/oidc-client-ts-and-jwt-decode";
-import { id, assert, is, type Equals, typeGuard } from "../vendor/frontend/tsafe";
+import { id, assert, is, type Equals } from "../vendor/frontend/tsafe";
 import { setTimeout, clearTimeout } from "../tools/workerTimers";
 import { Deferred } from "../tools/Deferred";
 import { decodeJwt } from "../tools/decodeJwt";
-import { create$isUserActive } from "./isUserActive";
+import { createEvtIsUserActive } from "./evtIsUserActive";
 import { createStartCountdown } from "../tools/startCountdown";
-import type { StatefulObservable } from "../tools/StatefulObservable";
 import { toHumanReadableDuration } from "../tools/toHumanReadableDuration";
 import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";
 import {
@@ -19,23 +18,29 @@ import {
     createIframeTimeoutInitializationError,
     createWellKnownOidcConfigurationEndpointUnreachableInitializationError
 } from "./OidcInitializationError";
-import {
-    getStateData,
-    type StateData,
-    generateStateQueryParamValue,
-    STATE_STORE_KEY_PREFIX
-} from "./StateData";
+import { type StateData, generateStateQueryParamValue, STATE_STORE_KEY_PREFIX } from "./StateData";
 import { notifyOtherTabsOfLogout, getPrOtherTabLogout } from "./logoutPropagationToOtherTabs";
+import { notifyOtherTabsOfLogin, getPrOtherTabLogin } from "./loginPropagationToOtherTabs";
 import { getConfigId } from "./configId";
 import { oidcClientTsUserToTokens, getMsBeforeExpiration } from "./oidcClientTsUserToTokens";
-import { loginSilent, authResponseToUrl } from "./loginSilent";
-import { handleOidcCallback, AUTH_RESPONSE_KEY } from "./handleOidcCallback";
+import { loginSilent } from "./loginSilent";
+import { authResponseToUrl } from "./AuthResponse";
+import { handleOidcCallback, retrieveRedirectAuthResponseAndStateData } from "./handleOidcCallback";
 import { getPersistedAuthState, persistAuthState } from "./persistedAuthState";
 import type { Oidc } from "./Oidc";
-import { type AwaitableEventEmitter, createAwaitableEventEmitter } from "../tools/AwaitableEventEmitter";
+import { createEvt, type Evt } from "../tools/Evt";
 import { getHaveSharedParentDomain } from "../tools/haveSharedParentDomain";
-import { createLoginOrGoToAuthServer } from "./loginOrGoToAuthServer";
-import { createEphemeralSessionStorage } from "../tools/ephemeralSessionStorage";
+import {
+    createLoginOrGoToAuthServer,
+    getPrSafelyRestoredFromBfCacheAfterLoginBackNavigation
+} from "./loginOrGoToAuthServer";
+import { createEphemeralSessionStorage } from "../tools/EphemeralSessionStorage";
+import {
+    startLoginOrRefreshProcess,
+    waitForAllOtherOngoingLoginOrRefreshProcessesToComplete
+} from "./ongoingLoginOrRefreshProcesses";
+
+handleOidcCallback();
 
 // NOTE: Replaced at build time
 const VERSION = "{{OIDC_SPA_VERSION}}";
@@ -120,26 +125,22 @@ export type ParamsOfCreateOidc<
     __unsafe_useIdTokenAsAccessToken?: boolean;
 };
 
-handleOidcCallback();
-
 const GLOBAL_CONTEXT_KEY = "__oidc-spa.createOidc.globalContext";
 
 declare global {
     interface Window {
         [GLOBAL_CONTEXT_KEY]: {
             prOidcByConfigId: Map<string, Promise<Oidc<any>>>;
-            evtAuthResponseHandled: AwaitableEventEmitter<void>;
-            $isUserActive: StatefulObservable<boolean> | undefined;
             hasLogoutBeenCalled: boolean;
+            evtRequestToPersistTokens: Evt<{ configIdOfInstancePostingTheRequest: string }>;
         };
     }
 }
 
 window[GLOBAL_CONTEXT_KEY] ??= {
     prOidcByConfigId: new Map(),
-    evtAuthResponseHandled: createAwaitableEventEmitter<void>(),
-    $isUserActive: undefined,
-    hasLogoutBeenCalled: false
+    hasLogoutBeenCalled: false,
+    evtRequestToPersistTokens: createEvt()
 };
 
 const globalContext = window[GLOBAL_CONTEXT_KEY];
@@ -321,7 +322,7 @@ export async function createOidc_nonMemoized<
         }
     }
 
-    const isUserStorePersistent = !areThirdPartyCookiesAllowed;
+    let isUserStoreInMemoryOnly: boolean;
 
     const oidcClientTsUserManager = new OidcClientTsUserManager({
         stateQueryParamValue: stateQueryParamValue_instance,
@@ -334,30 +335,50 @@ export async function createOidc_nonMemoized<
         scope: Array.from(new Set(["openid", ...scopes])).join(" "),
         automaticSilentRenew: false,
         userStore: new WebStorageStateStore({
-            store: areThirdPartyCookiesAllowed
-                ? new InMemoryWebStorage()
-                : createEphemeralSessionStorage({
-                      sessionStorageTtlMs: 3 * 60_1000
-                  })
+            store: (() => {
+                if (areThirdPartyCookiesAllowed) {
+                    isUserStoreInMemoryOnly = true;
+                    return new InMemoryWebStorage();
+                }
+
+                isUserStoreInMemoryOnly = false;
+
+                const storage = createEphemeralSessionStorage({
+                    sessionStorageTtlMs: 3 * 60_000
+                });
+
+                const { evtRequestToPersistTokens } = globalContext;
+
+                evtRequestToPersistTokens.subscribe(({ configIdOfInstancePostingTheRequest }) => {
+                    if (configIdOfInstancePostingTheRequest === configId) {
+                        return;
+                    }
+
+                    storage.persistCurrentStateAndSubsequentChanges();
+                });
+
+                return storage;
+            })()
         }),
         stateStore: new WebStorageStateStore({ store: localStorage, prefix: STATE_STORE_KEY_PREFIX }),
         client_secret: __unsafe_clientSecret
     });
 
-    const {
-        loginOrGoToAuthServer,
-        toCallBeforeReturningOidcLoggedIn,
-        toCallBeforeReturningOidcNotLoggedIn
-    } = createLoginOrGoToAuthServer({
+    const evtIsUserLoggedIn = createEvt<boolean>();
+
+    const { loginOrGoToAuthServer } = createLoginOrGoToAuthServer({
         configId,
         oidcClientTsUserManager,
         getExtraQueryParams,
         transformUrlBeforeRedirect,
         homeAndCallbackUrl,
+        evtIsUserLoggedIn,
         log
     });
 
     const BROWSER_SESSION_NOT_FIRST_INIT_KEY = `oidc-spa.browser-session-not-first-init:${configId}`;
+
+    const { completeLoginOrRefreshProcess } = await startLoginOrRefreshProcess();
 
     const resultOfLoginProcess = await (async (): Promise<
         | undefined // User is currently not logged in
@@ -368,58 +389,13 @@ export async function createOidc_nonMemoized<
           }
     > => {
         handle_redirect_auth_response: {
-            const authResponse = (() => {
-                const value = sessionStorage.getItem(AUTH_RESPONSE_KEY);
+            const authResponseAndStateData = retrieveRedirectAuthResponseAndStateData({ configId });
 
-                if (value === null) {
-                    return undefined;
-                }
-
-                let authResponse: unknown;
-
-                try {
-                    authResponse = JSON.parse(value);
-
-                    assert(
-                        typeGuard<{ state: string; [key: string]: string }>(
-                            authResponse,
-                            authResponse instanceof Object &&
-                                Object.values(authResponse).every(value => typeof value === "string")
-                        ),
-                        "Valid json but not expected shape"
-                    );
-                } catch (error) {
-                    console.error(`Failed to parse auth response from callback URL ${String(error)}`);
-                    return undefined;
-                }
-
-                return authResponse;
-            })();
-
-            if (authResponse === undefined) {
+            if (authResponseAndStateData === undefined) {
                 break handle_redirect_auth_response;
             }
 
-            const stateData = getStateData({ stateQueryParamValue: authResponse["state"] });
-
-            assert(stateData !== undefined);
-            assert(stateData.context === "redirect");
-
-            const { evtAuthResponseHandled } = globalContext;
-
-            if (stateData.configId !== configId) {
-                // NOTE: Best attempt at letting the other client handle the request synchronously
-                // but we won't wait for it because the initialization of the other client might
-                // be contingent on the initialization of this client.
-                const prHandled = evtAuthResponseHandled.waitFor();
-                await Promise.resolve();
-                if (sessionStorage.getItem(AUTH_RESPONSE_KEY) === null) {
-                    await prHandled;
-                }
-                break handle_redirect_auth_response;
-            }
-
-            sessionStorage.removeItem(AUTH_RESPONSE_KEY);
+            const { authResponse, stateData } = authResponseAndStateData;
 
             switch (stateData.action) {
                 case "login":
@@ -431,11 +407,9 @@ export async function createOidc_nonMemoized<
                         let oidcClientTsUser: OidcClientTsUser | undefined = undefined;
 
                         try {
-                            oidcClientTsUser = await oidcClientTsUserManager
-                                .signinRedirectCallback(authResponseUrl)
-                                .finally(() => {
-                                    evtAuthResponseHandled.post();
-                                });
+                            oidcClientTsUser = await oidcClientTsUserManager.signinRedirectCallback(
+                                authResponseUrl
+                            );
                         } catch (error) {
                             assert(error instanceof Error);
 
@@ -447,11 +421,11 @@ export async function createOidc_nonMemoized<
                             }
 
                             {
-                                const error: string | undefined = authResponse["error"];
+                                const authResponse_error = authResponse.error;
 
-                                if (error !== undefined) {
+                                if (authResponse_error !== undefined) {
                                     log?.(
-                                        `The auth server responded with: ${error}, trying to restore from the http only cookie`
+                                        `The auth server responded with: ${authResponse_error}, trying to restore from the http only cookie`
                                     );
                                     break handle_redirect_auth_response;
                                 }
@@ -462,18 +436,31 @@ export async function createOidc_nonMemoized<
 
                         sessionStorage.removeItem(BROWSER_SESSION_NOT_FIRST_INIT_KEY);
 
+                        notifyOtherTabsOfLogin({ configId });
+
                         return {
                             oidcClientTsUser,
                             backFromAuthServer: {
                                 extraQueryParams: stateData.extraQueryParams,
                                 result: Object.fromEntries(
-                                    Object.entries(authResponse).filter(
-                                        ([name]) =>
-                                            name !== "state" &&
-                                            name !== "session_state" &&
-                                            name !== "iss" &&
-                                            name !== "code"
-                                    )
+                                    Object.entries(authResponse)
+                                        .map(([name, value]) => {
+                                            if (
+                                                name === "state" ||
+                                                name === "session_state" ||
+                                                name === "iss" ||
+                                                name === "code"
+                                            ) {
+                                                return undefined;
+                                            }
+
+                                            if (value === undefined) {
+                                                return undefined;
+                                            }
+
+                                            return [name, value];
+                                        })
+                                        .filter(entry => entry !== undefined)
                                 )
                             }
                         };
@@ -489,8 +476,6 @@ export async function createOidc_nonMemoized<
                             await oidcClientTsUserManager.signoutRedirectCallback(authResponseUrl);
                         } catch {}
 
-                        evtAuthResponseHandled.post();
-
                         notifyOtherTabsOfLogout({
                             configId,
                             redirectUrl: stateData.redirectUrl,
@@ -505,7 +490,7 @@ export async function createOidc_nonMemoized<
         }
 
         restore_from_session_storage: {
-            if (!isUserStorePersistent) {
+            if (isUserStoreInMemoryOnly) {
                 break restore_from_session_storage;
             }
 
@@ -575,7 +560,7 @@ export async function createOidc_nonMemoized<
 
             log?.("Silent signin auth response", authResponse);
 
-            const authResponse_error: string | undefined = authResponse["error"];
+            const authResponse_error = authResponse.error;
             let oidcClientTsUser: OidcClientTsUser | undefined = undefined;
 
             try {
@@ -608,6 +593,18 @@ export async function createOidc_nonMemoized<
                 ) {
                     persistAuthState({ configId, state: undefined });
 
+                    completeLoginOrRefreshProcess();
+
+                    await waitForAllOtherOngoingLoginOrRefreshProcessesToComplete({
+                        prUnlock: new Promise<never>(() => {})
+                    });
+
+                    if (persistedAuthState === "logged in") {
+                        globalContext.evtRequestToPersistTokens.post({
+                            configIdOfInstancePostingTheRequest: configId
+                        });
+                    }
+
                     await loginOrGoToAuthServer({
                         action: "login",
                         doForceReloadOnBfCache: true,
@@ -617,8 +614,7 @@ export async function createOidc_nonMemoized<
                         transformUrlBeforeRedirect_local: undefined,
                         doForceInteraction: false
                     });
-
-                    // NOTE: Never here
+                    assert(false);
                 }
 
                 log?.(
@@ -643,74 +639,15 @@ export async function createOidc_nonMemoized<
 
         // NOTE: The user is not logged in.
         return undefined;
-    })().then(result => {
-        if (result === undefined) {
-            return undefined;
-        }
+    })();
 
-        if (result instanceof Error) {
-            return result;
-        }
+    completeLoginOrRefreshProcess();
 
-        const { oidcClientTsUser, backFromAuthServer } = result;
-
-        log_real_decoded_id_token: {
-            if (log === undefined) {
-                break log_real_decoded_id_token;
-            }
-            const idToken = oidcClientTsUser.id_token;
-
-            if (idToken === undefined) {
-                break log_real_decoded_id_token;
-            }
-
-            const decodedIdToken = decodeJwt(idToken);
-
-            log(
-                [
-                    `Decoded ID token`,
-                    decodedIdTokenSchema === undefined ? "" : " before `decodedIdTokenSchema.parse()`\n",
-                    JSON.stringify(decodedIdToken, null, 2)
-                ].join("")
-            );
-
-            if (decodedIdTokenSchema === undefined) {
-                break log_real_decoded_id_token;
-            }
-
-            log(
-                [
-                    "Decoded ID token after `decodedIdTokenSchema.parse()`\n",
-                    JSON.stringify(decodedIdTokenSchema.parse(decodedIdToken), null, 2)
-                ].join("")
-            );
-        }
-
-        const tokens = oidcClientTsUserToTokens({
-            oidcClientTsUser,
-            decodedIdTokenSchema,
-            __unsafe_useIdTokenAsAccessToken,
-            decodedIdToken_previous: undefined
-        });
-
-        if (
-            tokens.hasRefreshToken &&
-            tokens.refreshTokenExpirationTime !== undefined &&
-            tokens.refreshTokenExpirationTime < tokens.accessTokenExpirationTime
-        ) {
-            console.warn(
-                [
-                    "The OIDC refresh token shorter than the one of the access token.",
-                    "This is very unusual and probably a misconfiguration.",
-                    `Check your oidc server configuration for ${issuerUri}:${clientId} `
-                ].join(" ")
-            );
-        }
-
-        return { tokens, backFromAuthServer };
+    await waitForAllOtherOngoingLoginOrRefreshProcessesToComplete({
+        prUnlock: Promise.resolve()
     });
 
-    const common: Oidc.Common = {
+    const oidc_common: Oidc.Common = {
         params: {
             issuerUri,
             clientId
@@ -720,6 +657,12 @@ export async function createOidc_nonMemoized<
     not_loggedIn_case: {
         if (!(resultOfLoginProcess instanceof Error) && resultOfLoginProcess !== undefined) {
             break not_loggedIn_case;
+        }
+
+        evtIsUserLoggedIn.post(false);
+
+        if (getPersistedAuthState({ configId }) !== "explicitly logged out") {
+            persistAuthState({ configId, state: undefined });
         }
 
         const oidc_notLoggedIn: Oidc.NotLoggedIn = (() => {
@@ -750,7 +693,7 @@ export async function createOidc_nonMemoized<
                 );
 
                 return id<Oidc.NotLoggedIn>({
-                    ...common,
+                    ...oidc_common,
                     isUserLoggedIn: false,
                     login: async () => {
                         alert("Authentication is currently unavailable. Please try again later.");
@@ -764,15 +707,19 @@ export async function createOidc_nonMemoized<
                 log?.("User not logged in");
 
                 return id<Oidc.NotLoggedIn>({
-                    ...common,
+                    ...oidc_common,
                     isUserLoggedIn: false,
-                    login: ({
+                    login: async ({
                         doesCurrentHrefRequiresAuth,
                         extraQueryParams,
                         redirectUrl,
                         transformUrlBeforeRedirect
-                    }) =>
-                        loginOrGoToAuthServer({
+                    }) => {
+                        await waitForAllOtherOngoingLoginOrRefreshProcessesToComplete({
+                            prUnlock: getPrSafelyRestoredFromBfCacheAfterLoginBackNavigation()
+                        });
+
+                        return loginOrGoToAuthServer({
                             action: "login",
                             doNavigateBackToLastPublicUrlIfTheTheUserNavigateBack:
                                 doesCurrentHrefRequiresAuth,
@@ -783,7 +730,8 @@ export async function createOidc_nonMemoized<
                             transformUrlBeforeRedirect_local: transformUrlBeforeRedirect,
                             doForceInteraction:
                                 getPersistedAuthState({ configId }) === "explicitly logged out"
-                        }),
+                        });
+                    },
                     initializationError: undefined
                 });
             }
@@ -791,11 +739,21 @@ export async function createOidc_nonMemoized<
             assert<Equals<typeof resultOfLoginProcess, never>>(false);
         })();
 
-        if (getPersistedAuthState({ configId }) !== "explicitly logged out") {
-            persistAuthState({ configId, state: undefined });
-        }
+        {
+            const { prOtherTabLogin } = getPrOtherTabLogin({
+                configId
+            });
 
-        toCallBeforeReturningOidcNotLoggedIn();
+            prOtherTabLogin.then(async () => {
+                log?.(`Other tab has logged in, reloading this tab`);
+
+                await waitForAllOtherOngoingLoginOrRefreshProcessesToComplete({
+                    prUnlock: new Promise<never>(() => {})
+                });
+
+                window.location.reload();
+            });
+        }
 
         // @ts-expect-error: We know what we're doing
         return oidc_notLoggedIn;
@@ -803,7 +761,31 @@ export async function createOidc_nonMemoized<
 
     log?.("User is logged in");
 
-    let currentTokens = resultOfLoginProcess.tokens;
+    evtIsUserLoggedIn.post(true);
+
+    let currentTokens = oidcClientTsUserToTokens({
+        oidcClientTsUser: resultOfLoginProcess.oidcClientTsUser,
+        decodedIdTokenSchema,
+        __unsafe_useIdTokenAsAccessToken,
+        decodedIdToken_previous: undefined,
+        log
+    });
+
+    {
+        if (getPersistedAuthState({ configId }) !== undefined) {
+            persistAuthState({ configId, state: undefined });
+        }
+
+        if (!areThirdPartyCookiesAllowed) {
+            persistAuthState({
+                configId,
+                state: {
+                    stateDescription: "logged in",
+                    untilTime: currentTokens.refreshTokenExpirationTime
+                }
+            });
+        }
+    }
 
     const autoLogoutCountdownTickCallbacks = new Set<
         (params: { secondsLeft: number | undefined }) => void
@@ -812,7 +794,7 @@ export async function createOidc_nonMemoized<
     const onTokenChanges = new Set<(tokens: Oidc.Tokens<DecodedIdToken>) => void>();
 
     const oidc_loggedIn = id<Oidc.LoggedIn<DecodedIdToken>>({
-        ...common,
+        ...oidc_common,
         isUserLoggedIn: true,
         getTokens: () => currentTokens,
         getTokens_next: async () => {
@@ -831,12 +813,6 @@ export async function createOidc_nonMemoized<
 
             globalContext.hasLogoutBeenCalled = true;
 
-            document.addEventListener("visibilitychange", () => {
-                if (document.visibilityState === "visible") {
-                    location.reload();
-                }
-            });
-
             const postLogoutRedirectUrl: string = (() => {
                 switch (params.redirectTo) {
                     case "current page":
@@ -850,6 +826,14 @@ export async function createOidc_nonMemoized<
                         });
                 }
             })();
+
+            await waitForAllOtherOngoingLoginOrRefreshProcessesToComplete({
+                prUnlock: new Promise<never>(() => {})
+            });
+
+            window.addEventListener("pageshow", () => {
+                location.reload();
+            });
 
             try {
                 await oidcClientTsUserManager.signoutRedirect({
@@ -877,6 +861,12 @@ export async function createOidc_nonMemoized<
                         // NOTE: Not sure if it can throw
                     }
 
+                    notifyOtherTabsOfLogout({
+                        configId,
+                        redirectUrl: postLogoutRedirectUrl,
+                        sessionId
+                    });
+
                     window.location.href = postLogoutRedirectUrl;
                 } else {
                     throw error;
@@ -891,6 +881,8 @@ export async function createOidc_nonMemoized<
 
                 log?.("Renewing tokens");
 
+                const { completeLoginOrRefreshProcess } = await startLoginOrRefreshProcess();
+
                 const result_loginSilent = await loginSilent({
                     oidcClientTsUserManager,
                     stateQueryParamValue_instance,
@@ -899,6 +891,7 @@ export async function createOidc_nonMemoized<
                 });
 
                 if (result_loginSilent.outcome === "failure") {
+                    completeLoginOrRefreshProcess();
                     throw new Error(result_loginSilent.cause);
                 }
 
@@ -917,7 +910,7 @@ export async function createOidc_nonMemoized<
 
                             log?.("Tokens refresh using iframe", authResponse);
 
-                            const authResponse_error: string | undefined = authResponse["error"];
+                            const authResponse_error = authResponse.error;
 
                             let oidcClientTsUser_scope: OidcClientTsUser | undefined = undefined;
 
@@ -930,6 +923,7 @@ export async function createOidc_nonMemoized<
                                 assert(error instanceof Error);
 
                                 if (authResponse_error === undefined) {
+                                    completeLoginOrRefreshProcess();
                                     throw error;
                                 }
 
@@ -938,6 +932,16 @@ export async function createOidc_nonMemoized<
 
                             if (oidcClientTsUser_scope === undefined) {
                                 persistAuthState({ configId, state: undefined });
+
+                                completeLoginOrRefreshProcess();
+
+                                await waitForAllOtherOngoingLoginOrRefreshProcessesToComplete({
+                                    prUnlock: new Promise<never>(() => {})
+                                });
+
+                                globalContext.evtRequestToPersistTokens.post({
+                                    configIdOfInstancePostingTheRequest: configId
+                                });
 
                                 await loginOrGoToAuthServer({
                                     action: "login",
@@ -963,7 +967,8 @@ export async function createOidc_nonMemoized<
                     oidcClientTsUser,
                     decodedIdTokenSchema,
                     __unsafe_useIdTokenAsAccessToken,
-                    decodedIdToken_previous: currentTokens.decodedIdToken
+                    decodedIdToken_previous: currentTokens.decodedIdToken,
+                    log
                 });
 
                 if (getPersistedAuthState({ configId }) !== undefined) {
@@ -977,6 +982,8 @@ export async function createOidc_nonMemoized<
                 }
 
                 Array.from(onTokenChanges).forEach(onTokenChange => onTokenChange(currentTokens));
+
+                completeLoginOrRefreshProcess();
             }
 
             let ongoingCall:
@@ -1091,14 +1098,27 @@ export async function createOidc_nonMemoized<
             sessionId
         });
 
-        prOtherTabLogout.then(({ redirectUrl }) => {
+        prOtherTabLogout.then(async ({ redirectUrl }) => {
             log?.(`Other tab has logged out, redirecting to ${redirectUrl}`);
+
+            await waitForAllOtherOngoingLoginOrRefreshProcessesToComplete({
+                prUnlock: new Promise<never>(() => {})
+            });
+
+            window.addEventListener("pageshow", () => {
+                location.reload();
+            });
+
             window.location.href = redirectUrl;
         });
     }
 
     (function scheduleRenew() {
-        const login_dueToExpiration = () => {
+        const login_dueToExpiration = async () => {
+            await waitForAllOtherOngoingLoginOrRefreshProcessesToComplete({
+                prUnlock: new Promise<never>(() => {})
+            });
+
             persistAuthState({ configId, state: undefined });
 
             return loginOrGoToAuthServer({
@@ -1214,14 +1234,12 @@ export async function createOidc_nonMemoized<
 
         let stopCountdown: (() => void) | undefined = undefined;
 
-        if (globalContext.$isUserActive === undefined) {
-            globalContext.$isUserActive = create$isUserActive({
-                configId,
-                sessionId
-            });
-        }
+        const evtIsUserActive = createEvtIsUserActive({
+            configId,
+            sessionId
+        });
 
-        globalContext.$isUserActive.subscribe(isUserActive => {
+        evtIsUserActive.subscribe(isUserActive => {
             if (isUserActive) {
                 if (stopCountdown !== undefined) {
                     stopCountdown();
@@ -1233,24 +1251,6 @@ export async function createOidc_nonMemoized<
             }
         });
     }
-
-    {
-        if (getPersistedAuthState({ configId }) !== undefined) {
-            persistAuthState({ configId, state: undefined });
-        }
-
-        if (!areThirdPartyCookiesAllowed) {
-            persistAuthState({
-                configId,
-                state: {
-                    stateDescription: "logged in",
-                    untilTime: currentTokens.refreshTokenExpirationTime
-                }
-            });
-        }
-    }
-
-    toCallBeforeReturningOidcLoggedIn();
 
     return oidc_loggedIn;
 }

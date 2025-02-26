@@ -1,4 +1,11 @@
-import { getStateData, markStateDataAsProcessedByCallback, getIsStatQueryParamValue } from "./StateData";
+import {
+    getStateData,
+    markStateDataAsProcessedByCallback,
+    getIsStatQueryParamValue,
+    type StateData
+} from "./StateData";
+import { assert } from "../vendor/frontend/tsafe";
+import type { AuthResponse } from "./AuthResponse";
 
 const GLOBAL_CONTEXT_KEY = "__oidc-spa.handleOidcCallback.globalContext";
 
@@ -23,8 +30,6 @@ export function handleOidcCallback(): { isHandled: boolean } {
 
     return (globalContext.previousCall = handleOidcCallback_nonMemoized());
 }
-
-export const AUTH_RESPONSE_KEY = "oidc-spa.authResponse";
 
 function handleOidcCallback_nonMemoized(): { isHandled: boolean } {
     const locationUrl = new URL(window.location.href);
@@ -80,7 +85,7 @@ function handleOidcCallback_nonMemoized(): { isHandled: boolean } {
         stateData === undefined ||
         (stateData.context === "redirect" && stateData.hasBeenProcessedByCallback)
     ) {
-        reloadOnRestore();
+        reloadOnBfCacheNavigation();
 
         const historyMethod: "back" | "forward" = (() => {
             const backForwardTracker = readBackForwardTracker();
@@ -113,21 +118,25 @@ function handleOidcCallback_nonMemoized(): { isHandled: boolean } {
         return { isHandled };
     }
 
-    const authResponse: Record<string, string> = {};
+    const authResponse: AuthResponse = { state: "" };
 
     for (const [key, value] of locationUrl.searchParams) {
         authResponse[key] = value;
     }
+
+    assert(authResponse.state !== "");
 
     switch (stateData.context) {
         case "iframe":
             parent.postMessage(authResponse, location.origin);
             break;
         case "redirect":
-            reloadOnRestore();
+            reloadOnBfCacheNavigation();
             markStateDataAsProcessedByCallback({ stateQueryParamValue });
             clearBackForwardTracker();
-            sessionStorage.setItem(AUTH_RESPONSE_KEY, JSON.stringify(authResponse));
+            writeRedirectAuthResponses({
+                authResponses: [...readRedirectAuthResponses(), authResponse]
+            });
             location.href = (() => {
                 if (stateData.action === "login" && authResponse.error === "consent_required") {
                     return stateData.redirectUrl_consentRequiredCase;
@@ -141,16 +150,68 @@ function handleOidcCallback_nonMemoized(): { isHandled: boolean } {
     return { isHandled };
 }
 
-function reloadOnRestore() {
-    document.addEventListener("visibilitychange", () => {
-        if (document.visibilityState === "visible") {
-            location.reload();
+const { readRedirectAuthResponses, writeRedirectAuthResponses } = (() => {
+    const AUTH_RESPONSES_KEY = "oidc-spa:authResponses";
+
+    function writeRedirectAuthResponses(params: { authResponses: AuthResponse[] }): void {
+        const { authResponses } = params;
+        sessionStorage.setItem(AUTH_RESPONSES_KEY, JSON.stringify(authResponses));
+    }
+
+    function readRedirectAuthResponses(): AuthResponse[] {
+        const raw = sessionStorage.getItem(AUTH_RESPONSES_KEY);
+
+        if (raw === null) {
+            return [];
         }
+
+        return JSON.parse(raw);
+    }
+
+    return { writeRedirectAuthResponses, readRedirectAuthResponses };
+})();
+
+export function retrieveRedirectAuthResponseAndStateData(params: {
+    configId: string;
+}): { authResponse: AuthResponse; stateData: StateData.Redirect } | undefined {
+    const { configId } = params;
+
+    const authResponses = readRedirectAuthResponses();
+
+    let authResponseAndStateData:
+        | { authResponse: AuthResponse; stateData: StateData.Redirect }
+        | undefined = undefined;
+
+    for (const authResponse of [...authResponses]) {
+        const stateData = getStateData({ stateQueryParamValue: authResponse.state });
+
+        assert(stateData !== undefined);
+        assert(stateData.context === "redirect");
+
+        if (stateData.configId !== configId) {
+            continue;
+        }
+
+        authResponses.splice(authResponses.indexOf(authResponse), 1);
+
+        authResponseAndStateData = { authResponse, stateData };
+    }
+
+    if (authResponseAndStateData !== undefined) {
+        writeRedirectAuthResponses({ authResponses });
+    }
+
+    return authResponseAndStateData;
+}
+
+function reloadOnBfCacheNavigation() {
+    window.addEventListener("pageshow", () => {
+        location.reload();
     });
 }
 
 const { writeBackForwardTracker, readBackForwardTracker, clearBackForwardTracker } = (() => {
-    const BACK_NAVIGATION_TRACKER_KEY = "oidc-spa.callback-back-forward-tracker";
+    const BACK_NAVIGATION_TRACKER_KEY = "oidc-spa:callback-back-forward-tracker";
 
     type BackForwardTracker = {
         previousHistoryMethod: "back" | "forward";

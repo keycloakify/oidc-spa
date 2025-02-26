@@ -8,7 +8,7 @@ const clearByTimerHandle = new WeakMap<TimerHandle, () => void>();
 
 export function setTimeout(callback: () => void, delay: number): TimerHandle {
     const callback_actual = () => {
-        document.removeEventListener("visibilitychange", visibilityChangeListener);
+        window.removeEventListener("pageshow", onPageshow);
 
         clearByTimerHandle.delete(timerHandle);
 
@@ -24,26 +24,24 @@ export function setTimeout(callback: () => void, delay: number): TimerHandle {
 
         workerTimers.clearTimeout(timerHandle_n);
 
-        document.removeEventListener("visibilitychange", visibilityChangeListener);
+        window.removeEventListener("pageshow", onPageshow);
     });
 
     const start = Date.now();
 
-    const visibilityChangeListener = () => {
-        if (document.visibilityState === "visible") {
-            workerTimers.clearTimeout(timerHandle_n);
+    const onPageshow = () => {
+        workerTimers.clearTimeout(timerHandle_n);
 
-            const elapsed = Date.now() - start;
+        const elapsed = Date.now() - start;
 
-            if (elapsed < delay) {
-                timerHandle_n = workerTimers.setTimeout(callback_actual, delay - elapsed);
-            } else {
-                callback_actual();
-            }
+        if (elapsed < delay) {
+            timerHandle_n = workerTimers.setTimeout(callback_actual, delay - elapsed);
+        } else {
+            callback_actual();
         }
     };
 
-    document.addEventListener("visibilitychange", visibilityChangeListener);
+    window.addEventListener("pageshow", onPageshow);
 
     return timerHandle;
 }

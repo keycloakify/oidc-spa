@@ -5,25 +5,7 @@ import { getStateData, clearStateStore, type StateData } from "./StateData";
 import { getDownlinkAndRtt } from "../tools/getDownlinkAndRtt";
 import { getIsDev } from "../tools/isDev";
 import type { User as OidcClientTsUser } from "../vendor/frontend/oidc-client-ts-and-jwt-decode";
-
-export type AuthResponse = {
-    state: string;
-    [key: string]: string;
-};
-
-function getIsAuthResponse(data: any): data is AuthResponse {
-    return data instanceof Object && "state" in data && typeof data.state === "string";
-}
-
-export function authResponseToUrl(authResponse: AuthResponse): string {
-    const authResponseUrl = new URL("https://dummy.com");
-
-    for (const [name, value] of Object.entries(authResponse)) {
-        authResponseUrl.searchParams.set(name, value);
-    }
-
-    return authResponseUrl.href;
-}
+import { type AuthResponse, getIsAuthResponse } from "./AuthResponse";
 
 type ResultOfLoginSilent =
     | {
@@ -117,7 +99,7 @@ export async function loginSilent(params: {
         })
         .then(
             oidcClientTsUser => {
-                assert(oidcClientTsUser !== null);
+                assert(oidcClientTsUser !== null, "oidcClientTsUser is not supposed to be null here");
 
                 clearTimeout(timeout);
 

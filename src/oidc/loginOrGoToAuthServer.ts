@@ -2,21 +2,22 @@ import type { UserManager as OidcClientTsUserManager } from "../vendor/frontend/
 import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";
 import { id, assert, type Equals } from "../vendor/frontend/tsafe";
 import type { StateData } from "./StateData";
+import type { NonPostableEvt } from "../tools/Evt";
+import { type StatefulEvt, createStatefulEvt } from "../tools/StatefulEvt";
+import { Deferred } from "../tools/Deferred";
 
 const GLOBAL_CONTEXT_KEY = "__oidc-spa.loginOrGoToAuthSever.globalContext";
 
 declare global {
     interface Window {
         [GLOBAL_CONTEXT_KEY]: {
-            hasLoginBeenCalled: boolean;
-            URL_real: typeof URL;
+            evtHasLoginBeenCalled: StatefulEvt<boolean>;
         };
     }
 }
 
 window[GLOBAL_CONTEXT_KEY] ??= {
-    hasLoginBeenCalled: false,
-    URL_real: window.URL
+    evtHasLoginBeenCalled: createStatefulEvt(() => false)
 };
 
 const globalContext = window[GLOBAL_CONTEXT_KEY];
@@ -42,12 +43,26 @@ namespace Params {
     };
 }
 
+export function getPrSafelyRestoredFromBfCacheAfterLoginBackNavigation() {
+    const dOut = new Deferred<void>();
+
+    const { unsubscribe } = globalContext.evtHasLoginBeenCalled.subscribe(hasLoginBeenCalled => {
+        if (!hasLoginBeenCalled) {
+            unsubscribe();
+            dOut.resolve();
+        }
+    });
+
+    return dOut.pr;
+}
+
 export function createLoginOrGoToAuthServer(params: {
     configId: string;
     oidcClientTsUserManager: OidcClientTsUserManager;
     getExtraQueryParams: (() => Record<string, string>) | undefined;
     transformUrlBeforeRedirect: ((url: string) => string) | undefined;
     homeAndCallbackUrl: string;
+    evtIsUserLoggedIn: NonPostableEvt<boolean>;
     log: typeof console.log | undefined;
 }) {
     const {
@@ -56,14 +71,15 @@ export function createLoginOrGoToAuthServer(params: {
         getExtraQueryParams,
         transformUrlBeforeRedirect,
         homeAndCallbackUrl,
+        evtIsUserLoggedIn,
         log
     } = params;
 
-    const LOCAL_STORAGE_KEY_TO_CLEAR_WHEN_RETURNING_OIDC_LOGGED_IN = `oidc-spa.login-redirect-initiated:${configId}`;
+    const LOCAL_STORAGE_KEY_TO_CLEAR_WHEN_USER_LOGGED_IN = `oidc-spa.login-redirect-initiated:${configId}`;
 
     let lastPublicUrl: string | undefined = undefined;
 
-    async function loginOrGoToAuthServer(params: Params): Promise<never> {
+    function loginOrGoToAuthServer(params: Params): Promise<never> {
         const {
             redirectUrl: redirectUrl_params,
             extraQueryParams_local,
@@ -78,64 +94,54 @@ export function createLoginOrGoToAuthServer(params: {
                 break login_specific_handling;
             }
 
-            if (globalContext.hasLoginBeenCalled) {
+            if (globalContext.evtHasLoginBeenCalled.current) {
                 log?.("login() has already been called, ignoring the call");
                 return new Promise<never>(() => {});
             }
 
-            globalContext.hasLoginBeenCalled = true;
+            globalContext.evtHasLoginBeenCalled.current = true;
 
             bf_cache_handling: {
                 if (rest.doForceReloadOnBfCache) {
-                    document.removeEventListener("visibilitychange", () => {
-                        if (document.visibilityState === "visible") {
-                            location.reload();
-                        }
+                    window.removeEventListener("pageshow", () => {
+                        location.reload();
                     });
                     break bf_cache_handling;
                 }
 
-                localStorage.setItem(LOCAL_STORAGE_KEY_TO_CLEAR_WHEN_RETURNING_OIDC_LOGGED_IN, "true");
+                localStorage.setItem(LOCAL_STORAGE_KEY_TO_CLEAR_WHEN_USER_LOGGED_IN, "true");
 
                 const callback = () => {
-                    if (document.visibilityState === "visible") {
-                        document.removeEventListener("visibilitychange", callback);
+                    window.removeEventListener("pageshow", callback);
 
-                        log?.(
-                            "We came back from the login pages and the state of the app has been restored"
-                        );
+                    log?.(
+                        "We came back from the login pages and the state of the app has been restored"
+                    );
 
-                        if (rest.doNavigateBackToLastPublicUrlIfTheTheUserNavigateBack) {
-                            if (lastPublicUrl !== undefined) {
-                                log?.(`Loading last public route: ${lastPublicUrl}`);
-                                window.location.href = lastPublicUrl;
-                            } else {
-                                log?.("We don't know the last public route, navigating back in history");
-                                window.history.back();
-                            }
+                    if (rest.doNavigateBackToLastPublicUrlIfTheTheUserNavigateBack) {
+                        if (lastPublicUrl !== undefined) {
+                            log?.(`Loading last public route: ${lastPublicUrl}`);
+                            window.location.href = lastPublicUrl;
                         } else {
-                            log?.("The current page doesn't require auth...");
+                            log?.("We don't know the last public route, navigating back in history");
+                            window.history.back();
+                        }
+                    } else {
+                        log?.("The current page doesn't require auth...");
 
-                            if (
-                                localStorage.getItem(
-                                    LOCAL_STORAGE_KEY_TO_CLEAR_WHEN_RETURNING_OIDC_LOGGED_IN
-                                ) === null
-                            ) {
-                                log?.("but the user is now authenticated, reloading the page");
-                                location.reload();
-                            } else {
-                                log?.(
-                                    "and the user doesn't seem to be authenticated, avoiding a reload"
-                                );
-                                globalContext.hasLoginBeenCalled = false;
-                            }
+                        if (
+                            localStorage.getItem(LOCAL_STORAGE_KEY_TO_CLEAR_WHEN_USER_LOGGED_IN) === null
+                        ) {
+                            log?.("but the user is now authenticated, reloading the page");
+                            location.reload();
+                        } else {
+                            log?.("and the user doesn't seem to be authenticated, avoiding a reload");
+                            globalContext.evtHasLoginBeenCalled.current = false;
                         }
                     }
                 };
 
-                log?.("Start listening to visibility change event");
-
-                document.addEventListener("visibilitychange", callback);
+                window.addEventListener("pageshow", callback);
             }
         }
 
@@ -215,53 +221,54 @@ export function createLoginOrGoToAuthServer(params: {
             return { extraQueryParams };
         })();
 
-        await oidcClientTsUserManager.signinRedirect({
-            state: id<StateData>({
-                context: "redirect",
-                redirectUrl,
-                extraQueryParams,
-                hasBeenProcessedByCallback: false,
-                configId,
-                action: "login",
-                redirectUrl_consentRequiredCase: (() => {
+        return oidcClientTsUserManager
+            .signinRedirect({
+                state: id<StateData>({
+                    context: "redirect",
+                    redirectUrl,
+                    extraQueryParams,
+                    hasBeenProcessedByCallback: false,
+                    configId,
+                    action: "login",
+                    redirectUrl_consentRequiredCase: (() => {
+                        switch (rest.action) {
+                            case "login":
+                                return lastPublicUrl ?? homeAndCallbackUrl;
+                            case "go to auth server":
+                                return redirectUrl;
+                        }
+                    })()
+                }),
+                redirectMethod,
+                prompt: (() => {
                     switch (rest.action) {
-                        case "login":
-                            return lastPublicUrl ?? homeAndCallbackUrl;
                         case "go to auth server":
-                            return redirectUrl;
+                            return undefined;
+                        case "login":
+                            return rest.doForceInteraction ? "consent" : undefined;
                     }
-                })()
-            }),
-            redirectMethod,
-            prompt: (() => {
-                switch (rest.action) {
-                    case "go to auth server":
-                        return undefined;
-                    case "login":
-                        return rest.doForceInteraction ? "consent" : undefined;
-                }
-                assert<Equals<typeof rest, never>>;
-            })(),
-            transformUrl: transformUrl_oidcClientTs
-        });
-        return new Promise<never>(() => {});
+                    assert<Equals<typeof rest, never>>;
+                })(),
+                transformUrl: transformUrl_oidcClientTs
+            })
+            .then(() => new Promise<never>(() => {}));
     }
 
-    function toCallBeforeReturningOidcLoggedIn() {
-        localStorage.removeItem(LOCAL_STORAGE_KEY_TO_CLEAR_WHEN_RETURNING_OIDC_LOGGED_IN);
-    }
+    const { unsubscribe } = evtIsUserLoggedIn.subscribe(isLoggedIn => {
+        unsubscribe();
 
-    function toCallBeforeReturningOidcNotLoggedIn() {
-        const realPushState = history.pushState.bind(history);
-        history.pushState = function pushState(...args) {
-            lastPublicUrl = window.location.href;
-            return realPushState(...args);
-        };
-    }
+        if (isLoggedIn) {
+            localStorage.removeItem(LOCAL_STORAGE_KEY_TO_CLEAR_WHEN_USER_LOGGED_IN);
+        } else {
+            const realPushState = history.pushState.bind(history);
+            history.pushState = function pushState(...args) {
+                lastPublicUrl = window.location.href;
+                return realPushState(...args);
+            };
+        }
+    });
 
     return {
-        loginOrGoToAuthServer,
-        toCallBeforeReturningOidcLoggedIn,
-        toCallBeforeReturningOidcNotLoggedIn
+        loginOrGoToAuthServer
     };
 }

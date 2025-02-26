@@ -78,7 +78,22 @@ function createStoreInSessionStorageAndScheduleRemovalInMemoryItem(params: {
     return inMemoryItem;
 }
 
-export function createEphemeralSessionStorage(params: { sessionStorageTtlMs: number }): Storage {
+export type EphemeralSessionStorage = {
+    // `Storage` methods, we don't use the type directly because it has [name: string]: any;
+    readonly length: number;
+    clear(): void;
+    getItem(key: string): string | null;
+    key(index: number): string | null;
+    removeItem(key: string): void;
+    setItem(key: string, value: string): void;
+
+    // Custom method
+    persistCurrentStateAndSubsequentChanges: () => void;
+};
+
+export function createEphemeralSessionStorage(params: {
+    sessionStorageTtlMs: number;
+}): EphemeralSessionStorage {
     const { sessionStorageTtlMs } = params;
 
     const inMemoryItems: InMemoryItem[] = [];
@@ -103,25 +118,40 @@ export function createEphemeralSessionStorage(params: { sessionStorageTtlMs: num
 
         const remainingTtlMs = sessionStorageItem_parsed.expiresAtTime - Date.now();
 
+        sessionStorage.removeItem(sessionStorageKey);
+
         if (remainingTtlMs <= 0) {
-            sessionStorage.removeItem(sessionStorageKey);
             continue;
         }
 
-        inMemoryItems.push(
-            createStoreInSessionStorageAndScheduleRemovalInMemoryItem({
-                key: sessionStorageKey.slice(SESSION_STORAGE_PREFIX.length),
-                value: sessionStorageItem_parsed.value,
-                remainingTtlMs
-            })
-        );
+        inMemoryItems.push({
+            key: sessionStorageKey.slice(SESSION_STORAGE_PREFIX.length),
+            value: sessionStorageItem_parsed.value,
+            removeFromSessionStorage: undefined
+        });
     }
 
-    const storage = {
+    let isPersistenceEnabled = false;
+
+    const storage: EphemeralSessionStorage = {
+        persistCurrentStateAndSubsequentChanges: () => {
+            isPersistenceEnabled = true;
+
+            for (let i = 0; i < storage.length; i++) {
+                const key = storage.key(i);
+                assert(key !== null);
+
+                const value = storage.getItem(key);
+
+                assert(value !== null);
+
+                storage.setItem(key, value);
+            }
+        },
         get length() {
             return inMemoryItems.length;
         },
-        key(index: number) {
+        key: index => {
             const inMemoryItem = inMemoryItems[index];
 
             if (inMemoryItem === undefined) {
@@ -130,7 +160,7 @@ export function createEphemeralSessionStorage(params: { sessionStorageTtlMs: num
 
             return inMemoryItem.key;
         },
-        removeItem(key: string) {
+        removeItem: key => {
             const inMemoryItem = inMemoryItems.find(item => item.key === key);
 
             if (inMemoryItem === undefined) {
@@ -143,21 +173,21 @@ export function createEphemeralSessionStorage(params: { sessionStorageTtlMs: num
 
             inMemoryItems.splice(index, 1);
         },
-        clear() {
+        clear: () => {
             for (let i = 0; i < storage.length; i++) {
                 const key = storage.key(i);
                 assert(key !== null);
                 storage.removeItem(key);
             }
         },
-        getItem(key: string) {
+        getItem: key => {
             const inMemoryItem = inMemoryItems.find(item => item.key === key);
             if (inMemoryItem === undefined) {
                 return null;
             }
             return inMemoryItem.value;
         },
-        setItem(key: string, value: string) {
+        setItem: (key, value) => {
             let existingInMemoryItemIndex: number | undefined = undefined;
 
             {
@@ -169,11 +199,17 @@ export function createEphemeralSessionStorage(params: { sessionStorageTtlMs: num
                 }
             }
 
-            const inMemoryItem_new = createStoreInSessionStorageAndScheduleRemovalInMemoryItem({
-                key,
-                value,
-                remainingTtlMs: sessionStorageTtlMs
-            });
+            const inMemoryItem_new = isPersistenceEnabled
+                ? createStoreInSessionStorageAndScheduleRemovalInMemoryItem({
+                      key,
+                      value,
+                      remainingTtlMs: sessionStorageTtlMs
+                  })
+                : id<InMemoryItem>({
+                      key,
+                      value,
+                      removeFromSessionStorage: undefined
+                  });
 
             if (existingInMemoryItemIndex !== undefined) {
                 inMemoryItems[existingInMemoryItemIndex] = inMemoryItem_new;
