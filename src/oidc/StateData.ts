@@ -54,7 +54,7 @@ export function getIsStatQueryParamValue(params: { maybeStateQueryParamValue: st
 
 export const STATE_STORE_KEY_PREFIX = "oidc.";
 
-export function getKey(params: { stateQueryParamValue: string }) {
+function getKey(params: { stateQueryParamValue: string }) {
     const { stateQueryParamValue } = params;
 
     return `${STATE_STORE_KEY_PREFIX}${stateQueryParamValue}`;
@@ -116,3 +116,4 @@ export function markStateDataAsProcessedByCallback(params: { stateQueryParamValu
 
     setStateStore({ stateQueryParamValue, obj });
 }
+

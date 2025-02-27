@@ -1,7 +1,7 @@
 import type { UserManager as OidcClientTsUserManager } from "../vendor/frontend/oidc-client-ts-and-jwt-decode";
 import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";
-import { id, assert, type Equals } from "../vendor/frontend/tsafe";
-import type { StateData } from "./StateData";
+import { assert, type Equals } from "../vendor/frontend/tsafe";
+import { StateData } from "./StateData";
 import type { NonPostableEvt } from "../tools/Evt";
 import { type StatefulEvt, createStatefulEvt } from "../tools/StatefulEvt";
 import { Deferred } from "../tools/Deferred";
@@ -152,13 +152,32 @@ export function createLoginOrGoToAuthServer(params: {
 
         log?.(`redirectUrl: ${redirectUrl}`);
 
+        const stateData: StateData = {
+            context: "redirect",
+            redirectUrl,
+            extraQueryParams: {},
+            hasBeenProcessedByCallback: false,
+            configId,
+            action: "login",
+            redirectUrl_consentRequiredCase: (() => {
+                switch (rest.action) {
+                    case "login":
+                        return lastPublicUrl ?? homeAndCallbackUrl;
+                    case "go to auth server":
+                        return redirectUrl;
+                }
+            })()
+        };
+
         const transformUrl_oidcClientTs = (url: string) => {
             (
                 [
                     [getExtraQueryParams?.(), transformUrlBeforeRedirect],
                     [extraQueryParams_local, transformUrlBeforeRedirect_local]
                 ] as const
-            ).forEach(([extraQueryParams, transformUrlBeforeRedirect]) => {
+            ).forEach(([extraQueryParams, transformUrlBeforeRedirect], i) => {
+                const urlObj_before = i === 0 ? undefined : new URL(url);
+
                 add_extra_query_params: {
                     if (extraQueryParams === undefined) {
                         break add_extra_query_params;
@@ -179,6 +198,23 @@ export function createLoginOrGoToAuthServer(params: {
                     }
                     url = transformUrlBeforeRedirect(url);
                 }
+
+                update_state: {
+                    if (urlObj_before === undefined) {
+                        break update_state;
+                    }
+
+                    for (const [name, value] of new URL(url).searchParams.entries()) {
+                        const value_before = urlObj_before.searchParams.get(name);
+
+                        if (value_before === value) {
+                            continue;
+                        }
+
+                        stateData.extraQueryParams[name] = value;
+                    }
+
+                }
             });
 
             return url;
@@ -197,48 +233,9 @@ export function createLoginOrGoToAuthServer(params: {
 
         log?.(`redirectMethod: ${redirectMethod}`);
 
-        const { extraQueryParams } = (() => {
-            const extraQueryParams: Record<string, string> = extraQueryParams_local ?? {};
-
-            read_query_params_added_by_transform_before_redirect: {
-                if (transformUrlBeforeRedirect_local === undefined) {
-                    break read_query_params_added_by_transform_before_redirect;
-                }
-
-                let url_afterTransform;
-
-                try {
-                    url_afterTransform = transformUrlBeforeRedirect_local("https://dummy.com");
-                } catch {
-                    break read_query_params_added_by_transform_before_redirect;
-                }
-
-                for (const [name, value] of new URL(url_afterTransform).searchParams) {
-                    extraQueryParams[name] = value;
-                }
-            }
-
-            return { extraQueryParams };
-        })();
-
         return oidcClientTsUserManager
             .signinRedirect({
-                state: id<StateData>({
-                    context: "redirect",
-                    redirectUrl,
-                    extraQueryParams,
-                    hasBeenProcessedByCallback: false,
-                    configId,
-                    action: "login",
-                    redirectUrl_consentRequiredCase: (() => {
-                        switch (rest.action) {
-                            case "login":
-                                return lastPublicUrl ?? homeAndCallbackUrl;
-                            case "go to auth server":
-                                return redirectUrl;
-                        }
-                    })()
-                }),
+                state: stateData,
                 redirectMethod,
                 prompt: (() => {
                     switch (rest.action) {
