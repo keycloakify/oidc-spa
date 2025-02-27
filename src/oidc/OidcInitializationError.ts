@@ -209,7 +209,7 @@ export async function createIframeTimeoutInitializationError(params: {
                     `4. Locate the client "${clientId}" in the list and click on it.\n`,
                     `5. Find "Valid Redirect URIs" and add "${homeAndCallbackUrl}" to the list.\n`,
                     `6. Save the changes.\n\n`,
-                    `For more information, refer to the documentation: https://docs.oidc-spa.dev/v/v6/resources/keycloak-configuration`
+                    `For more information, refer to the documentation: https://docs.oidc-spa.dev/v/v6/providers-configuration/keycloak`
                 ];
             })()
         ].join(" ")
@@ -247,7 +247,7 @@ export function createFailedToFetchTokenEndpointInitializationError(params: {
                     `- Find '${clientId}' in the list of clients and click on it.\n`,
                     `- Find 'Web Origins' and add '${window.location.origin}' to the list.\n`,
                     `- Save the changes.\n\n`,
-                    `More info: https://docs.oidc-spa.dev/v/v6/resources/keycloak-configuration`
+                    `More info: https://docs.oidc-spa.dev/v/v6/providers-configuration/keycloak`
                 ];
             })()
         ].join(" ")
