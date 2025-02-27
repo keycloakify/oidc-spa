@@ -84,11 +84,7 @@ But **ease of use** isn't the only difference—`oidc-spa` also provides **out-o
 ### [react-oidc-context](https://github.com/authts/react-oidc-context)
 
 `react-oidc-context` is a React wrapper around `oidc-client-ts`.  
-`oidc-spa` also feature a carefully crafted React API that comes with example
-integration with:
-
--   [`@tanstack/react-router`](https://docs.oidc-spa.dev/example-setups/tanstack-router)
--   [`react-router-dom`](https://docs.oidc-spa.dev/example-setups/react-router)
+`oidc-spa` also feature a carefully crafted React API that comes with [working examples that you can test locally](https://docs.oidc-spa.dev/example-setups/example-setups).
 
 ### [keycloak-js](https://www.npmjs.com/package/keycloak-js)
 
