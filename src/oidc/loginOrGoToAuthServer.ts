@@ -60,16 +60,11 @@ export function createLoginOrGoToAuthServer(params: {
     configId: string;
     oidcClientTsUserManager: OidcClientTsUserManager;
     transformUrlBeforeRedirect: ((url: string) => string) | undefined;
-    transformUrlBeforeRedirect_next: ((params: {
-        isSilent: false;
-        url: string;
-    })=> string) | undefined;
+    transformUrlBeforeRedirect_next: ((params: { isSilent: false; url: string }) => string) | undefined;
 
     getExtraQueryParams:
-        ( ((params: {
-              isSilent: false;
-              url: string;
-          }) => Record<string, string | undefined>)) | undefined;
+        | ((params: { isSilent: false; url: string }) => Record<string, string | undefined>)
+        | undefined;
 
     getExtraTokenParams: (() => Record<string, string | undefined>) | undefined;
 
@@ -277,7 +272,8 @@ export function createLoginOrGoToAuthServer(params: {
                     assert<Equals<typeof rest, never>>;
                 })(),
                 transformUrl: transformUrl_oidcClientTs,
-                extraTokenParams: getExtraTokenParams === undefined ? undefined : noUndefined(getExtraTokenParams()),
+                extraTokenParams:
+                    getExtraTokenParams === undefined ? undefined : noUndefined(getExtraTokenParams())
             })
             .then(() => new Promise<never>(() => {}));
     }

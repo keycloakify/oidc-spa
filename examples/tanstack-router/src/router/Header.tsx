@@ -67,6 +67,8 @@ function NotLoggedInAuthButton() {
 
     const isKeycloak = parseKeycloakIssuerUri(params.issuerUri) !== undefined;
 
+    const isAuth0 = params.issuerUri.includes("auth0");
+
     return (
         <div>
             <button onClick={() => login({ doesCurrentHrefRequiresAuth: false })}>Login</button>{" "}
@@ -81,6 +83,20 @@ function NotLoggedInAuthButton() {
                                 urlObj.pathname = urlObj.pathname.replace(/\/auth$/, "/registrations");
 
                                 return urlObj.href;
+                            }
+                        })
+                    }
+                >
+                    Register
+                </button>
+            )}
+            {isAuth0 && (
+                <button
+                    onClick={() =>
+                        login({
+                            doesCurrentHrefRequiresAuth: false,
+                            extraQueryParams: {
+                                screen_hint: "signup"
                             }
                         })
                     }

@@ -63,16 +63,13 @@ export type ParamsOfCreateOidc<
 
     /**
      * NOTE: Will replace transformUrlBeforeRedirect in the next major version.
-     * 
-     * Transform the url (authorization endpoint) before redirecting to the login pages.  
-     * 
+     *
+     * Transform the url (authorization endpoint) before redirecting to the login pages.
+     *
      * The isSilent parameter is true when the redirect is initiated in the background iframe for silent signin.
-     * This can be used to omit ui related query parameters (like `ui_locales`).  
+     * This can be used to omit ui related query parameters (like `ui_locales`).
      */
-    transformUrlBeforeRedirect_next?: (params: {
-        isSilent: boolean;
-        url: string;
-    })=> string;
+    transformUrlBeforeRedirect_next?: (params: { isSilent: boolean; url: string }) => string;
 
     /**
      * Extra query params to be added to the authorization endpoint url before redirecting or silent signing in.
@@ -85,10 +82,7 @@ export type ParamsOfCreateOidc<
      */
     extraQueryParams?:
         | Record<string, string | undefined>
-        | ((params: {
-              isSilent: boolean;
-              url: string;
-          }) => Record<string, string | undefined>);
+        | ((params: { isSilent: boolean; url: string }) => Record<string, string | undefined>);
     /**
      * Extra body params to be added to the /token POST request.
      *
@@ -281,35 +275,29 @@ export async function createOidc_nonMemoized<
 
     const { issuerUri, clientId, scopes, configId, log } = preProcessedParams;
 
-    const getExtraQueryParams= (()=>{
-
-        if( extraQueryParamsOrGetter === undefined){
+    const getExtraQueryParams = (() => {
+        if (extraQueryParamsOrGetter === undefined) {
             return undefined;
         }
 
-        if( typeof extraQueryParamsOrGetter !== "function"){
-            return ()=> extraQueryParamsOrGetter;
+        if (typeof extraQueryParamsOrGetter !== "function") {
+            return () => extraQueryParamsOrGetter;
         }
 
         return extraQueryParamsOrGetter;
-
     })();
 
-    const getExtraTokenParams= (()=>{
-
-        if( extraTokenParamsOrGetter === undefined){
+    const getExtraTokenParams = (() => {
+        if (extraTokenParamsOrGetter === undefined) {
             return undefined;
         }
 
-        if( typeof extraTokenParamsOrGetter !== "function"){
-            return ()=> extraTokenParamsOrGetter;
+        if (typeof extraTokenParamsOrGetter !== "function") {
+            return () => extraTokenParamsOrGetter;
         }
 
         return extraTokenParamsOrGetter;
-
     })();
-    
-
 
     const homeAndCallbackUrl = toFullyQualifiedUrl({
         urlish: homeUrl_params,
@@ -926,7 +914,9 @@ export async function createOidc_nonMemoized<
             return new Promise<never>(() => {});
         },
         renewTokens: (() => {
-            async function renewTokens_nonMutexed(params: { extraTokenParams: Record<string, string | undefined> }) {
+            async function renewTokens_nonMutexed(params: {
+                extraTokenParams: Record<string, string | undefined>;
+            }) {
                 const { extraTokenParams } = params;
 
                 log?.("Renewing tokens");

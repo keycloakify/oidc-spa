@@ -40,7 +40,9 @@ export declare namespace Oidc {
     export type LoggedIn<DecodedIdToken extends Record<string, unknown> = Record<string, unknown>> =
         Common & {
             isUserLoggedIn: true;
-            renewTokens(params?: { extraTokenParams?: Record<string, string | undefined> }): Promise<void>;
+            renewTokens(params?: {
+                extraTokenParams?: Record<string, string | undefined>;
+            }): Promise<void>;
             /**
              * Prefer using getTokens_next(), in the next major getTokens() will be be async.
              *

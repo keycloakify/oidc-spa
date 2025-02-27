@@ -138,7 +138,8 @@ export async function loginSilent(params: {
                 configId
             }),
             silentRequestTimeoutInSeconds: timeoutDelayMs / 1000,
-            extraTokenParams: getExtraTokenParams === undefined ? undefined :  noUndefined(getExtraTokenParams()),
+            extraTokenParams:
+                getExtraTokenParams === undefined ? undefined : noUndefined(getExtraTokenParams()),
             transformUrl: transformUrl_oidcClientTs
         })
         .then(
