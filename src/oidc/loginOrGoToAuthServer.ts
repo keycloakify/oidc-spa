@@ -1,6 +1,6 @@
 import type { UserManager as OidcClientTsUserManager } from "../vendor/frontend/oidc-client-ts-and-jwt-decode";
 import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";
-import { assert, type Equals } from "../vendor/frontend/tsafe";
+import { assert, type Equals, noUndefined } from "../vendor/frontend/tsafe";
 import { StateData } from "./StateData";
 import type { NonPostableEvt } from "../tools/Evt";
 import { type StatefulEvt, createStatefulEvt } from "../tools/StatefulEvt";
@@ -27,7 +27,7 @@ type Params = Params.Login | Params.GoToAuthServer;
 namespace Params {
     type Common = {
         redirectUrl: string;
-        extraQueryParams_local: Record<string, string> | undefined;
+        extraQueryParams_local: Record<string, string | undefined> | undefined;
         transformUrlBeforeRedirect_local: ((url: string) => string) | undefined;
     };
 
@@ -59,8 +59,20 @@ export function getPrSafelyRestoredFromBfCacheAfterLoginBackNavigation() {
 export function createLoginOrGoToAuthServer(params: {
     configId: string;
     oidcClientTsUserManager: OidcClientTsUserManager;
-    getExtraQueryParams: (() => Record<string, string>) | undefined;
     transformUrlBeforeRedirect: ((url: string) => string) | undefined;
+    transformUrlBeforeRedirect_next: ((params: {
+        isSilent: false;
+        url: string;
+    })=> string) | undefined;
+
+    getExtraQueryParams:
+        ( ((params: {
+              isSilent: false;
+              url: string;
+          }) => Record<string, string | undefined>)) | undefined;
+
+    getExtraTokenParams: (() => Record<string, string | undefined>) | undefined;
+
     homeAndCallbackUrl: string;
     evtIsUserLoggedIn: NonPostableEvt<boolean>;
     log: typeof console.log | undefined;
@@ -68,8 +80,13 @@ export function createLoginOrGoToAuthServer(params: {
     const {
         configId,
         oidcClientTsUserManager,
-        getExtraQueryParams,
+
         transformUrlBeforeRedirect,
+        transformUrlBeforeRedirect_next,
+        getExtraQueryParams,
+
+        getExtraTokenParams,
+
         homeAndCallbackUrl,
         evtIsUserLoggedIn,
         log
@@ -83,7 +100,7 @@ export function createLoginOrGoToAuthServer(params: {
         const {
             redirectUrl: redirectUrl_params,
             extraQueryParams_local,
-            transformUrlBeforeRedirect_local,
+            transformUrlBeforeRedirect_local: transformUrl,
             ...rest
         } = params;
 
@@ -172,29 +189,43 @@ export function createLoginOrGoToAuthServer(params: {
         const transformUrl_oidcClientTs = (url: string) => {
             (
                 [
-                    [getExtraQueryParams?.(), transformUrlBeforeRedirect],
-                    [extraQueryParams_local, transformUrlBeforeRedirect_local]
+                    [
+                        undefined,
+                        transformUrlBeforeRedirect_next === undefined
+                            ? undefined
+                            : (url: string) => transformUrlBeforeRedirect_next({ url, isSilent: false })
+                    ],
+                    [getExtraQueryParams, transformUrlBeforeRedirect],
+                    [extraQueryParams_local, transformUrl]
                 ] as const
-            ).forEach(([extraQueryParams, transformUrlBeforeRedirect], i) => {
-                const urlObj_before = i === 0 ? undefined : new URL(url);
+            ).forEach(([extraQueryParamsMaybeGetter, transformUrlBeforeRedirect], i) => {
+                const urlObj_before = i !== 2 ? undefined : new URL(url);
 
                 add_extra_query_params: {
-                    if (extraQueryParams === undefined) {
+                    if (extraQueryParamsMaybeGetter === undefined) {
                         break add_extra_query_params;
                     }
+
+                    const extraQueryParams =
+                        typeof extraQueryParamsMaybeGetter === "function"
+                            ? extraQueryParamsMaybeGetter({ isSilent: false, url })
+                            : extraQueryParamsMaybeGetter;
 
                     const url_obj = new URL(url);
 
                     for (const [name, value] of Object.entries(extraQueryParams)) {
+                        if (value === undefined) {
+                            continue;
+                        }
                         url_obj.searchParams.set(name, value);
                     }
 
                     url = url_obj.href;
                 }
 
-                apply_transform_before_redirect: {
+                apply_transform_url: {
                     if (transformUrlBeforeRedirect === undefined) {
-                        break apply_transform_before_redirect;
+                        break apply_transform_url;
                     }
                     url = transformUrlBeforeRedirect(url);
                 }
@@ -213,7 +244,6 @@ export function createLoginOrGoToAuthServer(params: {
 
                         stateData.extraQueryParams[name] = value;
                     }
-
                 }
             });
 
@@ -246,7 +276,8 @@ export function createLoginOrGoToAuthServer(params: {
                     }
                     assert<Equals<typeof rest, never>>;
                 })(),
-                transformUrl: transformUrl_oidcClientTs
+                transformUrl: transformUrl_oidcClientTs,
+                extraTokenParams: getExtraTokenParams === undefined ? undefined : noUndefined(getExtraTokenParams()),
             })
             .then(() => new Promise<never>(() => {}));
     }

@@ -1,6 +1,6 @@
 import type { UserManager as OidcClientTsUserManager } from "../vendor/frontend/oidc-client-ts-and-jwt-decode";
 import { Deferred } from "../tools/Deferred";
-import { id, assert } from "../vendor/frontend/tsafe";
+import { id, assert, noUndefined } from "../vendor/frontend/tsafe";
 import { getStateData, clearStateStore, type StateData } from "./StateData";
 import { getDownlinkAndRtt } from "../tools/getDownlinkAndRtt";
 import { getIsDev } from "../tools/isDev";
@@ -25,10 +25,23 @@ export async function loginSilent(params: {
     oidcClientTsUserManager: OidcClientTsUserManager;
     stateQueryParamValue_instance: string;
     configId: string;
-    getExtraTokenParams: (() => Record<string, string>) | undefined;
+
+    transformUrlBeforeRedirect_next: ((params: { isSilent: true; url: string }) => string) | undefined;
+
+    getExtraQueryParams:
+        | ((params: { isSilent: true; url: string }) => Record<string, string | undefined>)
+        | undefined;
+
+    getExtraTokenParams: (() => Record<string, string | undefined>) | undefined;
 }): Promise<ResultOfLoginSilent> {
-    const { oidcClientTsUserManager, stateQueryParamValue_instance, configId, getExtraTokenParams } =
-        params;
+    const {
+        oidcClientTsUserManager,
+        stateQueryParamValue_instance,
+        configId,
+        transformUrlBeforeRedirect_next,
+        getExtraQueryParams,
+        getExtraTokenParams
+    } = params;
 
     const dResult = new Deferred<ResultOfLoginSilent>();
 
@@ -88,6 +101,36 @@ export async function loginSilent(params: {
 
     window.addEventListener("message", listener, false);
 
+    const transformUrl_oidcClientTs = (url: string) => {
+        add_extra_query_params: {
+            if (getExtraQueryParams === undefined) {
+                break add_extra_query_params;
+            }
+
+            const extraQueryParams = getExtraQueryParams({ isSilent: true, url });
+
+            const url_obj = new URL(url);
+
+            for (const [name, value] of Object.entries(extraQueryParams)) {
+                if (value === undefined) {
+                    continue;
+                }
+                url_obj.searchParams.set(name, value);
+            }
+
+            url = url_obj.href;
+        }
+
+        apply_transform_url: {
+            if (transformUrlBeforeRedirect_next === undefined) {
+                break apply_transform_url;
+            }
+            url = transformUrlBeforeRedirect_next({ url, isSilent: true });
+        }
+
+        return url;
+    };
+
     oidcClientTsUserManager
         .signinSilent({
             state: id<StateData.IFrame>({
@@ -95,7 +138,8 @@ export async function loginSilent(params: {
                 configId
             }),
             silentRequestTimeoutInSeconds: timeoutDelayMs / 1000,
-            extraTokenParams: getExtraTokenParams?.()
+            extraTokenParams: getExtraTokenParams === undefined ? undefined :  noUndefined(getExtraTokenParams()),
+            transformUrl: transformUrl_oidcClientTs
         })
         .then(
             oidcClientTsUser => {

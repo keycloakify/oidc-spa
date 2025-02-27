@@ -57,11 +57,25 @@ export type ParamsOfCreateOidc<
      **/
     scopes?: string[];
     /**
-     * Transform the url before redirecting to the login pages.
+     * Transform the url of the authorization endpoint before redirecting to the login pages.
      */
     transformUrlBeforeRedirect?: (url: string) => string;
+
     /**
-     * Extra query params to be added on the login url.
+     * NOTE: Will replace transformUrlBeforeRedirect in the next major version.
+     * 
+     * Transform the url (authorization endpoint) before redirecting to the login pages.  
+     * 
+     * The isSilent parameter is true when the redirect is initiated in the background iframe for silent signin.
+     * This can be used to omit ui related query parameters (like `ui_locales`).  
+     */
+    transformUrlBeforeRedirect_next?: (params: {
+        isSilent: boolean;
+        url: string;
+    })=> string;
+
+    /**
+     * Extra query params to be added to the authorization endpoint url before redirecting or silent signing in.
      * You can provide a function that returns those extra query params, it will be called
      * when login() is called.
      *
@@ -69,7 +83,12 @@ export type ParamsOfCreateOidc<
      *
      * This parameter can also be passed to login() directly.
      */
-    extraQueryParams?: Record<string, string> | (() => Record<string, string>);
+    extraQueryParams?:
+        | Record<string, string | undefined>
+        | ((params: {
+              isSilent: boolean;
+              url: string;
+          }) => Record<string, string | undefined>);
     /**
      * Extra body params to be added to the /token POST request.
      *
@@ -81,7 +100,7 @@ export type ParamsOfCreateOidc<
      * Example: extraTokenParams: ()=> ({ selectedCustomer: "xxx" })
      *          extraTokenParams: { selectedCustomer: "xxx" }
      */
-    extraTokenParams?: Record<string, string> | (() => Record<string, string>);
+    extraTokenParams?: Record<string, string | undefined> | (() => Record<string, string | undefined>);
     /**
      * Where to redirect after successful login.
      * Default: window.location.href (here)
@@ -246,6 +265,7 @@ export async function createOidc_nonMemoized<
     }
 ): Promise<AutoLogin extends true ? Oidc.LoggedIn<DecodedIdToken> : Oidc<DecodedIdToken>> {
     const {
+        transformUrlBeforeRedirect_next,
         transformUrlBeforeRedirect,
         extraQueryParams: extraQueryParamsOrGetter,
         extraTokenParams: extraTokenParamsOrGetter,
@@ -261,19 +281,35 @@ export async function createOidc_nonMemoized<
 
     const { issuerUri, clientId, scopes, configId, log } = preProcessedParams;
 
-    const [getExtraQueryParams, getExtraTokenParams] = (
-        [extraQueryParamsOrGetter, extraTokenParamsOrGetter] as const
-    ).map(valueOrGetter => {
-        if (typeof valueOrGetter === "function") {
-            return valueOrGetter;
+    const getExtraQueryParams= (()=>{
+
+        if( extraQueryParamsOrGetter === undefined){
+            return undefined;
         }
 
-        if (valueOrGetter !== undefined) {
-            return () => valueOrGetter;
+        if( typeof extraQueryParamsOrGetter !== "function"){
+            return ()=> extraQueryParamsOrGetter;
         }
 
-        return undefined;
-    });
+        return extraQueryParamsOrGetter;
+
+    })();
+
+    const getExtraTokenParams= (()=>{
+
+        if( extraTokenParamsOrGetter === undefined){
+            return undefined;
+        }
+
+        if( typeof extraTokenParamsOrGetter !== "function"){
+            return ()=> extraTokenParamsOrGetter;
+        }
+
+        return extraTokenParamsOrGetter;
+
+    })();
+    
+
 
     const homeAndCallbackUrl = toFullyQualifiedUrl({
         urlish: homeUrl_params,
@@ -369,8 +405,10 @@ export async function createOidc_nonMemoized<
     const { loginOrGoToAuthServer } = createLoginOrGoToAuthServer({
         configId,
         oidcClientTsUserManager,
-        getExtraQueryParams,
         transformUrlBeforeRedirect,
+        transformUrlBeforeRedirect_next,
+        getExtraQueryParams,
+        getExtraTokenParams,
         homeAndCallbackUrl,
         evtIsUserLoggedIn,
         log
@@ -540,6 +578,8 @@ export async function createOidc_nonMemoized<
                     oidcClientTsUserManager,
                     stateQueryParamValue_instance,
                     configId,
+                    transformUrlBeforeRedirect_next,
+                    getExtraQueryParams,
                     getExtraTokenParams
                 });
 
@@ -886,7 +926,7 @@ export async function createOidc_nonMemoized<
             return new Promise<never>(() => {});
         },
         renewTokens: (() => {
-            async function renewTokens_nonMutexed(params: { extraTokenParams: Record<string, string> }) {
+            async function renewTokens_nonMutexed(params: { extraTokenParams: Record<string, string | undefined> }) {
                 const { extraTokenParams } = params;
 
                 log?.("Renewing tokens");
@@ -897,6 +937,8 @@ export async function createOidc_nonMemoized<
                     oidcClientTsUserManager,
                     stateQueryParamValue_instance,
                     configId,
+                    transformUrlBeforeRedirect_next,
+                    getExtraQueryParams,
                     getExtraTokenParams: () => extraTokenParams
                 });
 
@@ -999,7 +1041,7 @@ export async function createOidc_nonMemoized<
             let ongoingCall:
                 | {
                       pr: Promise<void>;
-                      extraTokenParams: Record<string, string>;
+                      extraTokenParams: Record<string, string | undefined>;
                   }
                 | undefined = undefined;
 

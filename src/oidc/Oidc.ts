@@ -19,7 +19,7 @@ export declare namespace Oidc {
             /**
              * Add extra query parameters to the url before redirecting to the login pages.
              */
-            extraQueryParams?: Record<string, string>;
+            extraQueryParams?: Record<string, string | undefined>;
             /**
              * Where to redirect after successful login.
              * Default: window.location.href (here)
@@ -40,7 +40,7 @@ export declare namespace Oidc {
     export type LoggedIn<DecodedIdToken extends Record<string, unknown> = Record<string, unknown>> =
         Common & {
             isUserLoggedIn: true;
-            renewTokens(params?: { extraTokenParams?: Record<string, string> }): Promise<void>;
+            renewTokens(params?: { extraTokenParams?: Record<string, string | undefined> }): Promise<void>;
             /**
              * Prefer using getTokens_next(), in the next major getTokens() will be be async.
              *
