@@ -9,7 +9,7 @@ import {
 } from "react";
 import type { JSX } from "../tools/JSX";
 import { type Oidc, createOidc, type ParamsOfCreateOidc, OidcInitializationError } from "../oidc";
-import { assert, type Equals } from "../vendor/frontend/tsafe";
+import { assert, type Equals, type Param0 } from "../vendor/frontend/tsafe";
 import { id } from "../vendor/frontend/tsafe";
 import type { ValueOrAsyncGetter } from "../tools/ValueOrAsyncGetter";
 import { Deferred } from "../tools/Deferred";
@@ -23,7 +23,12 @@ export namespace OidcReact {
 
     export type NotLoggedIn = Common & {
         isUserLoggedIn: false;
-        login: Oidc.NotLoggedIn["login"];
+        login: (params: {
+            extraQueryParams?: Record<string, string | undefined>;
+            redirectUrl?: string;
+            transformUrlBeforeRedirect?: (url: string) => string;
+            doesCurrentHrefRequiresAuth?: boolean;
+        }) => Promise<never>;
         initializationError: OidcInitializationError | undefined;
 
         /** @deprecated: Use `const { decodedIdToken, tokens} = useOidc();` */
@@ -66,6 +71,14 @@ export namespace OidcReact {
 
         isNewBrowserSession: boolean;
     };
+}
+{
+    type Actual = Param0<OidcReact.NotLoggedIn["login"]>;
+    type Expected = Omit<Param0<Oidc.NotLoggedIn["login"]>, "doesCurrentHrefRequiresAuth"> & {
+        doesCurrentHrefRequiresAuth?: boolean;
+    };
+
+    assert<Equals<Actual, Expected>>();
 }
 
 type OidcReactApi<DecodedIdToken extends Record<string, unknown>, AutoLogin extends boolean> = {
@@ -289,7 +302,8 @@ export function createOidcReactApi_dependencyInjection<
             return id<OidcReact.NotLoggedIn>({
                 ...common,
                 isUserLoggedIn: false,
-                login: oidc.login,
+                login: ({ doesCurrentHrefRequiresAuth = false, ...rest }) =>
+                    oidc.login({ doesCurrentHrefRequiresAuth, ...rest }),
                 initializationError: oidc.initializationError
             });
         }
