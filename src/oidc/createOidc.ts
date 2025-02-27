@@ -426,7 +426,13 @@ export async function createOidc_nonMemoized<
             switch (stateData.action) {
                 case "login":
                     {
-                        log?.("Handling login redirect auth response", authResponse);
+                        log?.(
+                            `Handling login redirect auth response ${JSON.stringify(
+                                authResponse,
+                                null,
+                                2
+                            )}`
+                        );
 
                         const authResponseUrl = authResponseToUrl(authResponse);
 
