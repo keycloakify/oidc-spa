@@ -29,7 +29,7 @@
 
 A fully-featured OpenID Connect client for single-page applications (SPAs).
 
-With `oidc-spa`, you can integrate your application with authentication providers like [Keycloak](https://www.keycloak.org/), [Auth0](https://auth0.com/), or [Microsoft Entra ID](https://www.okta.com/).
+With `oidc-spa`, you can integrate your application with authentication providers like [Keycloak](https://www.keycloak.org/), [Auth0](https://auth0.com/), or [Microsoft Entra ID](https://www.microsoft.com/en-us/security/business/identity-access/microsoft-entra-id).
 
 In **simple terms**, `oidc-spa` is a library that lets you **add authentication** to your Vite (or Create-React-App) project.  
 When a user clicks the **"Login"** button in your app's header, call the `login()` method—it's that easy! 😄
@@ -46,14 +46,14 @@ Most OIDC providers push their own client libraries:
 These libraries are **tied to a specific provider**. But what if you want to:
 
 ✅ Switch OIDC providers without rewriting your authentication logic?  
-✅ Develop software that must support multiple environments, where the authentication provider is unknown beforehand.  
+✅ Develop an app that must support multiple environments, where the auth provider is unknown beforehand?  
 ✅ Support multiple OIDC providers in the same app?
 
 Well, we needed a solution so we built one, `oidc-spa`!
 
 ## Features
 
--   🎓 **No OIDC/OAuth2 expertise required**: Easy to setup and use. If you need help we're here to help [on Discord](https://discord.gg/mJdYJSdcm4)!
+-   🎓 **No OIDC/OAuth2 expertise required**: Easy to setup and use. We're here to help [on Discord](https://discord.gg/mJdYJSdcm4)!
 -   🛠️ **Simple setup**: No need to define `/login` or `/logout` routes—token refreshing is automatic, it just works.
 -   🔥 **If an OIDC provider’s official SDK can do it, `oidc-spa` can do it too**- For example, everything you could do with `keycloak-js`, you can do with `oidc-spa`.
 -   💬 **Detailed debug messages**: If your OIDC server is not properly configured, it tells you precisely what’s wrong and what you need to do to fix it.
