@@ -7,7 +7,9 @@ import { router } from "router/router";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
     <React.StrictMode>
-        <OidcProvider>
+        <OidcProvider
+        //fallback={<h1>Initializing OIDC...</h1>}
+        >
             <RouterProvider router={router} />
         </OidcProvider>
     </React.StrictMode>

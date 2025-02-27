@@ -9,7 +9,9 @@ const router = createRouter({ routeTree });
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
     <React.StrictMode>
-        <OidcProvider>
+        <OidcProvider
+        //fallback={<h1>Initializing OIDC...</h1>}
+        >
             <RouterProvider router={router} />
         </OidcProvider>
     </React.StrictMode>

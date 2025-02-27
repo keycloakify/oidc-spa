@@ -1,7 +1,7 @@
 import reactLogo from "assets/react.svg";
 import viteLogo from "assets/vite.svg";
 
-export function PublicPage() {
+export default function PublicPage() {
     return (
         <>
             <div>

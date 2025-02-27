@@ -71,12 +71,11 @@ function NotLoggedInAuthButton() {
 
     return (
         <div>
-            <button onClick={() => login({ doesCurrentHrefRequiresAuth: false })}>Login</button>{" "}
+            <button onClick={() => login()}>Login</button>{" "}
             {isKeycloak && (
                 <button
                     onClick={() =>
                         login({
-                            doesCurrentHrefRequiresAuth: false,
                             transformUrlBeforeRedirect: url => {
                                 const urlObj = new URL(url);
 
@@ -94,7 +93,6 @@ function NotLoggedInAuthButton() {
                 <button
                     onClick={() =>
                         login({
-                            doesCurrentHrefRequiresAuth: false,
                             extraQueryParams: {
                                 screen_hint: "signup"
                             }

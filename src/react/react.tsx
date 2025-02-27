@@ -5,9 +5,11 @@ import {
     useContext,
     useReducer,
     useRef,
-    type ReactNode
+    type ReactNode,
+    type ComponentType,
+    type FC,
+    JSX
 } from "react";
-import type { JSX } from "../tools/JSX";
 import { type Oidc, createOidc, type ParamsOfCreateOidc, OidcInitializationError } from "../oidc";
 import { assert, type Equals, type Param0 } from "../vendor/frontend/tsafe";
 import { id } from "../vendor/frontend/tsafe";
@@ -23,7 +25,7 @@ export namespace OidcReact {
 
     export type NotLoggedIn = Common & {
         isUserLoggedIn: false;
-        login: (params: {
+        login: (params?: {
             extraQueryParams?: Record<string, string | undefined>;
             redirectUrl?: string;
             transformUrlBeforeRedirect?: (url: string) => string;
@@ -101,6 +103,12 @@ type OidcReactApi<DecodedIdToken extends Record<string, unknown>, AutoLogin exte
     getOidc: () => Promise<
         AutoLogin extends true ? Oidc.LoggedIn<DecodedIdToken> : Oidc<DecodedIdToken>
     >;
+    withAuthenticationRequired: <Props extends Record<string, unknown>>(
+        Component: ComponentType<Props>,
+        params?: {
+            onRedirecting: () => JSX.Element | null;
+        }
+    ) => FC<Props>;
 };
 
 export function createOidcReactApi_dependencyInjection<
@@ -122,7 +130,9 @@ export function createOidcReactApi_dependencyInjection<
 > {
     const dReadyToCreate = new Deferred<void>();
 
-    const oidcContext = createContext<Oidc<DecodedIdToken> | undefined>(undefined);
+    const oidcContext = createContext<{ oidc: Oidc<DecodedIdToken>; fallback: ReactNode } | undefined>(
+        undefined
+    );
 
     // NOTE: It can be InitializationError only if autoLogin is true
     const prOidcOrInitializationError = (async () => {
@@ -196,7 +206,11 @@ export function createOidcReactApi_dependencyInjection<
 
         const oidc = oidcOrInitializationError;
 
-        return <oidcContext.Provider value={oidc}>{children}</oidcContext.Provider>;
+        return (
+            <oidcContext.Provider value={{ oidc, fallback: fallback ?? null }}>
+                {children}
+            </oidcContext.Provider>
+        );
     }
 
     function useOidc(params?: {
@@ -204,9 +218,11 @@ export function createOidcReactApi_dependencyInjection<
     }): OidcReact<DecodedIdToken> {
         const { assert: assert_params } = params ?? {};
 
-        const oidc = useContext(oidcContext);
+        const contextValue = useContext(oidcContext);
 
-        assert(oidc !== undefined, "You must use useOidc inside the corresponding OidcProvider");
+        assert(contextValue !== undefined, "You must use useOidc inside the corresponding OidcProvider");
+
+        const { oidc } = contextValue;
 
         check_assertion: {
             if (assert_params === undefined) {
@@ -302,7 +318,7 @@ export function createOidcReactApi_dependencyInjection<
             return id<OidcReact.NotLoggedIn>({
                 ...common,
                 isUserLoggedIn: false,
-                login: ({ doesCurrentHrefRequiresAuth = false, ...rest }) =>
+                login: ({ doesCurrentHrefRequiresAuth = false, ...rest } = {}) =>
                     oidc.login({ doesCurrentHrefRequiresAuth, ...rest }),
                 initializationError: oidc.initializationError
             });
@@ -327,6 +343,39 @@ export function createOidcReactApi_dependencyInjection<
         };
 
         return oidcReact;
+    }
+
+    function withAuthenticationRequired<Props extends Record<string, unknown>>(
+        Component: ComponentType<Props>,
+        params?: {
+            onRedirecting?: () => JSX.Element | null;
+        }
+    ): FC<Props> {
+        const { onRedirecting } = params ?? {};
+
+        function ComponentWithAuthenticationRequired(props: Props) {
+            const contextValue = useContext(oidcContext);
+
+            assert(contextValue !== undefined);
+
+            const { oidc, fallback } = contextValue;
+
+            useEffect(() => {
+                if (oidc.isUserLoggedIn) {
+                    return;
+                }
+
+                oidc.login({ doesCurrentHrefRequiresAuth: true });
+            }, []);
+
+            if (!oidc.isUserLoggedIn) {
+                return onRedirecting === undefined ? fallback : onRedirecting();
+            }
+
+            return <Component {...props} />;
+        }
+
+        return ComponentWithAuthenticationRequired;
     }
 
     const prOidc = prOidcOrInitializationError.then(oidcOrInitializationError => {
@@ -355,7 +404,8 @@ export function createOidcReactApi_dependencyInjection<
             }
 
             return oidc;
-        }
+        },
+        withAuthenticationRequired
     };
 }
 

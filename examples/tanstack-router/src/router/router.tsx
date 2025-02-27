@@ -1,17 +1,18 @@
+import { lazy } from "react";
 import { Layout } from "./Layout";
-import { ProtectedPage } from "../pages/ProtectedPage";
-import { PublicPage } from "../pages/PublicPage";
-import { getOidc } from "oidc";
 
 import { createRootRoute, createRoute, createRouter } from "@tanstack/react-router";
 
 const rootRoute = createRootRoute({ component: Layout });
-const indexRoute = createRoute({ getParentRoute: () => rootRoute, path: "/", component: PublicPage });
+const indexRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/",
+    component: lazy(() => import("../pages/PublicPage"))
+});
 const protectedRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: "protected",
-    component: ProtectedPage,
-    beforeLoad: beforeLoadProtectedRoute
+    component: lazy(() => import("../pages/ProtectedPage"))
 });
 
 const routeTree = rootRoute.addChildren([indexRoute, protectedRoute]);
@@ -22,16 +23,4 @@ declare module "@tanstack/react-router" {
     interface Register {
         router: typeof router;
     }
-}
-
-async function beforeLoadProtectedRoute() {
-    const oidc = await getOidc();
-
-    if (oidc.isUserLoggedIn) {
-        return;
-    }
-
-    await oidc.login({
-        doesCurrentHrefRequiresAuth: true
-    });
 }
