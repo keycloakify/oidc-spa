@@ -1,12 +1,12 @@
 // NOTE: Absolute imports are possible due to the following configuration:
 // - tsconfig.json: "baseUrl": "./src"
 // - vite.config.ts: usage of the "vite-tsconfig-paths" plugin
-import { useOidc, withAuthenticationRequired } from "oidc";
+import { useOidc, withLoginRequired } from "oidc";
 import { useMemo } from "react";
 import { decodeJwt } from "oidc-spa/tools/decodeJwt";
 import { parseKeycloakIssuerUri } from "oidc-spa/tools/parseKeycloakIssuerUri";
 
-const ProtectedPage = withAuthenticationRequired(
+const ProtectedPage = withLoginRequired(
     () => {
         // Here we can safely assume that the user is logged in.
         const {

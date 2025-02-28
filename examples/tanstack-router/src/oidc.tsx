@@ -13,7 +13,7 @@ export const {
      * This is useful to use the oidc API outside of React.
      */
     getOidc,
-    withAuthenticationRequired
+    withLoginRequired
 } = createReactOidc({
     // If you don't have the parameters right away, it's the case for example
     // if you get the oidc parameters from an API you can pass a promise that
