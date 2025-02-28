@@ -106,7 +106,7 @@ type OidcReactApi<DecodedIdToken extends Record<string, unknown>, AutoLogin exte
 } & (AutoLogin extends true
     ? {}
     : {
-          withLoginRequired: <Props extends Record<string, unknown>>(
+          withLoginEnforced: <Props extends Record<string, unknown>>(
               Component: ComponentType<Props>,
               params?: {
                   onRedirecting: () => JSX.Element | null;
@@ -348,7 +348,7 @@ export function createOidcReactApi_dependencyInjection<
         return oidcReact;
     }
 
-    function withLoginRequired<Props extends Record<string, unknown>>(
+    function withLoginEnforced<Props extends Record<string, unknown>>(
         Component: ComponentType<Props>,
         params?: {
             onRedirecting?: () => JSX.Element | null;
@@ -409,7 +409,7 @@ export function createOidcReactApi_dependencyInjection<
         // @ts-expect-error: We know what we are doing
         useOidc,
         getOidc,
-        withLoginRequired
+        withLoginEnforced
     };
 
     // @ts-expect-error: We know what we are doing

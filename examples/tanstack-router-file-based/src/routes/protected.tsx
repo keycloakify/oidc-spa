@@ -1,14 +1,14 @@
 // NOTE: Absolute imports are possible due to the following configuration:
 // - tsconfig.json: "baseUrl": "./src"
 // - vite.config.ts: usage of the "vite-tsconfig-paths" plugin
-import { useOidc, withLoginRequired } from "oidc";
+import { useOidc, withLoginEnforced } from "oidc";
 import { useMemo } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { decodeJwt } from "oidc-spa/tools/decodeJwt";
 import { parseKeycloakIssuerUri } from "oidc-spa/tools/parseKeycloakIssuerUri";
 
 export const Route = createFileRoute("/protected")({
-    component: withLoginRequired(ProtectedPage, {
+    component: withLoginEnforced(ProtectedPage, {
         onRedirecting: () => <h1>Redirecting to login...</h1>
     })
 });
