@@ -115,6 +115,8 @@ export type ParamsOfCreateOidc<
 
     decodedIdTokenSchema?: { parse: (data: unknown) => DecodedIdToken };
     /**
+     * @deprecated: Use idleSessionLifetimeInSeconds instead
+     *
      * This parameter defines after how many seconds of inactivity the user should be
      * logged out automatically.
      *
@@ -123,6 +125,15 @@ export type ParamsOfCreateOidc<
      * If you don't provide this parameter it will be inferred from the refresh token expiration time.
      * */
     __unsafe_ssoSessionIdleSeconds?: number;
+    /**
+     * This parameter defines after how many seconds of inactivity the user should be
+     * logged out automatically.
+     *
+     * WARNING: It should be configured on the identity server side
+     * as it's the authoritative source for security policies and not the client.
+     * If you don't provide this parameter it will be inferred from the refresh token expiration time.
+     * */
+    idleSessionLifetimeInSeconds?: number;
 
     autoLogoutParams?: Parameters<Oidc.LoggedIn<any>["logout"]>[0];
     autoLogin?: AutoLogin;
@@ -266,6 +277,7 @@ export async function createOidc_nonMemoized<
         homeUrl: homeUrl_params,
         decodedIdTokenSchema,
         __unsafe_ssoSessionIdleSeconds,
+        idleSessionLifetimeInSeconds = __unsafe_ssoSessionIdleSeconds,
         autoLogoutParams = { redirectTo: "current page" },
         autoLogin = false,
         postLoginRedirectUrl: postLoginRedirectUrl_default,
@@ -1231,14 +1243,14 @@ export async function createOidc_nonMemoized<
     auto_logout: {
         if (
             (!currentTokens.hasRefreshToken || currentTokens.refreshTokenExpirationTime === undefined) &&
-            __unsafe_ssoSessionIdleSeconds === undefined
+            idleSessionLifetimeInSeconds === undefined
         ) {
             log?.(
                 `${
                     currentTokens.hasRefreshToken
                         ? "The refresh token is opaque, we can't read it's expiration time"
                         : "No refresh token"
-                }, and __unsafe_ssoSessionIdleSeconds was not set, can't implement auto logout mechanism`
+                }, and idleSessionLifetimeInSeconds was not set, can't implement auto logout mechanism`
             );
             break auto_logout;
         }
@@ -1246,8 +1258,8 @@ export async function createOidc_nonMemoized<
         const { startCountdown } = createStartCountdown({
             getCountdownEndTime: (() => {
                 const getCountdownEndTime = () =>
-                    __unsafe_ssoSessionIdleSeconds !== undefined
-                        ? Date.now() + __unsafe_ssoSessionIdleSeconds * 1000
+                    idleSessionLifetimeInSeconds !== undefined
+                        ? Date.now() + idleSessionLifetimeInSeconds * 1000
                         : (assert(currentTokens.hasRefreshToken),
                           assert(currentTokens.refreshTokenExpirationTime !== undefined),
                           currentTokens.refreshTokenExpirationTime);
@@ -1259,9 +1271,9 @@ export async function createOidc_nonMemoized<
                 log?.(
                     [
                         `The user will be automatically logged out after ${durationBeforeAutoLogout} of inactivity.`,
-                        __unsafe_ssoSessionIdleSeconds === undefined
+                        idleSessionLifetimeInSeconds === undefined
                             ? undefined
-                            : `It was artificially defined by using the __unsafe_ssoSessionIdleSeconds param.`
+                            : `It was artificially defined by using the idleSessionLifetimeInSeconds param.`
                     ]
                         .filter(x => x !== undefined)
                         .join("\n")
