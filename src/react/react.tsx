@@ -103,13 +103,16 @@ type OidcReactApi<DecodedIdToken extends Record<string, unknown>, AutoLogin exte
     getOidc: () => Promise<
         AutoLogin extends true ? Oidc.LoggedIn<DecodedIdToken> : Oidc<DecodedIdToken>
     >;
-    withAuthenticationRequired: <Props extends Record<string, unknown>>(
-        Component: ComponentType<Props>,
-        params?: {
-            onRedirecting: () => JSX.Element | null;
-        }
-    ) => FC<Props>;
-};
+} & (AutoLogin extends true
+    ? {}
+    : {
+          withAuthenticationRequired: <Props extends Record<string, unknown>>(
+              Component: ComponentType<Props>,
+              params?: {
+                  onRedirecting: () => JSX.Element | null;
+              }
+          ) => FC<Props>;
+      });
 
 export function createOidcReactApi_dependencyInjection<
     DecodedIdToken extends Record<string, unknown>,
@@ -388,25 +391,29 @@ export function createOidcReactApi_dependencyInjection<
         return oidc;
     });
 
-    return {
+    async function getOidc(): Promise<Oidc<DecodedIdToken>> {
+        dReadyToCreate.resolve();
+
+        // TODO: Directly return oidc in next major version
+        const oidc = await prOidc;
+
+        if (oidc.isUserLoggedIn) {
+            await oidc.getTokens_next();
+        }
+
+        return oidc;
+    }
+
+    const oidcReact: OidcReactApi<DecodedIdToken, false> = {
         OidcProvider,
         // @ts-expect-error: We know what we are doing
         useOidc,
-        // @ts-expect-error: We know what we are doing
-        getOidc: async () => {
-            dReadyToCreate.resolve();
-
-            // TODO: Directly return oidc in next major version
-            const oidc = await prOidc;
-
-            if (oidc.isUserLoggedIn) {
-                await oidc.getTokens_next();
-            }
-
-            return oidc;
-        },
+        getOidc,
         withAuthenticationRequired
     };
+
+    // @ts-expect-error: We know what we are doing
+    return oidcReact;
 }
 
 /** @see: https://docs.oidc-spa.dev/v/v6/usage#react-api */
