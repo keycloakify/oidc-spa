@@ -356,7 +356,7 @@ export function createOidcReactApi_dependencyInjection<
     ): FC<Props> {
         const { onRedirecting } = params ?? {};
 
-        function ComponentWithAuthenticationRequired(props: Props) {
+        function ComponentWithLoginEnforced(props: Props) {
             const contextValue = useContext(oidcContext);
 
             assert(contextValue !== undefined);
@@ -378,7 +378,11 @@ export function createOidcReactApi_dependencyInjection<
             return <Component {...props} />;
         }
 
-        return ComponentWithAuthenticationRequired;
+        ComponentWithLoginEnforced.displayName = `${
+            Component.displayName ?? Component.name ?? "Component"
+        }WithLoginEnforced`;
+
+        return ComponentWithLoginEnforced;
     }
 
     const prOidc = prOidcOrInitializationError.then(oidcOrInitializationError => {
