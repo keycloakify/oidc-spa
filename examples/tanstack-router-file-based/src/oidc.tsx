@@ -29,6 +29,10 @@ export const {
     clientId: import.meta.env.VITE_OIDC_CLIENT_ID,
     __unsafe_clientSecret: import.meta.env.VITE_OIDC_CLIENT_SECRET || undefined,
     __unsafe_useIdTokenAsAccessToken: import.meta.env.VITE_OIDC_USE_ID_TOKEN_AS_ACCESS_TOKEN === "true",
+    idleSessionLifetimeInSeconds: (() => {
+        const value_str = import.meta.env.VITE_OIDC_SSO_SESSION_IDLE_SECONDS;
+        return value_str ? parseInt(value_str) : undefined;
+    })(),
     scopes: (import.meta.env.VITE_OIDC_SCOPE || undefined)?.split(" "),
     homeUrl: import.meta.env.BASE_URL,
     /**

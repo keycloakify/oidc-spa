@@ -25,8 +25,14 @@ namespace PersistedAuthState {
 export function persistAuthState(params: {
     configId: string;
     state:
-        | Omit<PersistedAuthState.ExplicitlyLoggedOut, "__brand">
-        | Omit<PersistedAuthState.LoggedIn, "__brand">
+        | {
+              stateDescription: "logged in";
+              idleSessionLifetimeInSeconds: number | undefined;
+              refreshTokenExpirationTime: number | undefined;
+          }
+        | {
+              stateDescription: "explicitly logged out";
+          }
         | undefined;
 }) {
     const { configId, state } = params;
@@ -41,10 +47,32 @@ export function persistAuthState(params: {
     localStorage.setItem(
         key,
         JSON.stringify(
-            id<PersistedAuthState>({
-                __brand: "PersistedAuthState-v1",
-                ...state
-            })
+            id<PersistedAuthState>(
+                (() => {
+                    switch (state.stateDescription) {
+                        case "logged in":
+                            return id<PersistedAuthState.LoggedIn>({
+                                __brand: "PersistedAuthState-v1",
+                                stateDescription: "logged in",
+                                untilTime: (() => {
+                                    const { idleSessionLifetimeInSeconds, refreshTokenExpirationTime } =
+                                        state;
+
+                                    if (idleSessionLifetimeInSeconds !== undefined) {
+                                        return Date.now() + idleSessionLifetimeInSeconds * 1000;
+                                    }
+
+                                    return refreshTokenExpirationTime;
+                                })()
+                            });
+                        case "explicitly logged out":
+                            return id<PersistedAuthState.ExplicitlyLoggedOut>({
+                                __brand: "PersistedAuthState-v1",
+                                stateDescription: "explicitly logged out"
+                            });
+                    }
+                })()
+            )
         )
     );
 }

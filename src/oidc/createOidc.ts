@@ -665,10 +665,22 @@ export async function createOidc_nonMemoized<
                         action: "login",
                         doForceReloadOnBfCache: true,
                         redirectUrl: window.location.href,
-                        doNavigateBackToLastPublicUrlIfTheTheUserNavigateBack: autoLogin,
+                        // NOTE: Wether or not it's the preferred behavior, pushing to history
+                        // only works on user interaction so it have to be false
+                        doNavigateBackToLastPublicUrlIfTheTheUserNavigateBack: false,
                         extraQueryParams_local: undefined,
                         transformUrlBeforeRedirect_local: undefined,
-                        doForceInteraction: persistedAuthState === "explicitly logged out"
+                        interaction: (() => {
+                            if (persistedAuthState === "explicitly logged out") {
+                                return "ensure interaction";
+                            }
+
+                            if (autoLogin) {
+                                return "directly redirect if active session show login otherwise";
+                            }
+
+                            return "ensure no interaction";
+                        })()
                     });
                     assert(false);
                 }
@@ -784,8 +796,10 @@ export async function createOidc_nonMemoized<
                                 redirectUrl ?? postLoginRedirectUrl_default ?? window.location.href,
                             extraQueryParams_local: extraQueryParams,
                             transformUrlBeforeRedirect_local: transformUrlBeforeRedirect,
-                            doForceInteraction:
+                            interaction:
                                 getPersistedAuthState({ configId }) === "explicitly logged out"
+                                    ? "ensure interaction"
+                                    : "directly redirect if active session show login otherwise"
                         });
                     },
                     initializationError: undefined
@@ -837,7 +851,8 @@ export async function createOidc_nonMemoized<
                 configId,
                 state: {
                     stateDescription: "logged in",
-                    untilTime: currentTokens.refreshTokenExpirationTime
+                    refreshTokenExpirationTime: currentTokens.refreshTokenExpirationTime,
+                    idleSessionLifetimeInSeconds
                 }
             });
         }
@@ -1010,7 +1025,7 @@ export async function createOidc_nonMemoized<
                                     extraQueryParams_local: undefined,
                                     transformUrlBeforeRedirect_local: undefined,
                                     doNavigateBackToLastPublicUrlIfTheTheUserNavigateBack: false,
-                                    doForceInteraction: false
+                                    interaction: "ensure no interaction"
                                 });
                                 assert(false);
                             }
@@ -1036,7 +1051,8 @@ export async function createOidc_nonMemoized<
                         configId,
                         state: {
                             stateDescription: "logged in",
-                            untilTime: currentTokens.refreshTokenExpirationTime
+                            refreshTokenExpirationTime: currentTokens.refreshTokenExpirationTime,
+                            idleSessionLifetimeInSeconds
                         }
                     });
                 }
@@ -1190,7 +1206,7 @@ export async function createOidc_nonMemoized<
                 // NOTE: Wether or not it's the preferred behavior, pushing to history
                 // only works on user interaction so it have to be false
                 doNavigateBackToLastPublicUrlIfTheTheUserNavigateBack: false,
-                doForceInteraction: true
+                interaction: "ensure no interaction"
             });
         };
 

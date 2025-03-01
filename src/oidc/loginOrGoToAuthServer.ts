@@ -35,7 +35,10 @@ namespace Params {
         action: "login";
         doNavigateBackToLastPublicUrlIfTheTheUserNavigateBack: boolean;
         doForceReloadOnBfCache: boolean;
-        doForceInteraction: boolean;
+        interaction:
+            | "ensure no interaction"
+            | "ensure interaction"
+            | "directly redirect if active session show login otherwise";
     };
 
     export type GoToAuthServer = Common & {
@@ -267,7 +270,15 @@ export function createLoginOrGoToAuthServer(params: {
                         case "go to auth server":
                             return undefined;
                         case "login":
-                            return rest.doForceInteraction ? "consent" : undefined;
+                            switch (rest.interaction) {
+                                case "ensure no interaction":
+                                    return "none";
+                                case "ensure interaction":
+                                    return "prompt";
+                                case "directly redirect if active session show login otherwise":
+                                    return undefined;
+                            }
+                            assert<Equals<typeof rest.interaction, never>>;
                     }
                     assert<Equals<typeof rest, never>>;
                 })(),
