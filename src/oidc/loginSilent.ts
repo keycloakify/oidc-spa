@@ -26,7 +26,9 @@ export async function loginSilent(params: {
     stateQueryParamValue_instance: string;
     configId: string;
 
-    transformUrlBeforeRedirect_next: ((params: { isSilent: true; url: string }) => string) | undefined;
+    transformUrlBeforeRedirect_next:
+        | ((params: { authorizationUrl: string; isSilent: true }) => string)
+        | undefined;
 
     getExtraQueryParams:
         | ((params: { isSilent: true; url: string }) => Record<string, string | undefined>)
@@ -125,7 +127,7 @@ export async function loginSilent(params: {
             if (transformUrlBeforeRedirect_next === undefined) {
                 break apply_transform_url;
             }
-            url = transformUrlBeforeRedirect_next({ url, isSilent: true });
+            url = transformUrlBeforeRedirect_next({ authorizationUrl: url, isSilent: true });
         }
 
         return url;

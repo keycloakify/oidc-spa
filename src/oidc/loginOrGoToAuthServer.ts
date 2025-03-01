@@ -63,7 +63,9 @@ export function createLoginOrGoToAuthServer(params: {
     configId: string;
     oidcClientTsUserManager: OidcClientTsUserManager;
     transformUrlBeforeRedirect: ((url: string) => string) | undefined;
-    transformUrlBeforeRedirect_next: ((params: { isSilent: false; url: string }) => string) | undefined;
+    transformUrlBeforeRedirect_next:
+        | ((params: { authorizationUrl: string; isSilent: false }) => string)
+        | undefined;
 
     getExtraQueryParams:
         | ((params: { isSilent: false; url: string }) => Record<string, string | undefined>)
@@ -191,7 +193,11 @@ export function createLoginOrGoToAuthServer(params: {
                         undefined,
                         transformUrlBeforeRedirect_next === undefined
                             ? undefined
-                            : (url: string) => transformUrlBeforeRedirect_next({ url, isSilent: false })
+                            : (url: string) =>
+                                  transformUrlBeforeRedirect_next({
+                                      isSilent: false,
+                                      authorizationUrl: url
+                                  })
                     ],
                     [getExtraQueryParams, transformUrlBeforeRedirect],
                     [extraQueryParams_local, transformUrl]

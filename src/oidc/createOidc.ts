@@ -69,7 +69,10 @@ export type ParamsOfCreateOidc<
      * The isSilent parameter is true when the redirect is initiated in the background iframe for silent signin.
      * This can be used to omit ui related query parameters (like `ui_locales`).
      */
-    transformUrlBeforeRedirect_next?: (params: { isSilent: boolean; url: string }) => string;
+    transformUrlBeforeRedirect_next?: (params: {
+        authorizationUrl: string;
+        isSilent: boolean;
+    }) => string;
 
     /**
      * Extra query params to be added to the authorization endpoint url before redirecting or silent signing in.
