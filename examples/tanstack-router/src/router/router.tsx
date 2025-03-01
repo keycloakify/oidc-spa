@@ -1,5 +1,6 @@
 import { lazy } from "react";
 import { Layout } from "./Layout";
+import { enforceLogin } from "oidc";
 
 import { createRootRoute, createRoute, createRouter } from "@tanstack/react-router";
 
@@ -12,6 +13,9 @@ const indexRoute = createRoute({
 const protectedRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: "protected",
+    beforeLoad: async () => {
+        await enforceLogin();
+    },
     component: lazy(() => import("../pages/ProtectedPage"))
 });
 
