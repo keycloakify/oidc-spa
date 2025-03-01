@@ -64,11 +64,11 @@ export function createLoginOrGoToAuthServer(params: {
     oidcClientTsUserManager: OidcClientTsUserManager;
     transformUrlBeforeRedirect: ((url: string) => string) | undefined;
     transformUrlBeforeRedirect_next:
-        | ((params: { authorizationUrl: string; isSilent: false }) => string)
+        | ((params: { authorizationUrl: string; isSilent: boolean }) => string)
         | undefined;
 
     getExtraQueryParams:
-        | ((params: { isSilent: false; url: string }) => Record<string, string | undefined>)
+        | ((params: { isSilent: boolean; url: string }) => Record<string, string | undefined>)
         | undefined;
 
     getExtraTokenParams: (() => Record<string, string | undefined>) | undefined;
@@ -186,6 +186,8 @@ export function createLoginOrGoToAuthServer(params: {
             })()
         };
 
+        const isSilent = rest.action === "login" && rest.interaction === "ensure no interaction";
+
         const transformUrl_oidcClientTs = (url: string) => {
             (
                 [
@@ -195,7 +197,7 @@ export function createLoginOrGoToAuthServer(params: {
                             ? undefined
                             : (url: string) =>
                                   transformUrlBeforeRedirect_next({
-                                      isSilent: false,
+                                      isSilent,
                                       authorizationUrl: url
                                   })
                     ],
@@ -212,7 +214,7 @@ export function createLoginOrGoToAuthServer(params: {
 
                     const extraQueryParams =
                         typeof extraQueryParamsMaybeGetter === "function"
-                            ? extraQueryParamsMaybeGetter({ isSilent: false, url })
+                            ? extraQueryParamsMaybeGetter({ isSilent, url })
                             : extraQueryParamsMaybeGetter;
 
                     const url_obj = new URL(url);
