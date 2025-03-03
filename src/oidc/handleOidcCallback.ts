@@ -155,6 +155,10 @@ const { readRedirectAuthResponses, writeRedirectAuthResponses } = (() => {
 
     function writeRedirectAuthResponses(params: { authResponses: AuthResponse[] }): void {
         const { authResponses } = params;
+        if (authResponses.length === 0) {
+            sessionStorage.removeItem(AUTH_RESPONSES_KEY);
+            return;
+        }
         sessionStorage.setItem(AUTH_RESPONSES_KEY, JSON.stringify(authResponses));
     }
 
