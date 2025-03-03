@@ -529,6 +529,11 @@ export async function createOidc_nonMemoized<
                             sessionId: stateData.sessionId
                         });
 
+                        if (autoLogin) {
+                            location.reload();
+                            await new Promise<never>(() => {});
+                        }
+
                         // NOTE: The user is no longer logged in.
                         return undefined;
                     }
