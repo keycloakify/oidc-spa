@@ -6,6 +6,7 @@ import {
 } from "./StateData";
 import { assert } from "../vendor/frontend/tsafe";
 import type { AuthResponse } from "./AuthResponse";
+import { initialLocationHref } from "./initialLocationHref";
 
 const GLOBAL_CONTEXT_KEY = "__oidc-spa.handleOidcCallback.globalContext";
 
@@ -32,7 +33,7 @@ export function handleOidcCallback(): { isHandled: boolean } {
 }
 
 function handleOidcCallback_nonMemoized(): { isHandled: boolean } {
-    const locationUrl = new URL(window.location.href);
+    const locationUrl = new URL(initialLocationHref);
 
     const stateQueryParamValue = (() => {
         const stateQueryParamValue = locationUrl.searchParams.get("state");
