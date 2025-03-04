@@ -320,13 +320,19 @@ export async function createOidc_nonMemoized<
         doOutputWithTrailingSlash: true
     });
 
-    log?.(`Calling createOidc v${VERSION}`, {
-        issuerUri,
-        clientId,
-        scopes,
-        configId,
-        homeAndCallbackUrl
-    });
+    log?.(
+        `Calling createOidc v${VERSION} ${JSON.stringify(
+            {
+                issuerUri,
+                clientId,
+                scopes,
+                configId,
+                homeAndCallbackUrl
+            },
+            null,
+            2
+        )}`
+    );
 
     {
         const { isHandled } = handleOidcCallback();

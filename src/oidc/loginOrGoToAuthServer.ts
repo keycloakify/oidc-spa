@@ -104,7 +104,7 @@ export function createLoginOrGoToAuthServer(params: {
             ...rest
         } = params;
 
-        log?.("Calling loginOrGoToAuthServer", { params });
+        log?.(`Calling loginOrGoToAuthServer ${JSON.stringify(params, null, 2)}`);
 
         login_specific_handling: {
             if (rest.action !== "login") {
