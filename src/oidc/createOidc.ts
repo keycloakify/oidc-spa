@@ -39,6 +39,7 @@ import {
     startLoginOrRefreshProcess,
     waitForAllOtherOngoingLoginOrRefreshProcessesToComplete
 } from "./ongoingLoginOrRefreshProcesses";
+import { initialLocationHref } from "./initialLocationHref";
 
 handleOidcCallback();
 
@@ -678,7 +679,7 @@ export async function createOidc_nonMemoized<
                     await loginOrGoToAuthServer({
                         action: "login",
                         doForceReloadOnBfCache: true,
-                        redirectUrl: window.location.href,
+                        redirectUrl: initialLocationHref,
                         // NOTE: Wether or not it's the preferred behavior, pushing to history
                         // only works on user interaction so it have to be false
                         doNavigateBackToLastPublicUrlIfTheTheUserNavigateBack: false,
