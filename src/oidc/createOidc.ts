@@ -40,6 +40,7 @@ import {
     waitForAllOtherOngoingLoginOrRefreshProcessesToComplete
 } from "./ongoingLoginOrRefreshProcesses";
 import { initialLocationHref } from "./initialLocationHref";
+import { getIsNewBrowserSession } from "./isNewBrowserSession";
 
 handleOidcCallback();
 
@@ -424,8 +425,6 @@ export async function createOidc_nonMemoized<
         log
     });
 
-    const BROWSER_SESSION_NOT_FIRST_INIT_KEY = `oidc-spa.browser-session-not-first-init:${configId}`;
-
     const { completeLoginOrRefreshProcess } = await startLoginOrRefreshProcess();
 
     const resultOfLoginProcess = await (async (): Promise<
@@ -487,8 +486,6 @@ export async function createOidc_nonMemoized<
 
                             return error;
                         }
-
-                        sessionStorage.removeItem(BROWSER_SESSION_NOT_FIRST_INIT_KEY);
 
                         notifyOtherTabsOfLogin({ configId });
 
@@ -879,6 +876,12 @@ export async function createOidc_nonMemoized<
 
     const onTokenChanges = new Set<(tokens: Oidc.Tokens<DecodedIdToken>) => void>();
 
+    const { sid: sessionId, sub: subjectId } = decodeJwt<{ sid?: string; sub?: string }>(
+        currentTokens.idToken
+    );
+
+    assert(subjectId !== undefined, "The 'sub' claim is missing from the id token");
+
     const oidc_loggedIn = id<Oidc.LoggedIn<DecodedIdToken>>({
         ...oidc_common,
         isUserLoggedIn: true,
@@ -1166,21 +1169,13 @@ export async function createOidc_nonMemoized<
             }),
         backFromAuthServer: resultOfLoginProcess.backFromAuthServer,
         isNewBrowserSession: (() => {
-            if (sessionStorage.getItem(BROWSER_SESSION_NOT_FIRST_INIT_KEY) === null) {
-                sessionStorage.setItem(BROWSER_SESSION_NOT_FIRST_INIT_KEY, "true");
+            const value = getIsNewBrowserSession({ configId, subjectId });
 
-                log?.("This is a new browser session");
+            log?.(`isNewBrowserSession: ${value}`);
 
-                return true;
-            }
-
-            log?.("This is not a new browser session");
-
-            return false;
+            return value;
         })()
     });
-
-    const sessionId = decodeJwt<{ sid?: string }>(currentTokens.idToken).sid;
 
     {
         const { prOtherTabLogout } = getPrOtherTabLogout({
