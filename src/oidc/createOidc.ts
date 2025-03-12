@@ -40,7 +40,7 @@ import {
     waitForAllOtherOngoingLoginOrRefreshProcessesToComplete
 } from "./ongoingLoginOrRefreshProcesses";
 import { initialLocationHref } from "./initialLocationHref";
-import { getIsNewBrowserSession } from "./isNewBrowserSession";
+import { createGetIsNewBrowserSession } from "./isNewBrowserSession";
 
 handleOidcCallback();
 
@@ -425,6 +425,21 @@ export async function createOidc_nonMemoized<
         log
     });
 
+    const { getIsNewBrowserSession } = createGetIsNewBrowserSession({
+        configId,
+        evtUserNotLoggedIn: (() => {
+            const evt = createEvt<void>();
+
+            evtIsUserLoggedIn.subscribe(isUserLoggedIn => {
+                if (!isUserLoggedIn) {
+                    evt.post();
+                }
+            });
+
+            return evt;
+        })()
+    });
+
     const { completeLoginOrRefreshProcess } = await startLoginOrRefreshProcess();
 
     const resultOfLoginProcess = await (async (): Promise<
@@ -662,6 +677,10 @@ export async function createOidc_nonMemoized<
                     persistAuthState({ configId, state: undefined });
 
                     completeLoginOrRefreshProcess();
+
+                    if (autoLogin && persistedAuthState !== "logged in") {
+                        evtIsUserLoggedIn.post(false);
+                    }
 
                     await waitForAllOtherOngoingLoginOrRefreshProcessesToComplete({
                         prUnlock: new Promise<never>(() => {})
@@ -1169,7 +1188,7 @@ export async function createOidc_nonMemoized<
             }),
         backFromAuthServer: resultOfLoginProcess.backFromAuthServer,
         isNewBrowserSession: (() => {
-            const value = getIsNewBrowserSession({ configId, subjectId });
+            const value = getIsNewBrowserSession({ subjectId });
 
             log?.(`isNewBrowserSession: ${value}`);
 
