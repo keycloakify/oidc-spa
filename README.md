@@ -27,12 +27,18 @@
   <a href="https://docs.oidc-spa.dev">Documentation</a>
 </p>
 
-A fully-featured OpenID Connect client for single-page applications (SPAs).
+A full-featured OpenID Connect / OAuth2 client for single-page applications (SPAs).
 
-With `oidc-spa`, you can integrate your application with authentication providers like [Keycloak](https://www.keycloak.org/), [Auth0](https://auth0.com/), or [Microsoft Entra ID](https://www.microsoft.com/en-us/security/business/identity-access/microsoft-entra-id).
+With `oidc-spa`, you can seamlessly integrate authentication providers like [Keycloak](https://www.keycloak.org/), [Auth0](https://auth0.com/), or [Microsoft Entra ID](https://www.microsoft.com/en-us/security/business/identity-access/microsoft-entra-id) into your application.
 
-In **simple terms**, `oidc-spa` is a library that lets you **add authentication** to your Vite (or Create-React-App) project.  
-When a user clicks the **"Login"** button in your app's header, call the `login()` method—it's that easy! 😄
+In **simple terms**, `oidc-spa` is a library that makes it easy to **add authentication** to your Vite or Create-React-App project.  
+There are many authentication and user management platforms out there: Okta, Auth0, Entra ID...  
+There are also plenty of self-hosted options like Keycloak, Ory Hydra, and Dex.  
+What all of these have in common is that they implement the OpenID Connect/OAuth2 standard.
+
+This library provides a **unified way** to connect with these different providers instead of having to use
+their specific SDKs.  
+When a user clicks the **"Login"** button in your app, just call the `login()` method—it's that simple.
 
 ## Why `oidc-spa`?
 
@@ -43,13 +49,15 @@ Most OIDC providers push their own client libraries:
 -   **Keycloak** → `keycloak-js` (no longer actively promoted, planned for deprecation)
 -   **... and so on.**
 
-These libraries are **tied to a specific provider**. But what if you want to:
+These libraries are **tied to a specific provider**. But what if you need to:
 
-✅ Switch OIDC providers without rewriting your authentication logic?  
-✅ Develop an app that must support multiple environments, where the auth provider is unknown beforehand?  
-✅ Support multiple OIDC providers in the same app?
+✅ Switch OIDC providers without modifying your authentication logic?  
+✅ Build a self-hostable solution that works with any provider (e.g., you're developing a dashboard app that you sell to enterprises and need to integrate with their existing IAM system)?  
+✅ Stop re-learning authentication implementation every time you change providers?
 
-Well, we needed a solution so we built one, `oidc-spa`!
+And besides, not all SDKs are equal in terms of setup simplicity, performance, and API quality.
+
+We wanted a **universal solution**—one that is as good or better than all existing SDKs in every aspect.
 
 ## Features
 
