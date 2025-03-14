@@ -1,1 +1,1 @@
-export { createSvelteOidc, type OidcSvelte } from './svelte';
+export { createSvelteOidc, type OidcSvelte } from "./svelte";

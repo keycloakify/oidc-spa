@@ -1,1 +1,1 @@
-export const oidcContextKey = Symbol('oidc');
+export const oidcContextKey = Symbol("oidc");
