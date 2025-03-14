@@ -23,6 +23,15 @@
         "start-multi-providers-example": "yarn build && tsx scripts/link-in-examples.ts && cd examples/multi-providers && rm -rf node_modules/.vite && yarn dev",
         "size": "bash ./scripts/compute-payload.sh"
     },
+    "main": "dist/index.js",
+    "types": "dist/index.d.ts",
+    "exports": {
+        ".": "./dist/index.js",
+        "./*": "./dist/*.js",
+        "./mock": "./dist/mock/index.js",
+        "./react": "./dist/react/index.js",
+        "./svelte": "./dist/svelte/index.js"
+    },
     "lint-staged": {
         "*.{ts,tsx,json,md}": [
             "prettier --write"
@@ -48,13 +57,17 @@
     "dependencies": {},
     "peerDependencies": {
         "@types/react": "*",
-        "react": "*"
+        "react": "*",
+        "svelte": "*"
     },
     "peerDependenciesMeta": {
         "react": {
             "optional": true
         },
         "@types/react": {
+            "optional": true
+        },
+        "svelte": {
             "optional": true
         }
     },
@@ -77,6 +90,7 @@
         "patch-package": "^8.0.0",
         "prettier": "^2.8.8",
         "punycode": "^2.3.1",
+        "svelte": "^5.23.0",
         "react": "19.1.1",
         "ts-node": "^10.9.1",
         "tsafe": "^1.8.9",
