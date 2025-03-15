@@ -33,10 +33,10 @@ export function handleOidcCallback(): { isHandled: boolean } {
 }
 
 function handleOidcCallback_nonMemoized(): { isHandled: boolean } {
-    const locationUrl = new URL(initialLocationHref);
+    const location_urlObj = new URL(initialLocationHref);
 
     const stateQueryParamValue = (() => {
-        const stateQueryParamValue = locationUrl.searchParams.get("state");
+        const stateQueryParamValue = location_urlObj.searchParams.get("state");
 
         if (stateQueryParamValue === null) {
             return undefined;
@@ -47,9 +47,9 @@ function handleOidcCallback_nonMemoized(): { isHandled: boolean } {
         }
 
         if (
-            locationUrl.searchParams.get("client_id") !== null &&
-            locationUrl.searchParams.get("response_type") !== null &&
-            locationUrl.searchParams.get("redirect_uri") !== null
+            location_urlObj.searchParams.get("client_id") !== null &&
+            location_urlObj.searchParams.get("response_type") !== null &&
+            location_urlObj.searchParams.get("redirect_uri") !== null
         ) {
             // NOTE: We are probably in a Keycloakify theme and oidc-spa was loaded by mistake.
             return undefined;
@@ -74,11 +74,6 @@ function handleOidcCallback_nonMemoized(): { isHandled: boolean } {
     }
 
     const isHandled = true;
-
-    console.log = () => {};
-    console.warn = () => {};
-    console.error = () => {};
-    console.debug = () => {};
 
     const stateData = getStateData({ stateQueryParamValue });
 
@@ -121,7 +116,7 @@ function handleOidcCallback_nonMemoized(): { isHandled: boolean } {
 
     const authResponse: AuthResponse = { state: "" };
 
-    for (const [key, value] of locationUrl.searchParams) {
+    for (const [key, value] of location_urlObj.searchParams) {
         authResponse[key] = value;
     }
 

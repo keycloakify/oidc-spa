@@ -5,6 +5,7 @@ import { StateData } from "./StateData";
 import type { NonPostableEvt } from "../tools/Evt";
 import { type StatefulEvt, createStatefulEvt } from "../tools/StatefulEvt";
 import { Deferred } from "../tools/Deferred";
+import { addOrUpdateSearchParam, getAllSearchParams } from "../tools/urlSearchParams";
 
 const GLOBAL_CONTEXT_KEY = "__oidc-spa.loginOrGoToAuthSever.globalContext";
 
@@ -205,7 +206,7 @@ export function createLoginOrGoToAuthServer(params: {
                     [extraQueryParams_local, transformUrl]
                 ] as const
             ).forEach(([extraQueryParamsMaybeGetter, transformUrlBeforeRedirect], i) => {
-                const urlObj_before = i !== 2 ? undefined : new URL(url);
+                const url_before = i !== 2 ? undefined : url;
 
                 add_extra_query_params: {
                     if (extraQueryParamsMaybeGetter === undefined) {
@@ -217,16 +218,17 @@ export function createLoginOrGoToAuthServer(params: {
                             ? extraQueryParamsMaybeGetter({ isSilent, url })
                             : extraQueryParamsMaybeGetter;
 
-                    const url_obj = new URL(url);
-
                     for (const [name, value] of Object.entries(extraQueryParams)) {
                         if (value === undefined) {
                             continue;
                         }
-                        url_obj.searchParams.set(name, value);
+                        url = addOrUpdateSearchParam({
+                            url,
+                            name,
+                            value,
+                            encodeMethod: "www-form"
+                        });
                     }
-
-                    url = url_obj.href;
                 }
 
                 apply_transform_url: {
@@ -237,18 +239,21 @@ export function createLoginOrGoToAuthServer(params: {
                 }
 
                 update_state: {
-                    if (urlObj_before === undefined) {
+                    if (url_before === undefined) {
                         break update_state;
                     }
 
-                    for (const [name, value] of new URL(url).searchParams.entries()) {
-                        const value_before = urlObj_before.searchParams.get(name);
+                    const paramValueByName_current = getAllSearchParams(url);
+                    const paramValueByName_before = getAllSearchParams(url_before);
 
-                        if (value_before === value) {
+                    for (const [name, value_current] of Object.entries(paramValueByName_current)) {
+                        const value_before: string | undefined = paramValueByName_before[name];
+
+                        if (value_before === value_current) {
                             continue;
                         }
 
-                        stateData.extraQueryParams[name] = value;
+                        stateData.extraQueryParams[name] = value_current;
                     }
                 }
             });

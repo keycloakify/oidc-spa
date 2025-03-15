@@ -6,6 +6,7 @@ import { getDownlinkAndRtt } from "../tools/getDownlinkAndRtt";
 import { getIsDev } from "../tools/isDev";
 import type { User as OidcClientTsUser } from "../vendor/frontend/oidc-client-ts-and-jwt-decode";
 import { type AuthResponse, getIsAuthResponse } from "./AuthResponse";
+import { addOrUpdateSearchParam } from "../tools/urlSearchParams";
 
 type ResultOfLoginSilent =
     | {
@@ -111,16 +112,12 @@ export async function loginSilent(params: {
 
             const extraQueryParams = getExtraQueryParams({ isSilent: true, url });
 
-            const url_obj = new URL(url);
-
             for (const [name, value] of Object.entries(extraQueryParams)) {
                 if (value === undefined) {
                     continue;
                 }
-                url_obj.searchParams.set(name, value);
+                url = addOrUpdateSearchParam({ url, name, value, encodeMethod: "www-form" });
             }
-
-            url = url_obj.href;
         }
 
         apply_transform_url: {

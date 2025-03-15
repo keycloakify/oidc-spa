@@ -2,6 +2,8 @@ import type { Oidc } from "../oidc";
 import { createObjectThatThrowsIfAccessed } from "../tools/createObjectThatThrowsIfAccessed";
 import { id } from "../vendor/frontend/tsafe";
 import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";
+import { getSearchParam, addOrUpdateSearchParam } from "../tools/urlSearchParams";
+import { initialLocationHref } from "../oidc/initialLocationHref";
 
 export type ParamsOfCreateMockOidc<
     DecodedIdToken extends Record<string, unknown> = Record<string, unknown>,
@@ -24,7 +26,7 @@ export type ParamsOfCreateMockOidc<
           isUserInitiallyLoggedIn: boolean;
       });
 
-const urlParamName = "isUserLoggedIn";
+const URL_SEARCH_PARAM_NAME = "isUserLoggedIn";
 
 export async function createMockOidc<
     DecodedIdToken extends Record<string, unknown> = Record<string, unknown>,
@@ -42,19 +44,29 @@ export async function createMockOidc<
     } = params;
 
     const isUserLoggedIn = (() => {
-        const newUrl = new URL(window.location.href);
+        const { wasPresent, value } = getSearchParam({
+            url: initialLocationHref,
+            name: URL_SEARCH_PARAM_NAME
+        });
 
-        const urlParamValue = newUrl.searchParams.get(urlParamName);
-
-        if (urlParamValue === null) {
+        if (!wasPresent) {
             return isUserInitiallyLoggedIn;
         }
 
-        newUrl.searchParams.delete(urlParamName);
+        remove_from_url: {
+            const { wasPresent, url_withoutTheParam } = getSearchParam({
+                url: window.location.href,
+                name: URL_SEARCH_PARAM_NAME
+            });
 
-        window.history.replaceState({}, "", newUrl.href);
+            if (!wasPresent) {
+                break remove_from_url;
+            }
 
-        return urlParamValue === "true";
+            window.history.replaceState({}, "", url_withoutTheParam);
+        }
+
+        return value === "true";
     })();
 
     const homeUrl = toFullyQualifiedUrl({
@@ -73,22 +85,25 @@ export async function createMockOidc<
     const loginOrGoToAuthServer = async (params: {
         redirectUrl: string | undefined;
     }): Promise<never> => {
-        const { redirectUrl } = params;
+        const { redirectUrl: redirectUrl_params } = params;
 
-        const newUrl = new URL(
-            (() => {
-                if (redirectUrl === undefined) {
+        const redirectUrl = addOrUpdateSearchParam({
+            url: (() => {
+                if (redirectUrl_params === undefined) {
                     return window.location.href;
                 }
-                return redirectUrl.startsWith("/")
-                    ? `${window.location.origin}${redirectUrl}`
-                    : redirectUrl;
-            })()
-        );
 
-        newUrl.searchParams.set(urlParamName, "true");
+                return toFullyQualifiedUrl({
+                    urlish: redirectUrl_params,
+                    doAssertNoQueryParams: false
+                });
+            })(),
+            name: URL_SEARCH_PARAM_NAME,
+            value: "true",
+            encodeMethod: "www-form"
+        });
 
-        window.location.href = newUrl.href;
+        window.location.href = redirectUrl;
 
         return new Promise<never>(() => {});
     };
@@ -151,8 +166,8 @@ export async function createMockOidc<
             unsubscribe: () => {}
         }),
         logout: params => {
-            const newUrl = new URL(
-                (() => {
+            const redirectUrl = addOrUpdateSearchParam({
+                url: (() => {
                     switch (params.redirectTo) {
                         case "current page":
                             return window.location.href;
@@ -164,12 +179,13 @@ export async function createMockOidc<
                                 doAssertNoQueryParams: false
                             });
                     }
-                })()
-            );
+                })(),
+                name: URL_SEARCH_PARAM_NAME,
+                value: "false",
+                encodeMethod: "www-form"
+            });
 
-            newUrl.searchParams.set(urlParamName, "false");
-
-            window.location.href = newUrl.href;
+            window.location.href = redirectUrl;
 
             return new Promise<never>(() => {});
         },

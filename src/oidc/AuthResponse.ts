@@ -1,3 +1,5 @@
+import { addOrUpdateSearchParam } from "../tools/urlSearchParams";
+
 export type AuthResponse = {
     state: string;
     [key: string]: string | undefined;
@@ -13,14 +15,19 @@ export function getIsAuthResponse(data: any): data is AuthResponse {
 }
 
 export function authResponseToUrl(authResponse: AuthResponse): string {
-    const authResponseUrl = new URL("https://dummy.com");
+    let authResponseUrl = "https://dummy.com";
 
     for (const [name, value] of Object.entries(authResponse)) {
         if (value === undefined) {
             continue;
         }
-        authResponseUrl.searchParams.set(name, value);
+        authResponseUrl = addOrUpdateSearchParam({
+            url: authResponseUrl,
+            name,
+            value,
+            encodeMethod: "www-form"
+        });
     }
 
-    return authResponseUrl.href;
+    return authResponseUrl;
 }
