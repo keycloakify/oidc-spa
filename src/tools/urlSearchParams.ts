@@ -68,7 +68,7 @@ export function addOrUpdateSearchParam(params: {
     let value_encoded = encodeURIComponent(value);
 
     if (encodeMethod === "www-form") {
-        value_encoded.replace(/%20/g, "+");
+        value_encoded = value_encoded.replace(/%20/g, "+");
     }
 
     return addOrUpdateOrRemoveSearchParam_encoded({
