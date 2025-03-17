@@ -4,25 +4,13 @@ import {
     getIsStatQueryParamValue,
     type StateData
 } from "./StateData";
-import { assert } from "../vendor/frontend/tsafe";
+import { assert, id } from "../vendor/frontend/tsafe";
 import type { AuthResponse } from "./AuthResponse";
 import { initialLocationHref } from "./initialLocationHref";
 
-const GLOBAL_CONTEXT_KEY = "__oidc-spa.handleOidcCallback.globalContext";
-
-declare global {
-    interface Window {
-        [GLOBAL_CONTEXT_KEY]: {
-            previousCall: { isHandled: boolean } | undefined;
-        };
-    }
-}
-
-window[GLOBAL_CONTEXT_KEY] ??= {
-    previousCall: undefined
+const globalContext = {
+    previousCall: id<{ isHandled: boolean } | undefined>(undefined)
 };
-
-const globalContext = window[GLOBAL_CONTEXT_KEY];
 
 export function handleOidcCallback(): { isHandled: boolean } {
     if (globalContext.previousCall !== undefined) {

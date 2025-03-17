@@ -1,21 +1,9 @@
 import { assert, is } from "../vendor/frontend/tsafe";
 import { Deferred } from "../tools/Deferred";
 
-const GLOBAL_CONTEXT_KEY = "__oidc-spa.logoutPropagationToOtherTabs.globalContext";
-
-declare global {
-    interface Window {
-        [GLOBAL_CONTEXT_KEY]: {
-            appInstanceId: string;
-        };
-    }
-}
-
-window[GLOBAL_CONTEXT_KEY] ??= {
+const globalContext = {
     appInstanceId: Math.random().toString(36).slice(2)
 };
-
-const globalContext = window[GLOBAL_CONTEXT_KEY];
 
 type Message = {
     appInstanceId: string;

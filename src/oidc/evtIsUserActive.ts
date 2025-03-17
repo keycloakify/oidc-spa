@@ -3,23 +3,10 @@ import { subscribeToUserInteraction } from "../tools/subscribeToUserInteraction"
 import { assert, is, id } from "../vendor/frontend/tsafe";
 import { setTimeout, clearTimeout } from "../tools/workerTimers";
 
-const GLOBAL_CONTEXT_KEY = "__oidc-spa.evtIsUserActive.globalContext";
-
-declare global {
-    interface Window {
-        [GLOBAL_CONTEXT_KEY]: {
-            appInstanceId: string;
-            evtIsUserActiveBySessionId: Map<string, NonPostableEvt<boolean>>;
-        };
-    }
-}
-
-window[GLOBAL_CONTEXT_KEY] ??= {
+const globalContext = {
     appInstanceId: Math.random().toString(36).slice(2),
-    evtIsUserActiveBySessionId: new Map()
+    evtIsUserActiveBySessionId: new Map<string, NonPostableEvt<boolean>>()
 };
-
-const globalContext = window[GLOBAL_CONTEXT_KEY];
 
 export function createEvtIsUserActive(params: {
     configId: string;

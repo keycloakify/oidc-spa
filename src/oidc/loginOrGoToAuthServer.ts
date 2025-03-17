@@ -3,25 +3,13 @@ import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";
 import { assert, type Equals, noUndefined } from "../vendor/frontend/tsafe";
 import { StateData } from "./StateData";
 import type { NonPostableEvt } from "../tools/Evt";
-import { type StatefulEvt, createStatefulEvt } from "../tools/StatefulEvt";
+import { createStatefulEvt } from "../tools/StatefulEvt";
 import { Deferred } from "../tools/Deferred";
 import { addOrUpdateSearchParam, getAllSearchParams } from "../tools/urlSearchParams";
 
-const GLOBAL_CONTEXT_KEY = "__oidc-spa.loginOrGoToAuthSever.globalContext";
-
-declare global {
-    interface Window {
-        [GLOBAL_CONTEXT_KEY]: {
-            evtHasLoginBeenCalled: StatefulEvt<boolean>;
-        };
-    }
-}
-
-window[GLOBAL_CONTEXT_KEY] ??= {
+const globalContext = {
     evtHasLoginBeenCalled: createStatefulEvt(() => false)
 };
-
-const globalContext = window[GLOBAL_CONTEXT_KEY];
 
 type Params = Params.Login | Params.GoToAuthServer;
 

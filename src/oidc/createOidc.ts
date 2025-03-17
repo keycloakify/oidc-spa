@@ -28,7 +28,7 @@ import { authResponseToUrl } from "./AuthResponse";
 import { handleOidcCallback, retrieveRedirectAuthResponseAndStateData } from "./handleOidcCallback";
 import { getPersistedAuthState, persistAuthState } from "./persistedAuthState";
 import type { Oidc } from "./Oidc";
-import { createEvt, type Evt } from "../tools/Evt";
+import { createEvt } from "../tools/Evt";
 import { getHaveSharedParentDomain } from "../tools/haveSharedParentDomain";
 import {
     createLoginOrGoToAuthServer,
@@ -154,25 +154,11 @@ export type ParamsOfCreateOidc<
     __unsafe_useIdTokenAsAccessToken?: boolean;
 };
 
-const GLOBAL_CONTEXT_KEY = "__oidc-spa.createOidc.globalContext";
-
-declare global {
-    interface Window {
-        [GLOBAL_CONTEXT_KEY]: {
-            prOidcByConfigId: Map<string, Promise<Oidc<any>>>;
-            hasLogoutBeenCalled: boolean;
-            evtRequestToPersistTokens: Evt<{ configIdOfInstancePostingTheRequest: string }>;
-        };
-    }
-}
-
-window[GLOBAL_CONTEXT_KEY] ??= {
-    prOidcByConfigId: new Map(),
-    hasLogoutBeenCalled: false,
-    evtRequestToPersistTokens: createEvt()
+const globalContext = {
+    prOidcByConfigId: new Map<string, Promise<Oidc<any>>>(),
+    hasLogoutBeenCalled: id<boolean>(false),
+    evtRequestToPersistTokens: createEvt<{ configIdOfInstancePostingTheRequest: string }>()
 };
-
-const globalContext = window[GLOBAL_CONTEXT_KEY];
 
 const MIN_RENEW_BEFORE_EXPIRE_MS = 2_000;
 
