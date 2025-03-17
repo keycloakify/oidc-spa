@@ -29,7 +29,8 @@
 
 A full-featured OpenID Connect / OAuth2 client for single-page applications (SPAs).
 
-With `oidc-spa`, you can seamlessly integrate authentication providers like [Keycloak](https://www.keycloak.org/), [Auth0](https://auth0.com/), or [Microsoft Entra ID](https://www.microsoft.com/en-us/security/business/identity-access/microsoft-entra-id) into your application.
+With `oidc-spa`, you can seamlessly integrate authentication providers like [Keycloak](https://www.keycloak.org/), [Auth0](https://auth0.com/), or [Microsoft Entra ID](https://www.microsoft.com/en-us/security/business/identity-access/microsoft-entra-id) into your application, purely on the client side—
+[without involving your backend in the token exchange](https://docs.oidc-spa.dev/resources/why-no-client-secret).
 
 In **simple terms**, `oidc-spa` is a library that makes it easy to **add authentication** to your Vite or Create-React-App project.  
 There are many authentication and user management platforms out there: Okta, Auth0, Entra ID...  
@@ -73,7 +74,7 @@ We wanted a **universal solution**—one that is as good or better than all exis
 -   🚪 **Logout propagation**: Logging out in one tab logs out all others.
 -   📖 **Comprehensive documentation**: Guides and examples for common scenarios.
 -   ✅ **Type safety**: Strong TypeScript support with optional [Zod](https://zod.dev/) integration validating the expected shape of the ID token.
--   🔒 **Security-first**: Uses **Authorization Code Flow + PKCE**—No token persistence in `localStorage` or `sessionStorage`.
+-   🔒 **Security-first**: Uses [**Authorization Code Flow + PKCE**](https://docs.oidc-spa.dev/resources/why-no-client-secret#id-2.-authorization-code-flow--pkce-used-by-oidc-spa)—No token persistence in `localStorage` or `sessionStorage`.
 -   🖥️ **Optional backend utilities**: Provides tools for token validation in JavaScript backends (Node.js, Deno, Web Workers).
 -   🔗 **Multi-instance support**: Run multiple `oidc-spa` instances—for example, to offer **Login with Google OR Microsoft** in the same app.
 -   🍪 **No third-party cookie issues**: Third-party cookies blocked? No problem—`oidc-spa` works around it automatically with no special measures needed on your side.
