@@ -393,7 +393,7 @@ export async function createOidc_nonMemoized<
                 return storage;
             })()
         }),
-        stateStore: new WebStorageStateStore({ store: localStorage, prefix: STATE_STORE_KEY_PREFIX }),
+        stateStore: new WebStorageStateStore({ store: sessionStorage, prefix: STATE_STORE_KEY_PREFIX }),
         client_secret: __unsafe_clientSecret
     });
 

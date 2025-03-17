@@ -63,7 +63,7 @@ function getKey(params: { stateQueryParamValue: string }) {
 function getStateStore(params: { stateQueryParamValue: string }): { data: StateData } | undefined {
     const { stateQueryParamValue } = params;
 
-    const item = localStorage.getItem(getKey({ stateQueryParamValue }));
+    const item = sessionStorage.getItem(getKey({ stateQueryParamValue }));
 
     if (item === null) {
         return undefined;
@@ -84,12 +84,12 @@ function getStateStore(params: { stateQueryParamValue: string }): { data: StateD
 function setStateStore(params: { stateQueryParamValue: string; obj: { data: StateData } }) {
     const { stateQueryParamValue, obj } = params;
 
-    localStorage.setItem(getKey({ stateQueryParamValue }), JSON.stringify(obj));
+    sessionStorage.setItem(getKey({ stateQueryParamValue }), JSON.stringify(obj));
 }
 
 export function clearStateStore(params: { stateQueryParamValue: string }) {
     const { stateQueryParamValue } = params;
-    localStorage.removeItem(getKey({ stateQueryParamValue }));
+    sessionStorage.removeItem(getKey({ stateQueryParamValue }));
 }
 
 export function getStateData(params: { stateQueryParamValue: string }): StateData | undefined {
