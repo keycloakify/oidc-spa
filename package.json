@@ -24,7 +24,10 @@
         ".": "./dist/index.js",
         "./*": "./dist/*.js",
         "./mock": "./dist/mock/index.js",
-        "./react": "./dist/react/index.js"
+        "./react": "./dist/react/index.js",
+        "./tools/decodeJwt": "./dist/tools/decodeJwt.js",
+        "./tools/parseKeycloakIssuerUri": "./dist/tools/parseKeycloakIssuerUri.js",
+        "./handleOidcCallback": "./dist/handleOidcCallback.js"
     },
     "lint-staged": {
         "*.{ts,tsx,json,md}": [

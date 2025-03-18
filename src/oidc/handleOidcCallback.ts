@@ -63,6 +63,11 @@ function handleOidcCallback_nonMemoized(): { isHandled: boolean } {
 
     const isHandled = true;
 
+    console.log = () => {};
+    console.warn = () => {};
+    console.error = () => {};
+    console.debug = () => {};
+
     const stateData = getStateData({ stateQueryParamValue });
 
     if (
