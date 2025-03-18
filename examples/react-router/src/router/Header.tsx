@@ -1,5 +1,5 @@
 import { useOidc } from "oidc";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation } from "react-router";
 import { parseKeycloakIssuerUri } from "oidc-spa/tools/parseKeycloakIssuerUri";
 
 export function Header() {

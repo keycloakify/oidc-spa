@@ -1,6 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 import { lazy, Suspense } from "react";
-import { createBrowserRouter } from "react-router-dom";
+import { createBrowserRouter } from "react-router";
 import { Layout } from "./Layout";
 import { getOidc } from "oidc";
 const ProtectedPage = lazy(() => import("../pages/ProtectedPage"));
