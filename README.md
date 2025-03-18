@@ -41,7 +41,7 @@ This library provides a **unified way** to connect with these different provider
 their specific SDKs.  
 When a user clicks the **"Login"** button in your app, just call the `login()` method—it's that simple.
 
-`oidc-spa` implement the **Authorization Code Flow with PKCE**, this means that **you do not need a backend** to handle the authentication process.  
+`oidc-spa` implement the [**Authorization Code Flow with PKCE**](https://docs.oidc-spa.dev/resources/why-no-client-secret), this means that **you do not need a backend** to handle the authentication process.  
 The authentication process is handled entirely in the browser. No need for `/login` or `/logout` routes.
 
 ## Why `oidc-spa`?
