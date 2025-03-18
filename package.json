@@ -24,7 +24,8 @@
         ".": "./dist/index.js",
         "./*": "./dist/*.js",
         "./mock": "./dist/mock/index.js",
-        "./react": "./dist/react/index.js"
+        "./react": "./dist/react/index.js",
+        "./svelte": "./dist/svelte/index.js"
     },
     "lint-staged": {
         "*.{ts,tsx,json,md}": [
@@ -48,13 +49,17 @@
     "dependencies": {},
     "peerDependencies": {
         "@types/react": "*",
-        "react": "*"
+        "react": "*",
+        "svelte": "*"
     },
     "peerDependenciesMeta": {
         "react": {
             "optional": true
         },
         "@types/react": {
+            "optional": true
+        },
+        "svelte": {
             "optional": true
         }
     },
@@ -79,6 +84,7 @@
         "prettier": "^2.8.8",
         "punycode": "^2.3.1",
         "react": "^18.2.0",
+        "svelte": "^5.23.0",
         "ts-node": "^10.9.1",
         "tsafe": "^1.8.5",
         "tsx": "^4.15.5",
