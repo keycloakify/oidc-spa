@@ -74,8 +74,6 @@ function handleOidcCallback_nonMemoized(): { isHandled: boolean } {
         stateData === undefined ||
         (stateData.context === "redirect" && stateData.hasBeenProcessedByCallback)
     ) {
-        reloadOnBfCacheNavigation();
-
         const historyMethod: "back" | "forward" = (() => {
             const backForwardTracker = readBackForwardTracker();
 
@@ -102,6 +100,8 @@ function handleOidcCallback_nonMemoized(): { isHandled: boolean } {
             }
         });
 
+        reloadOnBfCacheNavigation();
+
         window.history[historyMethod]();
 
         return { isHandled };
@@ -120,12 +120,12 @@ function handleOidcCallback_nonMemoized(): { isHandled: boolean } {
             parent.postMessage(authResponse, location.origin);
             break;
         case "redirect":
-            reloadOnBfCacheNavigation();
             markStateDataAsProcessedByCallback({ stateQueryParamValue });
             clearBackForwardTracker();
             writeRedirectAuthResponses({
                 authResponses: [...readRedirectAuthResponses(), authResponse]
             });
+            reloadOnBfCacheNavigation();
             location.href = (() => {
                 if (stateData.action === "login" && authResponse.error === "consent_required") {
                     return stateData.redirectUrl_consentRequiredCase;
@@ -198,7 +198,13 @@ export function retrieveRedirectAuthResponseAndStateData(params: {
 }
 
 function reloadOnBfCacheNavigation() {
+    const start = Date.now();
     window.addEventListener("pageshow", () => {
+        const elapsed = Date.now() - start;
+
+        if (elapsed < 100) {
+            return;
+        }
         location.reload();
     });
 }
