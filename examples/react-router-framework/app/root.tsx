@@ -1,7 +1,7 @@
 import { isRouteErrorResponse, Links, Meta, Outlet, Scripts, ScrollRestoration } from "react-router";
 import type { Route } from "./+types/root";
 import { OidcProvider } from "./oidc.client";
-import "./app.css";
+import Header from "./components/Header";
 
 export const links: Route.LinksFunction = () => [
     { rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -34,18 +34,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
     );
 }
 
-export function HydrateFallback() {
-    // Get rid of the "💿 Hey developer 👋. You can provide a way better UX than this when your app
-    // is loading JS modules and/or running `clientLoader` functions. Check out https://remix.run/route/hydrate-fallback
-    // for more information."
-    //
-    // This is a react-router false positive. Remove in future react-router versions.
-    return null;
-}
-
 export default function App() {
+    // NOTE: Here setup all your global providers
     return (
         <OidcProvider fallback={<p>Checking oidc...</p>}>
+            <Header />
             <Outlet />
         </OidcProvider>
     );
@@ -78,4 +71,13 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
             )}
         </main>
     );
+}
+
+export function HydrateFallback() {
+    // Get rid of the "💿 Hey developer 👋. You can provide a way better UX than this when your app
+    // is loading JS modules and/or running `clientLoader` functions. Check out https://remix.run/route/hydrate-fallback
+    // for more information."
+    //
+    // This is a react-router false positive. Remove in future react-router versions.
+    return null;
 }

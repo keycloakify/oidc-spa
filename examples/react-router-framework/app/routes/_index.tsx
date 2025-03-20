@@ -1,25 +1,19 @@
 import { useOidc } from "../oidc.client";
-
 import type { Route } from "./+types/_index";
 
 export function meta({}: Route.MetaArgs) {
     return [
-        { title: "New React Router App" },
-        { name: "description", content: "Welcome to React Router!" }
+        { title: "React-router (framework) + oidc-spa" },
+        { name: "description", content: "Welcome to this example app" }
     ];
 }
 
 export default function Home() {
-    const { logout } = useOidc();
-
-    const handleLogout = () => {
-        logout({ redirectTo: "current page" });
-    };
+    const { isUserLoggedIn, decodedIdToken } = useOidc();
 
     return (
         <>
-            <p>HOME</p>
-            <button onClick={handleLogout}>Click to: Log Out</button>
+            <h1>Welcome {isUserLoggedIn ? decodedIdToken.name : "stranger"}!</h1>
         </>
     );
 }
