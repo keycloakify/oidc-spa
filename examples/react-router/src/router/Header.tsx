@@ -19,7 +19,7 @@ export function Header() {
                 width: "100%"
             }}
         >
-            <span>OIDC-SPA + Tanstack-router Starter</span>
+            <span>OIDC-SPA + React Router</span>
             {/* You do not have to display an error here, it's just to show that if you want you can
                 But it's best to enable the user to navigate unauthenticated and to display an error
                 only if he attempt to login (by default it display an alert) */}
