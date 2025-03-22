@@ -18,7 +18,8 @@
         "oidc-spa": "latest",
         "react": "19.0.0",
         "react-dom": "19.0.0",
-        "react-router": "^7.3.0"
+        "react-router": "^7.3.0",
+        "zod": "^3.24.2"
     },
     "devDependencies": {
         "@react-router/dev": "^7.4.0",
