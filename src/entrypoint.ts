@@ -1,7 +1,7 @@
 import { handleOidcCallback } from "./core/handleOidcCallback";
 
 export function oidcEarlyInit(params: { freezeFetch: boolean; freezeXMLHttpRequest: boolean }) {
-    const { freezeFetch = true, freezeXMLHttpRequest = true } = params ?? {};
+    const { freezeFetch, freezeXMLHttpRequest } = params ?? {};
 
     const { isHandled } = handleOidcCallback();
 
