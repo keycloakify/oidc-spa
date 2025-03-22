@@ -23,6 +23,7 @@ export function parseKeycloakIssuerUri(issuerUri: string):
           /** If defined starts with / and end with no `/` */
           kcHttpRelativePath: string | undefined;
           adminConsoleUrl: string;
+          adminConsoleUrl_master: string;
           getAccountUrl: (params: {
               clientId: string;
               backToAppFromAccountUrl: string;
@@ -39,11 +40,15 @@ export function parseKeycloakIssuerUri(issuerUri: string):
 
     const [kcHttpRelativePath, realm] = split;
 
+    const getAdminConsoleUrl = (realm: string) =>
+        `${url.origin}${kcHttpRelativePath}/admin/${realm}/console`;
+
     return {
         origin: url.origin,
         realm,
         kcHttpRelativePath: kcHttpRelativePath === "" ? undefined : kcHttpRelativePath,
-        adminConsoleUrl: `${url.origin}${kcHttpRelativePath}/admin/${realm}/console`,
+        adminConsoleUrl: getAdminConsoleUrl(realm),
+        adminConsoleUrl_master: getAdminConsoleUrl("master"),
         getAccountUrl: ({ clientId, backToAppFromAccountUrl, locale }) => {
             const accountUrlObj = new URL(`${url.origin}${kcHttpRelativePath}/realms/${realm}/account`);
             accountUrlObj.searchParams.set("referrer", clientId);

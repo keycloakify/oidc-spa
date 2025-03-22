@@ -194,22 +194,23 @@ export async function createIframeTimeoutInitializationError(params: {
             `Client ID: "${clientId}"\n`,
             `Callback URL to add to the list of Valid Redirect URIs: "${callbackUri}"\n\n`,
             ...(() => {
-                const issuerUriParsed = parseKeycloakIssuerUri(issuerUri);
+                const kc = parseKeycloakIssuerUri(issuerUri);
 
-                if (!issuerUriParsed) {
+                if (!kc) {
                     return [
-                        "Check the documentation of your OIDC server to learn how to configure the client properly."
+                        "Check the documentation of your OIDC server to learn how to configure the public client (Authorization Code Flow + PKCE) properly."
                     ];
                 }
 
                 return [
                     `It seems you are using Keycloak. Follow these steps to resolve the issue:\n\n`,
-                    `1. Go to the Keycloak admin console: ${issuerUriParsed.adminConsoleUrl}/console\n`,
+                    `1. Go to the Keycloak admin console: ${kc.adminConsoleUrl_master}\n`,
                     `2. Log in as an admin user.\n`,
-                    `3. In the left menu, click on "Clients".\n`,
-                    `4. Locate the client "${clientId}" in the list and click on it.\n`,
-                    `5. Find "Valid Redirect URIs" and add "${callbackUri}" to the list.\n`,
-                    `6. Save the changes.\n\n`,
+                    `3. In the top left corner select the realm "${kc.realm}".\n`,
+                    `4. In the left menu, click on "Clients".\n`,
+                    `5. Locate the client "${clientId}" in the list and click on it.\n`,
+                    `6. Find "Valid Redirect URIs" and add "${callbackUri}" to the list.\n`,
+                    `7. Save the changes.\n\n`,
                     `For more information, refer to the documentation: https://docs.oidc-spa.dev/v/v6/providers-configuration/keycloak`
                 ];
             })()
@@ -232,22 +233,23 @@ export function createFailedToFetchTokenEndpointInitializationError(params: {
             `in the '${clientId}' client configuration of your OIDC server.\n`,
             "\n",
             ...(() => {
-                const issuerUri_parsed = parseKeycloakIssuerUri(issuerUri);
+                const kc = parseKeycloakIssuerUri(issuerUri);
 
-                if (issuerUri_parsed === undefined) {
+                if (kc === undefined) {
                     return [
-                        "Checkout the documentation of the OIDC server you are using to see how to configure the client properly."
+                        "Check the documentation of your OIDC server to learn how to configure the public client (Authorization Code Flow + PKCE) properly."
                     ];
                 }
 
                 return [
                     `Since it seems that you are using Keycloak, here are the steps to follow:\n`,
-                    `- Go to the Keycloak admin console. ${issuerUri_parsed.adminConsoleUrl}\n`,
-                    `- Log in as an admin user.\n`,
-                    `- In the left menu, click on "Clients".\n`,
-                    `- Find '${clientId}' in the list of clients and click on it.\n`,
-                    `- Find 'Web Origins' and add '${window.location.origin}' to the list.\n`,
-                    `- Save the changes.\n\n`,
+                    `1. Go to the Keycloak admin console: ${kc.adminConsoleUrl_master}\n`,
+                    `2. Log in as an admin user.\n`,
+                    `3. In the top left corner select the realm "${kc.realm}".\n`,
+                    `4. In the left menu, click on "Clients".\n`,
+                    `5. Find '${clientId}' in the list of clients and click on it.\n`,
+                    `6. Find 'Web Origins' and add '${window.location.origin}' to the list.\n`,
+                    `7. Save the changes.\n\n`,
                     `More info: https://docs.oidc-spa.dev/v/v6/providers-configuration/keycloak`
                 ];
             })()
