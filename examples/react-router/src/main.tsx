@@ -1,7 +1,7 @@
-import { handleOidcCallback } from "oidc-spa/handleOidcCallback";
+import { oidcEarlyInit } from "oidc-spa/entrypoint";
 
-const { isHandled } = handleOidcCallback();
+const { shouldLoadApp } = oidcEarlyInit();
 
-if (!isHandled) {
+if (shouldLoadApp) {
     import("./main.lazy");
 }

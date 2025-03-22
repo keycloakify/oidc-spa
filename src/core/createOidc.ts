@@ -41,6 +41,7 @@ import {
 } from "./ongoingLoginOrRefreshProcesses";
 import { initialLocationHref } from "./initialLocationHref";
 import { createGetIsNewBrowserSession } from "./isNewBrowserSession";
+import { fetch } from "./initialFetch";
 
 handleOidcCallback();
 
@@ -414,7 +415,8 @@ export async function createOidc_nonMemoized<
             })()
         }),
         stateStore: new WebStorageStateStore({ store: localStorage, prefix: STATE_STORE_KEY_PREFIX }),
-        client_secret: __unsafe_clientSecret
+        client_secret: __unsafe_clientSecret,
+        fetch
     });
 
     const evtIsUserLoggedIn = createEvt<boolean>();

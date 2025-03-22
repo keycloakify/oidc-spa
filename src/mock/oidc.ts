@@ -1,9 +1,9 @@
-import type { Oidc } from "../oidc";
+import type { Oidc } from "../core";
 import { createObjectThatThrowsIfAccessed } from "../tools/createObjectThatThrowsIfAccessed";
 import { id } from "../vendor/frontend/tsafe";
 import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";
 import { getSearchParam, addOrUpdateSearchParam } from "../tools/urlSearchParams";
-import { initialLocationHref } from "../oidc/initialLocationHref";
+import { initialLocationHref } from "../core/initialLocationHref";
 
 export type ParamsOfCreateMockOidc<
     DecodedIdToken extends Record<string, unknown> = Record<string, unknown>,

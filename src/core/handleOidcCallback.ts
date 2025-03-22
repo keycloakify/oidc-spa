@@ -7,6 +7,7 @@ import {
 import { assert, id } from "../vendor/frontend/tsafe";
 import type { AuthResponse } from "./AuthResponse";
 import { initialLocationHref } from "./initialLocationHref";
+import "./initialFetch";
 
 const globalContext = {
     previousCall: id<{ isHandled: boolean } | undefined>(undefined)

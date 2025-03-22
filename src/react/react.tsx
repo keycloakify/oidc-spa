@@ -10,7 +10,7 @@ import {
     type FC,
     JSX
 } from "react";
-import { type Oidc, createOidc, type ParamsOfCreateOidc, OidcInitializationError } from "../oidc";
+import { type Oidc, createOidc, type ParamsOfCreateOidc, OidcInitializationError } from "../core";
 import { assert, type Equals, type Param0 } from "../vendor/frontend/tsafe";
 import { id } from "../vendor/frontend/tsafe";
 import type { ValueOrAsyncGetter } from "../tools/ValueOrAsyncGetter";
