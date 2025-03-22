@@ -1,18 +1,7 @@
-import React from "react";
-import ReactDOM from "react-dom/client";
-import "./index.css";
-import { OidcProvider } from "oidc";
-import { createRouter, RouterProvider } from "@tanstack/react-router";
-import { routeTree } from "./routeTree.gen";
+import { handleOidcCallback } from "oidc-spa/handleOidcCallback";
 
-const router = createRouter({ routeTree });
+const { isHandled } = handleOidcCallback();
 
-ReactDOM.createRoot(document.getElementById("root")!).render(
-    <React.StrictMode>
-        <OidcProvider
-        //fallback={<h1>Initializing OIDC...</h1>}
-        >
-            <RouterProvider router={router} />
-        </OidcProvider>
-    </React.StrictMode>
-);
+if (!isHandled) {
+    import("./main.lazy");
+}

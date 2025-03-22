@@ -1,4 +1,4 @@
-import { useOidc } from "oidc";
+import { useOidc } from "../oidc";
 import { Link, useLocation } from "react-router";
 import { parseKeycloakIssuerUri } from "oidc-spa/tools/parseKeycloakIssuerUri";
 

@@ -112,6 +112,7 @@ type OidcReactApi<DecodedIdToken extends Record<string, unknown>, AutoLogin exte
                   onRedirecting: () => JSX.Element | null;
               }
           ) => FC<Props>;
+          enforceLogin: (redirectUrl?: string) => Promise<void | never>;
       });
 
 export function createOidcReactApi_dependencyInjection<
@@ -385,6 +386,17 @@ export function createOidcReactApi_dependencyInjection<
         return ComponentWithLoginEnforced;
     }
 
+    async function enforceLogin(redirectUrl: string = window.location.href): Promise<void | never> {
+        const oidc = await getOidc();
+
+        if (!oidc.isUserLoggedIn) {
+            await oidc.login({
+                redirectUrl,
+                doesCurrentHrefRequiresAuth: location.href === redirectUrl
+            });
+        }
+    }
+
     const prOidc = prOidcOrInitializationError.then(oidcOrInitializationError => {
         if (oidcOrInitializationError instanceof OidcInitializationError) {
             return new Promise<never>(() => {});
@@ -410,10 +422,10 @@ export function createOidcReactApi_dependencyInjection<
 
     const oidcReact: OidcReactApi<DecodedIdToken, false> = {
         OidcProvider,
-        // @ts-expect-error: We know what we are doing
-        useOidc,
+        useOidc: useOidc as any,
         getOidc,
-        withLoginEnforced
+        withLoginEnforced,
+        enforceLogin
     };
 
     // @ts-expect-error: We know what we are doing

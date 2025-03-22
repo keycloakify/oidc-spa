@@ -1,5 +1,5 @@
-import reactLogo from "assets/react.svg";
-import viteLogo from "assets/vite.svg";
+import reactLogo from "../assets/react.svg";
+import viteLogo from "../assets/vite.svg";
 
 export default function PublicPage() {
     return (

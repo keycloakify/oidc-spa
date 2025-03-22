@@ -88,7 +88,6 @@ const execYarnLink = (params: { targetModuleName?: string; cwd: string }) => {
 
 const testAppNames = [
     "react-router",
-    "react-router-framework",
     "tanstack-router",
     "tanstack-router-file-based",
     "multi-providers"

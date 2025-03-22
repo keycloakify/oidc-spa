@@ -4,7 +4,7 @@ import {
     useOidc_assertUserLoggedIn,
     useOidc_assertUserNotLoggedIn,
     askUserToSelectProvider
-} from "oidc";
+} from "../oidc";
 
 export function Header() {
     const isUserLoggedIn = useIsUserLoggedIn();

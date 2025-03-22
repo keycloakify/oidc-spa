@@ -12,7 +12,8 @@ export const {
     /**
      * This is useful to use the oidc API outside of React.
      */
-    getOidc
+    getOidc,
+    enforceLogin
 } = createReactOidc({
     // If you don't have the parameters right away, it's the case for example
     // if you get the oidc parameters from an API you can pass a promise that
@@ -76,17 +77,6 @@ export const {
     // Remove this in your repo
     debugLogs: true
 });
-
-export async function enforceLogin(): Promise<void | never> {
-    const oidc = await getOidc();
-
-    if (!oidc.isUserLoggedIn) {
-        await oidc.login({
-            doesCurrentHrefRequiresAuth: true
-        });
-        // Never here
-    }
-}
 
 // Using the mock adapter:
 // To use this, just remove the code above and uncomment the code below.

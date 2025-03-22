@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useOidc } from "oidc";
+import { useOidc } from "../oidc";
 
 export function AutoLogoutCountdown() {
     const { isUserLoggedIn, subscribeToAutoLogoutCountdown } = useOidc();

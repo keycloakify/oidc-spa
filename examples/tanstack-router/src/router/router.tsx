@@ -1,6 +1,6 @@
 import { lazy } from "react";
 import { Layout } from "./Layout";
-import { enforceLogin } from "oidc";
+import { enforceLogin } from "../oidc";
 
 import { createRootRoute, createRoute, createRouter } from "@tanstack/react-router";
 

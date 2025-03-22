@@ -1,5 +1,5 @@
-import reactLogo from "assets/react.svg";
-import viteLogo from "assets/vite.svg";
+import reactLogo from "../assets/react.svg";
+import viteLogo from "../assets/vite.svg";
 import { createFileRoute } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/")({

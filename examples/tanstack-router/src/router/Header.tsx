@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { useOidc } from "oidc";
+import { useOidc } from "../oidc";
 import { parseKeycloakIssuerUri } from "oidc-spa/tools/parseKeycloakIssuerUri";
 
 export function Header() {
