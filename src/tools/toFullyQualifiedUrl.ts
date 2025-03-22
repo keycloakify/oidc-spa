@@ -13,7 +13,7 @@ type Params = {
 export function toFullyQualifiedUrl(params: Params): string {
     let url: string;
 
-    if (params.urlish.startsWith("http")) {
+    if (params.urlish.includes("://")) {
         url = params.urlish;
     } else {
         let path = params.urlish;

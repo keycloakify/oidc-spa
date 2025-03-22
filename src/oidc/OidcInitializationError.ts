@@ -107,19 +107,21 @@ export async function createWellKnownOidcConfigurationEndpointUnreachableInitial
 }
 
 export async function createIframeTimeoutInitializationError(params: {
-    homeAndCallbackUrl: string;
+    callbackUri: string;
     issuerUri: string;
     clientId: string;
 }): Promise<OidcInitializationError> {
-    const { homeAndCallbackUrl, issuerUri, clientId } = params;
+    const { callbackUri, issuerUri, clientId } = params;
 
     frame_ancestors_none: {
-        const cspOrError = await fetch(homeAndCallbackUrl).then(
+        if (!/^https?:\/\//.test(callbackUri)) {
+            break frame_ancestors_none;
+        }
+
+        const cspOrError = await fetch(callbackUri).then(
             response => {
                 if (!response.ok) {
-                    return new Error(
-                        `${homeAndCallbackUrl} responded with a ${response.status} status code.`
-                    );
+                    return new Error(`${callbackUri} responded with a ${response.status} status code.`);
                 }
 
                 return response.headers.get("Content-Security-Policy");
@@ -157,8 +159,7 @@ export async function createIframeTimeoutInitializationError(params: {
         return new OidcInitializationError({
             isAuthServerLikelyDown: false,
             messageOrCause: [
-                `The home of your application ${homeAndCallbackUrl}, which is also used as the OIDC callback URL,`,
-                "is currently served by your web server with the HTTP header `Content-Security-Policy: frame-ancestors none`.\n",
+                `${callbackUri} is currently served by your web server with the HTTP header \`Content-Security-Policy: frame-ancestors none\`.\n`,
                 "This header prevents the silent sign-in process from working.\n",
                 "To fix this issue, you need to allow your application's homepage to be iframed during the silent login flow. ",
                 "For example, replacing `frame-ancestors 'none'` with `frame-ancestors 'self'` ensures your app can be embedded in an iframe on the same domain.\n",
@@ -173,7 +174,7 @@ export async function createIframeTimeoutInitializationError(params: {
                 "add_header Content-Security-Policy $add_content_security_policy;\n",
                 "```\n",
                 "This way, the homepage is only iframed when the `state` parameter is present, and remains protected in all other scenarios.\n",
-                `The URL in question is: ${homeAndCallbackUrl}`
+                `The URL in question is: ${callbackUri}`
             ].join(" ")
         });
     }
@@ -191,7 +192,7 @@ export async function createIframeTimeoutInitializationError(params: {
             `- Either the client ID "${clientId}" does not exist, or\n`,
             `- You forgot to add the OIDC callback URL to the list of Valid Redirect URIs.\n`,
             `Client ID: "${clientId}"\n`,
-            `Callback URL to add to the list of Valid Redirect URIs: "${homeAndCallbackUrl}"\n\n`,
+            `Callback URL to add to the list of Valid Redirect URIs: "${callbackUri}"\n\n`,
             ...(() => {
                 const issuerUriParsed = parseKeycloakIssuerUri(issuerUri);
 
@@ -207,7 +208,7 @@ export async function createIframeTimeoutInitializationError(params: {
                     `2. Log in as an admin user.\n`,
                     `3. In the left menu, click on "Clients".\n`,
                     `4. Locate the client "${clientId}" in the list and click on it.\n`,
-                    `5. Find "Valid Redirect URIs" and add "${homeAndCallbackUrl}" to the list.\n`,
+                    `5. Find "Valid Redirect URIs" and add "${callbackUri}" to the list.\n`,
                     `6. Save the changes.\n\n`,
                     `For more information, refer to the documentation: https://docs.oidc-spa.dev/v/v6/providers-configuration/keycloak`
                 ];

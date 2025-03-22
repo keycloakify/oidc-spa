@@ -62,7 +62,7 @@ export function createLoginOrGoToAuthServer(params: {
 
     getExtraTokenParams: (() => Record<string, string | undefined>) | undefined;
 
-    homeAndCallbackUrl: string;
+    homeUrl: string;
     evtIsUserLoggedIn: NonPostableEvt<boolean>;
     log: typeof console.log | undefined;
 }) {
@@ -76,7 +76,7 @@ export function createLoginOrGoToAuthServer(params: {
 
         getExtraTokenParams,
 
-        homeAndCallbackUrl,
+        homeUrl,
         evtIsUserLoggedIn,
         log
     } = params;
@@ -168,7 +168,7 @@ export function createLoginOrGoToAuthServer(params: {
             redirectUrl_consentRequiredCase: (() => {
                 switch (rest.action) {
                     case "login":
-                        return lastPublicUrl ?? homeAndCallbackUrl;
+                        return lastPublicUrl ?? homeUrl;
                     case "go to auth server":
                         return redirectUrl;
                 }

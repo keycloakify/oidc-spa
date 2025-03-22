@@ -118,6 +118,18 @@ export type ParamsOfCreateOidc<
      */
     homeUrl: string;
 
+    /**
+     * WARNING: If you are deploying on the web, you should not set this parameter.
+     * The callbackUrl is the homeURl.
+     *
+     * This is only useful for when you also shipping your app as a Desktop App with Electron.
+     * NOTE that even in this case, it's not automatic, you still need to handle the response
+     * in the electron node process.
+     *
+     * Example: __callbackUri: "myapp://oidc-callback/"
+     */
+    __callbackUri?: string;
+
     decodedIdTokenSchema?: { parse: (data: unknown) => DecodedIdToken };
     /**
      * @deprecated: Use idleSessionLifetimeInSeconds instead
@@ -266,6 +278,7 @@ export async function createOidc_nonMemoized<
         extraQueryParams: extraQueryParamsOrGetter,
         extraTokenParams: extraTokenParamsOrGetter,
         homeUrl: homeUrl_params,
+        __callbackUri,
         decodedIdTokenSchema,
         __unsafe_ssoSessionIdleSeconds,
         idleSessionLifetimeInSeconds = __unsafe_ssoSessionIdleSeconds,
@@ -302,8 +315,14 @@ export async function createOidc_nonMemoized<
         return extraTokenParamsOrGetter;
     })();
 
-    const homeAndCallbackUrl = toFullyQualifiedUrl({
+    const homeUrl = toFullyQualifiedUrl({
         urlish: homeUrl_params,
+        doAssertNoQueryParams: true,
+        doOutputWithTrailingSlash: true
+    });
+
+    const callbackUri = toFullyQualifiedUrl({
+        urlish: __callbackUri ?? homeUrl,
         doAssertNoQueryParams: true,
         doOutputWithTrailingSlash: true
     });
@@ -315,7 +334,8 @@ export async function createOidc_nonMemoized<
                 clientId,
                 scopes,
                 configId,
-                homeAndCallbackUrl
+                homeUrl,
+                callbackUri
             },
             null,
             2
@@ -332,26 +352,26 @@ export async function createOidc_nonMemoized<
 
     const stateQueryParamValue_instance = generateStateQueryParamValue();
 
-    let areThirdPartyCookiesAllowed: boolean;
+    let isOidcServerThirdPartyRelativeToApp: boolean;
     {
         const url1 = window.location.origin;
         const url2 = issuerUri;
 
-        areThirdPartyCookiesAllowed = getHaveSharedParentDomain({
-            url1,
-            url2
-        });
+        isOidcServerThirdPartyRelativeToApp =
+            getHaveSharedParentDomain({
+                url1,
+                url2
+            }) === false;
 
-        if (areThirdPartyCookiesAllowed) {
-            log?.(`${url1} and ${url2} have shared parent domain, third party cookies are allowed`);
-        } else {
+        if (isOidcServerThirdPartyRelativeToApp) {
             log?.(
                 [
-                    `${url1} and ${url2} don't have shared parent domain, setting third party cookies`,
-                    `on the auth server domain might not work. Making sure that everything works smoothly regardless`,
-                    `by allowing oidc-spa to store the auth state in the session storage for a limited period of time.`
+                    `${url1} and ${url2} don't have shared parent domain, silent signin in iframe (unless in chrome in dev mode) is not possible.`,
+                    "oidc-spa will have to fully reload the app to restore the auth state."
                 ].join(" ")
             );
+        } else {
+            log?.(`${url1} and ${url2} have shared parent domain silent signin in iframe is possible`);
         }
     }
 
@@ -361,15 +381,15 @@ export async function createOidc_nonMemoized<
         stateQueryParamValue: stateQueryParamValue_instance,
         authority: issuerUri,
         client_id: clientId,
-        redirect_uri: homeAndCallbackUrl,
-        silent_redirect_uri: homeAndCallbackUrl,
-        post_logout_redirect_uri: homeAndCallbackUrl,
+        redirect_uri: callbackUri,
+        silent_redirect_uri: callbackUri,
+        post_logout_redirect_uri: callbackUri,
         response_type: "code",
         scope: Array.from(new Set(["openid", ...scopes])).join(" "),
         automaticSilentRenew: false,
         userStore: new WebStorageStateStore({
             store: (() => {
-                if (areThirdPartyCookiesAllowed) {
+                if (!isOidcServerThirdPartyRelativeToApp) {
                     isUserStoreInMemoryOnly = true;
                     return new InMemoryWebStorage();
                 }
@@ -406,7 +426,7 @@ export async function createOidc_nonMemoized<
         transformUrlBeforeRedirect_next,
         getExtraQueryParams,
         getExtraTokenParams,
-        homeAndCallbackUrl,
+        homeUrl,
         evtIsUserLoggedIn,
         log
     });
@@ -576,8 +596,6 @@ export async function createOidc_nonMemoized<
         }
 
         silent_login_if_possible_and_auto_login: {
-            log?.("Trying to restore the auth from the http only cookie (silent signin with iframe)");
-
             const persistedAuthState = getPersistedAuthState({ configId });
 
             if (persistedAuthState === "explicitly logged out" && !autoLogin) {
@@ -592,6 +610,25 @@ export async function createOidc_nonMemoized<
                 if (persistedAuthState === "explicitly logged out") {
                     break actual_silent_signin;
                 }
+
+                if (isOidcServerThirdPartyRelativeToApp) {
+                    // NOTE: Electron
+                    if (!callbackUri.startsWith("https://")) {
+                        log?.("Skipping silent signin with iframe, custom protocol");
+                        break actual_silent_signin;
+                    }
+
+                    if (!homeUrl.startsWith("http://localhost")) {
+                        log?.(
+                            "Skipping silent signin with iframe, third party cookies are are not allowed so we know this won't work"
+                        );
+                        break actual_silent_signin;
+                    }
+                }
+
+                log?.(
+                    "Trying to restore the auth from the http only cookie (silent signin with iframe)"
+                );
 
                 const result_loginSilent = await loginSilent({
                     oidcClientTsUserManager,
@@ -614,7 +651,7 @@ export async function createOidc_nonMemoized<
                             );
                         case "timeout":
                             return createIframeTimeoutInitializationError({
-                                homeAndCallbackUrl,
+                                callbackUri,
                                 clientId,
                                 issuerUri
                             });
@@ -863,7 +900,7 @@ export async function createOidc_nonMemoized<
             persistAuthState({ configId, state: undefined });
         }
 
-        if (!areThirdPartyCookiesAllowed) {
+        if (isOidcServerThirdPartyRelativeToApp) {
             persistAuthState({
                 configId,
                 state: {
@@ -912,7 +949,7 @@ export async function createOidc_nonMemoized<
                     case "current page":
                         return window.location.href;
                     case "home":
-                        return homeAndCallbackUrl;
+                        return homeUrl;
                     case "specific url":
                         return toFullyQualifiedUrl({
                             urlish: params.url,
@@ -1185,7 +1222,7 @@ export async function createOidc_nonMemoized<
     {
         const { prOtherTabLogout } = getPrOtherTabLogout({
             configId,
-            homeUrl: homeAndCallbackUrl,
+            homeUrl,
             sessionId
         });
 
