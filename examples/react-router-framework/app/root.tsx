@@ -1,7 +1,6 @@
 import { isRouteErrorResponse, Links, Meta, Outlet, Scripts, ScrollRestoration } from "react-router";
 import type { Route } from "./+types/root";
 import { OidcProvider } from "./oidc.client";
-import "./app.css";
 
 export const links: Route.LinksFunction = () => [
     { rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -42,6 +41,15 @@ export default function App() {
     );
 }
 
+export function HydrateFallback() {
+    // Get rid of the "💿 Hey developer 👋. You can provide a way better UX than this when your app
+    // is loading JS modules and/or running `clientLoader` functions. Check out https://remix.run/route/hydrate-fallback
+    // for more information."
+    //
+    // This is a react-router false positive. Remove in future react-router versions.
+    return null;
+}
+
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
     let message = "Oops!";
     let details = "An unexpected error occurred.";
@@ -59,7 +67,7 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
     }
 
     return (
-        <main className="pt-16 p-4 container mx-auto">
+        <main>
             <h1>{message}</h1>
             <p>{details}</p>
             {stack && (
@@ -69,13 +77,4 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
             )}
         </main>
     );
-}
-
-export function HydrateFallback() {
-    // Get rid of the "💿 Hey developer 👋. You can provide a way better UX than this when your app
-    // is loading JS modules and/or running `clientLoader` functions. Check out https://remix.run/route/hydrate-fallback
-    // for more information."
-    //
-    // This is a react-router false positive. Remove in future react-router versions.
-    return null;
 }

@@ -14,6 +14,7 @@
         "format:check": "yarn _format --list-different",
         "link-in-app": "tsx scripts/link-in-app.ts",
         "start-react-router-example": "yarn build && tsx scripts/link-in-examples.ts && cd examples/react-router && rm -rf node_modules/.vite && yarn dev",
+        "start-react-router-framework-example": "yarn build && tsx scripts/link-in-examples.ts && cd examples/react-router-framework && rm -rf node_modules/.vite && yarn build && yarn preview",
         "start-tanstack-router-example": "yarn build && tsx scripts/link-in-examples.ts && cd examples/tanstack-router && rm -rf node_modules/.vite && yarn dev",
         "start-tanstack-router-file-based-example": "yarn build && tsx scripts/link-in-examples.ts && cd examples/tanstack-router-file-based && rm -rf node_modules/.vite && yarn dev",
         "start-multi-providers-example": "yarn build && tsx scripts/link-in-examples.ts && cd examples/multi-providers && rm -rf node_modules/.vite && yarn dev"

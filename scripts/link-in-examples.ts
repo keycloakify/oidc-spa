@@ -90,7 +90,8 @@ const testAppNames = [
     "react-router",
     "tanstack-router",
     "tanstack-router-file-based",
-    "multi-providers"
+    "multi-providers",
+    "react-router-framework"
 ] as const;
 
 const getTestAppPath = (testAppName: (typeof testAppNames)[number]) =>
