@@ -692,11 +692,14 @@ export async function createOidc_nonMemoized<
                 if (
                     autoLogin ||
                     (persistedAuthState === "logged in" &&
-                        (authResponse_error === "interaction_required" ||
+                        (authResponse_error === undefined ||
+                            authResponse_error === "interaction_required" ||
                             authResponse_error === "login_required" ||
                             authResponse_error === "consent_required" ||
                             authResponse_error === "account_selection_required"))
                 ) {
+                    log?.("Performing auto login with redirect");
+
                     persistAuthState({ configId, state: undefined });
 
                     completeLoginOrRefreshProcess();
@@ -739,14 +742,16 @@ export async function createOidc_nonMemoized<
                     assert(false);
                 }
 
-                log?.(
-                    [
-                        `The auth server responded with: ${authResponse_error} `,
-                        "login_required" === authResponse_error
-                            ? `(login_required just means that there's no active session for the user)`
-                            : ""
-                    ].join("")
-                );
+                if (authResponse_error !== undefined) {
+                    log?.(
+                        [
+                            `The auth server responded with: ${authResponse_error} `,
+                            "login_required" === authResponse_error
+                                ? `(login_required just means that there's no active session for the user)`
+                                : ""
+                        ].join("")
+                    );
+                }
 
                 break silent_login_if_possible_and_auto_login;
             }
