@@ -6,29 +6,29 @@
     "scripts": {
         "prepare": "[ ! -f .env.local ] && cp .env.local.sample .env.local || true",
         "dev": "vite",
-        "build": "tsc && vite build",
+        "build": "tsc -b && vite build",
         "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
         "preview": "vite preview"
     },
     "dependencies": {
-        "@tanstack/react-router": "1.58.11",
+        "@tanstack/react-router": "1.114.27",
         "oidc-spa": "latest",
-        "react": "18.2.0",
-        "react-dom": "18.2.0",
-        "zod": "3.22.4"
+        "react": "19.0.0",
+        "react-dom": "19.0.0",
+        "zod": "3.24.2"
     },
     "devDependencies": {
         "@tanstack/router-vite-plugin": "1.58.10",
-        "@types/react": "18.2.75",
-        "@types/react-dom": "18.2.24",
-        "@typescript-eslint/eslint-plugin": "6.20.0",
-        "@typescript-eslint/parser": "6.20.0",
-        "@vitejs/plugin-react": "4.2.1",
-        "eslint": "8.56.0",
-        "eslint-plugin-react-hooks": "4.6.0",
-        "eslint-plugin-react-refresh": "0.4.5",
-        "typescript": "5.4.4",
-        "vite": "5.4.8",
-        "vite-plugin-commonjs": "0.10.1"
+        "@types/react": "19.0.12",
+        "@types/react-dom": "19.0.4",
+        "@typescript-eslint/eslint-plugin": "8.27.0",
+        "@typescript-eslint/parser": "8.27.0",
+        "@vitejs/plugin-react": "4.3.4",
+        "eslint": "9.23.0",
+        "eslint-plugin-react-hooks": "5.2.0",
+        "eslint-plugin-react-refresh": "0.4.19",
+        "typescript": "5.8.2",
+        "vite": "6.2.2",
+        "vite-plugin-commonjs": "0.10.4"
     }
 }
