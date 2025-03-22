@@ -613,7 +613,7 @@ export async function createOidc_nonMemoized<
 
                 if (isOidcServerThirdPartyRelativeToApp) {
                     // NOTE: Electron
-                    if (!callbackUri.startsWith("https://")) {
+                    if (!/https?:\/\//.test(homeUrl)) {
                         log?.("Skipping silent signin with iframe, custom protocol");
                         break actual_silent_signin;
                     }
