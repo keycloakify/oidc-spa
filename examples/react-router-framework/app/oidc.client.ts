@@ -1,5 +1,10 @@
 import { createReactOidc } from "oidc-spa/react";
 import { z } from "zod";
+// This is the original, unmodified browser `fetch`.
+// It's safer to use this instead of `window.fetch`,
+// which could be overridden or tampered with by malicious code.
+// This import guarantees access to the native implementation.
+import { fetch } from "oidc-spa";
 
 export const {
     OidcProvider,
@@ -13,7 +18,8 @@ export const {
      * This is useful to use the oidc API outside of React.
      */
     getOidc,
-    enforceLogin
+    enforceLogin,
+    withLoginEnforced
 } = createReactOidc({
     // If you don't have the parameters right away, it's the case for example
     // if you get the oidc parameters from an API you can pass a promise that
@@ -77,6 +83,21 @@ export const {
     // Remove this in your repo
     debugLogs: true
 });
+
+export const fetchWithAuth: typeof fetch = async (input, init) => {
+    const oidc = await getOidc();
+
+    if (oidc.isUserLoggedIn) {
+        const { accessToken } = await oidc.getTokens();
+
+        (init ??= {}).headers = {
+            ...init.headers,
+            Authorization: `Bearer ${accessToken}`
+        };
+    }
+
+    return fetch(input, init);
+};
 
 // Using the mock adapter:
 // To use this, just remove the code above and uncomment the code below.

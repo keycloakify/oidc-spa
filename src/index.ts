@@ -1,1 +1,1 @@
-export { type Oidc, OidcInitializationError, type ParamsOfCreateOidc, createOidc } from "./core";
+export { type Oidc, OidcInitializationError, type ParamsOfCreateOidc, createOidc, fetch } from "./core";
