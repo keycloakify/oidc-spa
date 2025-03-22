@@ -1,9 +1,16 @@
-import { useOidc } from "../oidc";
+import { useOidc, enforceLogin } from "../oidc.client";
 import { useMemo } from "react";
 import { decodeJwt } from "oidc-spa/tools/decodeJwt";
 import { parseKeycloakIssuerUri } from "oidc-spa/tools/parseKeycloakIssuerUri";
+import type { Route } from "./+types/protected";
 
-export default function ProtectedPage() {
+export async function clientLoader({ request }: Route.ClientLoaderArgs) {
+    await enforceLogin(request.url);
+
+    return null;
+}
+
+export default function Protected() {
     // Here we can safely assume that the user is logged in.
     const {
         tokens,
@@ -22,7 +29,6 @@ export default function ProtectedPage() {
         if (tokens === undefined) {
             return undefined;
         }
-
         try {
             return decodeJwt(tokens.accessToken);
         } catch {
@@ -40,7 +46,7 @@ export default function ProtectedPage() {
             {decodedAccessToken !== undefined ? (
                 <>
                     <p>Decoded Access Token:</p>
-                    <pre style={{ textAlign: "left" }}>
+                    <pre style={{ textAlign: "left", display: "inline-block" }}>
                         {JSON.stringify(decodedAccessToken, null, 2)}
                     </pre>
                 </>

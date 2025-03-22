@@ -1,6 +1,3 @@
-// NOTE: Absolute imports are possible due to the following configuration:
-// - tsconfig.json: "baseUrl": "./src"
-// - vite.config.ts: usage of the "vite-tsconfig-paths" plugin
 import { useOidc } from "../oidc";
 import { useMemo } from "react";
 import { decodeJwt } from "oidc-spa/tools/decodeJwt";

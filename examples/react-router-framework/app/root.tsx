@@ -1,6 +1,9 @@
 import { isRouteErrorResponse, Links, Meta, Outlet, Scripts, ScrollRestoration } from "react-router";
 import type { Route } from "./+types/root";
 import { OidcProvider } from "./oidc.client";
+import { AutoLogoutCountdown } from "./components/AutoLogoutCountdown";
+import { Header } from "./components/Header";
+import "./app.css";
 
 export const links: Route.LinksFunction = () => [
     { rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -36,7 +39,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
 export default function App() {
     return (
         <OidcProvider fallback={<p>Checking oidc...</p>}>
-            <Outlet />
+            <Header />
+            <main style={{ width: "100%", textAlign: "center", margin: "0 auto" }}>
+                <Outlet />
+            </main>
+            <AutoLogoutCountdown />
         </OidcProvider>
     );
 }
