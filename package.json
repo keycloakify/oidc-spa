@@ -25,9 +25,11 @@
         ".": "./dist/index.js",
         "./mock": "./dist/mock/index.js",
         "./react": "./dist/react/index.js",
+        "./mock/react": "./dist/mock/react.js",
         "./entrypoint": "./dist/entrypoint.js",
         "./tools/decodeJwt": "./dist/tools/decodeJwt.js",
-        "./tools/parseKeycloakIssuerUri": "./dist/tools/parseKeycloakIssuerUri.js"
+        "./tools/parseKeycloakIssuerUri": "./dist/tools/parseKeycloakIssuerUri.js",
+        "./tools/assert": "./dist/tools/assert.js"
     },
     "lint-staged": {
         "*.{ts,tsx,json,md}": [
