@@ -38,7 +38,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
 export default function App() {
     return (
-        <OidcProvider fallback={<p>Checking oidc...</p>}>
+        <OidcProvider
+        //fallback={<p>Checking auth...</p>}
+        >
             <Header />
             <main style={{ width: "100%", textAlign: "center", margin: "0 auto" }}>
                 <Outlet />

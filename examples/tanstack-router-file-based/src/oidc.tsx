@@ -1,10 +1,5 @@
 import { createReactOidc } from "oidc-spa/react";
 import { z } from "zod";
-// This is the original, unmodified browser `fetch`.
-// It's safer to use this instead of `window.fetch`,
-// which could be overridden or tampered with by malicious code.
-// This import guarantees access to the native implementation.
-import { fetch } from "oidc-spa";
 
 export const {
     OidcProvider,
