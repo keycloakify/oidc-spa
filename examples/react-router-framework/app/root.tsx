@@ -51,11 +51,6 @@ export default function App() {
 }
 
 export function HydrateFallback() {
-    // Get rid of the "💿 Hey developer 👋. You can provide a way better UX than this when your app
-    // is loading JS modules and/or running `clientLoader` functions. Check out https://remix.run/route/hydrate-fallback
-    // for more information."
-    //
-    // This is a react-router false positive. Remove in future react-router versions.
     return null;
 }
 
