@@ -6,9 +6,5 @@ import tsconfigPaths from "vite-tsconfig-paths";
 import commonjs from "vite-plugin-commonjs";
 
 export default defineConfig({
-    server: {
-        host: true,
-        port: 3001
-    },
     plugins: [reactRouter(), tsconfigPaths(), commonjs()]
 });

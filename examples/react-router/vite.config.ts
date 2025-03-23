@@ -5,8 +5,5 @@ import react from "@vitejs/plugin-react";
 import commonjs from "vite-plugin-commonjs";
 // https://vitejs.dev/config/
 export default defineConfig({
-    plugins: [react(), commonjs()],
-    resolve: {
-        preserveSymlinks: true
-    }
+    plugins: [react(), commonjs()]
 });
