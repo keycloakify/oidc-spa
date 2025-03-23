@@ -11,25 +11,25 @@
         "preview": "vite preview"
     },
     "dependencies": {
-        "@react-router/fs-routes": "^7.4.0",
-        "@react-router/node": "^7.4.0",
-        "@react-router/serve": "^7.4.0",
-        "isbot": "^5",
+        "@react-router/fs-routes": "7.4.0",
+        "@react-router/node": "7.4.0",
+        "@react-router/serve": "7.4.0",
+        "isbot": "5.1.25",
         "oidc-spa": "latest",
         "react": "19.0.0",
         "react-dom": "19.0.0",
-        "react-router": "^7.3.0",
-        "zod": "^3.24.2"
+        "react-router": "7.4.0",
+        "zod": "3.24.2"
     },
     "devDependencies": {
-        "@react-router/dev": "^7.4.0",
-        "@types/node": "^20",
+        "@react-router/dev": "7.4.0",
+        "@types/node": "22.13.11",
         "@types/react": "19.0.12",
-        "@types/react-dom": "^19.0.1",
-        "react-router-devtools": "^1.1.0",
-        "typescript": "^5.8.2",
-        "vite": "^6.2.2",
-        "vite-tsconfig-paths": "^5.1.4",
-        "vite-plugin-commonjs": "^0.10.4"
+        "@types/react-dom": "19.0.4",
+        "react-router-devtools": "1.1.6",
+        "typescript": "5.8.2",
+        "vite": "6.2.2",
+        "vite-tsconfig-paths": "5.1.4",
+        "vite-plugin-commonjs": "0.10.4"
     }
 }
