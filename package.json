@@ -27,9 +27,9 @@
         "./react": "./dist/react/index.js",
         "./mock/react": "./dist/mock/react.js",
         "./entrypoint": "./dist/entrypoint.js",
+        "./backend": "./dist/backend.js",
         "./tools/decodeJwt": "./dist/tools/decodeJwt.js",
-        "./tools/parseKeycloakIssuerUri": "./dist/tools/parseKeycloakIssuerUri.js",
-        "./tools/assert": "./dist/tools/assert.js"
+        "./tools/parseKeycloakIssuerUri": "./dist/tools/parseKeycloakIssuerUri.js"
     },
     "lint-staged": {
         "*.{ts,tsx,json,md}": [
