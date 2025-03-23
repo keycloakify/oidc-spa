@@ -6,5 +6,5 @@ import tsconfigPaths from "vite-tsconfig-paths";
 import commonjs from "vite-plugin-commonjs";
 
 export default defineConfig({
-    plugins: [reactRouter(), tsconfigPaths(), commonjs()]
+    plugins: [reactRouter(), tsconfigPaths(), process.env["IS_LINKED"] === "true" && commonjs()]
 });

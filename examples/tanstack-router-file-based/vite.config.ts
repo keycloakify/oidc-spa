@@ -7,5 +7,5 @@ import { TanStackRouterVite } from "@tanstack/router-vite-plugin";
 
 // https://vitejs.dev/config/
 export default defineConfig({
-    plugins: [react(), commonjs(), TanStackRouterVite()]
+    plugins: [react(), TanStackRouterVite(), process.env["IS_LINKED"] === "true" && commonjs()]
 });
