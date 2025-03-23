@@ -6,6 +6,10 @@ import { OidcProvider } from "./oidc.client";
 ReactDOM.hydrateRoot(
     document,
     <React.StrictMode>
+        {/* 
+        NOTE: Do not provide a fallback prop to the <OidcProvider>
+        Use the HydrateFallback of ./root.tsx instead
+        */}
         <OidcProvider>
             <HydratedRouter />
         </OidcProvider>
