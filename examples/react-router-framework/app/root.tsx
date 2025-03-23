@@ -1,6 +1,5 @@
 import { isRouteErrorResponse, Links, Meta, Outlet, Scripts, ScrollRestoration } from "react-router";
 import type { Route } from "./+types/root";
-import { OidcProvider } from "./oidc.client";
 import { AutoLogoutCountdown } from "./components/AutoLogoutCountdown";
 import { Header } from "./components/Header";
 import "./app.css";
@@ -38,20 +37,22 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
 export default function App() {
     return (
-        <OidcProvider
-        //fallback={<p>Checking auth...</p>}
-        >
+        <>
             <Header />
             <main style={{ width: "100%", textAlign: "center", margin: "0 auto" }}>
                 <Outlet />
             </main>
             <AutoLogoutCountdown />
-        </OidcProvider>
+        </>
     );
 }
 
 export function HydrateFallback() {
-    return null;
+    return (
+        <div style={{ display: "flex", width: "100%", justifyContent: "center", alignItems: "center" }}>
+            <p>Loading oidc and hydrating client...</p>
+        </div>
+    );
 }
 
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
