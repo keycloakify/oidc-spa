@@ -8,7 +8,7 @@ import {
     type ReactNode,
     type ComponentType,
     type FC,
-    JSX
+    type JSX
 } from "react";
 import { type Oidc, createOidc, type ParamsOfCreateOidc, OidcInitializationError } from "../core";
 import { assert, type Equals, type Param0 } from "../vendor/frontend/tsafe";
