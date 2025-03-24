@@ -39,10 +39,9 @@ What all of these have in common is that they implement the OpenID Connect/OAuth
 
 This library provides a **unified way** to connect with these different providers instead of having to use
 their specific SDKs.  
-When a user clicks the **"Login"** button in your app, just call the `login()` method—it's that simple.
 
-`oidc-spa` implement the [**Authorization Code Flow with PKCE**](https://docs.oidc-spa.dev/resources/why-no-client-secret), this means that **you do not need a backend** to handle the authentication process.  
-The authentication process is handled entirely in the browser. No need for `/login` or `/logout` routes.
+`oidc-spa` implement the [**Authorization Code Flow with PKCE**](https://docs.oidc-spa.dev/resources/why-no-client-secret), this means that **you do not need a backend and a database** to handle the authentication process.  
+The authentication process is handled entirely in the browser. And no need for `/login` or `/logout` routes.
 
 ## Why `oidc-spa`?
 
