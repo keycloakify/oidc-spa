@@ -141,11 +141,19 @@ function SelectProviderDialog() {
     );
 }
 
-export async function beforeLoad_protectedRoute() {
+export async function beforeLoad_protectedRoute(params: { cause: "preload" | string }) {
+    const { cause } = params;
+
     const oidc = await getOidc();
 
     if (oidc.isUserLoggedIn) {
         return;
+    }
+
+    if (cause === "preload") {
+        throw new Error(
+            "oidc-spa: User is not yet logged in. This is an expected error, nothing to be addressed."
+        );
     }
 
     const provider = await askUserToSelectProvider();

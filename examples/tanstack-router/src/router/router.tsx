@@ -13,8 +13,8 @@ const indexRoute = createRoute({
 const protectedRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: "protected",
-    beforeLoad: async () => {
-        await enforceLogin();
+    beforeLoad: async params => {
+        await enforceLogin(params);
     },
     component: lazy(() => import("../pages/ProtectedPage"))
 });

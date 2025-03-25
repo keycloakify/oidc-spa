@@ -4,8 +4,8 @@ import { decodeJwt } from "oidc-spa/tools/decodeJwt";
 import { parseKeycloakIssuerUri } from "oidc-spa/tools/parseKeycloakIssuerUri";
 import type { Route } from "./+types/protected";
 
-export async function clientLoader({ request }: Route.ClientLoaderArgs) {
-    await enforceLogin(request.url);
+export async function clientLoader(params: Route.ClientLoaderArgs) {
+    await enforceLogin(params);
 
     return null;
 }

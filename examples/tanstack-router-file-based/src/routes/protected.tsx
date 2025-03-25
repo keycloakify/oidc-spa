@@ -6,8 +6,8 @@ import { parseKeycloakIssuerUri } from "oidc-spa/tools/parseKeycloakIssuerUri";
 
 export const Route = createFileRoute("/protected")({
     component: ProtectedPage,
-    beforeLoad: async () => {
-        await enforceLogin();
+    beforeLoad: async params => {
+        await enforceLogin(params);
         // If this line is reached, the user is logged in.
     }
 });

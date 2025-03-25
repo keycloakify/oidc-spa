@@ -13,8 +13,8 @@ export const router = createBrowserRouter([
         children: [
             {
                 path: "protected",
-                loader: async ({ request }) => {
-                    await enforceLogin(request.url);
+                loader: async params => {
+                    await enforceLogin(params);
 
                     return null;
                 },

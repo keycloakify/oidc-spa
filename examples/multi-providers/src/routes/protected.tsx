@@ -5,7 +5,9 @@ import { decodeJwt } from "oidc-spa/tools/decodeJwt";
 
 export const Route = createFileRoute("/protected")({
     component: ProtectedPage,
-    beforeLoad: beforeLoad_protectedRoute
+    beforeLoad: async params => {
+        await beforeLoad_protectedRoute(params);
+    }
 });
 
 function ProtectedPage() {

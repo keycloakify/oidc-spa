@@ -112,7 +112,10 @@ type OidcReactApi<DecodedIdToken extends Record<string, unknown>, AutoLogin exte
                   onRedirecting: () => JSX.Element | null;
               }
           ) => FC<Props>;
-          enforceLogin: (redirectUrl?: string) => Promise<void | never>;
+          enforceLogin: (loaderParams: {
+              request?: { url?: string };
+              cause?: "preload" | string;
+          }) => Promise<void | never>;
       });
 
 export function createOidcReactApi_dependencyInjection<
@@ -386,10 +389,22 @@ export function createOidcReactApi_dependencyInjection<
         return ComponentWithLoginEnforced;
     }
 
-    async function enforceLogin(redirectUrl: string = window.location.href): Promise<void | never> {
+    async function enforceLogin(loaderParams: {
+        request?: { url?: string };
+        cause?: "preload" | string;
+    }): Promise<void | never> {
+        const { cause } = loaderParams;
+        const redirectUrl = loaderParams.request?.url ?? location.href;
+
         const oidc = await getOidc();
 
         if (!oidc.isUserLoggedIn) {
+            if (cause === "preload") {
+                throw new Error(
+                    "oidc-spa: User is not yet logged in. This is an expected error, nothing to be addressed."
+                );
+            }
+
             await oidc.login({
                 redirectUrl,
                 doesCurrentHrefRequiresAuth: location.href === redirectUrl
