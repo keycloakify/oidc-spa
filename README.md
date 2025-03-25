@@ -69,7 +69,7 @@ We wanted a **universal solution**—one that is as good or better than all exis
 -   ✨ **React integration**: Expose a framework agnostic API but also a React adapter `oidc-spa/react`.
 -   🔥 **No limitation**- For example, everything you could do with `keycloak-js`, you can do with `oidc-spa`.
 -   💬 **Detailed debug messages**: If your OIDC server is not properly configured, it tells you precisely what’s wrong and what you need to do to fix it.
--   🕣 **Auto logout with countdown**: "You will be logged out in 10... 9... 8..."—users see exactly when their session expires.
+-   🕣 **Auto logout with countdown**: "You will be logged out in 10... 9... 8...", users see exactly when their session expires.
 -   🚪 **Logout propagation**: Logging out in one tab logs out all others.
 -   📖 **Comprehensive documentation**: Guides and examples for common scenarios.
 -   ✅ **Type safety**: Strong TypeScript support with optional [Zod](https://zod.dev/) integration validating the expected shape of the ID token.
