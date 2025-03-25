@@ -66,7 +66,7 @@ We wanted a **universal solution**—one that is as good or better than all exis
 
 -   🎓 **No OIDC/OAuth2 expertise required**: Easy to setup and use. We're here to help [on Discord](https://discord.gg/mJdYJSdcm4)!
 -   🛠️ **Simple setup**: No need to define `/login` or `/logout` routes—token refreshing is automatic, it just works.
--   ✨ **React integration**: Expose a framework agnostic API (`oidc-spa`) but also a React adapter `oidc-spa/react`.
+-   ✨ **React integration**: Expose a framework agnostic API but also a React adapter `oidc-spa/react`.
 -   🔥 **No limitation**- For example, everything you could do with `keycloak-js`, you can do with `oidc-spa`.
 -   💬 **Detailed debug messages**: If your OIDC server is not properly configured, it tells you precisely what’s wrong and what you need to do to fix it.
 -   🕣 **Auto logout with countdown**: "You will be logged out in 10... 9... 8..."—users see exactly when their session expires.
