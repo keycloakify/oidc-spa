@@ -38,7 +38,7 @@ There are also plenty of self-hosted options like Keycloak, Ory Hydra, and Dex.
 What all of these have in common is that they implement the OpenID Connect/OAuth2 standard.
 
 This library provides a **unified way** to connect with these different providers instead of having to use
-their specific SDKs.  
+their specific SDKs.
 
 `oidc-spa` implement the [**Authorization Code Flow with PKCE**](https://docs.oidc-spa.dev/resources/why-no-client-secret), this means that **you do not need a backend and a database** to handle the authentication process.  
 The authentication process is handled entirely in the browser. And no need for `/login` or `/logout` routes.
