@@ -363,7 +363,7 @@ export function createOidcReactApi_dependencyInjection<
         function ComponentWithLoginEnforced(props: Props) {
             const contextValue = useContext(oidcContext);
 
-            assert(contextValue !== undefined);
+            assert(contextValue !== undefined, "094283");
 
             const { oidc, fallback } = contextValue;
 

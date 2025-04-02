@@ -11,8 +11,8 @@ export function getDownlinkAndRtt(): { downlink: number; rtt: number } | undefin
         try {
             const { downlink, rtt } = navigator[key];
 
-            assert(typeof downlink === "number");
-            assert(typeof rtt === "number");
+            assert(typeof downlink === "number", "768860");
+            assert(typeof rtt === "number", "945829");
 
             return { downlink, rtt };
         } catch {}

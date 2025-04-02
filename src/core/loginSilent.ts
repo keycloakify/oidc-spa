@@ -85,8 +85,8 @@ export async function loginSilent(params: {
 
         const stateData = getStateData({ stateQueryParamValue: authResponse.state });
 
-        assert(stateData !== undefined);
-        assert(stateData.context === "iframe");
+        assert(stateData !== undefined, "765645");
+        assert(stateData.context === "iframe", "250711");
 
         if (stateData.configId !== configId) {
             return;

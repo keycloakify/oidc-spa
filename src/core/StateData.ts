@@ -109,8 +109,8 @@ export function markStateDataAsProcessedByCallback(params: { stateQueryParamValu
 
     const obj = getStateStore({ stateQueryParamValue });
 
-    assert(obj !== undefined);
-    assert(obj.data.context === "redirect");
+    assert(obj !== undefined, "180465");
+    assert(obj.data.context === "redirect", "649531");
 
     obj.data.hasBeenProcessedByCallback = true;
 

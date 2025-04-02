@@ -65,7 +65,7 @@ export function createEvtIsUserActive(params: {
 
     const scheduleSetInactive = () => {
         const timer = setTimeout(() => {
-            assert(isUserActive);
+            assert(isUserActive, "011507");
             isUserActive = false;
             evtIsUserActive.post(isUserActive);
         }, 5_000);

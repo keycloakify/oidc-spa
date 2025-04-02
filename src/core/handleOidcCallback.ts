@@ -116,7 +116,7 @@ function handleOidcCallback_nonMemoized(): { isHandled: boolean } {
         authResponse[key] = value;
     }
 
-    assert(authResponse.state !== "");
+    assert(authResponse.state !== "", "063965");
 
     switch (stateData.context) {
         case "iframe":
@@ -181,8 +181,8 @@ export function retrieveRedirectAuthResponseAndStateData(params: {
     for (const authResponse of [...authResponses]) {
         const stateData = getStateData({ stateQueryParamValue: authResponse.state });
 
-        assert(stateData !== undefined);
-        assert(stateData.context === "redirect");
+        assert(stateData !== undefined, "966975");
+        assert(stateData.context === "redirect", "474728");
 
         if (stateData.configId !== configId) {
             continue;

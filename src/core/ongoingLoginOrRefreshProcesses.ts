@@ -20,7 +20,7 @@ export async function startLoginOrRefreshProcess(): Promise<{
     function completeLoginOrRefreshProcess() {
         const index = prDone_arr.indexOf(dDone.pr);
 
-        assert(index !== -1);
+        assert(index !== -1, "104044");
 
         prDone_arr.splice(index, 1);
 

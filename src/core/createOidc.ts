@@ -487,7 +487,7 @@ export async function createOidc_nonMemoized<
                                 authResponseUrl
                             );
                         } catch (error) {
-                            assert(error instanceof Error);
+                            assert(error instanceof Error, "741947");
 
                             if (error.message === "Failed to fetch") {
                                 return createFailedToFetchTokenEndpointInitializationError({
@@ -641,7 +641,7 @@ export async function createOidc_nonMemoized<
                     getExtraTokenParams
                 });
 
-                assert(result_loginSilent.outcome !== "token refreshed using refresh token");
+                assert(result_loginSilent.outcome !== "token refreshed using refresh token", "876995");
 
                 if (result_loginSilent.outcome === "failure") {
                     switch (result_loginSilent.cause) {
@@ -675,7 +675,7 @@ export async function createOidc_nonMemoized<
                         authResponseToUrl(authResponse)
                     );
                 } catch (error) {
-                    assert(error instanceof Error);
+                    assert(error instanceof Error, "433344");
 
                     if (error.message === "Failed to fetch") {
                         return createFailedToFetchTokenEndpointInitializationError({
@@ -741,7 +741,7 @@ export async function createOidc_nonMemoized<
                             return "ensure no interaction";
                         })()
                     });
-                    assert(false);
+                    assert(false, "321389");
                 }
 
                 if (authResponse_error !== undefined) {
@@ -1062,7 +1062,7 @@ export async function createOidc_nonMemoized<
                                         authResponseToUrl(authResponse)
                                     );
                             } catch (error) {
-                                assert(error instanceof Error);
+                                assert(error instanceof Error, "321389");
 
                                 if (authResponse_error === undefined) {
                                     completeLoginOrRefreshProcess();
@@ -1094,7 +1094,7 @@ export async function createOidc_nonMemoized<
                                     doNavigateBackToLastPublicUrlIfTheTheUserNavigateBack: false,
                                     interaction: "ensure no interaction"
                                 });
-                                assert(false);
+                                assert(false, "136134");
                             }
 
                             oidcClientTsUser = oidcClientTsUser_scope;
@@ -1137,12 +1137,12 @@ export async function createOidc_nonMemoized<
                 | undefined = undefined;
 
             function handleFinally() {
-                assert(ongoingCall !== undefined);
+                assert(ongoingCall !== undefined, "131276");
 
                 const { pr } = ongoingCall;
 
                 pr.finally(() => {
-                    assert(ongoingCall !== undefined);
+                    assert(ongoingCall !== undefined, "549462");
 
                     if (ongoingCall.pr !== pr) {
                         return;
@@ -1335,8 +1335,8 @@ export async function createOidc_nonMemoized<
                 const getCountdownEndTime = () =>
                     idleSessionLifetimeInSeconds !== undefined
                         ? Date.now() + idleSessionLifetimeInSeconds * 1000
-                        : (assert(currentTokens.hasRefreshToken),
-                          assert(currentTokens.refreshTokenExpirationTime !== undefined),
+                        : (assert(currentTokens.hasRefreshToken, "230198"),
+                          assert(currentTokens.refreshTokenExpirationTime !== undefined, "435490"),
                           currentTokens.refreshTokenExpirationTime);
 
                 const durationBeforeAutoLogout = toHumanReadableDuration(
@@ -1381,7 +1381,7 @@ export async function createOidc_nonMemoized<
                     stopCountdown = undefined;
                 }
             } else {
-                assert(stopCountdown === undefined);
+                assert(stopCountdown === undefined, "902992");
                 stopCountdown = startCountdown().stopCountdown;
             }
         });

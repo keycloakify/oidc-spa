@@ -244,7 +244,7 @@ export async function createOidcBackend<DecodedAccessToken extends Record<string
                 }
             );
 
-            assert(result !== undefined);
+            assert(result !== undefined, "0522e6");
 
             return result;
         }

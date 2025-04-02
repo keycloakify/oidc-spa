@@ -100,7 +100,7 @@ export function createEphemeralSessionStorage(params: {
 
     for (let i = 0; i < sessionStorage.length; i++) {
         const sessionStorageKey = sessionStorage.key(i);
-        assert(sessionStorageKey !== null);
+        assert(sessionStorageKey !== null, "470498");
 
         if (!sessionStorageKey.startsWith(SESSION_STORAGE_PREFIX)) {
             continue;
@@ -108,7 +108,7 @@ export function createEphemeralSessionStorage(params: {
 
         const sessionStorageItem = sessionStorage.getItem(sessionStorageKey);
 
-        assert(sessionStorageItem !== null);
+        assert(sessionStorageItem !== null, "846771");
 
         const sessionStorageItem_parsed = parseSessionStorageItem(sessionStorageItem);
 
@@ -139,11 +139,11 @@ export function createEphemeralSessionStorage(params: {
 
             for (let i = 0; i < storage.length; i++) {
                 const key = storage.key(i);
-                assert(key !== null);
+                assert(key !== null, "803385");
 
                 const value = storage.getItem(key);
 
-                assert(value !== null);
+                assert(value !== null, "777098");
 
                 storage.setItem(key, value);
             }
@@ -176,7 +176,7 @@ export function createEphemeralSessionStorage(params: {
         clear: () => {
             for (let i = 0; i < storage.length; i++) {
                 const key = storage.key(i);
-                assert(key !== null);
+                assert(key !== null, "290875");
                 storage.removeItem(key);
             }
         },
