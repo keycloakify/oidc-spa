@@ -4,6 +4,7 @@ import {
     type User as OidcClientTsUser,
     InMemoryWebStorage
 } from "../vendor/frontend/oidc-client-ts-and-jwt-decode";
+import type { OidcMetadata } from "./OidcMetadata";
 import { id, assert, is, type Equals } from "../vendor/frontend/tsafe";
 import { setTimeout, clearTimeout } from "../tools/workerTimers";
 import { Deferred } from "../tools/Deferred";
@@ -165,6 +166,19 @@ export type ParamsOfCreateOidc<
      *  Use at your own risk, this is a hack.
      */
     __unsafe_useIdTokenAsAccessToken?: boolean;
+
+    /**
+     * This option should only be used as a last resort.
+     *
+     * If your OIDC provider is correctly configured, this should not be necessary.
+     *
+     * The metadata is normally retrieved automatically from:
+     * `${issuerUri}/.well-known/openid-configuration`
+     *
+     * Use this only if that endpoint is not accessible (e.g. due to missing CORS headers
+     * or non-standard deployments), and you cannot fix the server-side configuration.
+     */
+    __metadata?: Partial<OidcMetadata>;
 };
 
 const globalContext = {
@@ -287,7 +301,8 @@ export async function createOidc_nonMemoized<
         autoLogin = false,
         postLoginRedirectUrl: postLoginRedirectUrl_default,
         __unsafe_clientSecret,
-        __unsafe_useIdTokenAsAccessToken = false
+        __unsafe_useIdTokenAsAccessToken = false,
+        __metadata
     } = params;
 
     const { issuerUri, clientId, scopes, configId, log } = preProcessedParams;
@@ -416,7 +431,8 @@ export async function createOidc_nonMemoized<
         }),
         stateStore: new WebStorageStateStore({ store: localStorage, prefix: STATE_STORE_KEY_PREFIX }),
         client_secret: __unsafe_clientSecret,
-        fetch: trustedFetch
+        fetch: trustedFetch,
+        metadata: __metadata
     });
 
     const evtIsUserLoggedIn = createEvt<boolean>();
