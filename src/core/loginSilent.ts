@@ -36,6 +36,7 @@ export async function loginSilent(params: {
         | undefined;
 
     getExtraTokenParams: (() => Record<string, string | undefined>) | undefined;
+    autoLogin: boolean;
 }): Promise<ResultOfLoginSilent> {
     const {
         oidcClientTsUserManager,
@@ -43,17 +44,21 @@ export async function loginSilent(params: {
         configId,
         transformUrlBeforeRedirect_next,
         getExtraQueryParams,
-        getExtraTokenParams
+        getExtraTokenParams,
+        autoLogin
     } = params;
 
     const dResult = new Deferred<ResultOfLoginSilent>();
 
     const timeoutDelayMs: number = (() => {
+        if (autoLogin) {
+            return 25_000;
+        }
+
         const downlinkAndRtt = getDownlinkAndRtt();
         const isDev = getIsDev();
 
         // Base delay is the minimum delay we should wait in any case
-        //const BASE_DELAY_MS = 3000;
         const BASE_DELAY_MS = isDev ? 9_000 : 7_000;
 
         if (downlinkAndRtt === undefined) {
