@@ -148,7 +148,7 @@ export function oidcClientTsUserToTokens<DecodedIdToken extends Record<string, u
     ) {
         console.warn(
             [
-                "The OIDC refresh token shorter than the one of the access token.",
+                "The OIDC refresh token expirationTime is shorter than the one of the access token.",
                 "This is very unusual and probably a misconfiguration."
             ].join(" ")
         );
