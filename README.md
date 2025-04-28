@@ -160,9 +160,12 @@ Project backers, we trust and recommend their services.
   </a>
 </p>
 
-## Showcases
+## We built it because we needed it.
 
-This library powers the authentication of the following platforms:
+This library isn't a theoretical exercise or a tool for hobby projects.  
+We developed it to solve real-world problems we faced ourselves.  
+Today, it powers authentication for [Onyxia](https://onyxia.sh)—  
+a data science platform deployed across multiple large organizations.
 
 ### Onyxia
 
