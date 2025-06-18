@@ -36,7 +36,10 @@ export function toFullyQualifiedUrl(params: Params): string {
     }
 
     if (params.doAssertNoQueryParams) {
-        if (new URL(url).searchParams.size !== 0) {
+        // Check if the URL has query parameters.
+        // Note: `searchParams.size` can be `undefined` in some runtime environments.
+        // See https://github.com/keycloakify/oidc-spa/issues/63#issue-3080503083
+        if (new URL(url).searchParams.size) {
             throw new Error(`The ${params.urlish} URL should not have query parameters`);
         }
 
