@@ -1036,6 +1036,18 @@ export async function createOidc_nonMemoized<
             }) {
                 const { extraTokenParams } = params;
 
+                if (!currentTokens.hasRefreshToken && isOidcServerThirdPartyRelativeToApp) {
+                    const message = [
+                        "Unable to refresh tokens without a full app reload,",
+                        "because no refresh token is available",
+                        "and your app setup prevents silent sign-in via iframe."
+                    ].join(" ");
+
+                    log?.(message);
+
+                    throw new Error(message);
+                }
+
                 log?.("Renewing tokens");
 
                 const { completeLoginOrRefreshProcess } = await startLoginOrRefreshProcess();
