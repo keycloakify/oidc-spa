@@ -156,6 +156,14 @@ export type ParamsOfCreateOidc<
 
     autoLogoutParams?: Parameters<Oidc.LoggedIn<any>["logout"]>[0];
     autoLogin?: AutoLogin;
+
+    /**
+     * Default: false
+     *
+     * See: https://docs.oidc-spa.dev/v/v6/resources/iframe-related-issues
+     */
+    noIframe?: boolean;
+
     debugLogs?: boolean;
 
     __unsafe_clientSecret?: string;
@@ -302,7 +310,8 @@ export async function createOidc_nonMemoized<
         postLoginRedirectUrl: postLoginRedirectUrl_default,
         __unsafe_clientSecret,
         __unsafe_useIdTokenAsAccessToken = false,
-        __metadata
+        __metadata,
+        noIframe = false
     } = params;
 
     const { issuerUri, clientId, scopes, configId, log } = preProcessedParams;
@@ -368,28 +377,54 @@ export async function createOidc_nonMemoized<
 
     const stateQueryParamValue_instance = generateStateQueryParamValue();
 
-    let isOidcServerThirdPartyRelativeToApp: boolean;
-    {
-        const url1 = window.location.origin;
-        const url2 = issuerUri;
+    const canUseIframe = (() => {
+        if (noIframe) {
+            return false;
+        }
 
-        isOidcServerThirdPartyRelativeToApp =
-            getHaveSharedParentDomain({
-                url1,
-                url2
-            }) === false;
+        // NOTE: Electron
+        if (!/https?:\/\//.test(callbackUri)) {
+            log?.("We won't use iframe, callbackUri uses a custom protocol.");
+            return false;
+        }
 
-        if (isOidcServerThirdPartyRelativeToApp) {
+        third_party_cookies: {
+            const isOidcServerThirdPartyRelativeToApp =
+                getHaveSharedParentDomain({
+                    url1: window.location.origin,
+                    url2: issuerUri
+                }) === false;
+
+            if (!isOidcServerThirdPartyRelativeToApp) {
+                break third_party_cookies;
+            }
+
+            const isGoogleChrome = (() => {
+                const ua = navigator.userAgent;
+                const vendor = navigator.vendor;
+
+                return (
+                    /Chrome/.test(ua) && /Google Inc/.test(vendor) && !/Edg/.test(ua) && !/OPR/.test(ua)
+                );
+            })();
+
+            if (window.location.origin.startsWith("http://localhost") && isGoogleChrome) {
+                break third_party_cookies;
+            }
+
             log?.(
                 [
-                    `${url1} and ${url2} don't have shared parent domain, silent signin in iframe (unless in chrome in dev mode) is not possible.`,
-                    "oidc-spa will have to fully reload the app to restore the auth state."
+                    "Can't use iframe because your auth server is on a third party domain relative",
+                    "to the domain of your app and third party cookies are blocked by navigators."
                 ].join(" ")
             );
-        } else {
-            log?.(`${url1} and ${url2} have shared parent domain silent signin in iframe is possible`);
+
+            return false;
         }
-    }
+
+        // NOTE: Maybe not, it depend if the app can iframe itself.
+        return true;
+    })();
 
     let isUserStoreInMemoryOnly: boolean;
 
@@ -405,7 +440,7 @@ export async function createOidc_nonMemoized<
         automaticSilentRenew: false,
         userStore: new WebStorageStateStore({
             store: (() => {
-                if (!isOidcServerThirdPartyRelativeToApp) {
+                if (canUseIframe) {
                     isUserStoreInMemoryOnly = true;
                     return new InMemoryWebStorage();
                 }
@@ -629,19 +664,8 @@ export async function createOidc_nonMemoized<
                     break actual_silent_signin;
                 }
 
-                if (isOidcServerThirdPartyRelativeToApp) {
-                    // NOTE: Electron
-                    if (!/https?:\/\//.test(callbackUri)) {
-                        log?.("Skipping silent signin with iframe, custom protocol");
-                        break actual_silent_signin;
-                    }
-
-                    if (!homeUrl.startsWith("http://localhost")) {
-                        log?.(
-                            "Skipping silent signin with iframe, third party cookies are are not allowed so we know this won't work"
-                        );
-                        break actual_silent_signin;
-                    }
+                if (!canUseIframe) {
+                    break actual_silent_signin;
                 }
 
                 log?.(
@@ -672,7 +696,8 @@ export async function createOidc_nonMemoized<
                             return createIframeTimeoutInitializationError({
                                 callbackUri,
                                 clientId,
-                                issuerUri
+                                issuerUri,
+                                noIframe
                             });
                     }
 
@@ -924,7 +949,7 @@ export async function createOidc_nonMemoized<
             persistAuthState({ configId, state: undefined });
         }
 
-        if (isOidcServerThirdPartyRelativeToApp) {
+        if (!canUseIframe) {
             persistAuthState({
                 configId,
                 state: {
@@ -1036,11 +1061,12 @@ export async function createOidc_nonMemoized<
             }) {
                 const { extraTokenParams } = params;
 
-                if (!currentTokens.hasRefreshToken && isOidcServerThirdPartyRelativeToApp) {
+                if (!currentTokens.hasRefreshToken && !canUseIframe) {
                     const message = [
                         "Unable to refresh tokens without a full app reload,",
                         "because no refresh token is available",
-                        "and your app setup prevents silent sign-in via iframe."
+                        "and your app setup prevents silent sign-in via iframe.",
+                        "Your only option to refresh tokens is to call `window.location.reload()`"
                     ].join(" ");
 
                     log?.(message);

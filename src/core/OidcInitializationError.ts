@@ -110,26 +110,30 @@ export async function createIframeTimeoutInitializationError(params: {
     callbackUri: string;
     issuerUri: string;
     clientId: string;
+    noIframe: boolean;
 }): Promise<OidcInitializationError> {
-    const { callbackUri, issuerUri, clientId } = params;
+    const { callbackUri, issuerUri, clientId, noIframe } = params;
 
-    frame_ancestors_none: {
-        if (!/^https?:\/\//.test(callbackUri)) {
-            break frame_ancestors_none;
+    iframe_blocked: {
+        if (noIframe) {
+            break iframe_blocked;
         }
 
-        const cspOrError = await fetch(callbackUri).then(
+        const headersOrError = await fetch(callbackUri).then(
             response => {
                 if (!response.ok) {
                     return new Error(`${callbackUri} responded with a ${response.status} status code.`);
                 }
 
-                return response.headers.get("Content-Security-Policy");
+                return {
+                    "Content-Security-Policy": response.headers.get("Content-Security-Policy"),
+                    "X-Frame-Options": response.headers.get("X-Frame-Options")
+                };
             },
-            error => error
+            (error: Error) => error
         );
 
-        if (cspOrError instanceof Error) {
+        if (headersOrError instanceof Error) {
             return new OidcInitializationError({
                 isAuthServerLikelyDown: false,
                 messageOrCause: new Error(
@@ -140,41 +144,62 @@ export async function createIframeTimeoutInitializationError(params: {
             });
         }
 
-        const csp = cspOrError;
+        const headers = headersOrError;
 
-        if (csp === null) {
-            break frame_ancestors_none;
-        }
+        let key_problem = (() => {
+            block: {
+                const key = "Content-Security-Policy" as const;
 
-        const hasFrameAncestorsNone = csp
-            .replace(/["']/g, "")
-            .replace(/\s+/g, " ")
-            .toLowerCase()
-            .includes("frame-ancestors none");
+                const header = headers[key];
 
-        if (!hasFrameAncestorsNone) {
-            break frame_ancestors_none;
+                if (header === null) {
+                    break block;
+                }
+
+                const hasFrameAncestorsNone = header
+                    .replace(/["']/g, "")
+                    .replace(/\s+/g, " ")
+                    .toLowerCase()
+                    .includes("frame-ancestors none");
+
+                if (!hasFrameAncestorsNone) {
+                    break block;
+                }
+
+                return key;
+            }
+
+            block: {
+                const key = "X-Frame-Options" as const;
+
+                const header = headers[key];
+
+                if (header === null) {
+                    break block;
+                }
+
+                const hasFrameAncestorsNone = header.toLowerCase().includes("deny");
+
+                if (!hasFrameAncestorsNone) {
+                    break block;
+                }
+
+                return key;
+            }
+
+            return undefined;
+        })();
+
+        if (key_problem === undefined) {
+            break iframe_blocked;
         }
 
         return new OidcInitializationError({
             isAuthServerLikelyDown: false,
             messageOrCause: [
-                `${callbackUri} is currently served by your web server with the HTTP header \`Content-Security-Policy: frame-ancestors none\`.\n`,
+                `${callbackUri} is currently served by your web server with the HTTP header \`${key_problem}: ${headers[key_problem]}\`.\n`,
                 "This header prevents the silent sign-in process from working.\n",
-                "To fix this issue, you need to allow your application's homepage to be iframed during the silent login flow. ",
-                "For example, replacing `frame-ancestors 'none'` with `frame-ancestors 'self'` ensures your app can be embedded in an iframe on the same domain.\n",
-                "However, if you are concerned about allowing the entire SPA to be iframed, you can selectively loosen the `frame-ancestors` policy only when the `state` parameter is present on the URL.\n",
-                "If you're using Nginx, a possible configuration might look like:\n",
-                "ngnix.conf:\n",
-                "```\n",
-                "map $query_string $add_content_security_policy {\n",
-                '    "~*state=" "frame-ancestors \'self\'";\n',
-                "    default      \"frame-ancestors 'none'\";\n",
-                "}\n",
-                "add_header Content-Security-Policy $add_content_security_policy;\n",
-                "```\n",
-                "This way, the homepage is only iframed when the `state` parameter is present, and remains protected in all other scenarios.\n",
-                `The URL in question is: ${callbackUri}`
+                "Refer to this documentation page to fix this issue: https://docs.oidc-spa.dev/v/v6/resources/iframe-related-issues"
             ].join(" ")
         });
     }
