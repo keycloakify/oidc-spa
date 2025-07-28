@@ -132,12 +132,21 @@ function handleOidcCallback_nonMemoized(): { isHandled: boolean } {
             }
         });
 
-        reloadOnBfCacheNavigation();
-
         setTimeout(() => {
             debug966975.log(`(callback 0) Calling window.history.${historyMethod}()`);
 
+            reloadOnBfCacheNavigation();
+
             window.history[historyMethod]();
+
+            // NOTE: This is a "better than nothing" approach.
+            // Under some circumstances it's possible to get stuck on this url
+            // if there is no "next" page in the history for example, navigating
+            // forward is a NoOp. So in that case it's better to navigate to the home.
+            setTimeout(() => {
+                const { protocol, host, pathname, hash } = window.location;
+                window.location.href = `${protocol}//${host}${pathname}${hash}`;
+            }, 350);
         }, 0);
 
         debug966975.log(`returning isHandled: ${isHandled ? "true" : "false"}`);
