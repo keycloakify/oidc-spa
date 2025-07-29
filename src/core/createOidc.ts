@@ -603,7 +603,6 @@ export async function createOidc_nonMemoized<
 
                         notifyOtherTabsOfLogout({
                             configId,
-                            redirectUrl: stateData.redirectUrl,
                             sessionId: stateData.sessionId
                         });
 
@@ -1043,7 +1042,6 @@ export async function createOidc_nonMemoized<
 
                     notifyOtherTabsOfLogout({
                         configId,
-                        redirectUrl: postLogoutRedirectUrl,
                         sessionId
                     });
 
@@ -1285,22 +1283,17 @@ export async function createOidc_nonMemoized<
     {
         const { prOtherTabLogout } = getPrOtherTabLogout({
             configId,
-            homeUrl,
             sessionId
         });
 
-        prOtherTabLogout.then(async ({ redirectUrl }) => {
-            log?.(`Other tab has logged out, redirecting to ${redirectUrl}`);
+        prOtherTabLogout.then(async () => {
+            log?.(`Other tab has logged out, refreshing current tab`);
 
             await waitForAllOtherOngoingLoginOrRefreshProcessesToComplete({
                 prUnlock: new Promise<never>(() => {})
             });
 
-            window.addEventListener("pageshow", () => {
-                location.reload();
-            });
-
-            window.location.href = redirectUrl;
+            location.reload();
         });
     }
 

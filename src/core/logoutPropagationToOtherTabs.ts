@@ -7,7 +7,6 @@ const globalContext = {
 
 type Message = {
     appInstanceId: string;
-    redirectUrl_initiator: string;
     configId: string;
 };
 
@@ -16,15 +15,10 @@ function getChannelName(params: { sessionIdOrConfigId: string }) {
     return `oidc-spa:logout-propagation:${sessionIdOrConfigId}`;
 }
 
-export function notifyOtherTabsOfLogout(params: {
-    redirectUrl: string;
-    configId: string;
-    sessionId: string | undefined;
-}) {
-    const { redirectUrl, configId, sessionId } = params;
+export function notifyOtherTabsOfLogout(params: { configId: string; sessionId: string | undefined }) {
+    const { configId, sessionId } = params;
 
     const message: Message = {
-        redirectUrl_initiator: redirectUrl,
         configId,
         appInstanceId: globalContext.appInstanceId
     };
@@ -34,14 +28,10 @@ export function notifyOtherTabsOfLogout(params: {
     );
 }
 
-export function getPrOtherTabLogout(params: {
-    sessionId: string | undefined;
-    configId: string;
-    homeUrl: string;
-}) {
-    const { sessionId, configId, homeUrl } = params;
+export function getPrOtherTabLogout(params: { sessionId: string | undefined; configId: string }) {
+    const { sessionId, configId } = params;
 
-    const dOtherTabLogout = new Deferred<{ redirectUrl: string }>();
+    const dOtherTabLogout = new Deferred<void>();
 
     const channel = new BroadcastChannel(getChannelName({ sessionIdOrConfigId: sessionId ?? configId }));
 
@@ -54,15 +44,7 @@ export function getPrOtherTabLogout(params: {
 
         channel.close();
 
-        const redirectUrl = (() => {
-            if (configId === message.configId) {
-                return message.redirectUrl_initiator;
-            }
-
-            return homeUrl;
-        })();
-
-        dOtherTabLogout.resolve({ redirectUrl });
+        dOtherTabLogout.resolve();
     };
 
     const prOtherTabLogout = dOtherTabLogout.pr;
