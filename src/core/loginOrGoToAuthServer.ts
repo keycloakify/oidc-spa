@@ -85,7 +85,7 @@ export function createLoginOrGoToAuthServer(params: {
 
     let lastPublicUrl: string | undefined = undefined;
 
-    function loginOrGoToAuthServer(params: Params): Promise<never> {
+    async function loginOrGoToAuthServer(params: Params): Promise<never> {
         const {
             redirectUrl: redirectUrl_params,
             extraQueryParams_local,
@@ -106,6 +106,21 @@ export function createLoginOrGoToAuthServer(params: {
             }
 
             globalContext.evtHasLoginBeenCalled.current = true;
+
+            if (document.visibilityState !== "visible") {
+                const dVisible = new Deferred<void>();
+
+                const onVisible = () => {
+                    if (document.visibilityState !== "visible") {
+                        return;
+                    }
+                    document.removeEventListener("visibilitychange", onVisible);
+                    dVisible.resolve();
+                };
+                document.addEventListener("visibilitychange", onVisible);
+
+                await dVisible.pr;
+            }
 
             bf_cache_handling: {
                 if (rest.doForceReloadOnBfCache) {
