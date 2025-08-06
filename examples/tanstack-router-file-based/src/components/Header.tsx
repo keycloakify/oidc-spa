@@ -43,6 +43,14 @@ export function Header() {
                         </span>
                     )}
                 </Link>
+                &nbsp; &nbsp; &nbsp;
+                <Link to="/protected2">
+                    {({ isActive }) => (
+                        <span style={{ fontWeight: isActive ? "bold" : "normal" }}>
+                            My protected page 2 (lazy)
+                        </span>
+                    )}
+                </Link>
             </div>
 
             {isUserLoggedIn ? <LoggedInAuthButton /> : <NotLoggedInAuthButton />}

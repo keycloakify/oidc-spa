@@ -8,13 +8,25 @@
 // You should NOT make any changes in this file as it will be overwritten.
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
+import { createFileRoute } from '@tanstack/react-router'
+
 // Import Routes
 
 import { Route as rootRoute } from './routes/__root'
 import { Route as ProtectedImport } from './routes/protected'
 import { Route as IndexImport } from './routes/index'
 
+// Create Virtual Routes
+
+const Protected2LazyImport = createFileRoute('/protected2')()
+
 // Create/Update Routes
+
+const Protected2LazyRoute = Protected2LazyImport.update({
+  id: '/protected2',
+  path: '/protected2',
+  getParentRoute: () => rootRoute,
+} as any).lazy(() => import('./routes/protected2.lazy').then((d) => d.Route))
 
 const ProtectedRoute = ProtectedImport.update({
   id: '/protected',
@@ -46,6 +58,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProtectedImport
       parentRoute: typeof rootRoute
     }
+    '/protected2': {
+      id: '/protected2'
+      path: '/protected2'
+      fullPath: '/protected2'
+      preLoaderRoute: typeof Protected2LazyImport
+      parentRoute: typeof rootRoute
+    }
   }
 }
 
@@ -54,36 +73,41 @@ declare module '@tanstack/react-router' {
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/protected': typeof ProtectedRoute
+  '/protected2': typeof Protected2LazyRoute
 }
 
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/protected': typeof ProtectedRoute
+  '/protected2': typeof Protected2LazyRoute
 }
 
 export interface FileRoutesById {
   __root__: typeof rootRoute
   '/': typeof IndexRoute
   '/protected': typeof ProtectedRoute
+  '/protected2': typeof Protected2LazyRoute
 }
 
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/protected'
+  fullPaths: '/' | '/protected' | '/protected2'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/protected'
-  id: '__root__' | '/' | '/protected'
+  to: '/' | '/protected' | '/protected2'
+  id: '__root__' | '/' | '/protected' | '/protected2'
   fileRoutesById: FileRoutesById
 }
 
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ProtectedRoute: typeof ProtectedRoute
+  Protected2LazyRoute: typeof Protected2LazyRoute
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ProtectedRoute: ProtectedRoute,
+  Protected2LazyRoute: Protected2LazyRoute,
 }
 
 export const routeTree = rootRoute
@@ -97,7 +121,8 @@ export const routeTree = rootRoute
       "filePath": "__root.tsx",
       "children": [
         "/",
-        "/protected"
+        "/protected",
+        "/protected2"
       ]
     },
     "/": {
@@ -105,6 +130,9 @@ export const routeTree = rootRoute
     },
     "/protected": {
       "filePath": "protected.tsx"
+    },
+    "/protected2": {
+      "filePath": "protected2.lazy.tsx"
     }
   }
 }
