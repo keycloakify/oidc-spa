@@ -27,6 +27,8 @@
   <a href="https://docs.oidc-spa.dev">Documentation</a>
 </p>
 
+> 🗣️ oidc-spa will be introduced at [KeyConf 2025](https://keyconf.dev/) on the 28 of August.
+
 A full-featured OpenID Connect / OAuth2 client for single-page applications (SPAs).
 
 With `oidc-spa`, you can seamlessly integrate authentication providers like [Keycloak](https://www.keycloak.org/), [Auth0](https://auth0.com/), or [Microsoft Entra ID](https://www.microsoft.com/en-us/security/business/identity-access/microsoft-entra-id) into your application, purely on the client side—
