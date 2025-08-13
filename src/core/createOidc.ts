@@ -23,7 +23,7 @@ import { type StateData, generateStateQueryParamValue, STATE_STORE_KEY_PREFIX } 
 import { notifyOtherTabsOfLogout, getPrOtherTabLogout } from "./logoutPropagationToOtherTabs";
 import { notifyOtherTabsOfLogin, getPrOtherTabLogin } from "./loginPropagationToOtherTabs";
 import { getConfigId } from "./configId";
-import { oidcClientTsUserToTokens, getMsBeforeExpiration } from "./oidcClientTsUserToTokens";
+import { oidcClientTsUserToTokens } from "./oidcClientTsUserToTokens";
 import { loginSilent } from "./loginSilent";
 import { authResponseToUrl } from "./AuthResponse";
 import { handleOidcCallback, retrieveRedirectAuthResponseAndStateData } from "./handleOidcCallback";
@@ -43,6 +43,7 @@ import {
 import { initialLocationHref } from "./initialLocationHref";
 import { createGetIsNewBrowserSession } from "./isNewBrowserSession";
 import { trustedFetch } from "./trustedFetch";
+import { getIsOnline } from "../tools/getIsOnline";
 
 handleOidcCallback();
 
@@ -194,8 +195,6 @@ const globalContext = {
     hasLogoutBeenCalled: id<boolean>(false),
     evtRequestToPersistTokens: createEvt<{ configIdOfInstancePostingTheRequest: string }>()
 };
-
-const MIN_RENEW_BEFORE_EXPIRE_MS = 2_000;
 
 /** @see: https://docs.oidc-spa.dev/v/v6/usage */
 export async function createOidc<
@@ -658,6 +657,18 @@ export async function createOidc_nonMemoized<
             let authResponse_error: string | undefined = undefined;
             let oidcClientTsUser: OidcClientTsUser | undefined = undefined;
 
+            {
+                const { isOnline, prOnline } = getIsOnline();
+
+                if (!isOnline) {
+                    if (autoLogin) {
+                        await prOnline;
+                    } else {
+                        break silent_login_if_possible_and_auto_login;
+                    }
+                }
+            }
+
             actual_silent_signin: {
                 if (persistedAuthState === "explicitly logged out") {
                     break actual_silent_signin;
@@ -977,7 +988,24 @@ export async function createOidc_nonMemoized<
         isUserLoggedIn: true,
         getTokens: () => currentTokens,
         getTokens_next: async () => {
-            if (getMsBeforeExpiration(currentTokens) <= MIN_RENEW_BEFORE_EXPIRE_MS) {
+            renew_tokens: {
+                {
+                    const msBeforeExpirationOfTheAccessToken =
+                        currentTokens.accessTokenExpirationTime - Date.now();
+
+                    if (msBeforeExpirationOfTheAccessToken > 30_000) {
+                        break renew_tokens;
+                    }
+                }
+
+                {
+                    const msElapsedSinceCurrentTokenWereIssued = Date.now() - currentTokens.issuedAtTime;
+
+                    if (msElapsedSinceCurrentTokenWereIssued < 5_000) {
+                        break renew_tokens;
+                    }
+                }
+
                 await oidc_loggedIn.renewTokens();
             }
 
@@ -1059,17 +1087,42 @@ export async function createOidc_nonMemoized<
             }) {
                 const { extraTokenParams } = params;
 
+                const fallbackToFullPageReload = async (): Promise<never> => {
+                    persistAuthState({ configId, state: undefined });
+
+                    await waitForAllOtherOngoingLoginOrRefreshProcessesToComplete({
+                        prUnlock: new Promise<never>(() => {})
+                    });
+
+                    globalContext.evtRequestToPersistTokens.post({
+                        configIdOfInstancePostingTheRequest: configId
+                    });
+
+                    await loginOrGoToAuthServer({
+                        action: "login",
+                        redirectUrl: window.location.href,
+                        doForceReloadOnBfCache: true,
+                        extraQueryParams_local: undefined,
+                        transformUrlBeforeRedirect_local: undefined,
+                        doNavigateBackToLastPublicUrlIfTheTheUserNavigateBack: false,
+                        interaction: "directly redirect if active session show login otherwise"
+                    });
+                    assert(false, "136134");
+                };
+
                 if (!currentTokens.hasRefreshToken && !canUseIframe) {
-                    const message = [
-                        "Unable to refresh tokens without a full app reload,",
-                        "because no refresh token is available",
-                        "and your app setup prevents silent sign-in via iframe.",
-                        "Your only option to refresh tokens is to call `window.location.reload()`"
-                    ].join(" ");
+                    log?.(
+                        [
+                            "Unable to refresh tokens without a full app reload,",
+                            "because no refresh token is available",
+                            "and your app setup prevents silent sign-in via iframe.",
+                            "Your only option to refresh tokens is to call `window.location.reload()`"
+                        ].join(" ")
+                    );
 
-                    log?.(message);
+                    await fallbackToFullPageReload();
 
-                    throw new Error(message);
+                    assert(false, "136135");
                 }
 
                 log?.("Renewing tokens");
@@ -1088,6 +1141,8 @@ export async function createOidc_nonMemoized<
 
                 if (result_loginSilent.outcome === "failure") {
                     completeLoginOrRefreshProcess();
+                    // NOTE: This is a configuration or network error, okay to throw,
+                    // this exception doesn't have to be handle if it fails it fails.
                     throw new Error(result_loginSilent.cause);
                 }
 
@@ -1120,35 +1175,27 @@ export async function createOidc_nonMemoized<
 
                                 if (authResponse_error === undefined) {
                                     completeLoginOrRefreshProcess();
+                                    // Same here, if it fails it fails.
                                     throw error;
                                 }
-
-                                oidcClientTsUser_scope = undefined;
                             }
 
                             if (oidcClientTsUser_scope === undefined) {
-                                persistAuthState({ configId, state: undefined });
+                                // NOTE: Here we got a response but it's an error, session might have been
+                                // deleted or other edge case.
 
                                 completeLoginOrRefreshProcess();
 
-                                await waitForAllOtherOngoingLoginOrRefreshProcessesToComplete({
-                                    prUnlock: new Promise<never>(() => {})
-                                });
+                                log?.(
+                                    [
+                                        "The user is probably not logged in anymore,",
+                                        "need to redirect to login pages"
+                                    ].join(" ")
+                                );
 
-                                globalContext.evtRequestToPersistTokens.post({
-                                    configIdOfInstancePostingTheRequest: configId
-                                });
+                                await fallbackToFullPageReload();
 
-                                await loginOrGoToAuthServer({
-                                    action: "login",
-                                    redirectUrl: window.location.href,
-                                    doForceReloadOnBfCache: true,
-                                    extraQueryParams_local: undefined,
-                                    transformUrlBeforeRedirect_local: undefined,
-                                    doNavigateBackToLastPublicUrlIfTheTheUserNavigateBack: false,
-                                    interaction: "ensure no interaction"
-                                });
-                                assert(false, "136134");
+                                assert(false, "136135");
                             }
 
                             oidcClientTsUser = oidcClientTsUser_scope;
@@ -1298,64 +1345,55 @@ export async function createOidc_nonMemoized<
     }
 
     (function scheduleRenew() {
-        const login_dueToExpiration = async () => {
-            await waitForAllOtherOngoingLoginOrRefreshProcessesToComplete({
-                prUnlock: new Promise<never>(() => {})
-            });
-
-            persistAuthState({ configId, state: undefined });
-
-            return loginOrGoToAuthServer({
-                action: "login",
-                redirectUrl: window.location.href,
-                doForceReloadOnBfCache: true,
-                extraQueryParams_local: undefined,
-                transformUrlBeforeRedirect_local: undefined,
-                // NOTE: Wether or not it's the preferred behavior, pushing to history
-                // only works on user interaction so it have to be false
-                doNavigateBackToLastPublicUrlIfTheTheUserNavigateBack: false,
-                interaction: "ensure no interaction"
-            });
-        };
-
-        const msBeforeExpiration = getMsBeforeExpiration(currentTokens);
-
-        if (msBeforeExpiration <= MIN_RENEW_BEFORE_EXPIRE_MS) {
-            // NOTE: We just got a new token that is about to expire. This means that
-            // the refresh token has reached it's max SSO time.
-            login_dueToExpiration();
+        if (!currentTokens.hasRefreshToken && !canUseIframe) {
+            log?.(
+                "Disabling token auto refresh mechanism because we have no way to do it without reloading the page"
+            );
             return;
         }
 
-        // NOTE: We refresh the token 25 seconds before it expires.
-        // If the token expiration time is less than 25 seconds we refresh the token when
-        // only 1/10 of the token time is left.
-        const renewMsBeforeExpires = Math.max(
-            Math.min(25_000, msBeforeExpiration * 0.1),
-            MIN_RENEW_BEFORE_EXPIRE_MS
-        );
+        const msBeforeExpiration =
+            (currentTokens.refreshTokenExpirationTime ?? currentTokens.accessTokenExpirationTime) -
+            Date.now();
+
+        const RENEW_MS_BEFORE_EXPIRES = 30_000;
+
+        if (msBeforeExpiration <= RENEW_MS_BEFORE_EXPIRES) {
+            // NOTE: We just got a new token that is about to expire. This means that
+            // the refresh token has reached it's max SSO time.
+            // ...or that the refresh token have a very short lifespan...
+            // anyway, no need to keep alive, it will probably redirect on the next getTokens() or refreshTokens() call
+            return;
+        }
 
         log?.(
             [
                 toHumanReadableDuration(msBeforeExpiration),
                 `before expiration of the access token.`,
-                `Scheduling renewal ${toHumanReadableDuration(renewMsBeforeExpires)} before expiration`
+                `Scheduling renewal ${toHumanReadableDuration(
+                    RENEW_MS_BEFORE_EXPIRES
+                )} before expiration`
             ].join(" ")
         );
 
-        const timer = setTimeout(async () => {
-            log?.(
-                `Renewing the access token now as it will expires in ${toHumanReadableDuration(
-                    renewMsBeforeExpires
-                )}`
-            );
+        const timer = setTimeout(
+            async () => {
+                log?.(
+                    `Renewing the access token now as it will expires in ${toHumanReadableDuration(
+                        RENEW_MS_BEFORE_EXPIRES
+                    )}`
+                );
 
-            try {
                 await oidc_loggedIn.renewTokens();
-            } catch {
-                await login_dueToExpiration();
-            }
-        }, msBeforeExpiration - renewMsBeforeExpires);
+            },
+            Math.min(
+                msBeforeExpiration - RENEW_MS_BEFORE_EXPIRES,
+                // NOTE: We want to make sure we do not overflow the setTimeout
+                // that must be a 32 bit unsigned integer.
+                // This can happen if the tokenExpirationTime is more than 24.8 days in the future.
+                Math.pow(2, 31) - 1
+            )
+        );
 
         const { unsubscribe: tokenChangeUnsubscribe } = oidc_loggedIn.subscribeToTokensChange(() => {
             clearTimeout(timer);

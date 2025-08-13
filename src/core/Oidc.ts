@@ -111,6 +111,7 @@ export declare namespace Oidc {
             accessTokenExpirationTime: number;
             idToken: string;
             decodedIdToken: DecodedIdToken;
+            issuedAtTime: number;
         };
 
         export type WithRefreshToken<DecodedIdToken> = Common<DecodedIdToken> & {

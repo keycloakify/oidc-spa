@@ -108,6 +108,8 @@ export function createLoginOrGoToAuthServer(params: {
             globalContext.evtHasLoginBeenCalled.current = true;
 
             if (document.visibilityState !== "visible") {
+                rest.interaction === "ensure no interaction";
+
                 const dVisible = new Deferred<void>();
 
                 const onVisible = () => {
