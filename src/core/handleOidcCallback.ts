@@ -8,7 +8,6 @@ import { assert, id } from "../vendor/frontend/tsafe";
 import type { AuthResponse } from "./AuthResponse";
 import { initialLocationHref } from "./initialLocationHref";
 import { captureFetch } from "./trustedFetch";
-import { debug966975 } from "./debug966975";
 
 captureFetch();
 
@@ -16,19 +15,8 @@ const globalContext = {
     previousCall: id<{ isHandled: boolean } | undefined>(undefined)
 };
 
-debug966975.log(
-    `=================== Evaluating the handleOidcCallback file, isInIframe: ${
-        window.self !== window.top ? "true" : "false"
-    }, location.href: ${initialLocationHref}`
-);
-
 export function handleOidcCallback(): { isHandled: boolean } {
     if (globalContext.previousCall !== undefined) {
-        debug966975.log(
-            `handleOidcCallback() call, it has been called previously ${JSON.stringify(
-                globalContext.previousCall
-            )}`
-        );
         return globalContext.previousCall;
     }
 
@@ -36,20 +24,16 @@ export function handleOidcCallback(): { isHandled: boolean } {
 }
 
 function handleOidcCallback_nonMemoized(): { isHandled: boolean } {
-    debug966975.log(`In handleOidcCallback_nonMemoized()`);
-
     const location_urlObj = new URL(initialLocationHref);
 
     const stateQueryParamValue = (() => {
         const stateQueryParamValue = location_urlObj.searchParams.get("state");
 
         if (stateQueryParamValue === null) {
-            debug966975.log("No state in url");
             return undefined;
         }
 
         if (!getIsStatQueryParamValue({ maybeStateQueryParamValue: stateQueryParamValue })) {
-            debug966975.log(`State query param value ${stateQueryParamValue} is malformed`);
             return undefined;
         }
 
@@ -58,9 +42,6 @@ function handleOidcCallback_nonMemoized(): { isHandled: boolean } {
             location_urlObj.searchParams.get("response_type") !== null &&
             location_urlObj.searchParams.get("redirect_uri") !== null
         ) {
-            debug966975.log(
-                "NOTE: We are probably in a Keycloakify theme and oidc-spa was loaded by mistake."
-            );
             // NOTE: We are probably in a Keycloakify theme and oidc-spa was loaded by mistake.
             return undefined;
         }
@@ -68,12 +49,8 @@ function handleOidcCallback_nonMemoized(): { isHandled: boolean } {
         return stateQueryParamValue;
     })();
 
-    debug966975.log(`state query param value ${stateQueryParamValue ?? "undefined"}`);
-
     if (stateQueryParamValue === undefined) {
         const backForwardTracker = readBackForwardTracker();
-
-        debug966975.log(`backForwardTracker: ${JSON.stringify(backForwardTracker)}`);
 
         if (backForwardTracker !== undefined) {
             writeBackForwardTracker({
@@ -83,8 +60,6 @@ function handleOidcCallback_nonMemoized(): { isHandled: boolean } {
                 }
             });
         }
-
-        debug966975.log("returning isHandled false");
 
         return { isHandled: false };
     }
@@ -97,8 +72,6 @@ function handleOidcCallback_nonMemoized(): { isHandled: boolean } {
     console.debug = () => {};
 
     const stateData = getStateData({ stateQueryParamValue });
-
-    debug966975.log(`stateData: ${JSON.stringify(stateData)}`);
 
     if (
         stateData === undefined ||
@@ -123,8 +96,6 @@ function handleOidcCallback_nonMemoized(): { isHandled: boolean } {
             }
         })();
 
-        debug966975.log(`historyMethod: ${historyMethod}`);
-
         writeBackForwardTracker({
             backForwardTracker: {
                 previousHistoryMethod: historyMethod,
@@ -133,8 +104,6 @@ function handleOidcCallback_nonMemoized(): { isHandled: boolean } {
         });
 
         setTimeout(() => {
-            debug966975.log(`(callback 0) Calling window.history.${historyMethod}()`);
-
             reloadOnBfCacheNavigation();
 
             window.history[historyMethod]();
@@ -149,8 +118,6 @@ function handleOidcCallback_nonMemoized(): { isHandled: boolean } {
             }, 350);
         }, 0);
 
-        debug966975.log(`returning isHandled: ${isHandled ? "true" : "false"}`);
-
         return { isHandled };
     }
 
@@ -162,12 +129,9 @@ function handleOidcCallback_nonMemoized(): { isHandled: boolean } {
 
     assert(authResponse.state !== "", "063965");
 
-    debug966975.log(`authResponse: ${JSON.stringify(authResponse)}`);
-
     switch (stateData.context) {
         case "iframe":
             setTimeout(() => {
-                debug966975.log(`(callback 0) posting message to parent`);
                 parent.postMessage(authResponse, location.origin);
             }, 0);
             break;
@@ -187,14 +151,10 @@ function handleOidcCallback_nonMemoized(): { isHandled: boolean } {
                     return stateData.redirectUrl;
                 })();
 
-                debug966975.log(`(callback 0) location.href = "${href}";`);
-
                 location.href = href;
             }, 0);
             break;
     }
-
-    debug966975.log(`Returning isHandled: ${isHandled ? "true" : "false"}`);
 
     return { isHandled };
 }
@@ -229,28 +189,18 @@ export function retrieveRedirectAuthResponseAndStateData(params: {
 }): { authResponse: AuthResponse; stateData: StateData.Redirect } | undefined {
     const { configId } = params;
 
-    debug966975.log(`>>> In retrieveRedirectAuthResponseAndStateData(${JSON.stringify({ configId })})`);
-
     const authResponses = readRedirectAuthResponses();
-
-    debug966975.log(`authResponses: ${JSON.stringify(authResponses)}`);
 
     let authResponseAndStateData:
         | { authResponse: AuthResponse; stateData: StateData.Redirect }
         | undefined = undefined;
 
     for (const authResponse of [...authResponses]) {
-        debug966975.log(`authResponse: ${JSON.stringify(authResponse)}`);
-
         const stateData = getStateData({ stateQueryParamValue: authResponse.state });
 
-        debug966975.log(`stateDate: ${JSON.stringify(stateData)}`);
-
-        try {
-            assert(stateData !== undefined, "966975");
-        } catch {
+        if (stateData === undefined) {
+            // NOTE: We do not understand how this can happen but it can.
             authResponses.splice(authResponses.indexOf(authResponse), 1);
-            debug966975.report();
             continue;
         }
 
@@ -266,11 +216,8 @@ export function retrieveRedirectAuthResponseAndStateData(params: {
     }
 
     if (authResponseAndStateData !== undefined) {
-        debug966975.log(`writeRedirectAuthResponses(${JSON.stringify({ authResponses })})`);
         writeRedirectAuthResponses({ authResponses });
     }
-
-    debug966975.log(`Returning ${JSON.stringify({ authResponseAndStateData })} <<<<<<<<<`);
 
     return authResponseAndStateData;
 }
