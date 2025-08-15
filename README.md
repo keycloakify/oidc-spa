@@ -31,7 +31,7 @@
 
 A full-featured OpenID Connect / OAuth2 client for single-page applications (SPAs).
 
-With `oidc-spa`, you can seamlessly integrate authentication providers like [Keycloak](https://www.keycloak.org/), [Auth0](https://auth0.com/), or [Microsoft Entra ID](https://www.microsoft.com/en-us/security/business/identity-access/microsoft-entra-id) into your application, purely on the client side—
+With `oidc-spa`, you can seamlessly integrate authentication providers like [Keycloak](https://www.keycloak.org/), [Auth0](https://auth0.com/), or [Microsoft Entra ID](https://www.microsoft.com/en-us/security/business/identity-access/microsoft-entra-id) into your application, purely on the client side, 
 [without involving your backend in the token exchange](https://docs.oidc-spa.dev/resources/why-no-client-secret).
 
 In **simple terms**, `oidc-spa` is a library that makes it easy to **add authentication** to your Vite or Create-React-App project.  
@@ -62,12 +62,12 @@ These libraries are **tied to a specific provider**. But what if you need to:
 
 And besides, not all SDKs are equal in terms of setup simplicity, performance, and API quality.
 
-We wanted a **universal solution**—one that is as good or better than all existing SDKs in every aspect.
+We wanted a **universal solution**, one that is as good or better than all existing SDKs in every aspect.
 
 ## Features
 
 -   🎓 **No OIDC/OAuth2 expertise required**: Easy to setup and use. We're here to help [on Discord](https://discord.gg/mJdYJSdcm4)!
--   🛠️ **Simple setup**: No need to define `/login` or `/logout` routes—token refreshing is automatic, it just works.
+-   🛠️ **Simple setup**: No need to define `/login` or `/logout` routes, token refreshing is automatic, it just works.
 -   ✨ **React integration**: Expose a framework agnostic API but also a React adapter `oidc-spa/react`.
 -   🔥 **No limitation**- For example, everything you could do with `keycloak-js`, you can do with `oidc-spa`.
 -   💬 **Detailed debug messages**: If your OIDC server is not properly configured, it tells you precisely what’s wrong and what you need to do to fix it.
@@ -75,23 +75,23 @@ We wanted a **universal solution**—one that is as good or better than all exis
 -   🚪 **Logout propagation**: Logging out in one tab logs out all others.
 -   📖 **Comprehensive documentation**: Guides and examples for common scenarios.
 -   ✅ **Type safety**: Strong TypeScript support with optional [Zod](https://zod.dev/) integration validating the expected shape of the ID token.
--   🔒 **Security-first**: Uses [**Authorization Code Flow + PKCE**](https://docs.oidc-spa.dev/resources/why-no-client-secret#id-2.-authorization-code-flow--pkce-used-by-oidc-spa)—No token persistence in `localStorage` or `sessionStorage`.
+-   🔒 **Security-first**: Uses [**Authorization Code Flow + PKCE**](https://docs.oidc-spa.dev/resources/why-no-client-secret#id-2.-authorization-code-flow--pkce-used-by-oidc-spa), No token persistence in `localStorage` or `sessionStorage`.
 -   🖥️ **Optional backend utilities**: Provides tools for token validation in JavaScript backends (Node.js, Deno, Web Workers).
--   🔗 **Multi-instance support**: Run multiple `oidc-spa` instances—for example, to offer **Login with Google OR Microsoft** in the same app.
--   🍪 **No third-party cookie issues**: Third-party cookies blocked? No problem—`oidc-spa` works around it automatically with no special measures needed on your side.
+-   🍪 **No third-party cookie issues**: Third-party cookies blocked? No problem, `oidc-spa` works around it automatically with no special measures needed on your side.  
+-   🔗 **Multi-instance support**: Run multiple `oidc-spa` instances in the same app without conflict.  
 
 ## Comparison with Existing Libraries
 
 ### [oidc-client-ts](https://github.com/authts/oidc-client-ts)
 
 While `oidc-client-ts` is a comprehensive toolkit designed for various applications, `oidc-spa` is specifically built for SPAs with an easy-to-set-up API.  
-But **ease of use** isn't the only difference—`oidc-spa` also provides **out-of-the-box** solutions for features that `oidc-client-ts` leaves up to you to implement, such as:
+But **ease of use** isn't the only difference, `oidc-spa` also provides **out-of-the-box** solutions for features that `oidc-client-ts` leaves up to you to implement, such as:
 
 -   **Login/logout propagation** across tabs
 -   **Graceful fallback when third-party cookies are blocked**
 -   **Seamless browser back/forward cache (bfcache) management**
 -   **Auto logout countdown** so users can be automatically logged out after a set period of inactivity.
--   **Ensuring you never get an expired access token error**—even after the computer wakes up from sleep.
+-   **Ensuring you never get an expired access token error**, even after the computer wakes up from sleep.
 -   **Gracefully handles scenarios where the provider does not issue a refresh token or lacks a logout endpoint** (e.g., Google OAuth)
 
 ### [react-oidc-context](https://github.com/authts/react-oidc-context)
@@ -102,7 +102,7 @@ But **ease of use** isn't the only difference—`oidc-spa` also provides **out-o
 ### [keycloak-js](https://www.npmjs.com/package/keycloak-js)
 
 The official OIDC Client for Keycloak. It only works with Keycloak and [will eventually be deprecated](https://www.keycloak.org/2023/03/adapter-deprecation-update).  
-Beyond that, achieving the same seamless user experience as `oidc-spa` with `keycloak-js` requires writing a lot of custom code—code that really **shouldn’t** be handled at the application level.
+Beyond that, achieving the same seamless user experience as `oidc-spa` with `keycloak-js` requires writing a lot of custom code, code that really **shouldn’t** be handled at the application level.
 
 ### [NextAuth.js](https://next-auth.js.org/)
 
@@ -166,7 +166,7 @@ Project backers, we trust and recommend their services.
 
 This library isn't a theoretical exercise or a tool for hobby projects.  
 We developed it to solve real-world problems we faced ourselves.  
-Today, it powers authentication for [Onyxia](https://onyxia.sh)—  
+Today, it powers authentication for [Onyxia](https://onyxia.sh),   
 a data science platform deployed across multiple large organizations.
 
 ### Onyxia
