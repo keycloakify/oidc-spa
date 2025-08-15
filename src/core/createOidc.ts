@@ -166,6 +166,16 @@ export type ParamsOfCreateOidc<
 
     debugLogs?: boolean;
 
+    /**
+     * WARNING: This option exists solely as a workaround
+     * for limitations in the Google OAuth API.
+     * See: https://docs.oidc-spa.dev/providers-configuration/google-oauth
+     *
+     * Do not use this for other providers.
+     * If you think you need a client secret in a SPA, you are likely
+     * trying to use a confidential (private) client in the browser,
+     * which is insecure and not supported.
+     */
     __unsafe_clientSecret?: string;
 
     /**
