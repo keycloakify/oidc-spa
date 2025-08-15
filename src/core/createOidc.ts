@@ -43,7 +43,6 @@ import {
 import { initialLocationHref } from "./initialLocationHref";
 import { createGetIsNewBrowserSession } from "./isNewBrowserSession";
 import { trustedFetch } from "./trustedFetch";
-import { getIsOnline } from "../tools/getIsOnline";
 
 handleOidcCallback();
 
@@ -656,18 +655,6 @@ export async function createOidc_nonMemoized<
 
             let authResponse_error: string | undefined = undefined;
             let oidcClientTsUser: OidcClientTsUser | undefined = undefined;
-
-            {
-                const { isOnline, prOnline } = getIsOnline();
-
-                if (!isOnline) {
-                    if (autoLogin) {
-                        await prOnline;
-                    } else {
-                        break silent_login_if_possible_and_auto_login;
-                    }
-                }
-            }
 
             actual_silent_signin: {
                 if (persistedAuthState === "explicitly logged out") {
