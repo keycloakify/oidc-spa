@@ -154,6 +154,9 @@ export type ParamsOfCreateOidc<
      * */
     idleSessionLifetimeInSeconds?: number;
 
+    /**
+     * Default: { redirectTo: "current page" }
+     */
     autoLogoutParams?: Parameters<Oidc.LoggedIn<any>["logout"]>[0];
     autoLogin?: AutoLogin;
 
