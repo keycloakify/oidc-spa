@@ -142,7 +142,8 @@ export async function createMockOidc<
                             "You haven't provided a mocked decodedIdToken",
                             "See https://docs.oidc-spa.dev/v/v6/mock"
                         ].join("\n")
-                    })
+                    }),
+                issuedAtTime: Date.now()
             };
 
             const tokens: Oidc.Tokens<DecodedIdToken> =
