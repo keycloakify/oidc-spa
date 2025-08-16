@@ -119,18 +119,6 @@ export type ParamsOfCreateOidc<
      */
     homeUrl: string;
 
-    /**
-     * WARNING: If you are deploying on the web, you should not set this parameter.
-     * The callbackUrl is the homeURl.
-     *
-     * This is only useful for when you also shipping your app as a Desktop App with Electron.
-     * NOTE that even in this case, it's not automatic, you still need to handle the response
-     * in the electron node process.
-     *
-     * Example: __callbackUri: "myapp://oidc-callback/"
-     */
-    __callbackUri?: string;
-
     decodedIdTokenSchema?: {
         parse: (decodedIdToken_original: Oidc.Tokens.DecodedIdToken_base) => DecodedIdToken;
     };
@@ -313,7 +301,6 @@ export async function createOidc_nonMemoized<
         extraQueryParams: extraQueryParamsOrGetter,
         extraTokenParams: extraTokenParamsOrGetter,
         homeUrl: homeUrl_params,
-        __callbackUri,
         decodedIdTokenSchema,
         __unsafe_ssoSessionIdleSeconds,
         idleSessionLifetimeInSeconds = __unsafe_ssoSessionIdleSeconds,
@@ -359,7 +346,7 @@ export async function createOidc_nonMemoized<
     });
 
     const callbackUri = toFullyQualifiedUrl({
-        urlish: __callbackUri ?? homeUrl,
+        urlish: homeUrl,
         doAssertNoQueryParams: true,
         doOutputWithTrailingSlash: true
     });
