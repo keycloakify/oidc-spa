@@ -1,8 +1,8 @@
 import type { OidcInitializationError } from "./OidcInitializationError";
 
-export declare type Oidc<DecodedIdToken extends Record<string, unknown> = Record<string, unknown>> =
-    | Oidc.LoggedIn<DecodedIdToken>
-    | Oidc.NotLoggedIn;
+export declare type Oidc<
+    DecodedIdToken extends Record<string, unknown> = Oidc.Tokens.DecodedIdToken_base
+> = Oidc.LoggedIn<DecodedIdToken> | Oidc.NotLoggedIn;
 
 export declare namespace Oidc {
     export type Common = {
@@ -101,7 +101,7 @@ export declare namespace Oidc {
             isNewBrowserSession: boolean;
         };
 
-    export type Tokens<DecodedIdToken extends Record<string, unknown> = Record<string, unknown>> =
+    export type Tokens<DecodedIdToken extends Record<string, unknown> = Tokens.DecodedIdToken_base> =
         | Tokens.WithRefreshToken<DecodedIdToken>
         | Tokens.WithoutRefreshToken<DecodedIdToken>;
 
@@ -111,6 +111,17 @@ export declare namespace Oidc {
             accessTokenExpirationTime: number;
             idToken: string;
             decodedIdToken: DecodedIdToken;
+            /**
+             * decodedIdToken_original = decodeJwt(idToken);
+             * decodedIdToken = decodedIdTokenSchema.parse(decodedIdToken_original)
+             *
+             * The idea here is that if you have provided a zod schema as `decodedIdTokenSchema`
+             * it will strip out every claim that you haven't specified.
+             * You might even be applying some transformation.
+             *
+             * `decodedIdToken_original` is the actual decoded payload of the  id_token, untransformed.
+             * */
+            decodedIdToken_original: DecodedIdToken_base;
             /** Read from id_token's JWT, iat claim value, it's a JavaScript timestamp (millisecond epoch) */
             issuedAtTime: number;
         };
@@ -125,6 +136,15 @@ export declare namespace Oidc {
             hasRefreshToken: false;
             refreshToken?: never;
             refreshTokenExpirationTime?: never;
+        };
+
+        export type DecodedIdToken_base = {
+            iss: string;
+            sub: string;
+            aud: string | string[];
+            exp: number;
+            iat: number;
+            [claimName: string]: unknown;
         };
     }
 }

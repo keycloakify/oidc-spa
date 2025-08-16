@@ -29,7 +29,7 @@ export type ParamsOfCreateMockOidc<
 const URL_SEARCH_PARAM_NAME = "isUserLoggedIn";
 
 export async function createMockOidc<
-    DecodedIdToken extends Record<string, unknown> = Record<string, unknown>,
+    DecodedIdToken extends Record<string, unknown> = Oidc.Tokens.DecodedIdToken_base,
     AutoLogin extends boolean = false
 >(
     params: ParamsOfCreateMockOidc<DecodedIdToken, AutoLogin>
@@ -140,6 +140,14 @@ export async function createMockOidc<
                     createObjectThatThrowsIfAccessed<DecodedIdToken>({
                         debugMessage: [
                             "You haven't provided a mocked decodedIdToken",
+                            "See https://docs.oidc-spa.dev/v/v6/mock"
+                        ].join("\n")
+                    }),
+                decodedIdToken_original:
+                    mockedTokens.decodedIdToken_original ??
+                    createObjectThatThrowsIfAccessed<Oidc.Tokens.DecodedIdToken_base>({
+                        debugMessage: [
+                            "You haven't provided a mocked decodedIdToken_original",
                             "See https://docs.oidc-spa.dev/v/v6/mock"
                         ].join("\n")
                     }),

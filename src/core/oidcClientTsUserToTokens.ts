@@ -6,7 +6,9 @@ import type { Oidc } from "./Oidc";
 
 export function oidcClientTsUserToTokens<DecodedIdToken extends Record<string, unknown>>(params: {
     oidcClientTsUser: OidcClientTsUser;
-    decodedIdTokenSchema?: { parse: (data: unknown) => DecodedIdToken };
+    decodedIdTokenSchema?: {
+        parse: (decodedIdToken_original: Oidc.Tokens.DecodedIdToken_base) => DecodedIdToken;
+    };
     __unsafe_useIdTokenAsAccessToken: boolean;
     decodedIdToken_previous: DecodedIdToken | undefined;
     log: typeof console.log | undefined;
@@ -29,23 +31,23 @@ export function oidcClientTsUserToTokens<DecodedIdToken extends Record<string, u
 
     assert(idToken !== undefined, "No id token provided by the oidc server");
 
-    const decodedIdToken_original = decodeJwt<Record<string, unknown>>(idToken);
+    const decodedIdToken_original = decodeJwt<Oidc.Tokens.DecodedIdToken_base>(idToken);
+
+    if (isFirstInit) {
+        log?.(
+            [
+                `Decoded ID token`,
+                decodedIdTokenSchema === undefined ? "" : " before `decodedIdTokenSchema.parse()`\n",
+                JSON.stringify(decodedIdToken_original, null, 2)
+            ].join("")
+        );
+    }
 
     const decodedIdToken = (() => {
-        let decodedIdToken = decodedIdToken_original as DecodedIdToken;
-
-        if (isFirstInit) {
-            log?.(
-                [
-                    `Decoded ID token`,
-                    decodedIdTokenSchema === undefined ? "" : " before `decodedIdTokenSchema.parse()`\n",
-                    JSON.stringify(decodedIdToken, null, 2)
-                ].join("")
-            );
-        }
+        let decodedIdToken: DecodedIdToken;
 
         if (decodedIdTokenSchema !== undefined) {
-            decodedIdToken = decodedIdTokenSchema.parse(decodedIdToken);
+            decodedIdToken = decodedIdTokenSchema.parse(decodedIdToken_original);
 
             if (isFirstInit) {
                 log?.(
@@ -55,12 +57,16 @@ export function oidcClientTsUserToTokens<DecodedIdToken extends Record<string, u
                     ].join("")
                 );
             }
+        } else {
+            // @ts-expect-error
+            decodedIdToken = decodedIdToken_original;
         }
 
         if (
             decodedIdToken_previous !== undefined &&
             JSON.stringify(decodedIdToken) === JSON.stringify(decodedIdToken_previous)
         ) {
+            // NOTE: For stable ref, prevent re-render for component that would memoize
             return decodedIdToken_previous;
         }
 
@@ -152,6 +158,7 @@ export function oidcClientTsUserToTokens<DecodedIdToken extends Record<string, u
               }),
         idToken,
         decodedIdToken,
+        decodedIdToken_original,
         issuedAtTime
     };
 

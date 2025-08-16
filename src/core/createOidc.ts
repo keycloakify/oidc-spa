@@ -8,7 +8,6 @@ import type { OidcMetadata } from "./OidcMetadata";
 import { id, assert, is, type Equals } from "../vendor/frontend/tsafe";
 import { setTimeout, clearTimeout } from "../tools/workerTimers";
 import { Deferred } from "../tools/Deferred";
-import { decodeJwt } from "../tools/decodeJwt";
 import { createEvtIsUserActive } from "./evtIsUserActive";
 import { createStartCountdown } from "../tools/startCountdown";
 import { toHumanReadableDuration } from "../tools/toHumanReadableDuration";
@@ -132,7 +131,9 @@ export type ParamsOfCreateOidc<
      */
     __callbackUri?: string;
 
-    decodedIdTokenSchema?: { parse: (data: unknown) => DecodedIdToken };
+    decodedIdTokenSchema?: {
+        parse: (decodedIdToken_original: Oidc.Tokens.DecodedIdToken_base) => DecodedIdToken;
+    };
     /**
      * @deprecated: Use idleSessionLifetimeInSeconds instead
      *
@@ -977,11 +978,10 @@ export async function createOidc_nonMemoized<
 
     const onTokenChanges = new Set<(tokens: Oidc.Tokens<DecodedIdToken>) => void>();
 
-    const { sid: sessionId, sub: subjectId } = decodeJwt<{ sid?: string; sub?: string }>(
-        currentTokens.idToken
-    );
+    const { sid: sessionId, sub: subjectId } = currentTokens.decodedIdToken_original;
 
     assert(subjectId !== undefined, "The 'sub' claim is missing from the id token");
+    assert(sessionId === undefined || typeof sessionId === "string");
 
     const oidc_loggedIn = id<Oidc.LoggedIn<DecodedIdToken>>({
         ...oidc_common,
