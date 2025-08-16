@@ -31,7 +31,7 @@
 
 A full-featured OpenID Connect / OAuth2 client for single-page applications (SPAs).
 
-With `oidc-spa`, you can seamlessly integrate authentication providers like [Keycloak](https://www.keycloak.org/), [Auth0](https://auth0.com/), or [Microsoft Entra ID](https://www.microsoft.com/en-us/security/business/identity-access/microsoft-entra-id) into your application, purely on the client side, 
+With `oidc-spa`, you can seamlessly integrate authentication providers like [Keycloak](https://www.keycloak.org/), [Auth0](https://auth0.com/), or [Microsoft Entra ID](https://www.microsoft.com/en-us/security/business/identity-access/microsoft-entra-id) into your application, purely on the client side,
 [without involving your backend in the token exchange](https://docs.oidc-spa.dev/resources/why-no-client-secret).
 
 In **simple terms**, `oidc-spa` is a library that makes it easy to **add authentication** to your Vite or Create-React-App project.  
@@ -77,8 +77,8 @@ We wanted a **universal solution**, one that is as good or better than all exist
 -   ✅ **Type safety**: Strong TypeScript support with optional [Zod](https://zod.dev/) integration validating the expected shape of the ID token.
 -   🔒 **Security-first**: Uses [**Authorization Code Flow + PKCE**](https://docs.oidc-spa.dev/resources/why-no-client-secret#id-2.-authorization-code-flow--pkce-used-by-oidc-spa), No token persistence in `localStorage` or `sessionStorage`.
 -   🖥️ **Optional backend utilities**: Provides tools for token validation in JavaScript backends (Node.js, Deno, Web Workers).
--   🍪 **No third-party cookie issues**: Third-party cookies blocked? No problem, `oidc-spa` works around it automatically with no special measures needed on your side.  
--   🔗 **Multi-instance support**: Run multiple `oidc-spa` instances in the same app without conflict.  
+-   🍪 **No third-party cookie issues**: Third-party cookies blocked? No problem, `oidc-spa` works around it automatically with no special measures needed on your side.
+-   🔗 **Multi-instance support**: Run multiple `oidc-spa` instances in the same app without conflict.
 
 ## Comparison with Existing Libraries
 
@@ -166,7 +166,7 @@ Project backers, we trust and recommend their services.
 
 This library isn't a theoretical exercise or a tool for hobby projects.  
 We developed it to solve real-world problems we faced ourselves.  
-Today, it powers authentication for [Onyxia](https://onyxia.sh),   
+Today, it powers authentication for [Onyxia](https://onyxia.sh),  
 a data science platform deployed across multiple large organizations.
 
 ### Onyxia
