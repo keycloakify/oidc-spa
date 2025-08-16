@@ -71,10 +71,9 @@ export const fetchWithAuth: typeof fetch = async (input, init) => {
     if (oidc.isUserLoggedIn) {
         const { accessToken } = await oidc.getTokens();
 
-        (init ??= {}).headers = {
-            ...init.headers,
-            Authorization: `Bearer ${accessToken}`
-        };
+        const headers = new Headers(init?.headers);
+        headers.set("Authorization", `Bearer ${accessToken}`);
+        (init ??= {}).headers = headers;
     }
 
     return fetch(input, init);
