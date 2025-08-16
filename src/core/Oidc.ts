@@ -43,16 +43,7 @@ export declare namespace Oidc {
             renewTokens(params?: {
                 extraTokenParams?: Record<string, string | undefined>;
             }): Promise<void>;
-            /**
-             * Prefer using getTokens_next(), in the next major getTokens() will be be async.
-             *
-             * The problem is that When the computer wakes up from sleep, the tokens might have expired so
-             * there is a window of time where the tokens are not valid.
-             *
-             * This potential issue do not affect you if you are using "oidc-spa/react" as in the documentation.
-             * */
-            getTokens: () => Tokens<DecodedIdToken>;
-            getTokens_next: () => Promise<Tokens<DecodedIdToken>>;
+            getTokens: () => Promise<Tokens<DecodedIdToken>>;
             subscribeToTokensChange: (onTokenChange: (tokens: Tokens<DecodedIdToken>) => void) => {
                 unsubscribe: () => void;
             };

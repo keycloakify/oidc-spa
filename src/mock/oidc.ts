@@ -130,7 +130,7 @@ export async function createMockOidc<
         ...common,
         isUserLoggedIn: true,
         renewTokens: async () => {},
-        getTokens: (() => {
+        ...(() => {
             const tokens_common: Oidc.Tokens.Common<DecodedIdToken> = {
                 accessToken: mockedTokens.accessToken ?? "mocked-access-token",
                 accessTokenExpirationTime: mockedTokens.accessTokenExpirationTime ?? Infinity,
@@ -167,10 +167,11 @@ export async function createMockOidc<
                           hasRefreshToken: false
                       });
 
-            return () => tokens;
+            return {
+                getTokens: () => Promise.resolve(tokens),
+                getDecodedIdToken: () => tokens_common.decodedIdToken
+            };
         })(),
-        getTokens_next: () => Promise.resolve(oidc.getTokens()),
-        getDecodedIdToken: () => oidc.getTokens().decodedIdToken,
         subscribeToTokensChange: () => ({
             unsubscribe: () => {}
         }),

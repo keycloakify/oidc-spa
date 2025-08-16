@@ -986,8 +986,7 @@ export async function createOidc_nonMemoized<
     const oidc_loggedIn = id<Oidc.LoggedIn<DecodedIdToken>>({
         ...oidc_common,
         isUserLoggedIn: true,
-        getTokens: () => currentTokens,
-        getTokens_next: async () => {
+        getTokens: async () => {
             renew_tokens: {
                 {
                     const msBeforeExpirationOfTheAccessToken =
