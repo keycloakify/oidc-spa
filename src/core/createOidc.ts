@@ -59,23 +59,14 @@ export type ParamsOfCreateOidc<
      * (the scope "openid" is added automatically as it's mandatory)
      **/
     scopes?: string[];
-    /**
-     * Transform the url of the authorization endpoint before redirecting to the login pages.
-     */
-    transformUrlBeforeRedirect?: (url: string) => string;
 
     /**
-     * NOTE: Will replace transformUrlBeforeRedirect in the next major version.
-     *
      * Transform the url (authorization endpoint) before redirecting to the login pages.
      *
      * The isSilent parameter is true when the redirect is initiated in the background iframe for silent signin.
      * This can be used to omit ui related query parameters (like `ui_locales`).
      */
-    transformUrlBeforeRedirect_next?: (params: {
-        authorizationUrl: string;
-        isSilent: boolean;
-    }) => string;
+    transformUrlBeforeRedirect?: (params: { authorizationUrl: string; isSilent: boolean }) => string;
 
     /**
      * Extra query params to be added to the authorization endpoint url before redirecting or silent signing in.
@@ -296,7 +287,6 @@ export async function createOidc_nonMemoized<
     }
 ): Promise<AutoLogin extends true ? Oidc.LoggedIn<DecodedIdToken> : Oidc<DecodedIdToken>> {
     const {
-        transformUrlBeforeRedirect_next,
         transformUrlBeforeRedirect,
         extraQueryParams: extraQueryParamsOrGetter,
         extraTokenParams: extraTokenParamsOrGetter,
@@ -475,7 +465,6 @@ export async function createOidc_nonMemoized<
         configId,
         oidcClientTsUserManager,
         transformUrlBeforeRedirect,
-        transformUrlBeforeRedirect_next,
         getExtraQueryParams,
         getExtraTokenParams,
         homeUrl,
@@ -674,7 +663,7 @@ export async function createOidc_nonMemoized<
                     oidcClientTsUserManager,
                     stateQueryParamValue_instance,
                     configId,
-                    transformUrlBeforeRedirect_next,
+                    transformUrlBeforeRedirect,
                     getExtraQueryParams,
                     getExtraTokenParams,
                     autoLogin
@@ -1119,7 +1108,7 @@ export async function createOidc_nonMemoized<
                     oidcClientTsUserManager,
                     stateQueryParamValue_instance,
                     configId,
-                    transformUrlBeforeRedirect_next,
+                    transformUrlBeforeRedirect,
                     getExtraQueryParams,
                     getExtraTokenParams: () => extraTokenParams,
                     autoLogin

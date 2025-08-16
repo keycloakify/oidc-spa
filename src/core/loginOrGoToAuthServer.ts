@@ -51,8 +51,7 @@ export function getPrSafelyRestoredFromBfCacheAfterLoginBackNavigation() {
 export function createLoginOrGoToAuthServer(params: {
     configId: string;
     oidcClientTsUserManager: OidcClientTsUserManager;
-    transformUrlBeforeRedirect: ((url: string) => string) | undefined;
-    transformUrlBeforeRedirect_next:
+    transformUrlBeforeRedirect:
         | ((params: { authorizationUrl: string; isSilent: boolean }) => string)
         | undefined;
 
@@ -71,7 +70,6 @@ export function createLoginOrGoToAuthServer(params: {
         oidcClientTsUserManager,
 
         transformUrlBeforeRedirect,
-        transformUrlBeforeRedirect_next,
         getExtraQueryParams,
 
         getExtraTokenParams,
@@ -89,7 +87,7 @@ export function createLoginOrGoToAuthServer(params: {
         const {
             redirectUrl: redirectUrl_params,
             extraQueryParams_local,
-            transformUrlBeforeRedirect_local: transformUrl,
+            transformUrlBeforeRedirect_local,
             ...rest
         } = params;
 
@@ -198,20 +196,19 @@ export function createLoginOrGoToAuthServer(params: {
             (
                 [
                     [
-                        undefined,
-                        transformUrlBeforeRedirect_next === undefined
+                        getExtraQueryParams,
+                        transformUrlBeforeRedirect === undefined
                             ? undefined
                             : (url: string) =>
-                                  transformUrlBeforeRedirect_next({
+                                  transformUrlBeforeRedirect({
                                       isSilent,
                                       authorizationUrl: url
                                   })
                     ],
-                    [getExtraQueryParams, transformUrlBeforeRedirect],
-                    [extraQueryParams_local, transformUrl]
+                    [extraQueryParams_local, transformUrlBeforeRedirect_local]
                 ] as const
-            ).forEach(([extraQueryParamsMaybeGetter, transformUrlBeforeRedirect], i) => {
-                const url_before = i !== 2 ? undefined : url;
+            ).forEach(([extraQueryParamsMaybeGetter, transformUrlBeforeRedirect], i, arr) => {
+                const url_before = i !== arr.length - 1 ? undefined : url;
 
                 add_extra_query_params: {
                     if (extraQueryParamsMaybeGetter === undefined) {

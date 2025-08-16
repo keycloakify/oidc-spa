@@ -27,7 +27,7 @@ export async function loginSilent(params: {
     stateQueryParamValue_instance: string;
     configId: string;
 
-    transformUrlBeforeRedirect_next:
+    transformUrlBeforeRedirect:
         | ((params: { authorizationUrl: string; isSilent: true }) => string)
         | undefined;
 
@@ -42,7 +42,7 @@ export async function loginSilent(params: {
         oidcClientTsUserManager,
         stateQueryParamValue_instance,
         configId,
-        transformUrlBeforeRedirect_next,
+        transformUrlBeforeRedirect,
         getExtraQueryParams,
         getExtraTokenParams,
         autoLogin
@@ -126,10 +126,10 @@ export async function loginSilent(params: {
         }
 
         apply_transform_url: {
-            if (transformUrlBeforeRedirect_next === undefined) {
+            if (transformUrlBeforeRedirect === undefined) {
                 break apply_transform_url;
             }
-            url = transformUrlBeforeRedirect_next({ authorizationUrl: url, isSilent: true });
+            url = transformUrlBeforeRedirect({ authorizationUrl: url, isSilent: true });
         }
 
         return url;
