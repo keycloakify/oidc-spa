@@ -36,8 +36,12 @@ export const {
      * This is how you define the expected claims that
      * should be present on the id_token JWT.
      *
-     * What's going on behind the scene:
-     * decodedIdToken = decodedIdTokenSchema.parse(decodeJwt(id_token));
+     * You can also write:
+     * ```
+     * const DecodedIdToken = z.object({ sub: string(), name: z.string() });
+     *
+     * decodedIdTokenSchema: { parse: decodedIdToken_original => DecodedIdToken.parse(decodedIdToken_original) }
+     * ```
      */
     decodedIdTokenSchema: z.object({
         sub: z.string(),
