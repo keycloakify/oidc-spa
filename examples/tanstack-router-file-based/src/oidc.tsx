@@ -42,7 +42,7 @@ export const {
      *
      * You can also write:
      * ```
-     * const DecodedIdToken = z.object({ sub: string(), name: z.string() });
+     * const DecodedIdToken = z.object({ sub: z.string(), name: z.string() });
      *
      * decodedIdTokenSchema: { parse: decodedIdToken_original => DecodedIdToken.parse(decodedIdToken_original) }
      * ```
