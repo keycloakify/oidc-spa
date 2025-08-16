@@ -3,8 +3,6 @@ import {
     useState,
     createContext,
     useContext,
-    useReducer,
-    useRef,
     type ReactNode,
     type ComponentType,
     type FC,
@@ -33,10 +31,7 @@ export namespace OidcReact {
         }) => Promise<never>;
         initializationError: OidcInitializationError | undefined;
 
-        /** @deprecated: Use `const { decodedIdToken, tokens} = useOidc();` */
-        oidcTokens?: never;
         decodedIdToken?: never;
-        tokens?: never;
         logout?: never;
         subscribeToAutoLogoutCountdown?: never;
         goToAuthServer?: never;
@@ -46,10 +41,7 @@ export namespace OidcReact {
 
     export type LoggedIn<DecodedIdToken extends Record<string, unknown>> = Common & {
         isUserLoggedIn: true;
-        /** @deprecated: Use `const { decodedIdToken, tokens} = useOidc();` */
-        oidcTokens: Oidc.Tokens<DecodedIdToken>;
         decodedIdToken: DecodedIdToken;
-        tokens: Oidc.Tokens<DecodedIdToken> | undefined;
         logout: Oidc.LoggedIn["logout"];
         renewTokens: Oidc.LoggedIn["renewTokens"];
         subscribeToAutoLogoutCountdown: (
@@ -259,62 +251,22 @@ export function createOidcReactApi_dependencyInjection<
             }
         }
 
-        const [, forceUpdate] = useReducer(() => [], []);
-        // TODO: Remove in next major version
+        const [, reRenderIfDecodedIdTokenChanged] = useState(
+            !oidc.isUserLoggedIn ? undefined : oidc.getDecodedIdToken()
+        );
+
         useEffect(() => {
             if (!oidc.isUserLoggedIn) {
                 return;
             }
 
-            const { unsubscribe } = oidc.subscribeToTokensChange(forceUpdate);
+            const { unsubscribe } = oidc.subscribeToTokensChange(() =>
+                reRenderIfDecodedIdTokenChanged(oidc.getDecodedIdToken())
+            );
+
+            reRenderIfDecodedIdTokenChanged(oidc.getDecodedIdToken());
 
             return unsubscribe;
-        }, [oidc]);
-
-        const tokensState_ref = useRef<{
-            isConsumerReadingTokens: boolean;
-            tokens: Oidc.Tokens<DecodedIdToken> | undefined;
-        }>({
-            isConsumerReadingTokens: false,
-            tokens: undefined
-        });
-
-        useEffect(() => {
-            if (!oidc.isUserLoggedIn) {
-                return;
-            }
-
-            const updateTokens = (tokens: Oidc.Tokens<DecodedIdToken>) => {
-                if (tokens === tokensState_ref.current.tokens) {
-                    return;
-                }
-
-                const tokenState = tokensState_ref.current;
-
-                tokenState.tokens = tokens;
-
-                if (tokenState.isConsumerReadingTokens) {
-                    forceUpdate();
-                }
-            };
-
-            let isActive = true;
-
-            oidc.getTokens_next().then(tokens => {
-                if (!isActive) {
-                    return;
-                }
-                updateTokens(tokens);
-            });
-
-            const { unsubscribe } = oidc.subscribeToTokensChange(tokens => {
-                updateTokens(tokens);
-            });
-
-            return () => {
-                isActive = false;
-                unsubscribe();
-            };
         }, []);
 
         const common: OidcReact.Common = {
@@ -334,13 +286,7 @@ export function createOidcReactApi_dependencyInjection<
         const oidcReact: OidcReact.LoggedIn<DecodedIdToken> = {
             ...common,
             isUserLoggedIn: true,
-            oidcTokens: oidc.getTokens(),
             decodedIdToken: oidc.getDecodedIdToken(),
-            get tokens() {
-                const tokensState = tokensState_ref.current;
-                tokensState.isConsumerReadingTokens = true;
-                return tokensState.tokens;
-            },
             logout: oidc.logout,
             renewTokens: oidc.renewTokens,
             subscribeToAutoLogoutCountdown: oidc.subscribeToAutoLogoutCountdown,
@@ -422,17 +368,10 @@ export function createOidcReactApi_dependencyInjection<
         return oidc;
     });
 
-    async function getOidc(): Promise<Oidc<DecodedIdToken>> {
+    function getOidc(): Promise<Oidc<DecodedIdToken>> {
         dReadyToCreate.resolve();
 
-        // TODO: Directly return oidc in next major version
-        const oidc = await prOidc;
-
-        if (oidc.isUserLoggedIn) {
-            await oidc.getTokens_next();
-        }
-
-        return oidc;
+        return prOidc;
     }
 
     const oidcReact: OidcReactApi<DecodedIdToken, false> = {
@@ -449,7 +388,7 @@ export function createOidcReactApi_dependencyInjection<
 
 /** @see: https://docs.oidc-spa.dev/v/v6/usage#react-api */
 export function createReactOidc<
-    DecodedIdToken extends Record<string, unknown> = Record<string, unknown>,
+    DecodedIdToken extends Record<string, unknown> = Oidc.Tokens.DecodedIdToken_base,
     AutoLogin extends boolean = false
 >(params: ValueOrAsyncGetter<ParamsOfCreateOidc<DecodedIdToken, AutoLogin>>) {
     return createOidcReactApi_dependencyInjection(params, createOidc);

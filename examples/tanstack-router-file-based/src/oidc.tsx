@@ -37,34 +37,16 @@ export const {
     scopes: (import.meta.env.VITE_OIDC_SCOPE || undefined)?.split(" "),
     homeUrl: import.meta.env.BASE_URL,
     /**
-     * This parameter is optional.
+     * This is how you define the expected claims that
+     * should be present on the id_token JWT.
      *
-     * It allows you to validate the shape of the idToken so that you
-     * can trust that oidcTokens.decodedIdToken is of the expected shape
-     * when the user is logged in.
-     * What is actually inside the idToken is defined by the OIDC server
-     * you are using.
-     * The usage of zod here is just an example, you can use any other schema
-     * validation library or write your own validation function.
+     * You can also write:
+     * ```
+     * const DecodedIdToken = z.object({ sub: z.string(), name: z.string() });
      *
-     * Note that zod will strip out all the fields that are not defined in the
-     * schema, you can use `debugLogs: true` to get the raw decodedIdToken.
+     * decodedIdTokenSchema: { parse: decodedIdToken_original => DecodedIdToken.parse(decodedIdToken_original) }
+     * ```
      */
-    /*
-    decodedIdTokenSchema: {
-        parse: (decodedIdToken) => {
-
-            type DecodedIdToken = {
-                sub: string;
-                preferred_username: string
-            };
-
-            console.log(decodedIdToken);
-
-            return decodedIdToken as DecodedIdToken;
-        }
-    },
-    */
     decodedIdTokenSchema: z.object({
         sub: z.string(),
         name: z.string()
@@ -89,10 +71,9 @@ export const fetchWithAuth: typeof fetch = async (input, init) => {
     if (oidc.isUserLoggedIn) {
         const { accessToken } = await oidc.getTokens();
 
-        (init ??= {}).headers = {
-            ...init.headers,
-            Authorization: `Bearer ${accessToken}`
-        };
+        const headers = new Headers(init?.headers);
+        headers.set("Authorization", `Bearer ${accessToken}`);
+        (init ??= {}).headers = headers;
     }
 
     return fetch(input, init);

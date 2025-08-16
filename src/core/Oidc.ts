@@ -1,8 +1,8 @@
 import type { OidcInitializationError } from "./OidcInitializationError";
 
-export declare type Oidc<DecodedIdToken extends Record<string, unknown> = Record<string, unknown>> =
-    | Oidc.LoggedIn<DecodedIdToken>
-    | Oidc.NotLoggedIn;
+export declare type Oidc<
+    DecodedIdToken extends Record<string, unknown> = Oidc.Tokens.DecodedIdToken_base
+> = Oidc.LoggedIn<DecodedIdToken> | Oidc.NotLoggedIn;
 
 export declare namespace Oidc {
     export type Common = {
@@ -43,16 +43,7 @@ export declare namespace Oidc {
             renewTokens(params?: {
                 extraTokenParams?: Record<string, string | undefined>;
             }): Promise<void>;
-            /**
-             * Prefer using getTokens_next(), in the next major getTokens() will be be async.
-             *
-             * The problem is that When the computer wakes up from sleep, the tokens might have expired so
-             * there is a window of time where the tokens are not valid.
-             *
-             * This potential issue do not affect you if you are using "oidc-spa/react" as in the documentation.
-             * */
-            getTokens: () => Tokens<DecodedIdToken>;
-            getTokens_next: () => Promise<Tokens<DecodedIdToken>>;
+            getTokens: () => Promise<Tokens<DecodedIdToken>>;
             subscribeToTokensChange: (onTokenChange: (tokens: Tokens<DecodedIdToken>) => void) => {
                 unsubscribe: () => void;
             };
@@ -101,7 +92,7 @@ export declare namespace Oidc {
             isNewBrowserSession: boolean;
         };
 
-    export type Tokens<DecodedIdToken extends Record<string, unknown> = Record<string, unknown>> =
+    export type Tokens<DecodedIdToken extends Record<string, unknown> = Tokens.DecodedIdToken_base> =
         | Tokens.WithRefreshToken<DecodedIdToken>
         | Tokens.WithoutRefreshToken<DecodedIdToken>;
 
@@ -111,6 +102,19 @@ export declare namespace Oidc {
             accessTokenExpirationTime: number;
             idToken: string;
             decodedIdToken: DecodedIdToken;
+            /**
+             * decodedIdToken_original = decodeJwt(idToken);
+             * decodedIdToken = decodedIdTokenSchema.parse(decodedIdToken_original)
+             *
+             * The idea here is that if you have provided a zod schema as `decodedIdTokenSchema`
+             * it will strip out every claim that you haven't specified.
+             * You might even be applying some transformation.
+             *
+             * `decodedIdToken_original` is the actual decoded payload of the  id_token, untransformed.
+             * */
+            decodedIdToken_original: DecodedIdToken_base;
+            /** Read from id_token's JWT, iat claim value, it's a JavaScript timestamp (millisecond epoch) */
+            issuedAtTime: number;
         };
 
         export type WithRefreshToken<DecodedIdToken> = Common<DecodedIdToken> & {
@@ -123,6 +127,15 @@ export declare namespace Oidc {
             hasRefreshToken: false;
             refreshToken?: never;
             refreshTokenExpirationTime?: never;
+        };
+
+        export type DecodedIdToken_base = {
+            iss: string;
+            sub: string;
+            aud: string | string[];
+            exp: number;
+            iat: number;
+            [claimName: string]: unknown;
         };
     }
 }

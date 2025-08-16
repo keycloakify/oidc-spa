@@ -8,7 +8,6 @@ import type { OidcMetadata } from "./OidcMetadata";
 import { id, assert, is, type Equals } from "../vendor/frontend/tsafe";
 import { setTimeout, clearTimeout } from "../tools/workerTimers";
 import { Deferred } from "../tools/Deferred";
-import { decodeJwt } from "../tools/decodeJwt";
 import { createEvtIsUserActive } from "./evtIsUserActive";
 import { createStartCountdown } from "../tools/startCountdown";
 import { toHumanReadableDuration } from "../tools/toHumanReadableDuration";
@@ -23,7 +22,7 @@ import { type StateData, generateStateQueryParamValue, STATE_STORE_KEY_PREFIX } 
 import { notifyOtherTabsOfLogout, getPrOtherTabLogout } from "./logoutPropagationToOtherTabs";
 import { notifyOtherTabsOfLogin, getPrOtherTabLogin } from "./loginPropagationToOtherTabs";
 import { getConfigId } from "./configId";
-import { oidcClientTsUserToTokens, getMsBeforeExpiration } from "./oidcClientTsUserToTokens";
+import { oidcClientTsUserToTokens } from "./oidcClientTsUserToTokens";
 import { loginSilent } from "./loginSilent";
 import { authResponseToUrl } from "./AuthResponse";
 import { handleOidcCallback, retrieveRedirectAuthResponseAndStateData } from "./handleOidcCallback";
@@ -60,23 +59,14 @@ export type ParamsOfCreateOidc<
      * (the scope "openid" is added automatically as it's mandatory)
      **/
     scopes?: string[];
-    /**
-     * Transform the url of the authorization endpoint before redirecting to the login pages.
-     */
-    transformUrlBeforeRedirect?: (url: string) => string;
 
     /**
-     * NOTE: Will replace transformUrlBeforeRedirect in the next major version.
-     *
      * Transform the url (authorization endpoint) before redirecting to the login pages.
      *
      * The isSilent parameter is true when the redirect is initiated in the background iframe for silent signin.
      * This can be used to omit ui related query parameters (like `ui_locales`).
      */
-    transformUrlBeforeRedirect_next?: (params: {
-        authorizationUrl: string;
-        isSilent: boolean;
-    }) => string;
+    transformUrlBeforeRedirect?: (params: { authorizationUrl: string; isSilent: boolean }) => string;
 
     /**
      * Extra query params to be added to the authorization endpoint url before redirecting or silent signing in.
@@ -120,30 +110,10 @@ export type ParamsOfCreateOidc<
      */
     homeUrl: string;
 
-    /**
-     * WARNING: If you are deploying on the web, you should not set this parameter.
-     * The callbackUrl is the homeURl.
-     *
-     * This is only useful for when you also shipping your app as a Desktop App with Electron.
-     * NOTE that even in this case, it's not automatic, you still need to handle the response
-     * in the electron node process.
-     *
-     * Example: __callbackUri: "myapp://oidc-callback/"
-     */
-    __callbackUri?: string;
+    decodedIdTokenSchema?: {
+        parse: (decodedIdToken_original: Oidc.Tokens.DecodedIdToken_base) => DecodedIdToken;
+    };
 
-    decodedIdTokenSchema?: { parse: (data: unknown) => DecodedIdToken };
-    /**
-     * @deprecated: Use idleSessionLifetimeInSeconds instead
-     *
-     * This parameter defines after how many seconds of inactivity the user should be
-     * logged out automatically.
-     *
-     * WARNING: It should be configured on the identity server side
-     * as it's the authoritative source for security policies and not the client.
-     * If you don't provide this parameter it will be inferred from the refresh token expiration time.
-     * */
-    __unsafe_ssoSessionIdleSeconds?: number;
     /**
      * This parameter defines after how many seconds of inactivity the user should be
      * logged out automatically.
@@ -154,6 +124,9 @@ export type ParamsOfCreateOidc<
      * */
     idleSessionLifetimeInSeconds?: number;
 
+    /**
+     * Default: { redirectTo: "current page" }
+     */
     autoLogoutParams?: Parameters<Oidc.LoggedIn<any>["logout"]>[0];
     autoLogin?: AutoLogin;
 
@@ -166,6 +139,16 @@ export type ParamsOfCreateOidc<
 
     debugLogs?: boolean;
 
+    /**
+     * WARNING: This option exists solely as a workaround
+     * for limitations in the Google OAuth API.
+     * See: https://docs.oidc-spa.dev/providers-configuration/google-oauth
+     *
+     * Do not use this for other providers.
+     * If you think you need a client secret in a SPA, you are likely
+     * trying to use a confidential (private) client in the browser,
+     * which is insecure and not supported.
+     */
     __unsafe_clientSecret?: string;
 
     /**
@@ -194,8 +177,6 @@ const globalContext = {
     hasLogoutBeenCalled: id<boolean>(false),
     evtRequestToPersistTokens: createEvt<{ configIdOfInstancePostingTheRequest: string }>()
 };
-
-const MIN_RENEW_BEFORE_EXPIRE_MS = 2_000;
 
 /** @see: https://docs.oidc-spa.dev/v/v6/usage */
 export async function createOidc<
@@ -296,15 +277,12 @@ export async function createOidc_nonMemoized<
     }
 ): Promise<AutoLogin extends true ? Oidc.LoggedIn<DecodedIdToken> : Oidc<DecodedIdToken>> {
     const {
-        transformUrlBeforeRedirect_next,
         transformUrlBeforeRedirect,
         extraQueryParams: extraQueryParamsOrGetter,
         extraTokenParams: extraTokenParamsOrGetter,
         homeUrl: homeUrl_params,
-        __callbackUri,
         decodedIdTokenSchema,
-        __unsafe_ssoSessionIdleSeconds,
-        idleSessionLifetimeInSeconds = __unsafe_ssoSessionIdleSeconds,
+        idleSessionLifetimeInSeconds,
         autoLogoutParams = { redirectTo: "current page" },
         autoLogin = false,
         postLoginRedirectUrl: postLoginRedirectUrl_default,
@@ -347,7 +325,7 @@ export async function createOidc_nonMemoized<
     });
 
     const callbackUri = toFullyQualifiedUrl({
-        urlish: __callbackUri ?? homeUrl,
+        urlish: homeUrl,
         doAssertNoQueryParams: true,
         doOutputWithTrailingSlash: true
     });
@@ -476,7 +454,6 @@ export async function createOidc_nonMemoized<
         configId,
         oidcClientTsUserManager,
         transformUrlBeforeRedirect,
-        transformUrlBeforeRedirect_next,
         getExtraQueryParams,
         getExtraTokenParams,
         homeUrl,
@@ -675,7 +652,7 @@ export async function createOidc_nonMemoized<
                     oidcClientTsUserManager,
                     stateQueryParamValue_instance,
                     configId,
-                    transformUrlBeforeRedirect_next,
+                    transformUrlBeforeRedirect,
                     getExtraQueryParams,
                     getExtraTokenParams,
                     autoLogin
@@ -966,18 +943,33 @@ export async function createOidc_nonMemoized<
 
     const onTokenChanges = new Set<(tokens: Oidc.Tokens<DecodedIdToken>) => void>();
 
-    const { sid: sessionId, sub: subjectId } = decodeJwt<{ sid?: string; sub?: string }>(
-        currentTokens.idToken
-    );
+    const { sid: sessionId, sub: subjectId } = currentTokens.decodedIdToken_original;
 
     assert(subjectId !== undefined, "The 'sub' claim is missing from the id token");
+    assert(sessionId === undefined || typeof sessionId === "string");
 
     const oidc_loggedIn = id<Oidc.LoggedIn<DecodedIdToken>>({
         ...oidc_common,
         isUserLoggedIn: true,
-        getTokens: () => currentTokens,
-        getTokens_next: async () => {
-            if (getMsBeforeExpiration(currentTokens) <= MIN_RENEW_BEFORE_EXPIRE_MS) {
+        getTokens: async () => {
+            renew_tokens: {
+                {
+                    const msBeforeExpirationOfTheAccessToken =
+                        currentTokens.accessTokenExpirationTime - Date.now();
+
+                    if (msBeforeExpirationOfTheAccessToken > 30_000) {
+                        break renew_tokens;
+                    }
+                }
+
+                {
+                    const msElapsedSinceCurrentTokenWereIssued = Date.now() - currentTokens.issuedAtTime;
+
+                    if (msElapsedSinceCurrentTokenWereIssued < 5_000) {
+                        break renew_tokens;
+                    }
+                }
+
                 await oidc_loggedIn.renewTokens();
             }
 
@@ -1059,17 +1051,42 @@ export async function createOidc_nonMemoized<
             }) {
                 const { extraTokenParams } = params;
 
+                const fallbackToFullPageReload = async (): Promise<never> => {
+                    persistAuthState({ configId, state: undefined });
+
+                    await waitForAllOtherOngoingLoginOrRefreshProcessesToComplete({
+                        prUnlock: new Promise<never>(() => {})
+                    });
+
+                    globalContext.evtRequestToPersistTokens.post({
+                        configIdOfInstancePostingTheRequest: configId
+                    });
+
+                    await loginOrGoToAuthServer({
+                        action: "login",
+                        redirectUrl: window.location.href,
+                        doForceReloadOnBfCache: true,
+                        extraQueryParams_local: undefined,
+                        transformUrlBeforeRedirect_local: undefined,
+                        doNavigateBackToLastPublicUrlIfTheTheUserNavigateBack: false,
+                        interaction: "directly redirect if active session show login otherwise"
+                    });
+                    assert(false, "136134");
+                };
+
                 if (!currentTokens.hasRefreshToken && !canUseIframe) {
-                    const message = [
-                        "Unable to refresh tokens without a full app reload,",
-                        "because no refresh token is available",
-                        "and your app setup prevents silent sign-in via iframe.",
-                        "Your only option to refresh tokens is to call `window.location.reload()`"
-                    ].join(" ");
+                    log?.(
+                        [
+                            "Unable to refresh tokens without a full app reload,",
+                            "because no refresh token is available",
+                            "and your app setup prevents silent sign-in via iframe.",
+                            "Your only option to refresh tokens is to call `window.location.reload()`"
+                        ].join(" ")
+                    );
 
-                    log?.(message);
+                    await fallbackToFullPageReload();
 
-                    throw new Error(message);
+                    assert(false, "136135");
                 }
 
                 log?.("Renewing tokens");
@@ -1080,7 +1097,7 @@ export async function createOidc_nonMemoized<
                     oidcClientTsUserManager,
                     stateQueryParamValue_instance,
                     configId,
-                    transformUrlBeforeRedirect_next,
+                    transformUrlBeforeRedirect,
                     getExtraQueryParams,
                     getExtraTokenParams: () => extraTokenParams,
                     autoLogin
@@ -1088,6 +1105,8 @@ export async function createOidc_nonMemoized<
 
                 if (result_loginSilent.outcome === "failure") {
                     completeLoginOrRefreshProcess();
+                    // NOTE: This is a configuration or network error, okay to throw,
+                    // this exception doesn't have to be handle if it fails it fails.
                     throw new Error(result_loginSilent.cause);
                 }
 
@@ -1120,35 +1139,27 @@ export async function createOidc_nonMemoized<
 
                                 if (authResponse_error === undefined) {
                                     completeLoginOrRefreshProcess();
+                                    // Same here, if it fails it fails.
                                     throw error;
                                 }
-
-                                oidcClientTsUser_scope = undefined;
                             }
 
                             if (oidcClientTsUser_scope === undefined) {
-                                persistAuthState({ configId, state: undefined });
+                                // NOTE: Here we got a response but it's an error, session might have been
+                                // deleted or other edge case.
 
                                 completeLoginOrRefreshProcess();
 
-                                await waitForAllOtherOngoingLoginOrRefreshProcessesToComplete({
-                                    prUnlock: new Promise<never>(() => {})
-                                });
+                                log?.(
+                                    [
+                                        "The user is probably not logged in anymore,",
+                                        "need to redirect to login pages"
+                                    ].join(" ")
+                                );
 
-                                globalContext.evtRequestToPersistTokens.post({
-                                    configIdOfInstancePostingTheRequest: configId
-                                });
+                                await fallbackToFullPageReload();
 
-                                await loginOrGoToAuthServer({
-                                    action: "login",
-                                    redirectUrl: window.location.href,
-                                    doForceReloadOnBfCache: true,
-                                    extraQueryParams_local: undefined,
-                                    transformUrlBeforeRedirect_local: undefined,
-                                    doNavigateBackToLastPublicUrlIfTheTheUserNavigateBack: false,
-                                    interaction: "ensure no interaction"
-                                });
-                                assert(false, "136134");
+                                assert(false, "136135");
                             }
 
                             oidcClientTsUser = oidcClientTsUser_scope;
@@ -1298,64 +1309,55 @@ export async function createOidc_nonMemoized<
     }
 
     (function scheduleRenew() {
-        const login_dueToExpiration = async () => {
-            await waitForAllOtherOngoingLoginOrRefreshProcessesToComplete({
-                prUnlock: new Promise<never>(() => {})
-            });
-
-            persistAuthState({ configId, state: undefined });
-
-            return loginOrGoToAuthServer({
-                action: "login",
-                redirectUrl: window.location.href,
-                doForceReloadOnBfCache: true,
-                extraQueryParams_local: undefined,
-                transformUrlBeforeRedirect_local: undefined,
-                // NOTE: Wether or not it's the preferred behavior, pushing to history
-                // only works on user interaction so it have to be false
-                doNavigateBackToLastPublicUrlIfTheTheUserNavigateBack: false,
-                interaction: "ensure no interaction"
-            });
-        };
-
-        const msBeforeExpiration = getMsBeforeExpiration(currentTokens);
-
-        if (msBeforeExpiration <= MIN_RENEW_BEFORE_EXPIRE_MS) {
-            // NOTE: We just got a new token that is about to expire. This means that
-            // the refresh token has reached it's max SSO time.
-            login_dueToExpiration();
+        if (!currentTokens.hasRefreshToken && !canUseIframe) {
+            log?.(
+                "Disabling token auto refresh mechanism because we have no way to do it without reloading the page"
+            );
             return;
         }
 
-        // NOTE: We refresh the token 25 seconds before it expires.
-        // If the token expiration time is less than 25 seconds we refresh the token when
-        // only 1/10 of the token time is left.
-        const renewMsBeforeExpires = Math.max(
-            Math.min(25_000, msBeforeExpiration * 0.1),
-            MIN_RENEW_BEFORE_EXPIRE_MS
-        );
+        const msBeforeExpiration =
+            (currentTokens.refreshTokenExpirationTime ?? currentTokens.accessTokenExpirationTime) -
+            Date.now();
+
+        const RENEW_MS_BEFORE_EXPIRES = 30_000;
+
+        if (msBeforeExpiration <= RENEW_MS_BEFORE_EXPIRES) {
+            // NOTE: We just got a new token that is about to expire. This means that
+            // the refresh token has reached it's max SSO time.
+            // ...or that the refresh token have a very short lifespan...
+            // anyway, no need to keep alive, it will probably redirect on the next getTokens() or refreshTokens() call
+            return;
+        }
 
         log?.(
             [
                 toHumanReadableDuration(msBeforeExpiration),
                 `before expiration of the access token.`,
-                `Scheduling renewal ${toHumanReadableDuration(renewMsBeforeExpires)} before expiration`
+                `Scheduling renewal ${toHumanReadableDuration(
+                    RENEW_MS_BEFORE_EXPIRES
+                )} before expiration`
             ].join(" ")
         );
 
-        const timer = setTimeout(async () => {
-            log?.(
-                `Renewing the access token now as it will expires in ${toHumanReadableDuration(
-                    renewMsBeforeExpires
-                )}`
-            );
+        const timer = setTimeout(
+            async () => {
+                log?.(
+                    `Renewing the access token now as it will expires in ${toHumanReadableDuration(
+                        RENEW_MS_BEFORE_EXPIRES
+                    )}`
+                );
 
-            try {
                 await oidc_loggedIn.renewTokens();
-            } catch {
-                await login_dueToExpiration();
-            }
-        }, msBeforeExpiration - renewMsBeforeExpires);
+            },
+            Math.min(
+                msBeforeExpiration - RENEW_MS_BEFORE_EXPIRES,
+                // NOTE: We want to make sure we do not overflow the setTimeout
+                // that must be a 32 bit unsigned integer.
+                // This can happen if the tokenExpirationTime is more than 24.8 days in the future.
+                Math.pow(2, 31) - 1
+            )
+        );
 
         const { unsubscribe: tokenChangeUnsubscribe } = oidc_loggedIn.subscribeToTokensChange(() => {
             clearTimeout(timer);

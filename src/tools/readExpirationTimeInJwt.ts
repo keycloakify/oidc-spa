@@ -3,15 +3,14 @@ import { assert } from "../vendor/frontend/tsafe";
 
 // Return undefined if token provided wasn't a JWT or if it hasn't an exp claim number
 export function readExpirationTimeInJwt(token: string): number | undefined {
-    let expirationTime: number;
+    let exp: number;
 
     try {
-        expirationTime = decodeJwt<{ exp: number }>(token).exp * 1000;
-
-        assert(typeof expirationTime === "number" && !isNaN(expirationTime));
+        exp = decodeJwt<{ exp: number }>(token).exp;
+        assert(typeof exp === "number");
     } catch {
         return undefined;
     }
 
-    return expirationTime;
+    return exp * 1000;
 }

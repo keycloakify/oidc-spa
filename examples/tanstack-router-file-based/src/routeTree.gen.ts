@@ -10,85 +10,44 @@
 
 import { createFileRoute } from '@tanstack/react-router'
 
-// Import Routes
+import { Route as rootRouteImport } from './routes/__root'
+import { Route as ProtectedRouteImport } from './routes/protected'
+import { Route as IndexRouteImport } from './routes/index'
 
-import { Route as rootRoute } from './routes/__root'
-import { Route as ProtectedImport } from './routes/protected'
-import { Route as IndexImport } from './routes/index'
+const Protected2LazyRouteImport = createFileRoute('/protected2')()
 
-// Create Virtual Routes
-
-const Protected2LazyImport = createFileRoute('/protected2')()
-
-// Create/Update Routes
-
-const Protected2LazyRoute = Protected2LazyImport.update({
+const Protected2LazyRoute = Protected2LazyRouteImport.update({
   id: '/protected2',
   path: '/protected2',
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => rootRouteImport,
 } as any).lazy(() => import('./routes/protected2.lazy').then((d) => d.Route))
-
-const ProtectedRoute = ProtectedImport.update({
+const ProtectedRoute = ProtectedRouteImport.update({
   id: '/protected',
   path: '/protected',
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => rootRouteImport,
 } as any)
-
-const IndexRoute = IndexImport.update({
+const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => rootRouteImport,
 } as any)
-
-// Populate the FileRoutesByPath interface
-
-declare module '@tanstack/react-router' {
-  interface FileRoutesByPath {
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexImport
-      parentRoute: typeof rootRoute
-    }
-    '/protected': {
-      id: '/protected'
-      path: '/protected'
-      fullPath: '/protected'
-      preLoaderRoute: typeof ProtectedImport
-      parentRoute: typeof rootRoute
-    }
-    '/protected2': {
-      id: '/protected2'
-      path: '/protected2'
-      fullPath: '/protected2'
-      preLoaderRoute: typeof Protected2LazyImport
-      parentRoute: typeof rootRoute
-    }
-  }
-}
-
-// Create and export the route tree
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/protected': typeof ProtectedRoute
   '/protected2': typeof Protected2LazyRoute
 }
-
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/protected': typeof ProtectedRoute
   '/protected2': typeof Protected2LazyRoute
 }
-
 export interface FileRoutesById {
-  __root__: typeof rootRoute
+  __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/protected': typeof ProtectedRoute
   '/protected2': typeof Protected2LazyRoute
 }
-
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths: '/' | '/protected' | '/protected2'
@@ -97,11 +56,36 @@ export interface FileRouteTypes {
   id: '__root__' | '/' | '/protected' | '/protected2'
   fileRoutesById: FileRoutesById
 }
-
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ProtectedRoute: typeof ProtectedRoute
   Protected2LazyRoute: typeof Protected2LazyRoute
+}
+
+declare module '@tanstack/react-router' {
+  interface FileRoutesByPath {
+    '/protected2': {
+      id: '/protected2'
+      path: '/protected2'
+      fullPath: '/protected2'
+      preLoaderRoute: typeof Protected2LazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/protected': {
+      id: '/protected'
+      path: '/protected'
+      fullPath: '/protected'
+      preLoaderRoute: typeof ProtectedRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+  }
 }
 
 const rootRouteChildren: RootRouteChildren = {
@@ -109,31 +93,6 @@ const rootRouteChildren: RootRouteChildren = {
   ProtectedRoute: ProtectedRoute,
   Protected2LazyRoute: Protected2LazyRoute,
 }
-
-export const routeTree = rootRoute
+export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-/* ROUTE_MANIFEST_START
-{
-  "routes": {
-    "__root__": {
-      "filePath": "__root.tsx",
-      "children": [
-        "/",
-        "/protected",
-        "/protected2"
-      ]
-    },
-    "/": {
-      "filePath": "index.tsx"
-    },
-    "/protected": {
-      "filePath": "protected.tsx"
-    },
-    "/protected2": {
-      "filePath": "protected2.lazy.tsx"
-    }
-  }
-}
-ROUTE_MANIFEST_END */

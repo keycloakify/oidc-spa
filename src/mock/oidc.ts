@@ -29,7 +29,7 @@ export type ParamsOfCreateMockOidc<
 const URL_SEARCH_PARAM_NAME = "isUserLoggedIn";
 
 export async function createMockOidc<
-    DecodedIdToken extends Record<string, unknown> = Record<string, unknown>,
+    DecodedIdToken extends Record<string, unknown> = Oidc.Tokens.DecodedIdToken_base,
     AutoLogin extends boolean = false
 >(
     params: ParamsOfCreateMockOidc<DecodedIdToken, AutoLogin>
@@ -130,7 +130,7 @@ export async function createMockOidc<
         ...common,
         isUserLoggedIn: true,
         renewTokens: async () => {},
-        getTokens: (() => {
+        ...(() => {
             const tokens_common: Oidc.Tokens.Common<DecodedIdToken> = {
                 accessToken: mockedTokens.accessToken ?? "mocked-access-token",
                 accessTokenExpirationTime: mockedTokens.accessTokenExpirationTime ?? Infinity,
@@ -142,7 +142,16 @@ export async function createMockOidc<
                             "You haven't provided a mocked decodedIdToken",
                             "See https://docs.oidc-spa.dev/v/v6/mock"
                         ].join("\n")
-                    })
+                    }),
+                decodedIdToken_original:
+                    mockedTokens.decodedIdToken_original ??
+                    createObjectThatThrowsIfAccessed<Oidc.Tokens.DecodedIdToken_base>({
+                        debugMessage: [
+                            "You haven't provided a mocked decodedIdToken_original",
+                            "See https://docs.oidc-spa.dev/v/v6/mock"
+                        ].join("\n")
+                    }),
+                issuedAtTime: Date.now()
             };
 
             const tokens: Oidc.Tokens<DecodedIdToken> =
@@ -158,10 +167,11 @@ export async function createMockOidc<
                           hasRefreshToken: false
                       });
 
-            return () => tokens;
+            return {
+                getTokens: () => Promise.resolve(tokens),
+                getDecodedIdToken: () => tokens_common.decodedIdToken
+            };
         })(),
-        getTokens_next: () => Promise.resolve(oidc.getTokens()),
-        getDecodedIdToken: () => oidc.getTokens().decodedIdToken,
         subscribeToTokensChange: () => ({
             unsubscribe: () => {}
         }),
