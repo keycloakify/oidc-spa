@@ -5,9 +5,6 @@
     <a href="https://github.com/keycloakify/oidc-spa/actions">
       <img src="https://github.com/keycloakify/oidc-spa/actions/workflows/ci.yaml/badge.svg?branch=main">
     </a>
-    <a href="https://bundlephobia.com/package/oidc-spa">
-      <img src="https://img.shields.io/bundlephobia/minzip/oidc-spa">
-    </a>
     <a href="https://www.npmjs.com/package/oidc-spa">
       <img src="https://img.shields.io/npm/dw/oidc-spa">
     </a>
