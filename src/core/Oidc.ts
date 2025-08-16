@@ -111,6 +111,7 @@ export declare namespace Oidc {
             accessTokenExpirationTime: number;
             idToken: string;
             decodedIdToken: DecodedIdToken;
+            /** Read from id_token's JWT, iat claim value, it's a JavaScript timestamp (millisecond epoch) */
             issuedAtTime: number;
         };
 
