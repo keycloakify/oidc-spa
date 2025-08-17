@@ -1451,7 +1451,7 @@ export async function createOidc_nonMemoized<
                 assert(currentRefreshTokenTtlInSeconds !== undefined, "902992326");
 
                 stopCountdown = startCountdown({
-                    startCountdownAtSeconds: currentRefreshTokenTtlInSeconds
+                    countDownFromSeconds: currentRefreshTokenTtlInSeconds
                 }).stopCountdown;
             }
         });

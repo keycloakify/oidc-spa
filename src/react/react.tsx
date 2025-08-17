@@ -19,7 +19,11 @@ export type OidcReact<DecodedIdToken extends Record<string, unknown>> =
     | OidcReact.LoggedIn<DecodedIdToken>;
 
 export namespace OidcReact {
-    export type Common = Oidc.Common;
+    export type Common = Oidc.Common & {
+        useLogoutWarningCountdown: (params: { warningDurationSeconds: number }) => {
+            secondsLeft: number | undefined;
+        };
+    };
 
     export type NotLoggedIn = Common & {
         isUserLoggedIn: false;
@@ -33,7 +37,7 @@ export namespace OidcReact {
 
         decodedIdToken?: never;
         logout?: never;
-        subscribeToAutoLogoutCountdown?: never;
+        renewTokens?: never;
         goToAuthServer?: never;
         backFromAuthServer?: never;
         isNewBrowserSession?: never;
@@ -44,10 +48,6 @@ export namespace OidcReact {
         decodedIdToken: DecodedIdToken;
         logout: Oidc.LoggedIn["logout"];
         renewTokens: Oidc.LoggedIn["renewTokens"];
-        subscribeToAutoLogoutCountdown: (
-            tickCallback: (params: { secondsLeft: number | undefined }) => void
-        ) => { unsubscribeFromAutoLogoutCountdown: () => void };
-
         login?: never;
         initializationError?: never;
         goToAuthServer: (params: {
@@ -212,6 +212,39 @@ export function createOidcReactApi_dependencyInjection<
         );
     }
 
+    const useLogoutWarningCountdown: OidcReact.LoggedIn<DecodedIdToken>["useLogoutWarningCountdown"] = ({
+        warningDurationSeconds
+    }) => {
+        const contextValue = useContext(oidcContext);
+
+        assert(contextValue !== undefined);
+
+        const { oidc } = contextValue;
+
+        const [secondsLeft, setSecondsLeft] = useState<number | undefined>(undefined);
+
+        useEffect(() => {
+            if (!oidc.isUserLoggedIn) {
+                return;
+            }
+
+            const { unsubscribeFromAutoLogoutCountdown } = oidc.subscribeToAutoLogoutCountdown(
+                ({ secondsLeft }) =>
+                    setSecondsLeft(
+                        secondsLeft === undefined || secondsLeft > warningDurationSeconds
+                            ? undefined
+                            : secondsLeft
+                    )
+            );
+
+            return () => {
+                unsubscribeFromAutoLogoutCountdown();
+            };
+        }, [warningDurationSeconds]);
+
+        return { secondsLeft };
+    };
+
     function useOidc(params?: {
         assert?: "user logged in" | "user not logged in";
     }): OidcReact<DecodedIdToken> {
@@ -270,7 +303,8 @@ export function createOidcReactApi_dependencyInjection<
         }, []);
 
         const common: OidcReact.Common = {
-            params: oidc.params
+            params: oidc.params,
+            useLogoutWarningCountdown
         };
 
         if (!oidc.isUserLoggedIn) {
@@ -289,7 +323,6 @@ export function createOidcReactApi_dependencyInjection<
             decodedIdToken: oidc.getDecodedIdToken(),
             logout: oidc.logout,
             renewTokens: oidc.renewTokens,
-            subscribeToAutoLogoutCountdown: oidc.subscribeToAutoLogoutCountdown,
             goToAuthServer: oidc.goToAuthServer,
             isNewBrowserSession: oidc.isNewBrowserSession,
             backFromAuthServer: oidc.backFromAuthServer

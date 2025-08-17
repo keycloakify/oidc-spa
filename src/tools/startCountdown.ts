@@ -5,13 +5,13 @@ export function createStartCountdown(params: {
 }) {
     const { tickCallback } = params;
 
-    function startCountdown(params: { startCountdownAtSeconds: number }) {
-        const { startCountdownAtSeconds } = params;
+    function startCountdown(params: { countDownFromSeconds: number }) {
+        const { countDownFromSeconds } = params;
 
         let timer: ReturnType<typeof setTimeout>;
 
         (async () => {
-            let secondsLeft = Math.floor(startCountdownAtSeconds);
+            let secondsLeft = Math.floor(countDownFromSeconds);
 
             while (secondsLeft >= 0) {
                 tickCallback({ secondsLeft });
