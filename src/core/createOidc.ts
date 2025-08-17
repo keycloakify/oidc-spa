@@ -1311,10 +1311,15 @@ export async function createOidc_nonMemoized<
     (function scheduleRenew() {
         if (!currentTokens.hasRefreshToken && !canUseIframe) {
             log?.(
-                "Disabling token auto refresh mechanism because we have no way to do it without reloading the page"
+                [
+                    "Disabling token auto refresh mechanism because we",
+                    "have no way to renew the tokens without a full page reload"
+                ].join(" ")
             );
             return;
         }
+
+        const typeOfTheTokenWeGotTheTtlFrom = currentTokens.hasRefreshToken ? "refresh" : "access";
 
         const msBeforeExpiration =
             (currentTokens.refreshTokenExpirationTime ?? currentTokens.accessTokenExpirationTime) -
@@ -1327,23 +1332,46 @@ export async function createOidc_nonMemoized<
             // the refresh token has reached it's max SSO time.
             // ...or that the refresh token have a very short lifespan...
             // anyway, no need to keep alive, it will probably redirect on the next getTokens() or refreshTokens() call
+            log?.(
+                [
+                    "Disabling auto renew mechanism. We just got fresh tokens",
+                    (() => {
+                        switch (typeOfTheTokenWeGotTheTtlFrom) {
+                            case "refresh":
+                                return [
+                                    " and the refresh token is already about to expires.",
+                                    "This means that we have reached the max session lifespan, we can't keep",
+                                    "the session alive any longer.",
+                                    "(This can also mean that the refresh token was configured with a TTL,",
+                                    "aka the idle session lifespan, too low to make sense)"
+                                ].join(" ");
+                            case "access":
+                                return [
+                                    ", we have no refresh token and the access token is already about to expire",
+                                    "we would spam the auth server by constantly renewing the access token in the background",
+                                    "avoiding to do so."
+                                ].join(" ");
+                        }
+                    })()
+                ].join(" ")
+            );
             return;
         }
 
         log?.(
             [
                 toHumanReadableDuration(msBeforeExpiration),
-                `before expiration of the access token.`,
+                `before expiration of the ${typeOfTheTokenWeGotTheTtlFrom} token.`,
                 `Scheduling renewal ${toHumanReadableDuration(
                     RENEW_MS_BEFORE_EXPIRES
-                )} before expiration`
+                )} before expiration to keep the session alive on the OIDC server.`
             ].join(" ")
         );
 
         const timer = setTimeout(
             async () => {
                 log?.(
-                    `Renewing the access token now as it will expires in ${toHumanReadableDuration(
+                    `Renewing the ${typeOfTheTokenWeGotTheTtlFrom} token now as it will expires in ${toHumanReadableDuration(
                         RENEW_MS_BEFORE_EXPIRES
                     )}`
                 );
