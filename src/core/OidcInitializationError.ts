@@ -238,7 +238,10 @@ export async function createIframeTimeoutInitializationError(params: {
                     `7. Save the changes.\n\n`,
                     `For more information, refer to the documentation: https://docs.oidc-spa.dev/v/v7/providers-configuration/keycloak`
                 ];
-            })()
+            })(),
+            "\n\n",
+            "If nothing works, you can try disabling the use of iframe: https://docs.oidc-spa.dev/resources/iframe-related-issues\n",
+            "with some OIDC provider it might solve the issue."
         ].join(" ")
     });
 }
