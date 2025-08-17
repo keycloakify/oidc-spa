@@ -289,7 +289,7 @@ export function createLoginOrGoToAuthServer(params: {
                                 case "ensure no interaction":
                                     return "none";
                                 case "ensure interaction":
-                                    return "consent";
+                                    return "login";
                                 case "directly redirect if active session show login otherwise":
                                     return undefined;
                             }
