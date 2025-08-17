@@ -6,7 +6,7 @@ export function createStartCountdown(params: {
 }) {
     const { getCountdownEndTime, tickCallback } = params;
 
-    const getCountdownEndInMs = () => getCountdownEndTime() - Date.now();
+    const getCountdownEndInMs = () => Math.max(getCountdownEndTime() - Date.now(), 0);
 
     function startCountdown() {
         let timer: ReturnType<typeof setTimeout>;
@@ -14,7 +14,7 @@ export function createStartCountdown(params: {
         (async () => {
             let secondsLeft = Math.floor(getCountdownEndInMs() / 1000);
 
-            while (secondsLeft >= 0) {
+            do {
                 tickCallback({ secondsLeft });
 
                 await new Promise<void>(resolve => {
@@ -22,7 +22,7 @@ export function createStartCountdown(params: {
                 });
 
                 secondsLeft--;
-            }
+            } while (secondsLeft >= 0);
         })();
 
         const stopCountdown = () => {
