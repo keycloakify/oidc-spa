@@ -42,6 +42,7 @@ import {
 import { initialLocationHref } from "./initialLocationHref";
 import { createGetIsNewBrowserSession } from "./isNewBrowserSession";
 import { trustedFetch } from "./trustedFetch";
+import { getIsOnline } from "../tools/getIsOnline";
 
 handleOidcCallback();
 
@@ -632,6 +633,31 @@ export async function createOidc_nonMemoized<
                 break silent_login_if_possible_and_auto_login;
             }
 
+            {
+                const { isOnline, prOnline } = getIsOnline();
+
+                if (!isOnline) {
+                    if (autoLogin) {
+                        log?.(
+                            [
+                                "The browser is currently offline",
+                                "Since autoLogin is enabled we wait until it comes back online",
+                                "to continue with authentication"
+                            ].join(" ")
+                        );
+                        await prOnline;
+                    } else {
+                        log?.(
+                            [
+                                "The browser is not currently online so we proceed with initialization",
+                                "assuming the user isn't authenticated"
+                            ].join(" ")
+                        );
+                        break silent_login_if_possible_and_auto_login;
+                    }
+                }
+            }
+
             let authResponse_error: string | undefined = undefined;
             let oidcClientTsUser: OidcClientTsUser | undefined = undefined;
 
@@ -948,10 +974,17 @@ export async function createOidc_nonMemoized<
     assert(subjectId !== undefined, "The 'sub' claim is missing from the id token");
     assert(sessionId === undefined || typeof sessionId === "string");
 
+    let wouldHaveAutoLoggedOutIfBrowserWasOnline = false;
+
     const oidc_loggedIn = id<Oidc.LoggedIn<DecodedIdToken>>({
         ...oidc_common,
         isUserLoggedIn: true,
         getTokens: async () => {
+            if (wouldHaveAutoLoggedOutIfBrowserWasOnline) {
+                await oidc_loggedIn.logout(autoLogoutParams);
+                assert(false);
+            }
+
             renew_tokens: {
                 {
                     const msBeforeExpirationOfTheAccessToken =
@@ -1370,6 +1403,31 @@ export async function createOidc_nonMemoized<
 
         const timer = setTimeout(
             async () => {
+                {
+                    const { isOnline, prOnline } = getIsOnline();
+
+                    if (!isOnline) {
+                        const didCameBackOnlineInTime = await Promise.race([
+                            new Promise<false>(resolve =>
+                                setTimeout(() => resolve(false), RENEW_MS_BEFORE_EXPIRES - 1_000)
+                            ),
+                            prOnline.then(() => true)
+                        ]);
+
+                        if (!didCameBackOnlineInTime) {
+                            log?.(
+                                [
+                                    "The session expired on the OIDC server.",
+                                    "We couldn't keep it alive because the browser was offline.",
+                                    "We are not redirecting to the login page to support PWAs with offline features.",
+                                    "However, the next getTokens() call will trigger a redirect to the Auth server login page."
+                                ].join(" ")
+                            );
+                            return;
+                        }
+                    }
+                }
+
                 log?.(
                     `Renewing the ${typeOfTheTokenWeGotTheTtlFrom} token now as it will expires in ${toHumanReadableDuration(
                         RENEW_MS_BEFORE_EXPIRES
@@ -1419,13 +1477,53 @@ export async function createOidc_nonMemoized<
         }
 
         const { startCountdown } = createStartCountdown({
-            tickCallback: ({ secondsLeft }) => {
-                Array.from(autoLogoutCountdownTickCallbacks).forEach(tickCallback =>
-                    tickCallback({ secondsLeft })
-                );
+            tickCallback: async ({ secondsLeft }) => {
+                const invokeAllCallbacks = (params: { secondsLeft: number | undefined }) => {
+                    const { secondsLeft } = params;
+                    Array.from(autoLogoutCountdownTickCallbacks).forEach(tickCallback =>
+                        tickCallback({ secondsLeft })
+                    );
+                };
+
+                invokeAllCallbacks({ secondsLeft });
 
                 if (secondsLeft === 0) {
-                    oidc_loggedIn.logout(autoLogoutParams);
+                    cancel_if_offline: {
+                        const { isOnline, prOnline } = getIsOnline();
+
+                        if (isOnline) {
+                            break cancel_if_offline;
+                        }
+
+                        const didCameBackOnline = await Promise.race([
+                            new Promise<false>(resolve => setTimeout(() => resolve(false), 10_000)),
+                            prOnline.then(() => true)
+                        ]);
+
+                        if (didCameBackOnline) {
+                            break cancel_if_offline;
+                        }
+
+                        log?.(
+                            [
+                                "Normally now we should auto logout.",
+                                "However since the browser is currently offline",
+                                "we avoid calling logout() now to play nice in case",
+                                "this app is a PWA.",
+                                "Next getTokens() is called logout will be called"
+                            ].join(" ")
+                        );
+
+                        unsubscribeFromIsUserActive();
+
+                        invokeAllCallbacks({ secondsLeft: undefined });
+
+                        wouldHaveAutoLoggedOutIfBrowserWasOnline = true;
+
+                        return;
+                    }
+
+                    await oidc_loggedIn.logout(autoLogoutParams);
                 }
             }
         });
@@ -1437,7 +1535,7 @@ export async function createOidc_nonMemoized<
             sessionId
         });
 
-        evtIsUserActive.subscribe(isUserActive => {
+        const { unsubscribe: unsubscribeFromIsUserActive } = evtIsUserActive.subscribe(isUserActive => {
             if (isUserActive) {
                 if (stopCountdown !== undefined) {
                     stopCountdown();
