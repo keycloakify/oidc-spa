@@ -20,7 +20,7 @@ export type OidcReact<DecodedIdToken extends Record<string, unknown>> =
 
 export namespace OidcReact {
     export type Common = Oidc.Common & {
-        useLogoutWarningCountdown: (params: { warningDurationSeconds: number }) => {
+        useAutoLogoutWarningCountdown: (params: { warningDurationSeconds: number }) => {
             secondsLeft: number | undefined;
         };
     };
@@ -212,38 +212,37 @@ export function createOidcReactApi_dependencyInjection<
         );
     }
 
-    const useLogoutWarningCountdown: OidcReact.LoggedIn<DecodedIdToken>["useLogoutWarningCountdown"] = ({
-        warningDurationSeconds
-    }) => {
-        const contextValue = useContext(oidcContext);
+    const useAutoLogoutWarningCountdown: OidcReact.LoggedIn<DecodedIdToken>["useAutoLogoutWarningCountdown"] =
+        ({ warningDurationSeconds }) => {
+            const contextValue = useContext(oidcContext);
 
-        assert(contextValue !== undefined);
+            assert(contextValue !== undefined);
 
-        const { oidc } = contextValue;
+            const { oidc } = contextValue;
 
-        const [secondsLeft, setSecondsLeft] = useState<number | undefined>(undefined);
+            const [secondsLeft, setSecondsLeft] = useState<number | undefined>(undefined);
 
-        useEffect(() => {
-            if (!oidc.isUserLoggedIn) {
-                return;
-            }
+            useEffect(() => {
+                if (!oidc.isUserLoggedIn) {
+                    return;
+                }
 
-            const { unsubscribeFromAutoLogoutCountdown } = oidc.subscribeToAutoLogoutCountdown(
-                ({ secondsLeft }) =>
-                    setSecondsLeft(
-                        secondsLeft === undefined || secondsLeft > warningDurationSeconds
-                            ? undefined
-                            : secondsLeft
-                    )
-            );
+                const { unsubscribeFromAutoLogoutCountdown } = oidc.subscribeToAutoLogoutCountdown(
+                    ({ secondsLeft }) =>
+                        setSecondsLeft(
+                            secondsLeft === undefined || secondsLeft > warningDurationSeconds
+                                ? undefined
+                                : secondsLeft
+                        )
+                );
 
-            return () => {
-                unsubscribeFromAutoLogoutCountdown();
-            };
-        }, [warningDurationSeconds]);
+                return () => {
+                    unsubscribeFromAutoLogoutCountdown();
+                };
+            }, [warningDurationSeconds]);
 
-        return { secondsLeft };
-    };
+            return { secondsLeft };
+        };
 
     function useOidc(params?: {
         assert?: "user logged in" | "user not logged in";
@@ -304,7 +303,7 @@ export function createOidcReactApi_dependencyInjection<
 
         const common: OidcReact.Common = {
             params: oidc.params,
-            useLogoutWarningCountdown
+            useAutoLogoutWarningCountdown
         };
 
         if (!oidc.isUserLoggedIn) {

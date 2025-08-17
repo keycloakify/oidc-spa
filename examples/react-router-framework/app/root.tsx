@@ -1,6 +1,6 @@
 import { isRouteErrorResponse, Links, Meta, Outlet, Scripts, ScrollRestoration } from "react-router";
 import type { Route } from "./+types/root";
-import { AutoLogoutCountdown } from "./components/AutoLogoutCountdown";
+import { AutoLogoutWarningOverlay } from "./components/AutoLogoutWarningOverlay";
 import { Header } from "./components/Header";
 import "./app.css";
 
@@ -42,7 +42,7 @@ export default function App() {
             <main style={{ width: "100%", textAlign: "center", margin: "0 auto" }}>
                 <Outlet />
             </main>
-            <AutoLogoutCountdown />
+            <AutoLogoutWarningOverlay />
         </>
     );
 }

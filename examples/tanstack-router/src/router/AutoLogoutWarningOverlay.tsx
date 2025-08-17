@@ -1,8 +1,8 @@
 import { useOidc } from "../oidc";
 
-export function AutoLogoutCountdown() {
-    const { useLogoutWarningCountdown } = useOidc();
-    const { secondsLeft } = useLogoutWarningCountdown({ warningDurationSeconds: 45 });
+export function AutoLogoutWarningOverlay() {
+    const { useAutoLogoutWarningCountdown } = useOidc();
+    const { secondsLeft } = useAutoLogoutWarningCountdown({ warningDurationSeconds: 45 });
 
     if (secondsLeft === undefined) {
         return null;
