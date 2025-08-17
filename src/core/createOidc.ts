@@ -1367,10 +1367,19 @@ export async function createOidc_nonMemoized<
     })();
 
     auto_logout: {
-        if (
-            (!currentTokens.hasRefreshToken || currentTokens.refreshTokenExpirationTime === undefined) &&
-            idleSessionLifetimeInSeconds === undefined
-        ) {
+        const getCurrentRefreshTokenTtlInSeconds = () => {
+            if (idleSessionLifetimeInSeconds !== undefined) {
+                return idleSessionLifetimeInSeconds;
+            }
+
+            if (currentTokens.refreshTokenExpirationTime === undefined) {
+                return undefined;
+            }
+
+            return (currentTokens.refreshTokenExpirationTime - currentTokens.issuedAtTime) / 1000;
+        };
+
+        if (getCurrentRefreshTokenTtlInSeconds() === undefined) {
             log?.(
                 `${
                     currentTokens.hasRefreshToken
@@ -1382,31 +1391,6 @@ export async function createOidc_nonMemoized<
         }
 
         const { startCountdown } = createStartCountdown({
-            getCountdownEndTime: (() => {
-                const getCountdownEndTime = () =>
-                    idleSessionLifetimeInSeconds !== undefined
-                        ? Date.now() + idleSessionLifetimeInSeconds * 1000
-                        : (assert(currentTokens.hasRefreshToken, "230198"),
-                          assert(currentTokens.refreshTokenExpirationTime !== undefined, "435490"),
-                          currentTokens.refreshTokenExpirationTime);
-
-                const durationBeforeAutoLogout = toHumanReadableDuration(
-                    getCountdownEndTime() - Date.now()
-                );
-
-                log?.(
-                    [
-                        `The user will be automatically logged out after ${durationBeforeAutoLogout} of inactivity.`,
-                        idleSessionLifetimeInSeconds === undefined
-                            ? undefined
-                            : `It was artificially defined by using the idleSessionLifetimeInSeconds param.`
-                    ]
-                        .filter(x => x !== undefined)
-                        .join("\n")
-                );
-
-                return getCountdownEndTime;
-            })(),
             tickCallback: ({ secondsLeft }) => {
                 Array.from(autoLogoutCountdownTickCallbacks).forEach(tickCallback =>
                     tickCallback({ secondsLeft })
@@ -1433,9 +1417,35 @@ export async function createOidc_nonMemoized<
                 }
             } else {
                 assert(stopCountdown === undefined, "902992");
-                stopCountdown = startCountdown().stopCountdown;
+
+                const currentRefreshTokenTtlInSeconds = getCurrentRefreshTokenTtlInSeconds();
+
+                assert(currentRefreshTokenTtlInSeconds !== undefined, "902992326");
+
+                stopCountdown = startCountdown({
+                    startCountdownAtSeconds: currentRefreshTokenTtlInSeconds
+                }).stopCountdown;
             }
         });
+
+        {
+            const currentRefreshTokenTtlInSeconds = getCurrentRefreshTokenTtlInSeconds();
+
+            assert(currentRefreshTokenTtlInSeconds !== undefined, "9029923253");
+
+            log?.(
+                [
+                    `The user will be automatically logged out after ${toHumanReadableDuration(
+                        currentRefreshTokenTtlInSeconds * 1_000
+                    )} of inactivity.`,
+                    idleSessionLifetimeInSeconds === undefined
+                        ? undefined
+                        : `It was artificially defined by using the idleSessionLifetimeInSeconds param.`
+                ]
+                    .filter(x => x !== undefined)
+                    .join("\n")
+            );
+        }
     }
 
     return oidc_loggedIn;

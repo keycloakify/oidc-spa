@@ -2,17 +2,16 @@ import { setTimeout, clearTimeout } from "../tools/workerTimers";
 
 export function createStartCountdown(params: {
     tickCallback: (params: { secondsLeft: number | undefined }) => void;
-    getCountdownEndTime: () => number;
 }) {
-    const { getCountdownEndTime, tickCallback } = params;
+    const { tickCallback } = params;
 
-    const getCountdownEndInMs = () => getCountdownEndTime() - Date.now();
+    function startCountdown(params: { startCountdownAtSeconds: number }) {
+        const { startCountdownAtSeconds } = params;
 
-    function startCountdown() {
         let timer: ReturnType<typeof setTimeout>;
 
         (async () => {
-            let secondsLeft = Math.floor(getCountdownEndInMs() / 1000);
+            let secondsLeft = Math.floor(startCountdownAtSeconds);
 
             while (secondsLeft >= 0) {
                 tickCallback({ secondsLeft });
