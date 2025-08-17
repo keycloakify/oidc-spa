@@ -199,7 +199,7 @@ export async function createIframeTimeoutInitializationError(params: {
             messageOrCause: [
                 `${callbackUri} is currently served by your web server with the HTTP header \`${key_problem}: ${headers[key_problem]}\`.\n`,
                 "This header prevents the silent sign-in process from working.\n",
-                "Refer to this documentation page to fix this issue: https://docs.oidc-spa.dev/v/v6/resources/iframe-related-issues"
+                "Refer to this documentation page to fix this issue: https://docs.oidc-spa.dev/v/v7/resources/iframe-related-issues"
             ].join(" ")
         });
     }
@@ -236,7 +236,7 @@ export async function createIframeTimeoutInitializationError(params: {
                     `5. Locate the client "${clientId}" in the list and click on it.\n`,
                     `6. Find "Valid Redirect URIs" and add "${callbackUri}" to the list.\n`,
                     `7. Save the changes.\n\n`,
-                    `For more information, refer to the documentation: https://docs.oidc-spa.dev/v/v6/providers-configuration/keycloak`
+                    `For more information, refer to the documentation: https://docs.oidc-spa.dev/v/v7/providers-configuration/keycloak`
                 ];
             })()
         ].join(" ")
@@ -275,7 +275,7 @@ export function createFailedToFetchTokenEndpointInitializationError(params: {
                     `5. Find '${clientId}' in the list of clients and click on it.\n`,
                     `6. Find 'Web Origins' and add '${window.location.origin}' to the list.\n`,
                     `7. Save the changes.\n\n`,
-                    `More info: https://docs.oidc-spa.dev/v/v6/providers-configuration/keycloak`
+                    `More info: https://docs.oidc-spa.dev/v/v7/providers-configuration/keycloak`
                 ];
             })()
         ].join(" ")

@@ -133,7 +133,7 @@ export type ParamsOfCreateOidc<
     /**
      * Default: false
      *
-     * See: https://docs.oidc-spa.dev/v/v6/resources/iframe-related-issues
+     * See: https://docs.oidc-spa.dev/v/v7/resources/iframe-related-issues
      */
     noIframe?: boolean;
 
@@ -178,7 +178,7 @@ const globalContext = {
     evtRequestToPersistTokens: createEvt<{ configIdOfInstancePostingTheRequest: string }>()
 };
 
-/** @see: https://docs.oidc-spa.dev/v/v6/usage */
+/** @see: https://docs.oidc-spa.dev/v/v7/usage */
 export async function createOidc<
     DecodedIdToken extends Record<string, unknown> = Record<string, unknown>,
     AutoLogin extends boolean = false

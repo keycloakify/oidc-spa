@@ -140,7 +140,7 @@ export async function createMockOidc<
                     createObjectThatThrowsIfAccessed<DecodedIdToken>({
                         debugMessage: [
                             "You haven't provided a mocked decodedIdToken",
-                            "See https://docs.oidc-spa.dev/v/v6/mock"
+                            "See https://docs.oidc-spa.dev/v/v7/mock"
                         ].join("\n")
                     }),
                 decodedIdToken_original:
@@ -148,7 +148,7 @@ export async function createMockOidc<
                     createObjectThatThrowsIfAccessed<Oidc.Tokens.DecodedIdToken_base>({
                         debugMessage: [
                             "You haven't provided a mocked decodedIdToken_original",
-                            "See https://docs.oidc-spa.dev/v/v6/mock"
+                            "See https://docs.oidc-spa.dev/v/v7/mock"
                         ].join("\n")
                     }),
                 issuedAtTime: Date.now()
