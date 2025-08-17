@@ -1352,11 +1352,12 @@ export async function createOidc_nonMemoized<
             return;
         }
 
-        const typeOfTheTokenWeGotTheTtlFrom = currentTokens.hasRefreshToken ? "refresh" : "access";
-
         const msBeforeExpiration =
             (currentTokens.refreshTokenExpirationTime ?? currentTokens.accessTokenExpirationTime) -
             Date.now();
+
+        const typeOfTheTokenWeGotTheTtlFrom =
+            currentTokens.refreshTokenExpirationTime !== undefined ? "refresh" : "access";
 
         const RENEW_MS_BEFORE_EXPIRES = 30_000;
 
@@ -1380,7 +1381,10 @@ export async function createOidc_nonMemoized<
                                 ].join(" ");
                             case "access":
                                 return [
-                                    ", we have no refresh token and the access token is already about to expire",
+                                    currentTokens.hasRefreshToken
+                                        ? ", we can't read the expiration time of the refresh token"
+                                        : ", we don't have a refresh token",
+                                    ` and the access token is already about to expire`,
                                     "we would spam the auth server by constantly renewing the access token in the background",
                                     "avoiding to do so."
                                 ].join(" ");
@@ -1429,7 +1433,7 @@ export async function createOidc_nonMemoized<
                 }
 
                 log?.(
-                    `Renewing the ${typeOfTheTokenWeGotTheTtlFrom} token now as it will expires in ${toHumanReadableDuration(
+                    `Renewing the tokens now as the ${typeOfTheTokenWeGotTheTtlFrom} token will expire in ${toHumanReadableDuration(
                         RENEW_MS_BEFORE_EXPIRES
                     )}`
                 );
