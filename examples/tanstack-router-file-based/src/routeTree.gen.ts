@@ -8,15 +8,12 @@
 // You should NOT make any changes in this file as it will be overwritten.
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
-import { createFileRoute } from '@tanstack/react-router'
-
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as Protected2RouteImport } from './routes/protected2'
 import { Route as ProtectedRouteImport } from './routes/protected'
 import { Route as IndexRouteImport } from './routes/index'
 
-const Protected2LazyRouteImport = createFileRoute('/protected2')()
-
-const Protected2LazyRoute = Protected2LazyRouteImport.update({
+const Protected2Route = Protected2RouteImport.update({
   id: '/protected2',
   path: '/protected2',
   getParentRoute: () => rootRouteImport,
@@ -35,18 +32,18 @@ const IndexRoute = IndexRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/protected': typeof ProtectedRoute
-  '/protected2': typeof Protected2LazyRoute
+  '/protected2': typeof Protected2Route
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/protected': typeof ProtectedRoute
-  '/protected2': typeof Protected2LazyRoute
+  '/protected2': typeof Protected2Route
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/protected': typeof ProtectedRoute
-  '/protected2': typeof Protected2LazyRoute
+  '/protected2': typeof Protected2Route
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -59,7 +56,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ProtectedRoute: typeof ProtectedRoute
-  Protected2LazyRoute: typeof Protected2LazyRoute
+  Protected2Route: typeof Protected2Route
 }
 
 declare module '@tanstack/react-router' {
@@ -68,7 +65,7 @@ declare module '@tanstack/react-router' {
       id: '/protected2'
       path: '/protected2'
       fullPath: '/protected2'
-      preLoaderRoute: typeof Protected2LazyRouteImport
+      preLoaderRoute: typeof Protected2RouteImport
       parentRoute: typeof rootRouteImport
     }
     '/protected': {
@@ -91,7 +88,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ProtectedRoute: ProtectedRoute,
-  Protected2LazyRoute: Protected2LazyRoute,
+  Protected2Route: Protected2Route,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
