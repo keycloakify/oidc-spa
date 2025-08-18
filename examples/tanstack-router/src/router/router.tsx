@@ -15,6 +15,7 @@ const protectedRoute = createRoute({
     path: "protected",
     beforeLoad: async params => {
         await enforceLogin(params);
+        // If we are here you can assert user logged in.
     },
     component: lazy(() => import("../pages/ProtectedPage"))
 });

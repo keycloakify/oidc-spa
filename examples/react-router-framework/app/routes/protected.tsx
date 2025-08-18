@@ -14,7 +14,6 @@ export async function clientLoader(params: Route.ClientLoaderArgs) {
 export default function Protected() {
     // Here we can safely assume that the user is logged in.
     const {
-        tokens,
         decodedIdToken,
         goToAuthServer,
         backFromAuthServer,
