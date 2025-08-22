@@ -19,11 +19,10 @@ export const links: Route.LinksFunction = () => [
 ];
 
 /**
- * This component is server rendered at build time.
- * This means that any component directly mounted here
- * that uses `useOidc()` should be wrapped in a `<NoSsr />`
- * boundary.
- * See the <Header /> component for reference.
+ * This component is server-rendered at build time.
+ * Any component directly rendered here that calls `useOidc()`
+ * must be wrapped in a `<ClientOnly />` boundary to prevent errors.
+ * See the <Header /> component for an example.
  */
 export function Layout({ children }: { children: React.ReactNode }) {
     return (
@@ -45,10 +44,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
 }
 
 /**
- * <App /> is NOT server rendered at build time.
- * You can call `useOidc()` without <NoSsr /> boundaries in all the sub tree.
- * It will take the place of `{children}` in the <Layout />
- * component above.
+ * <App /> is client-rendered (not rendered by node at compile time).
+ * It replaces the `{children}` placeholder in <Layout />.
+ * Inside this subtree, you can call `useOidc()` freely without wrapping in <ClientOnly />.
  */
 export default function App() {
     return (
@@ -66,8 +64,7 @@ export default function App() {
 }
 
 /**
- * This component will be mounted in place of <App /> in the {children}
- * placeholder of the <Layout /> component while oidc-spa is initializing.
+ * Shown in place of <App /> within <Layout /> while oidc-spa is initializing.
  */
 export function HydrateFallback() {
     return (

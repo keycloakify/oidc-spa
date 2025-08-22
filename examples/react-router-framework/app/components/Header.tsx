@@ -1,7 +1,7 @@
 import { NavLink } from "react-router";
 import { useOidc } from "../oidc.client";
 import { parseKeycloakIssuerUri } from "oidc-spa/tools/parseKeycloakIssuerUri";
-import { NoSsr } from "oidc-spa/react/tools/NoSsr";
+import { ClientOnly } from "oidc-spa/react/tools/ClientOnly";
 
 export function Header() {
     return (
@@ -35,27 +35,25 @@ export function Header() {
                 </NavLink>
             </div>
 
-            {/* 
-            Note that this component is mounted in the <Layout />
-            component in root.tsx, this means that it will be
-            server rendered at build time. As a consequence we must make 
-            sure to wrap within <NoSsr /> boundaries any component that
-            call the useOidc() hook.
+            {/*
+            This header is rendered inside <Layout /> (server-rendered at build time).
+            Any component here that calls `useOidc()` must be wrapped in <NoSsr />
+            to ensure it only runs on the client after hydration.
             */}
-            <NoSsr fallback={<span>Loading...</span>}>
-                <AuthButton />
-            </NoSsr>
+            <ClientOnly fallback={<span>Loading...</span>}>
+                <AuthButtons />
+            </ClientOnly>
         </div>
     );
 }
 
-function AuthButton() {
+function AuthButtons() {
     const { isUserLoggedIn } = useOidc();
 
-    return isUserLoggedIn ? <LoggedInAuthButton /> : <NotLoggedInAuthButton />;
+    return isUserLoggedIn ? <LoggedInAuthButtons /> : <NotLoggedInAuthButtons />;
 }
 
-function LoggedInAuthButton() {
+function LoggedInAuthButtons() {
     const { decodedIdToken, logout } = useOidc({ assert: "user logged in" });
 
     return (
@@ -67,7 +65,7 @@ function LoggedInAuthButton() {
     );
 }
 
-function NotLoggedInAuthButton() {
+function NotLoggedInAuthButtons() {
     let { login, params } = useOidc({ assert: "user not logged in" });
 
     const isKeycloak = parseKeycloakIssuerUri(params.issuerUri) !== undefined;
