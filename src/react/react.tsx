@@ -166,6 +166,12 @@ export function createOidcReactApi_dependencyInjection<
         return oidc;
     })();
 
+    let prOidcOrInitializationError_resolvedValue:
+        | Oidc<DecodedIdToken>
+        | OidcInitializationError
+        | undefined = undefined;
+    prOidcOrInitializationError.then(value => (prOidcOrInitializationError_resolvedValue = value));
+
     function OidcProvider(props: {
         fallback?: ReactNode;
         ErrorFallback?: (props: { initializationError: OidcInitializationError }) => ReactNode;
@@ -175,9 +181,13 @@ export function createOidcReactApi_dependencyInjection<
 
         const [oidcOrInitializationError, setOidcOrInitializationError] = useState<
             Oidc<DecodedIdToken> | OidcInitializationError | undefined
-        >(undefined);
+        >(prOidcOrInitializationError_resolvedValue);
 
         useEffect(() => {
+            if (oidcOrInitializationError !== undefined) {
+                return;
+            }
+
             dReadyToCreate.resolve();
             prOidcOrInitializationError.then(setOidcOrInitializationError);
         }, []);
