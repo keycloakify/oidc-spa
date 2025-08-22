@@ -20,19 +20,21 @@ export function Header() {
             <div>
                 <span>oidc-spa + react-router 7 framework mode</span>
                 &nbsp; &nbsp; &nbsp; &nbsp;
-                <NavLink to="/">
-                    {({ isActive }) => (
-                        <span style={{ fontWeight: isActive ? "bold" : "normal" }}>Home</span>
-                    )}
-                </NavLink>
-                &nbsp; &nbsp; &nbsp;
-                <NavLink to="/protected">
-                    {({ isActive }) => (
-                        <span style={{ fontWeight: isActive ? "bold" : "normal" }}>
-                            My protected page
-                        </span>
-                    )}
-                </NavLink>
+                <ClientOnly fallback={<span>Loading...</span>}>
+                    <NavLink to="/">
+                        {({ isActive }) => (
+                            <span style={{ fontWeight: isActive ? "bold" : "normal" }}>Home</span>
+                        )}
+                    </NavLink>
+                    &nbsp; &nbsp; &nbsp;
+                    <NavLink to="/protected">
+                        {({ isActive }) => (
+                            <span style={{ fontWeight: isActive ? "bold" : "normal" }}>
+                                My protected page
+                            </span>
+                        )}
+                    </NavLink>
+                </ClientOnly>
             </div>
 
             {/*
