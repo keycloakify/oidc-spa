@@ -8,10 +8,10 @@ export function OidcInitializationErrorIfAny() {
     }
 
     return (
-        <div style={{ color: "red" }}>
+        <pre style={{ color: "red", textAlign: "left", paddingLeft: 20 }}>
             {initializationError.isAuthServerLikelyDown
                 ? "Sorry our Auth server is down"
                 : `Initialization error: ${initializationError.message}`}
-        </div>
+        </pre>
     );
 }
