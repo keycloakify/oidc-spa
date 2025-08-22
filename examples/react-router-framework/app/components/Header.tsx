@@ -1,10 +1,9 @@
 import { NavLink } from "react-router";
 import { useOidc } from "../oidc.client";
 import { parseKeycloakIssuerUri } from "oidc-spa/tools/parseKeycloakIssuerUri";
+import { NoSsr } from "oidc-spa/react/tools/NoSsr";
 
 export function Header() {
-    const { isUserLoggedIn, initializationError } = useOidc();
-
     return (
         <div
             style={{
@@ -14,22 +13,13 @@ export function Header() {
                 position: "absolute",
                 top: 0,
                 left: 0,
-                width: "100%"
+                width: "100%",
+                height: 50
             }}
         >
-            <span>oidc-spa + react-router 7 framework mode</span>
-            {/* You do not have to display an error here, it's just to show that if you want you can
-                But it's best to enable the user to navigate unauthenticated and to display an error
-                only if he attempt to login (by default it display an alert) */}
-            {initializationError !== undefined && (
-                <div style={{ color: "red" }}>
-                    {initializationError.isAuthServerLikelyDown
-                        ? "Sorry our Auth server is down"
-                        : `Initialization error: ${initializationError.message}`}
-                </div>
-            )}
-
             <div>
+                <span>oidc-spa + react-router 7 framework mode</span>
+                &nbsp; &nbsp; &nbsp; &nbsp;
                 <NavLink to="/">
                     {({ isActive }) => (
                         <span style={{ fontWeight: isActive ? "bold" : "normal" }}>Home</span>
@@ -45,9 +35,24 @@ export function Header() {
                 </NavLink>
             </div>
 
-            {isUserLoggedIn ? <LoggedInAuthButton /> : <NotLoggedInAuthButton />}
+            {/* 
+            Note that this component is mounted in the <Layout />
+            component in root.tsx, this means that it will be
+            server rendered at build time. As a consequence we must make 
+            sure to wrap within <NoSsr /> boundaries any component that
+            call the useOidc() hook.
+            */}
+            <NoSsr fallback={<span>Loading...</span>}>
+                <AuthButton />
+            </NoSsr>
         </div>
     );
+}
+
+function AuthButton() {
+    const { isUserLoggedIn } = useOidc();
+
+    return isUserLoggedIn ? <LoggedInAuthButton /> : <NotLoggedInAuthButton />;
 }
 
 function LoggedInAuthButton() {
@@ -63,7 +68,7 @@ function LoggedInAuthButton() {
 }
 
 function NotLoggedInAuthButton() {
-    const { login, params } = useOidc({ assert: "user not logged in" });
+    let { login, params } = useOidc({ assert: "user not logged in" });
 
     const isKeycloak = parseKeycloakIssuerUri(params.issuerUri) !== undefined;
 

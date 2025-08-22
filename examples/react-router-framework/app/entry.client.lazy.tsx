@@ -3,7 +3,7 @@ import ReactDOM from "react-dom/client";
 import { HydratedRouter } from "react-router/dom";
 import { getOidc, OidcProvider } from "./oidc.client";
 
-getOidc().then(() => {
+getOidc().finally(() =>
     ReactDOM.hydrateRoot(
         document,
         <React.StrictMode>
@@ -15,5 +15,5 @@ getOidc().then(() => {
                 <HydratedRouter />
             </OidcProvider>
         </React.StrictMode>
-    );
-});
+    )
+);

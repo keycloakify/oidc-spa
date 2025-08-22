@@ -2,6 +2,7 @@ import { isRouteErrorResponse, Links, Meta, Outlet, Scripts, ScrollRestoration }
 import type { Route } from "./+types/root";
 import { AutoLogoutWarningOverlay } from "./components/AutoLogoutWarningOverlay";
 import { Header } from "./components/Header";
+import { OidcInitializationErrorIfAny } from "./components/OidcInitializationErrorIfAny";
 import "./app.css";
 
 export const links: Route.LinksFunction = () => [
@@ -17,6 +18,13 @@ export const links: Route.LinksFunction = () => [
     }
 ];
 
+/**
+ * This component is server rendered at build time.
+ * This means that any component directly mounted here
+ * that uses `useOidc()` should be wrapped in a `<NoSsr />`
+ * boundary.
+ * See the <Header /> component for reference.
+ */
 export function Layout({ children }: { children: React.ReactNode }) {
     return (
         <html lang="en">
@@ -27,6 +35,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 <Links />
             </head>
             <body>
+                <Header />
                 {children}
                 <ScrollRestoration />
                 <Scripts />
@@ -35,11 +44,20 @@ export function Layout({ children }: { children: React.ReactNode }) {
     );
 }
 
+/**
+ * <App /> is NOT server rendered at build time.
+ * You can call `useOidc()` without <NoSsr /> boundaries in all the sub tree.
+ * It will take the place of `{children}` in the <Layout />
+ * component above.
+ */
 export default function App() {
     return (
         <>
-            <Header />
             <main style={{ width: "100%", textAlign: "center", margin: "0 auto" }}>
+                {/*You do not have to display an error here, it's just to 
+                show that if you want you can implement custom OIDC initialization 
+                error handling.*/}
+                <OidcInitializationErrorIfAny />
                 <Outlet />
             </main>
             <AutoLogoutWarningOverlay />
@@ -47,6 +65,10 @@ export default function App() {
     );
 }
 
+/**
+ * This component will be mounted in place of <App /> in the {children}
+ * placeholder of the <Layout /> component while oidc-spa is initializing.
+ */
 export function HydrateFallback() {
     return (
         <div style={{ display: "flex", width: "100%", justifyContent: "center", alignItems: "center" }}>
