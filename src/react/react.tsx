@@ -400,20 +400,19 @@ export function createOidcReactApi_dependencyInjection<
         }
     }
 
-    const prOidc = prOidcOrInitializationError.then(oidcOrInitializationError => {
+    async function getOidc(): Promise<Oidc<DecodedIdToken>> {
+        dReadyToCreate.resolve();
+
+        const oidcOrInitializationError = await prOidcOrInitializationError;
+
         if (oidcOrInitializationError instanceof OidcInitializationError) {
-            return new Promise<never>(() => {});
+            const error = oidcOrInitializationError;
+            throw error;
         }
 
         const oidc = oidcOrInitializationError;
 
         return oidc;
-    });
-
-    function getOidc(): Promise<Oidc<DecodedIdToken>> {
-        dReadyToCreate.resolve();
-
-        return prOidc;
     }
 
     const oidcReact: OidcReactApi<DecodedIdToken, false> = {
