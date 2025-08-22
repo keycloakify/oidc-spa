@@ -13,6 +13,7 @@ import { assert, type Equals, type Param0 } from "../vendor/frontend/tsafe";
 import { id } from "../vendor/frontend/tsafe";
 import type { ValueOrAsyncGetter } from "../tools/ValueOrAsyncGetter";
 import { Deferred } from "../tools/Deferred";
+import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";
 
 export type OidcReact<DecodedIdToken extends Record<string, unknown>> =
     | OidcReact.NotLoggedIn
@@ -107,6 +108,9 @@ type OidcReactApi<DecodedIdToken extends Record<string, unknown>, AutoLogin exte
           enforceLogin: (loaderParams: {
               request?: { url?: string };
               cause?: "preload" | string;
+              location?: {
+                  href?: string;
+              };
           }) => Promise<void | never>;
       });
 
@@ -380,9 +384,27 @@ export function createOidcReactApi_dependencyInjection<
     async function enforceLogin(loaderParams: {
         request?: { url?: string };
         cause?: "preload" | string;
+        location?: { href?: string };
     }): Promise<void | never> {
         const { cause } = loaderParams;
-        const redirectUrl = loaderParams.request?.url ?? location.href;
+
+        const redirectUrl = (() => {
+            if (loaderParams.request?.url !== undefined) {
+                return toFullyQualifiedUrl({
+                    urlish: loaderParams.request.url,
+                    doAssertNoQueryParams: false
+                });
+            }
+
+            if (loaderParams.location?.href !== undefined) {
+                return toFullyQualifiedUrl({
+                    urlish: loaderParams.location.href,
+                    doAssertNoQueryParams: false
+                });
+            }
+
+            return location.href;
+        })();
 
         const oidc = await getOidc();
 
@@ -392,10 +414,12 @@ export function createOidcReactApi_dependencyInjection<
                     "oidc-spa: User is not yet logged in. This is an expected error, nothing to be addressed."
                 );
             }
+            const doesCurrentHrefRequiresAuth =
+                location.href.replace(/\/$/, "") === redirectUrl.replace(/\/$/, "");
 
             await oidc.login({
                 redirectUrl,
-                doesCurrentHrefRequiresAuth: location.href === redirectUrl
+                doesCurrentHrefRequiresAuth
             });
         }
     }
