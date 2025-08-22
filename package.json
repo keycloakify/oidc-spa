@@ -25,7 +25,6 @@
         ".": "./dist/index.js",
         "./mock": "./dist/mock/index.js",
         "./react": "./dist/react/index.js",
-        "./react/tools/ClientOnly": "./dist/react/tools/ClientOnly.js",
         "./mock/react": "./dist/mock/react.js",
         "./entrypoint": "./dist/entrypoint.js",
         "./backend": "./dist/backend.js",

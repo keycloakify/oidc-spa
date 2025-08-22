@@ -18,12 +18,6 @@ export const links: Route.LinksFunction = () => [
     }
 ];
 
-/**
- * This component is server-rendered at build time.
- * Any component directly rendered here that calls `useOidc()`
- * must be wrapped in a `<ClientOnly />` boundary to prevent errors.
- * See the <Header /> component for an example.
- */
 export function Layout({ children }: { children: React.ReactNode }) {
     return (
         <html lang="en">
@@ -34,7 +28,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 <Links />
             </head>
             <body>
-                <Header />
                 {children}
                 <ScrollRestoration />
                 <Scripts />
@@ -44,13 +37,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
 }
 
 /**
- * <App /> is client-rendered (not rendered by node at compile time).
- * It replaces the `{children}` placeholder in <Layout />.
- * Inside this subtree, you can call `useOidc()` freely without wrapping in <ClientOnly />.
+ * `<App />` is injected as `{children}` in `<Layout />` `once oidc is initialized.
  */
 export default function App() {
     return (
         <>
+            <Header />
             <main style={{ width: "100%", textAlign: "center", margin: "0 auto" }}>
                 {/*You do not have to display an error here, it's just to 
                 show that if you want you can implement custom OIDC initialization 
@@ -64,7 +56,7 @@ export default function App() {
 }
 
 /**
- * Shown in place of <App /> within <Layout /> while oidc-spa is initializing.
+ * `<HydrateFallback />` is injected as `{children}` in `<Layout />` while oidc is initializing.
  */
 export function HydrateFallback() {
     return (

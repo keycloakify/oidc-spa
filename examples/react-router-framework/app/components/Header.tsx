@@ -1,9 +1,10 @@
 import { NavLink } from "react-router";
 import { useOidc } from "../oidc.client";
 import { parseKeycloakIssuerUri } from "oidc-spa/tools/parseKeycloakIssuerUri";
-import { ClientOnly } from "oidc-spa/react/tools/ClientOnly";
 
 export function Header() {
+    const { isUserLoggedIn } = useOidc();
+
     return (
         <div
             style={{
@@ -20,39 +21,24 @@ export function Header() {
             <div>
                 <span>oidc-spa + react-router 7 framework mode</span>
                 &nbsp; &nbsp; &nbsp; &nbsp;
-                <ClientOnly fallback={<span>Loading...</span>}>
-                    <NavLink to="/">
-                        {({ isActive }) => (
-                            <span style={{ fontWeight: isActive ? "bold" : "normal" }}>Home</span>
-                        )}
-                    </NavLink>
-                    &nbsp; &nbsp; &nbsp;
-                    <NavLink to="/protected">
-                        {({ isActive }) => (
-                            <span style={{ fontWeight: isActive ? "bold" : "normal" }}>
-                                My protected page
-                            </span>
-                        )}
-                    </NavLink>
-                </ClientOnly>
+                <NavLink to="/">
+                    {({ isActive }) => (
+                        <span style={{ fontWeight: isActive ? "bold" : "normal" }}>Home</span>
+                    )}
+                </NavLink>
+                &nbsp; &nbsp; &nbsp;
+                <NavLink to="/protected">
+                    {({ isActive }) => (
+                        <span style={{ fontWeight: isActive ? "bold" : "normal" }}>
+                            My protected page
+                        </span>
+                    )}
+                </NavLink>
             </div>
 
-            {/*
-            This header is rendered inside <Layout /> (server-rendered at build time).
-            Any component here that calls `useOidc()` must be wrapped in <NoSsr />
-            to ensure it only runs on the client after hydration.
-            */}
-            <ClientOnly fallback={<span>Loading...</span>}>
-                <AuthButtons />
-            </ClientOnly>
+            {isUserLoggedIn ? <LoggedInAuthButtons /> : <NotLoggedInAuthButtons />}
         </div>
     );
-}
-
-function AuthButtons() {
-    const { isUserLoggedIn } = useOidc();
-
-    return isUserLoggedIn ? <LoggedInAuthButtons /> : <NotLoggedInAuthButtons />;
 }
 
 function LoggedInAuthButtons() {
