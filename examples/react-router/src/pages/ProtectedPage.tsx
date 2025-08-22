@@ -2,7 +2,6 @@ import { useOidc, getOidc } from "../oidc";
 import { useEffect, useState } from "react";
 import { decodeJwt } from "oidc-spa/tools/decodeJwt";
 import { parseKeycloakIssuerUri } from "oidc-spa/tools/parseKeycloakIssuerUri";
-import { assert } from "tsafe/assert";
 
 export default function ProtectedPage() {
     // Here we can safely assume that the user is logged in.
@@ -124,7 +123,9 @@ function useDecodedAccessToken_DIAGNOSTIC_ONLY() {
                 return;
             }
 
-            assert(oidc.isUserLoggedIn);
+            if (!oidc.isUserLoggedIn) {
+                throw new Error("Assertion error");
+            }
 
             const update = (accessToken: string) => {
                 let decodedAccessToken: Record<string, unknown> | null;

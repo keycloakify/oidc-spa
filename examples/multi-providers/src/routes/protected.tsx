@@ -2,7 +2,6 @@ import { useOidc_assertUserLoggedIn, beforeLoad_protectedRoute, getOidc } from "
 import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { decodeJwt } from "oidc-spa/tools/decodeJwt";
-import { assert } from "tsafe/assert";
 
 export const Route = createFileRoute("/protected")({
     component: ProtectedPage,
@@ -71,7 +70,9 @@ function useDecodedAccessToken_DIAGNOSTIC_ONLY() {
                 return;
             }
 
-            assert(oidc.isUserLoggedIn);
+            if (!oidc.isUserLoggedIn) {
+                throw new Error("Assertion error");
+            }
 
             const update = (accessToken: string) => {
                 let decodedAccessToken: Record<string, unknown> | null;

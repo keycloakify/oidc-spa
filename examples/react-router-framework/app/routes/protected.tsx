@@ -3,7 +3,6 @@ import { useEffect, useState } from "react";
 import { decodeJwt } from "oidc-spa/tools/decodeJwt";
 import { parseKeycloakIssuerUri } from "oidc-spa/tools/parseKeycloakIssuerUri";
 import type { Route } from "./+types/protected";
-import { assert } from "tsafe/assert";
 
 export async function clientLoader(params: Route.ClientLoaderArgs) {
     await enforceLogin(params);
@@ -131,7 +130,9 @@ function useDecodedAccessToken_DIAGNOSTIC_ONLY() {
                 return;
             }
 
-            assert(oidc.isUserLoggedIn);
+            if (!oidc.isUserLoggedIn) {
+                throw new Error("Assertion error");
+            }
 
             const update = (accessToken: string) => {
                 let decodedAccessToken: Record<string, unknown> | null;
