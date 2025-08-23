@@ -6,5 +6,14 @@ import tsconfigPaths from "vite-tsconfig-paths";
 import commonjs from "vite-plugin-commonjs";
 
 export default defineConfig({
-    plugins: [reactRouter(), tsconfigPaths(), process.env["IS_LINKED"] === "true" && commonjs()]
+    plugins: [reactRouter(), tsconfigPaths(), process.env["IS_LINKED"] === "true" && commonjs()],
+    optimizeDeps: {
+        include: [
+            "oidc-spa/react",
+            "oidc-spa/entrypoint",
+            "oidc-spa/tools/parseKeycloakIssuerUri",
+            "oidc-spa/tools/decodeJwt",
+            "zod"
+        ]
+    }
 });
