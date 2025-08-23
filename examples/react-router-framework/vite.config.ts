@@ -13,7 +13,8 @@ export default defineConfig({
             "oidc-spa/entrypoint",
             "oidc-spa/tools/parseKeycloakIssuerUri",
             "oidc-spa/tools/decodeJwt",
-            "zod"
+            "zod",
+            "foo"
         ]
     }
 });

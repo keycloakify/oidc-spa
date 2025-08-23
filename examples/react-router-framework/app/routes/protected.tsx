@@ -6,8 +6,6 @@ import type { Route } from "./+types/protected";
 
 export async function clientLoader(params: Route.ClientLoaderArgs) {
     await enforceLogin(params);
-
-    return null;
 }
 
 export default function Protected() {
