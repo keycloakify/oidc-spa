@@ -1,7 +1,7 @@
 import type { UserManager as OidcClientTsUserManager } from "../vendor/frontend/oidc-client-ts-and-jwt-decode";
 import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";
 import { assert, type Equals, noUndefined } from "../vendor/frontend/tsafe";
-import { StateData } from "./StateData";
+import type { StateData } from "./StateData";
 import type { NonPostableEvt } from "../tools/Evt";
 import { createStatefulEvt } from "../tools/StatefulEvt";
 import { Deferred } from "../tools/Deferred";
