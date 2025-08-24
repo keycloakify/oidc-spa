@@ -159,11 +159,27 @@ function handleOidcCallback_nonMemoized(): { isHandled: boolean } {
     return { isHandled };
 }
 
-const { readRedirectAuthResponses, writeRedirectAuthResponses } = (() => {
+const {
+    readRedirectAuthResponses,
+    writeRedirectAuthResponses,
+    moveRedirectAuthResponseFromSessionStorageToMemory
+} = (() => {
     const AUTH_RESPONSES_KEY = "oidc-spa:authResponses";
 
+    let authResponses_movedToMemoryFromSessionStorage: AuthResponse[] | undefined = undefined;
+
+    // NOTE: Here we note that we can re-write on session storage some auth response
+    // after earlyInit in retrieveRedirectAuthResponseAndStateData
+    // In situation where there are more than one client in the same app and we can't use iframe,
+    // we can have one client that has to redirect before the response has been dealt with.
+    // In most case it won't happen if the init sequence is deterministic but the client
+    // can be instantiated at any time really.
+    // So the move to memory of the response is fully effective only when theres one client.
     function writeRedirectAuthResponses(params: { authResponses: AuthResponse[] }): void {
         const { authResponses } = params;
+
+        authResponses_movedToMemoryFromSessionStorage = undefined;
+
         if (authResponses.length === 0) {
             sessionStorage.removeItem(AUTH_RESPONSES_KEY);
             return;
@@ -172,6 +188,10 @@ const { readRedirectAuthResponses, writeRedirectAuthResponses } = (() => {
     }
 
     function readRedirectAuthResponses(): AuthResponse[] {
+        if (authResponses_movedToMemoryFromSessionStorage !== undefined) {
+            return authResponses_movedToMemoryFromSessionStorage;
+        }
+
         const raw = sessionStorage.getItem(AUTH_RESPONSES_KEY);
 
         if (raw === null) {
@@ -181,8 +201,22 @@ const { readRedirectAuthResponses, writeRedirectAuthResponses } = (() => {
         return JSON.parse(raw);
     }
 
-    return { writeRedirectAuthResponses, readRedirectAuthResponses };
+    function moveRedirectAuthResponseFromSessionStorageToMemory() {
+        const authResponses = readRedirectAuthResponses();
+
+        writeRedirectAuthResponses({ authResponses: [] });
+
+        authResponses_movedToMemoryFromSessionStorage = authResponses;
+    }
+
+    return {
+        writeRedirectAuthResponses,
+        readRedirectAuthResponses,
+        moveRedirectAuthResponseFromSessionStorageToMemory
+    };
 })();
+
+export { moveRedirectAuthResponseFromSessionStorageToMemory };
 
 export function retrieveRedirectAuthResponseAndStateData(params: {
     configId: string;
@@ -215,9 +249,7 @@ export function retrieveRedirectAuthResponseAndStateData(params: {
         authResponseAndStateData = { authResponse, stateData };
     }
 
-    if (authResponseAndStateData !== undefined) {
-        writeRedirectAuthResponses({ authResponses });
-    }
+    writeRedirectAuthResponses({ authResponses });
 
     return authResponseAndStateData;
 }

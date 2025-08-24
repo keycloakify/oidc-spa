@@ -1,4 +1,7 @@
-import { handleOidcCallback } from "./core/handleOidcCallback";
+import {
+    handleOidcCallback,
+    moveRedirectAuthResponseFromSessionStorageToMemory
+} from "./core/handleOidcCallback";
 
 export function oidcEarlyInit(params: { freezeFetch: boolean; freezeXMLHttpRequest: boolean }) {
     const { freezeFetch, freezeXMLHttpRequest } = params ?? {};
@@ -8,6 +11,8 @@ export function oidcEarlyInit(params: { freezeFetch: boolean; freezeXMLHttpReque
     const shouldLoadApp = !isHandled;
 
     if (shouldLoadApp) {
+        moveRedirectAuthResponseFromSessionStorageToMemory();
+
         if (freezeXMLHttpRequest) {
             const XMLHttpRequest_trusted = globalThis.XMLHttpRequest;
 
