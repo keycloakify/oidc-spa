@@ -3,6 +3,8 @@ type AsymmetricKeys = {
     privateKey: string; // base64-encoded JSON export of CryptoKey
 };
 
+const INFO_LABEL = "oidc-spa/tools/asymmetricEncryption";
+
 export async function generateKeys(): Promise<AsymmetricKeys> {
     const keyPair = await crypto.subtle.generateKey(
         {
@@ -10,7 +12,7 @@ export async function generateKeys(): Promise<AsymmetricKeys> {
             namedCurve: "P-256"
         },
         true,
-        ["deriveKey"]
+        ["deriveKey", "deriveBits"]
     );
 
     const publicKeyRaw = await crypto.subtle.exportKey("jwk", keyPair.publicKey);
@@ -45,19 +47,32 @@ export async function asymmetricEncrypt(params: {
             namedCurve: "P-256"
         },
         true,
-        ["deriveKey"]
+        ["deriveKey", "deriveBits"]
     );
 
-    const derivedKey = await crypto.subtle.deriveKey(
+    const sharedSecret = await crypto.subtle.deriveBits(
         {
             name: "ECDH",
             public: importedPublicKey
         },
         ephemeralKeyPair.privateKey,
+        256
+    );
+
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    const infoBytes = new TextEncoder().encode(INFO_LABEL);
+
+    const hkdfKey = await crypto.subtle.importKey("raw", sharedSecret, "HKDF", false, ["deriveKey"]);
+
+    const derivedKey = await crypto.subtle.deriveKey(
         {
-            name: "AES-GCM",
-            length: 256
+            name: "HKDF",
+            hash: "SHA-256",
+            salt,
+            info: infoBytes
         },
+        hkdfKey,
+        { name: "AES-GCM", length: 256 },
         false,
         ["encrypt"]
     );
@@ -79,6 +94,7 @@ export async function asymmetricEncrypt(params: {
     const payload = {
         ephemeralPubKey: ephemeralPubKeyRaw,
         iv: Array.from(iv),
+        salt: Array.from(salt),
         ciphertext: Array.from(new Uint8Array(ciphertext))
     };
 
@@ -96,10 +112,12 @@ export async function asymmetricDecrypt(params: {
     const {
         ephemeralPubKey,
         iv,
+        salt,
         ciphertext
     }: {
         ephemeralPubKey: JsonWebKey;
         iv: number[];
+        salt: number[];
         ciphertext: number[];
     } = JSON.parse(atob(encryptedMessage));
 
@@ -111,7 +129,7 @@ export async function asymmetricDecrypt(params: {
             namedCurve: "P-256"
         },
         false,
-        ["deriveKey"]
+        ["deriveKey", "deriveBits"]
     );
 
     const importedEphemeralPubKey = await crypto.subtle.importKey(
@@ -125,16 +143,28 @@ export async function asymmetricDecrypt(params: {
         []
     );
 
-    const derivedKey = await crypto.subtle.deriveKey(
+    const sharedSecret = await crypto.subtle.deriveBits(
         {
             name: "ECDH",
             public: importedEphemeralPubKey
         },
         importedPrivateKey,
+        256
+    );
+
+    const infoBytes = new TextEncoder().encode(INFO_LABEL);
+
+    const hkdfKey = await crypto.subtle.importKey("raw", sharedSecret, "HKDF", false, ["deriveKey"]);
+
+    const derivedKey = await crypto.subtle.deriveKey(
         {
-            name: "AES-GCM",
-            length: 256
+            name: "HKDF",
+            hash: "SHA-256",
+            salt: new Uint8Array(salt),
+            info: infoBytes
         },
+        hkdfKey,
+        { name: "AES-GCM", length: 256 },
         false,
         ["decrypt"]
     );
