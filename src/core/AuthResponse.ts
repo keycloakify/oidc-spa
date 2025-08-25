@@ -5,15 +5,6 @@ export type AuthResponse = {
     [key: string]: string | undefined;
 };
 
-export function getIsAuthResponse(data: any): data is AuthResponse {
-    return (
-        data instanceof Object &&
-        "state" in data &&
-        typeof data.state === "string" &&
-        Object.values(data).every(value => value === undefined || typeof value === "string")
-    );
-}
-
 export function authResponseToUrl(authResponse: AuthResponse): string {
     let authResponseUrl = "https://dummy.com";
 

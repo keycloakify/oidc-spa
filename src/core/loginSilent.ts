@@ -5,8 +5,9 @@ import { getStateData, clearStateStore, type StateData } from "./StateData";
 import { getDownlinkAndRtt } from "../tools/getDownlinkAndRtt";
 import { getIsDev } from "../tools/isDev";
 import type { User as OidcClientTsUser } from "../vendor/frontend/oidc-client-ts-and-jwt-decode";
-import { type AuthResponse, getIsAuthResponse } from "./AuthResponse";
+import { type AuthResponse } from "./AuthResponse";
 import { addOrUpdateSearchParam } from "../tools/urlSearchParams";
+import { initIframeMessageProtection } from "./iframeMessageProtection";
 
 type ResultOfLoginSilent =
     | {
@@ -74,6 +75,11 @@ export async function loginSilent(params: {
         return Math.max(BASE_DELAY_MS, dynamicDelay);
     })();
 
+    const { decodeEncryptedAuth, getIsEncryptedAuthResponse, clearSessionStoragePublicKey } =
+        await initIframeMessageProtection({
+            stateQueryParamValue: stateQueryParamValue_instance
+        });
+
     const timeout = setTimeout(async () => {
         dResult.resolve({
             outcome: "failure",
@@ -81,12 +87,20 @@ export async function loginSilent(params: {
         });
     }, timeoutDelayMs);
 
-    const listener = (event: MessageEvent) => {
-        if (!getIsAuthResponse(event.data)) {
+    const listener = async (event: MessageEvent) => {
+        if (event.origin !== window.location.origin) {
             return;
         }
 
-        const authResponse = event.data;
+        if (
+            !getIsEncryptedAuthResponse({
+                message: event.data
+            })
+        ) {
+            return;
+        }
+
+        const { authResponse } = await decodeEncryptedAuth({ encryptedAuthResponse: event.data });
 
         const stateData = getStateData({ stateQueryParamValue: authResponse.state });
 
@@ -181,6 +195,8 @@ export async function loginSilent(params: {
         );
 
     dResult.pr.then(result => {
+        clearSessionStoragePublicKey();
+
         if (result.outcome === "failure") {
             clearStateStore({ stateQueryParamValue: stateQueryParamValue_instance });
         }

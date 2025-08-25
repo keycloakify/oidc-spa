@@ -2,6 +2,7 @@ import {
     handleOidcCallback,
     moveRedirectAuthResponseFromSessionStorageToMemory
 } from "./core/handleOidcCallback";
+import { preventSessionStorageSetItemOfPublicKeyByThirdParty } from "./core/iframeMessageProtection";
 
 export function oidcEarlyInit(params: { freezeFetch: boolean; freezeXMLHttpRequest: boolean }) {
     const { freezeFetch, freezeXMLHttpRequest } = params ?? {};
@@ -40,6 +41,8 @@ export function oidcEarlyInit(params: { freezeFetch: boolean; freezeXMLHttpReque
                 value: fetch_trusted
             });
         }
+
+        preventSessionStorageSetItemOfPublicKeyByThirdParty();
     }
 
     return { shouldLoadApp };
