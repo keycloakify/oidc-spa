@@ -2,9 +2,16 @@ import {
     handleOidcCallback,
     moveRedirectAuthResponseFromSessionStorageToMemory
 } from "./core/handleOidcCallback";
+import { preventSessionStorageSetItemOfPublicKeyByThirdParty } from "./core/iframeMessageProtection";
 
-export function oidcEarlyInit(params: { freezeFetch: boolean; freezeXMLHttpRequest: boolean }) {
-    const { freezeFetch, freezeXMLHttpRequest } = params ?? {};
+export function oidcEarlyInit(params: {
+    freezeFetch: boolean;
+    freezeXMLHttpRequest: boolean;
+    // NOTE: Made optional just to avoid breaking change.
+    // Will be made mandatory next major.
+    freezeWebSocket?: boolean;
+}) {
+    const { freezeFetch, freezeXMLHttpRequest, freezeWebSocket = false } = params ?? {};
 
     const { isHandled } = handleOidcCallback();
 
@@ -40,6 +47,22 @@ export function oidcEarlyInit(params: { freezeFetch: boolean; freezeXMLHttpReque
                 value: fetch_trusted
             });
         }
+
+        if (freezeWebSocket) {
+            const WebSocket_trusted = globalThis.WebSocket;
+
+            Object.freeze(WebSocket_trusted.prototype);
+            Object.freeze(WebSocket_trusted);
+
+            Object.defineProperty(globalThis, "WebSocket", {
+                configurable: false,
+                writable: false,
+                enumerable: true,
+                value: WebSocket_trusted
+            });
+        }
+
+        preventSessionStorageSetItemOfPublicKeyByThirdParty();
     }
 
     return { shouldLoadApp };

@@ -8,6 +8,7 @@ import { assert, id } from "../vendor/frontend/tsafe";
 import type { AuthResponse } from "./AuthResponse";
 import { initialLocationHref } from "./initialLocationHref";
 import { captureFetch } from "./trustedFetch";
+import { encryptAuthResponse } from "./iframeMessageProtection";
 
 captureFetch();
 
@@ -111,7 +112,8 @@ function handleOidcCallback_nonMemoized(): { isHandled: boolean } {
             // NOTE: This is a "better than nothing" approach.
             // Under some circumstances it's possible to get stuck on this url
             // if there is no "next" page in the history for example, navigating
-            // forward is a NoOp. So in that case it's better to navigate to the home.
+            // forward is a NoOp. So in that case it's better to reload the same route
+            // with just the authResponse removed from the url to avoid re-entering here.
             setTimeout(() => {
                 const { protocol, host, pathname, hash } = window.location;
                 window.location.href = `${protocol}//${host}${pathname}${hash}`;
@@ -131,9 +133,9 @@ function handleOidcCallback_nonMemoized(): { isHandled: boolean } {
 
     switch (stateData.context) {
         case "iframe":
-            setTimeout(() => {
-                parent.postMessage(authResponse, location.origin);
-            }, 0);
+            encryptAuthResponse({
+                authResponse
+            }).then(({ encryptedMessage }) => parent.postMessage(encryptedMessage, location.origin));
             break;
         case "redirect":
             markStateDataAsProcessedByCallback({ stateQueryParamValue });
