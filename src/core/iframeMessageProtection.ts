@@ -1,4 +1,4 @@
-import { assert } from "tsafe/assert";
+import { assert } from "../vendor/frontend/tsafe";
 import { asymmetricEncrypt, asymmetricDecrypt, generateKeys } from "../tools/asymmetricEncryption";
 import { type AuthResponse } from "./AuthResponse";
 
