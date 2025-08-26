@@ -2,13 +2,14 @@ import { assert } from "tsafe/assert";
 import { asymmetricEncrypt, asymmetricDecrypt, generateKeys } from "../tools/asymmetricEncryption";
 import { type AuthResponse } from "./AuthResponse";
 
+const sessionStorage_original = window.sessionStorage;
 const setItem_real = Storage.prototype.setItem;
 
 const SESSION_STORAGE_PREFIX = "oidc-spa_iframe_authResponse_publicKey_";
 
 export function preventSessionStorageSetItemOfPublicKeyByThirdParty() {
     const setItem_protected = function setItem(this: any, key: string, value: string): void {
-        if (this !== sessionStorage) {
+        if (this !== sessionStorage_original) {
             return setItem_real.call(this, key, value);
         }
 
@@ -18,7 +19,7 @@ export function preventSessionStorageSetItemOfPublicKeyByThirdParty() {
             );
         }
 
-        return setItem_real.call(sessionStorage, key, value);
+        return setItem_real.call(sessionStorage_original, key, value);
     };
 
     {
