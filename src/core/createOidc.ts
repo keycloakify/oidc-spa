@@ -18,7 +18,7 @@ import {
     createIframeTimeoutInitializationError,
     createWellKnownOidcConfigurationEndpointUnreachableInitializationError
 } from "./OidcInitializationError";
-import { type StateData, generateStateQueryParamValue, STATE_STORE_KEY_PREFIX } from "./StateData";
+import { type StateData, generateStateUrlParamValue, STATE_STORE_KEY_PREFIX } from "./StateData";
 import { notifyOtherTabsOfLogout, getPrOtherTabLogout } from "./logoutPropagationToOtherTabs";
 import { notifyOtherTabsOfLogin, getPrOtherTabLogin } from "./loginPropagationToOtherTabs";
 import { getConfigId } from "./configId";
@@ -354,7 +354,7 @@ export async function createOidc_nonMemoized<
         }
     }
 
-    const stateQueryParamValue_instance = generateStateQueryParamValue();
+    const stateUrlParamValue_instance = generateStateUrlParamValue();
 
     const canUseIframe = (() => {
         if (noIframe) {
@@ -408,12 +408,13 @@ export async function createOidc_nonMemoized<
     let isUserStoreInMemoryOnly: boolean;
 
     const oidcClientTsUserManager = new OidcClientTsUserManager({
-        stateQueryParamValue: stateQueryParamValue_instance,
+        stateQueryParamValue: stateUrlParamValue_instance,
         authority: issuerUri,
         client_id: clientId,
         redirect_uri: callbackUri,
         silent_redirect_uri: callbackUri,
         post_logout_redirect_uri: callbackUri,
+        response_mode: "fragment",
         response_type: "code",
         scope: Array.from(new Set(["openid", ...scopes])).join(" "),
         automaticSilentRenew: false,
@@ -676,7 +677,7 @@ export async function createOidc_nonMemoized<
 
                 const result_loginSilent = await loginSilent({
                     oidcClientTsUserManager,
-                    stateQueryParamValue_instance,
+                    stateUrlParamValue_instance,
                     configId,
                     transformUrlBeforeRedirect,
                     getExtraQueryParams,
@@ -1128,7 +1129,7 @@ export async function createOidc_nonMemoized<
 
                 const result_loginSilent = await loginSilent({
                     oidcClientTsUserManager,
-                    stateQueryParamValue_instance,
+                    stateUrlParamValue_instance,
                     configId,
                     transformUrlBeforeRedirect,
                     getExtraQueryParams,

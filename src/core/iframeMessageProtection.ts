@@ -37,18 +37,18 @@ export function preventSessionStorageSetItemOfPublicKeyByThirdParty() {
 
 const ENCRYPTED_AUTH_RESPONSES_PREFIX = "oidc-spa_encrypted_authResponse_";
 
-function getSessionStorageKey(params: { stateQueryParamValue: string }) {
-    const { stateQueryParamValue } = params;
+function getSessionStorageKey(params: { stateUrlParamValue: string }) {
+    const { stateUrlParamValue } = params;
 
-    return `${SESSION_STORAGE_PREFIX}${stateQueryParamValue}`;
+    return `${SESSION_STORAGE_PREFIX}${stateUrlParamValue}`;
 }
 
-export async function initIframeMessageProtection(params: { stateQueryParamValue: string }) {
-    const { stateQueryParamValue } = params;
+export async function initIframeMessageProtection(params: { stateUrlParamValue: string }) {
+    const { stateUrlParamValue } = params;
 
     const { publicKey, privateKey } = await generateKeys();
 
-    const sessionStorageKey = getSessionStorageKey({ stateQueryParamValue });
+    const sessionStorageKey = getSessionStorageKey({ stateUrlParamValue });
 
     setItem_real.call(sessionStorage, sessionStorageKey, publicKey);
 
@@ -84,7 +84,7 @@ export async function encryptAuthResponse(params: { authResponse: AuthResponse }
     const { authResponse } = params;
 
     const publicKey = sessionStorage.getItem(
-        getSessionStorageKey({ stateQueryParamValue: authResponse.state })
+        getSessionStorageKey({ stateUrlParamValue: authResponse.state })
     );
 
     assert(publicKey !== null, "2293302");
