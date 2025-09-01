@@ -50,9 +50,6 @@ export const {
         sub: z.string(),
         name: z.string()
     }),
-    //autoLogoutParams: { redirectTo: "current page" } // Default
-    //autoLogoutParams: { redirectTo: "home" }
-    //autoLogoutParams: { redirectTo: "specific url", url: "/a-page" }
 
     // This parameter is optional.
     // It allows you to pass extra query params before redirecting to the OIDC server.

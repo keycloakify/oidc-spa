@@ -54,7 +54,7 @@ export declare namespace Oidc {
                     | { redirectTo: "specific url"; url: string }
             ) => Promise<never>;
             goToAuthServer: (params: {
-                extraQueryParams?: Record<string, string>;
+                extraQueryParams?: Record<string, string | undefined>;
                 redirectUrl?: string;
                 transformUrlBeforeRedirect?: (url: string) => string;
             }) => Promise<never>;
@@ -62,7 +62,6 @@ export declare namespace Oidc {
                 tickCallback: (params: { secondsLeft: number | undefined }) => void
             ) => { unsubscribeFromAutoLogoutCountdown: () => void };
             /**
-             * Defined when authMethod is "back from auth server".
              * If you called `goToAuthServer` or `login` with extraQueryParams, this object let you know the outcome of the
              * of the action that was intended.
              *

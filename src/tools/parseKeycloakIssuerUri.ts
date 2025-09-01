@@ -1,4 +1,4 @@
-import { toFullyQualifiedUrl } from "./toFullyQualifiedUrl";
+import { isKeycloak, createKeycloakUtils } from "../keycloak";
 
 /**
  * Return undefined if the issuerUri doesn't match the expected shape of a Keycloak issuerUri
@@ -30,39 +30,18 @@ export function parseKeycloakIssuerUri(issuerUri: string):
               locale?: string;
           }) => string;
       } {
-    const url = new URL(issuerUri);
-
-    const split = url.pathname.split("/realms/");
-
-    if (split.length !== 2) {
+    if (!isKeycloak({ issuerUri })) {
         return undefined;
     }
 
-    const [kcHttpRelativePath, realm] = split;
-
-    const getAdminConsoleUrl = (realm: string) =>
-        `${url.origin}${kcHttpRelativePath}/admin/${realm}/console`;
+    const keycloakUtils = createKeycloakUtils({ issuerUri });
 
     return {
-        origin: url.origin,
-        realm,
-        kcHttpRelativePath: kcHttpRelativePath === "" ? undefined : kcHttpRelativePath,
-        adminConsoleUrl: getAdminConsoleUrl(realm),
-        adminConsoleUrl_master: getAdminConsoleUrl("master"),
-        getAccountUrl: ({ clientId, backToAppFromAccountUrl, locale }) => {
-            const accountUrlObj = new URL(`${url.origin}${kcHttpRelativePath}/realms/${realm}/account`);
-            accountUrlObj.searchParams.set("referrer", clientId);
-            accountUrlObj.searchParams.set(
-                "referrer_uri",
-                toFullyQualifiedUrl({
-                    urlish: backToAppFromAccountUrl,
-                    doAssertNoQueryParams: false
-                })
-            );
-            if (locale !== undefined) {
-                accountUrlObj.searchParams.set("kc_locale", locale);
-            }
-            return accountUrlObj.href;
-        }
+        origin: keycloakUtils.issuerUriParsed.origin,
+        realm: keycloakUtils.issuerUriParsed.realm,
+        kcHttpRelativePath: keycloakUtils.issuerUriParsed.kcHttpRelativePath,
+        adminConsoleUrl: keycloakUtils.adminConsoleUrl,
+        adminConsoleUrl_master: keycloakUtils.adminConsoleUrl_master,
+        getAccountUrl: keycloakUtils.getAccountUrl
     };
 }
