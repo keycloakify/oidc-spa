@@ -20,5 +20,7 @@ export function authResponseToUrl(authResponse: AuthResponse): string {
         });
     }
 
+    authResponseUrl = `${authResponseUrl}#${authResponseUrl.split("?")[1]}`;
+
     return authResponseUrl;
 }

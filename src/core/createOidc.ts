@@ -414,7 +414,7 @@ export async function createOidc_nonMemoized<
         redirect_uri: callbackUri,
         silent_redirect_uri: callbackUri,
         post_logout_redirect_uri: callbackUri,
-        response_mode: "fragment",
+        //response_mode: "fragment",
         response_type: "code",
         scope: Array.from(new Set(["openid", ...scopes])).join(" "),
         automaticSilentRenew: false,
