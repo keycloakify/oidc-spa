@@ -25,7 +25,7 @@ type ResultOfLoginSilent =
 
 export async function loginSilent(params: {
     oidcClientTsUserManager: OidcClientTsUserManager;
-    stateQueryParamValue_instance: string;
+    stateUrlParamValue_instance: string;
     configId: string;
 
     transformUrlBeforeRedirect:
@@ -41,7 +41,7 @@ export async function loginSilent(params: {
 }): Promise<ResultOfLoginSilent> {
     const {
         oidcClientTsUserManager,
-        stateQueryParamValue_instance,
+        stateUrlParamValue_instance,
         configId,
         transformUrlBeforeRedirect,
         getExtraQueryParams,
@@ -77,7 +77,7 @@ export async function loginSilent(params: {
 
     const { decodeEncryptedAuth, getIsEncryptedAuthResponse, clearSessionStoragePublicKey } =
         await initIframeMessageProtection({
-            stateQueryParamValue: stateQueryParamValue_instance
+            stateUrlParamValue: stateUrlParamValue_instance
         });
 
     const timeout = setTimeout(async () => {
@@ -102,7 +102,7 @@ export async function loginSilent(params: {
 
         const { authResponse } = await decodeEncryptedAuth({ encryptedAuthResponse: event.data });
 
-        const stateData = getStateData({ stateQueryParamValue: authResponse.state });
+        const stateData = getStateData({ stateUrlParamValue: authResponse.state });
 
         assert(stateData !== undefined, "765645");
         assert(stateData.context === "iframe", "250711");
@@ -198,7 +198,7 @@ export async function loginSilent(params: {
         clearSessionStoragePublicKey();
 
         if (result.outcome === "failure") {
-            clearStateStore({ stateQueryParamValue: stateQueryParamValue_instance });
+            clearStateStore({ stateUrlParamValue: stateUrlParamValue_instance });
         }
     });
 

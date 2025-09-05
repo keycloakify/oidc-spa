@@ -27,30 +27,50 @@ export function handleOidcCallback(): { isHandled: boolean } {
 function handleOidcCallback_nonMemoized(): { isHandled: boolean } {
     const location_urlObj = new URL(initialLocationHref);
 
-    const stateQueryParamValue = (() => {
-        const stateQueryParamValue = location_urlObj.searchParams.get("state");
+    const stateUrlParamValue_wrap = (() => {
+        fragment: {
+            const stateUrlParamValue = new URLSearchParams(location_urlObj.hash.replace(/^#/, "")).get(
+                "state"
+            );
 
-        if (stateQueryParamValue === null) {
-            return undefined;
+            if (stateUrlParamValue === null) {
+                break fragment;
+            }
+
+            if (!getIsStatQueryParamValue({ maybeStateUrlParamValue: stateUrlParamValue })) {
+                break fragment;
+            }
+
+            return { stateUrlParamValue, isFragment: true };
         }
 
-        if (!getIsStatQueryParamValue({ maybeStateQueryParamValue: stateQueryParamValue })) {
-            return undefined;
+        query: {
+            const stateUrlParamValue = location_urlObj.searchParams.get("state");
+
+            if (stateUrlParamValue === null) {
+                break query;
+            }
+
+            if (!getIsStatQueryParamValue({ maybeStateUrlParamValue: stateUrlParamValue })) {
+                break query;
+            }
+
+            if (
+                location_urlObj.searchParams.get("client_id") !== null &&
+                location_urlObj.searchParams.get("response_type") !== null &&
+                location_urlObj.searchParams.get("redirect_uri") !== null
+            ) {
+                // NOTE: We are probably in a Keycloakify theme and oidc-spa was loaded by mistake.
+                break query;
+            }
+
+            return { stateUrlParamValue, isFragment: false };
         }
 
-        if (
-            location_urlObj.searchParams.get("client_id") !== null &&
-            location_urlObj.searchParams.get("response_type") !== null &&
-            location_urlObj.searchParams.get("redirect_uri") !== null
-        ) {
-            // NOTE: We are probably in a Keycloakify theme and oidc-spa was loaded by mistake.
-            return undefined;
-        }
-
-        return stateQueryParamValue;
+        return undefined;
     })();
 
-    if (stateQueryParamValue === undefined) {
+    if (stateUrlParamValue_wrap === undefined) {
         const backForwardTracker = readBackForwardTracker();
 
         if (backForwardTracker !== undefined) {
@@ -67,12 +87,14 @@ function handleOidcCallback_nonMemoized(): { isHandled: boolean } {
 
     const isHandled = true;
 
+    const { stateUrlParamValue, isFragment } = stateUrlParamValue_wrap;
+
     console.log = () => {};
     console.warn = () => {};
     console.error = () => {};
     console.debug = () => {};
 
-    const stateData = getStateData({ stateQueryParamValue });
+    const stateData = getStateData({ stateUrlParamValue });
 
     if (
         stateData === undefined ||
@@ -125,7 +147,9 @@ function handleOidcCallback_nonMemoized(): { isHandled: boolean } {
 
     const authResponse: AuthResponse = { state: "" };
 
-    for (const [key, value] of location_urlObj.searchParams) {
+    for (const [key, value] of isFragment
+        ? new URLSearchParams(location_urlObj.hash.replace(/^#/, ""))
+        : location_urlObj.searchParams) {
         authResponse[key] = value;
     }
 
@@ -138,7 +162,7 @@ function handleOidcCallback_nonMemoized(): { isHandled: boolean } {
             }).then(({ encryptedMessage }) => parent.postMessage(encryptedMessage, location.origin));
             break;
         case "redirect":
-            markStateDataAsProcessedByCallback({ stateQueryParamValue });
+            markStateDataAsProcessedByCallback({ stateUrlParamValue });
             clearBackForwardTracker();
             writeRedirectAuthResponses({
                 authResponses: [...readRedirectAuthResponses(), authResponse]
@@ -232,7 +256,7 @@ export function retrieveRedirectAuthResponseAndStateData(params: {
         | undefined = undefined;
 
     for (const authResponse of [...authResponses]) {
-        const stateData = getStateData({ stateQueryParamValue: authResponse.state });
+        const stateData = getStateData({ stateUrlParamValue: authResponse.state });
 
         if (stateData === undefined) {
             // NOTE: We do not understand how this can happen but it can.
