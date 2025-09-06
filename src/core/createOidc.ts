@@ -3,7 +3,7 @@ import {
     WebStorageStateStore,
     type User as OidcClientTsUser,
     InMemoryWebStorage
-} from "../vendor/frontend/oidc-client-ts-and-jwt-decode";
+} from "../vendor/frontend/oidc-client-ts";
 import type { OidcMetadata } from "./OidcMetadata";
 import { id, assert, is, type Equals } from "../vendor/frontend/tsafe";
 import { setTimeout, clearTimeout } from "../tools/workerTimers";

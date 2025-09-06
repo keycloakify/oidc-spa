@@ -1,4 +1,4 @@
-import type { User as OidcClientTsUser } from "../vendor/frontend/oidc-client-ts-and-jwt-decode";
+import type { User as OidcClientTsUser } from "../vendor/frontend/oidc-client-ts";
 import { assert, id } from "../vendor/frontend/tsafe";
 import { readExpirationTimeInJwt } from "../tools/readExpirationTimeInJwt";
 import { decodeJwt } from "../tools/decodeJwt";

@@ -17,7 +17,8 @@
         "start-react-router-framework-example": "yarn build && tsx scripts/link-in-examples.ts && cd examples/react-router-framework && rm -rf node_modules/.vite && IS_LINKED=true yarn dev",
         "start-tanstack-router-example": "yarn build && tsx scripts/link-in-examples.ts && cd examples/tanstack-router && rm -rf node_modules/.vite && IS_LINKED=true yarn dev",
         "start-tanstack-router-file-based-example": "yarn build && tsx scripts/link-in-examples.ts && cd examples/tanstack-router-file-based && rm -rf node_modules/.vite && IS_LINKED=true yarn dev",
-        "start-multi-providers-example": "yarn build && tsx scripts/link-in-examples.ts && cd examples/multi-providers && rm -rf node_modules/.vite && IS_LINKED=true yarn dev"
+        "start-multi-providers-example": "yarn build && tsx scripts/link-in-examples.ts && cd examples/multi-providers && rm -rf node_modules/.vite && IS_LINKED=true yarn dev",
+        "size": "bash ./scripts/compute-payload.sh"
     },
     "main": "dist/index.js",
     "types": "dist/index.d.ts",
@@ -77,7 +78,6 @@
         "evt": "^2.5.7",
         "husky": "^4.3.8",
         "jsonwebtoken": "9.0.2",
-        "jwt-decode": "4.0.0",
         "lint-staged": "^11.1.1",
         "node-fetch": "2.7.0",
         "node-jose": "2.2.0",

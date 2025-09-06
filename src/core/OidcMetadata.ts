@@ -1,4 +1,4 @@
-import { type OidcMetadata as OidcClientTsOidcMetadata } from "../vendor/frontend/oidc-client-ts-and-jwt-decode";
+import { type OidcMetadata as OidcClientTsOidcMetadata } from "../vendor/frontend/oidc-client-ts";
 import { assert, type Equals } from "../vendor/frontend/tsafe";
 
 /**

@@ -1,4 +1,4 @@
-import type { UserManager as OidcClientTsUserManager } from "../vendor/frontend/oidc-client-ts-and-jwt-decode";
+import type { UserManager as OidcClientTsUserManager } from "../vendor/frontend/oidc-client-ts";
 import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";
 import { assert, type Equals, noUndefined } from "../vendor/frontend/tsafe";
 import type { StateData } from "./StateData";

@@ -1,10 +1,12 @@
-import type { UserManager as OidcClientTsUserManager } from "../vendor/frontend/oidc-client-ts-and-jwt-decode";
+import type {
+    UserManager as OidcClientTsUserManager,
+    User as OidcClientTsUser
+} from "../vendor/frontend/oidc-client-ts";
 import { Deferred } from "../tools/Deferred";
 import { id, assert, noUndefined } from "../vendor/frontend/tsafe";
 import { getStateData, clearStateStore, type StateData } from "./StateData";
 import { getDownlinkAndRtt } from "../tools/getDownlinkAndRtt";
 import { getIsDev } from "../tools/isDev";
-import type { User as OidcClientTsUser } from "../vendor/frontend/oidc-client-ts-and-jwt-decode";
 import { type AuthResponse } from "./AuthResponse";
 import { addOrUpdateSearchParam } from "../tools/urlSearchParams";
 import { initIframeMessageProtection } from "./iframeMessageProtection";
