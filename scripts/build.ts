@@ -258,6 +258,10 @@ for (const targetFormat of ["cjs", "esm"] as const) {
     );
 }
 
+for (const basename of ["README.md", "LICENSE"]) {
+    fs.cpSync(pathJoin(projectDirPath, basename), pathJoin(distDirPath_root, basename));
+}
+
 console.log(`✓ built in ${((Date.now() - startTime) / 1000).toFixed(2)}s`);
 
 function run(command: string) {
