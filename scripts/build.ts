@@ -7,7 +7,6 @@ import {
     dirname as pathDirname
 } from "path";
 import { assert } from "tsafe/assert";
-import { Buffer } from "Buffer";
 
 const startTime = Date.now();
 
