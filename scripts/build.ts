@@ -10,7 +10,8 @@ import { assert } from "tsafe/assert";
 
 const startTime = Date.now();
 
-const distDirPath_root = pathJoin(__dirname, "..", "dist");
+const projectDirPath = pathJoin(__dirname, "..");
+const distDirPath_root = pathJoin(projectDirPath, "dist");
 
 if (fs.existsSync(distDirPath_root)) {
     fs.rmSync(distDirPath_root, { recursive: true });
@@ -27,6 +28,8 @@ for (const targetFormat of ["cjs", "esm"] as const) {
                 return pathJoin(distDirPath_root, "esm");
         }
     })();
+
+    fs.rmSync(pathJoin(distDirPath, "tsconfig.tsbuildinfo"));
 
     if (targetFormat === "esm") {
         fs.rmSync(pathJoin(distDirPath, "vendor", "backend"), { recursive: true });
@@ -223,6 +226,36 @@ for (const targetFormat of ["cjs", "esm"] as const) {
                     }
                 })
         );
+}
+
+{
+    let modifiedPackageJsonContent = fs
+        .readFileSync(pathJoin(projectDirPath, "package.json"))
+        .toString("utf8");
+
+    modifiedPackageJsonContent = (() => {
+        const o = JSON.parse(modifiedPackageJsonContent);
+
+        for (const propertyName of ["scripts", "lint-staged", "husky", "devDependencies"]) {
+            assert(propertyName in o);
+            delete o[propertyName];
+        }
+
+        delete o.files;
+
+        return JSON.stringify(o, null, 4);
+    })();
+
+    modifiedPackageJsonContent = modifiedPackageJsonContent
+        .replace(/"dist\//g, '"')
+        .replace(/"\.\/dist\//g, '"./')
+        .replace(/"!dist\//g, '"!')
+        .replace(/"!\.\/dist\//g, '"!./');
+
+    fs.writeFileSync(
+        pathJoin(distDirPath_root, "package.json"),
+        Buffer.from(modifiedPackageJsonContent, "utf8")
+    );
 }
 
 console.log(`✓ built in ${((Date.now() - startTime) / 1000).toFixed(2)}s`);

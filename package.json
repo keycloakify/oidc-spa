@@ -23,48 +23,6 @@
         "start-multi-providers-example": "yarn build && tsx scripts/link-in-examples.ts && cd examples/multi-providers && rm -rf node_modules/.vite && IS_LINKED=true yarn dev",
         "size": "bash ./scripts/compute-payload.sh"
     },
-    "main": "dist/index.js",
-    "types": "dist/index.d.ts",
-    "module": "dist/esm/index.js",
-    "exports": {
-        ".": {
-            "module": "./dist/esm/index.js",
-            "default": "./dist/index.js"
-        },
-        "./mock": {
-            "module": "./dist/esm/mock/index.js",
-            "default": "./dist/mock/index.js"
-        },
-        "./react": {
-            "module": "./dist/esm/react/index.js",
-            "default": "./dist/react/index.js"
-        },
-        "./mock/react": {
-            "module": "./dist/esm/mock/react.js",
-            "default": "./dist/mock/react.js"
-        },
-        "./entrypoint": {
-            "module": "./dist/esm/entrypoint.js",
-            "default": "./dist/entrypoint.js"
-        },
-        "./backend": "./dist/backend.js",
-        "./keycloak": {
-            "module": "./dist/esm/keycloak/index.js",
-            "default": "./dist/keycloak/index.js"
-        },
-        "./keycloak-js": {
-            "module": "./dist/esm/keycloak-js.js",
-            "default": "./dist/keycloak-js.js"
-        },
-        "./tools/decodeJwt": {
-            "module": "./dist/esm/tools/decodeJwt.js",
-            "default": "./dist/tools/decodeJwt.js"
-        },
-        "./tools/parseKeycloakIssuerUri": {
-            "module": "./dist/esm/tools/parseKeycloakIssuerUri.js",
-            "default": "./dist/tools/parseKeycloakIssuerUri.js"
-        }
-    },
     "lint-staged": {
         "*.{ts,tsx,json,md}": [
             "prettier --write"
@@ -77,12 +35,15 @@
     },
     "author": "u/garronej & u/ddecrulle",
     "license": "MIT",
-    "files": [
-        "src/",
-        "dist/",
-        "!dist/tsconfig.tsbuildinfo"
+    "keywords": [
+        "OpenID Connect",
+        "PKCE",
+        "Authorization Code Flow",
+        "OIDC",
+        "keycloak",
+        "keycloak-js",
+        "react"
     ],
-    "keywords": [],
     "homepage": "https://docs.oidc-spa.dev/",
     "dependencies": {},
     "peerDependencies": {
@@ -128,5 +89,69 @@
     },
     "publishConfig": {
         "access": "public"
+    },
+    "main": "dist/index.js",
+    "types": "dist/index.d.ts",
+    "module": "dist/esm/index.js",
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "import": "./dist/esm/index.js",
+            "require": "./dist/index.js",
+            "default": "./dist/index.js"
+        },
+        "./mock": {
+            "types": "./dist/mock/index.d.ts",
+            "import": "./dist/esm/mock/index.js",
+            "require": "./dist/mock/index.js",
+            "default": "./dist/mock/index.js"
+        },
+        "./react": {
+            "types": "./dist/react/index.d.ts",
+            "import": "./dist/esm/react/index.js",
+            "require": "./dist/react/index.js",
+            "default": "./dist/react/index.js"
+        },
+        "./mock/react": {
+            "types": "./dist/mock/react.d.ts",
+            "import": "./dist/esm/mock/react.js",
+            "require": "./dist/mock/react.js",
+            "default": "./dist/mock/react.js"
+        },
+        "./entrypoint": {
+            "types": "./dist/entrypoint.d.ts",
+            "import": "./dist/esm/entrypoint.js",
+            "require": "./dist/entrypoint.js",
+            "default": "./dist/entrypoint.js"
+        },
+        "./backend": {
+            "types": "./dist/backend.d.ts",
+            "require": "./dist/backend.js",
+            "default": "./dist/backend.js"
+        },
+        "./keycloak": {
+            "types": "./dist/keycloak/index.d.ts",
+            "import": "./dist/esm/keycloak/index.js",
+            "require": "./dist/keycloak/index.js",
+            "default": "./dist/keycloak/index.js"
+        },
+        "./keycloak-js": {
+            "types": "./dist/keycloak-js.d.ts",
+            "import": "./dist/esm/keycloak-js.js",
+            "require": "./dist/keycloak-js.js",
+            "default": "./dist/keycloak-js.js"
+        },
+        "./tools/decodeJwt": {
+            "types": "./dist/tools/decodeJwt.d.ts",
+            "import": "./dist/esm/tools/decodeJwt.js",
+            "require": "./dist/tools/decodeJwt.js",
+            "default": "./dist/tools/decodeJwt.js"
+        },
+        "./tools/parseKeycloakIssuerUri": {
+            "types": "./dist/tools/parseKeycloakIssuerUri.d.ts",
+            "import": "./dist/esm/tools/parseKeycloakIssuerUri.js",
+            "require": "./dist/tools/parseKeycloakIssuerUri.js",
+            "default": "./dist/tools/parseKeycloakIssuerUri.js"
+        }
     }
 }
