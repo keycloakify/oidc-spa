@@ -47,9 +47,7 @@
             "module": "./dist/esm/entrypoint.js",
             "default": "./dist/entrypoint.js"
         },
-        "./backend": {
-            "default": "./dist/backend.js"
-        },
+        "./backend": "./dist/backend.js",
         "./keycloak": {
             "module": "./dist/esm/keycloak/index.js",
             "default": "./dist/keycloak/index.js"
