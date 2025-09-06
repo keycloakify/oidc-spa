@@ -2,7 +2,7 @@ import { useOidc, enforceLogin, getOidc } from "../oidc";
 import { useState, useEffect } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { decodeJwt } from "oidc-spa/tools/decodeJwt";
-import { parseKeycloakIssuerUri } from "oidc-spa/tools/parseKeycloakIssuerUri";
+import { isKeycloak, createKeycloakUtils } from "oidc-spa/keycloak";
 
 export const Route = createFileRoute("/protected")({
     component: ProtectedPage,
@@ -24,7 +24,7 @@ function ProtectedPage() {
         assert: "user logged in"
     });
 
-    const parsedKeycloakIssuerUri = parseKeycloakIssuerUri(issuerUri);
+    const keycloakUtils = isKeycloak({ issuerUri }) ? createKeycloakUtils({ issuerUri }) : undefined;
 
     const { decodedAccessToken } = useDecodedAccessToken_DIAGNOSTIC_ONLY();
 
@@ -51,7 +51,7 @@ function ProtectedPage() {
             <br />
             <button onClick={() => renewTokens()}>Renew tokens </button>
             <br />
-            {parsedKeycloakIssuerUri !== undefined && (
+            {keycloakUtils !== undefined && (
                 <>
                     <br />
                     <button
@@ -91,7 +91,7 @@ function ProtectedPage() {
                     </button>
                     <br />
                     <a
-                        href={parsedKeycloakIssuerUri.getAccountUrl({
+                        href={keycloakUtils.getAccountUrl({
                             clientId,
                             backToAppFromAccountUrl: import.meta.env.BASE_URL
                         })}

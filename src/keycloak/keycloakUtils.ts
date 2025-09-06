@@ -14,9 +14,7 @@ export type KeycloakUtils = {
     }) => string;
     fetchUserProfile: (params: { accessToken: string }) => Promise<KeycloakProfile>;
     fetchUserInfo: (params: { accessToken: string }) => Promise<KeycloakUserInfo>;
-    loginTransformUrlBeforeRedirectForDirectNavigationToRegisterPage: (
-        authorizationUrl: string
-    ) => string;
+    transformUrlBeforeRedirectForRegister: (authorizationUrl: string) => string;
 };
 
 export type KeycloakProfile = {
@@ -84,7 +82,7 @@ export function createKeycloakUtils(params: { issuerUri: string }): KeycloakUtil
                     Authorization: `bearer ${accessToken}`
                 }
             }).then(r => r.json()),
-        loginTransformUrlBeforeRedirectForDirectNavigationToRegisterPage: authorizationUrl => {
+        transformUrlBeforeRedirectForRegister: authorizationUrl => {
             const urlObj = new URL(authorizationUrl);
             urlObj.pathname = urlObj.pathname.replace(/\/auth$/, "/registrations");
             return urlObj.href;

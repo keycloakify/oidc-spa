@@ -1,7 +1,7 @@
 import { useOidc, enforceLogin, getOidc } from "../oidc.client";
 import { useEffect, useState } from "react";
 import { decodeJwt } from "oidc-spa/tools/decodeJwt";
-import { parseKeycloakIssuerUri } from "oidc-spa/tools/parseKeycloakIssuerUri";
+import { isKeycloak, createKeycloakUtils } from "oidc-spa/keycloak";
 import type { Route } from "./+types/protected";
 
 export async function clientLoader(params: Route.ClientLoaderArgs) {
@@ -20,7 +20,7 @@ export default function Protected() {
         assert: "user logged in"
     });
 
-    const parsedKeycloakIssuerUri = parseKeycloakIssuerUri(issuerUri);
+    const keycloakUtils = isKeycloak({ issuerUri }) ? createKeycloakUtils({ issuerUri }) : undefined;
 
     const { decodedAccessToken } = useDecodedAccessToken_DIAGNOSTIC_ONLY();
 
@@ -47,7 +47,7 @@ export default function Protected() {
             <br />
             <button onClick={() => renewTokens()}>Renew tokens </button>
             <br />
-            {parsedKeycloakIssuerUri !== undefined && (
+            {keycloakUtils !== undefined && (
                 <>
                     <br />
                     <button
@@ -87,7 +87,7 @@ export default function Protected() {
                     </button>
                     <br />
                     <a
-                        href={parsedKeycloakIssuerUri.getAccountUrl({
+                        href={keycloakUtils.getAccountUrl({
                             clientId,
                             backToAppFromAccountUrl: import.meta.env.BASE_URL
                         })}

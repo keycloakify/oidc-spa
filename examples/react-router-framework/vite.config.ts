@@ -11,10 +11,9 @@ export default defineConfig({
         include: [
             "oidc-spa/react",
             "oidc-spa/entrypoint",
-            "oidc-spa/tools/parseKeycloakIssuerUri",
+            "oidc-spa/keycloak",
             "oidc-spa/tools/decodeJwt",
-            "zod",
-            "foo"
+            "zod"
         ]
     }
 });

@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { useOidc } from "../oidc";
-import { parseKeycloakIssuerUri } from "oidc-spa/tools/parseKeycloakIssuerUri";
+import { isKeycloak, createKeycloakUtils } from "oidc-spa/keycloak";
 
 export function Header() {
     const { isUserLoggedIn, initializationError } = useOidc();
@@ -63,26 +63,24 @@ function LoggedInAuthButton() {
 }
 
 function NotLoggedInAuthButton() {
-    const { login, params } = useOidc({ assert: "user not logged in" });
+    const {
+        login,
+        params: { issuerUri }
+    } = useOidc({ assert: "user not logged in" });
 
-    const isKeycloak = parseKeycloakIssuerUri(params.issuerUri) !== undefined;
+    const keycloakUtils = isKeycloak({ issuerUri }) ? createKeycloakUtils({ issuerUri }) : undefined;
 
-    const isAuth0 = params.issuerUri.includes("auth0");
+    const isAuth0 = issuerUri.includes("auth0");
 
     return (
         <div>
             <button onClick={() => login()}>Login</button>{" "}
-            {isKeycloak && (
+            {keycloakUtils !== undefined && (
                 <button
                     onClick={() =>
                         login({
-                            transformUrlBeforeRedirect: url => {
-                                const urlObj = new URL(url);
-
-                                urlObj.pathname = urlObj.pathname.replace(/\/auth$/, "/registrations");
-
-                                return urlObj.href;
-                            }
+                            transformUrlBeforeRedirect:
+                                keycloakUtils.transformUrlBeforeRedirectForRegister
                         })
                     }
                 >

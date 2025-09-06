@@ -41,8 +41,11 @@ type InternalState = {
 const internalStateByInstance = new WeakMap<Keycloak, InternalState>();
 
 /**
- * A client for the Keycloak authentication server.
- * @see {@link https://keycloak.gitbooks.io/securing-client-applications-guide/content/topics/oidc/javascript-adapter.html|Keycloak JS adapter documentation}
+ * This module provides a drop-in replacement for `keycloak-js`,
+ * designed for teams migrating to `oidc-spa` with minimal changes.
+ *
+ * ⚠️ While the import path is `oidc-spa/keycloak-js`, this is *not* a re-export or patch —
+ * it is a full alternative implementation aligned with the `keycloak-js` API.
  */
 export class Keycloak {
     /**
@@ -774,7 +777,7 @@ export class Keycloak {
             await internalState.dInitialized.pr;
         }
 
-        const { oidc } = internalState;
+        const { oidc, keycloakUtils } = internalState;
 
         assert(oidc !== undefined);
 
@@ -819,13 +822,7 @@ export class Keycloak {
                 kc_idp_hint: idpHint
             },
             transformUrlBeforeRedirect:
-                action !== "register"
-                    ? undefined
-                    : url => {
-                          const urlObj = new URL(url);
-                          urlObj.pathname = urlObj.pathname.replace(/\/auth$/, "/registrations");
-                          return urlObj.href;
-                      }
+                action !== "register" ? undefined : keycloakUtils.transformUrlBeforeRedirectForRegister
         });
         assert(false);
     }
