@@ -9,6 +9,8 @@
     "scripts": {
         "prepare": "patch-package",
         "build": "tsx scripts/build.ts",
+        "tsc:cjs": "tsc --module CommonJS --outDir ./dist",
+        "tsc:esm": "tsc --module es2020 --outDir ./dist/esm",
         "_format": "prettier '**/*.{ts,tsx,json,md}'",
         "format": "yarn _format --write",
         "format:check": "yarn _format --list-different",
@@ -22,17 +24,45 @@
     },
     "main": "dist/index.js",
     "types": "dist/index.d.ts",
+    "module": "dist/esm/index.js",
     "exports": {
-        ".": "./dist/index.js",
-        "./mock": "./dist/mock/index.js",
-        "./react": "./dist/react/index.js",
-        "./mock/react": "./dist/mock/react.js",
-        "./entrypoint": "./dist/entrypoint.js",
+        ".": {
+            "module": "./dist/esm/index.js",
+            "default": "./dist/index.js"
+        },
+        "./mock": {
+            "module": "./dist/esm/mock/index.js",
+            "default": "./dist/mock/index.js"
+        },
+        "./react": {
+            "module": "./dist/esm/react/index.js",
+            "default": "./dist/react/index.js"
+        },
+        "./mock/react": {
+            "module": "./dist/esm/mock/react.js",
+            "default": "./dist/mock/react.js"
+        },
+        "./entrypoint": {
+            "module": "./dist/esm/entrypoint.js",
+            "default": "./dist/entrypoint.js"
+        },
         "./backend": "./dist/backend.js",
-        "./keycloak": "./dist/keycloak/index.js",
-        "./keycloak-js": "./dist/keycloak-js.js",
-        "./tools/decodeJwt": "./dist/tools/decodeJwt.js",
-        "./tools/parseKeycloakIssuerUri": "./dist/tools/parseKeycloakIssuerUri.js"
+        "./keycloak": {
+            "module": "./dist/esm/keycloak/index.js",
+            "default": "./dist/keycloak/index.js"
+        },
+        "./keycloak-js": {
+            "module": "./dist/esm/keycloak-js.js",
+            "default": "./dist/keycloak-js.js"
+        },
+        "./tools/decodeJwt": {
+            "module": "./dist/esm/tools/decodeJwt.js",
+            "default": "./dist/tools/decodeJwt.js"
+        },
+        "./tools/parseKeycloakIssuerUri": {
+            "module": "./dist/esm/tools/parseKeycloakIssuerUri.js",
+            "default": "./dist/tools/parseKeycloakIssuerUri.js"
+        }
     },
     "lint-staged": {
         "*.{ts,tsx,json,md}": [

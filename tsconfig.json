@@ -1,13 +1,10 @@
 {
     "compilerOptions": {
-        "module": "CommonJS",
         "target": "ES2020",
         "moduleResolution": "node",
         "lib": ["ES2020", "DOM", "DOM.Iterable"],
         "esModuleInterop": true,
         "declaration": true,
-        // Do not change or the linking script will stop working
-        "outDir": "./dist",
         "sourceMap": true,
         "newLine": "LF",
         "noUnusedLocals": true,
@@ -18,6 +15,5 @@
         "noFallthroughCasesInSwitch": true,
         "skipLibCheck": true
     },
-    "include": ["src"],
-    "exclude": ["src/**/*.deno.ts", "src/**/*.deno.tsx"]
+    "include": ["src"]
 }

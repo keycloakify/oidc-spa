@@ -10,171 +10,201 @@ import { assert } from "tsafe/assert";
 
 const startTime = Date.now();
 
-const distDirPath = pathJoin(__dirname, "..", "dist");
+const distDirPath_root = pathJoin(__dirname, "..", "dist");
 
-if (fs.existsSync(distDirPath)) {
-    fs.rmSync(distDirPath, { recursive: true });
+if (fs.existsSync(distDirPath_root)) {
+    fs.rmSync(distDirPath_root, { recursive: true });
 }
 
-run("npx tsc");
+for (const targetFormat of ["cjs", "esm"] as const) {
+    run(`npm run tsc:${targetFormat}`);
 
-{
-    const version: string = JSON.parse(
-        fs.readFileSync(pathJoin(process.cwd(), "package.json")).toString("utf8")
-    ).version;
+    const distDirPath = (() => {
+        switch (targetFormat) {
+            case "cjs":
+                return distDirPath_root;
+            case "esm":
+                return pathJoin(distDirPath_root, "esm");
+        }
+    })();
 
-    assert(typeof version === "string");
+    if (targetFormat === "esm") {
+        fs.rmSync(pathJoin(distDirPath, "vendor", "backend"), { recursive: true });
+        for (const ext of [".js", ".d.ts", ".js.map"] as const) {
+            fs.rmSync(pathJoin(distDirPath, `backend${ext}`));
+        }
+    }
 
-    const filePath = pathJoin(distDirPath, "core", "createOidc.js");
+    {
+        const version: string = JSON.parse(
+            fs.readFileSync(pathJoin(process.cwd(), "package.json")).toString("utf8")
+        ).version;
 
-    const content = fs.readFileSync(filePath).toString("utf8");
+        assert(typeof version === "string");
 
-    const content_modified = content.replace("{{OIDC_SPA_VERSION}}", version);
+        const filePath = pathJoin(distDirPath, "core", "createOidc.js");
 
-    assert(content !== content_modified);
+        const content = fs.readFileSync(filePath).toString("utf8");
 
-    fs.writeFileSync(filePath, content_modified);
-}
+        const content_modified = content.replace("{{OIDC_SPA_VERSION}}", version);
 
-const extraBundleFileBasenames = new Set<string>();
+        assert(content !== content_modified);
 
-(["backend", "frontend"] as const)
-    .map(backendOrFrontend => ({
-        vendorDirPath: pathJoin(distDirPath, "vendor", backendOrFrontend),
-        backendOrFrontend
-    }))
-    .forEach(({ backendOrFrontend, vendorDirPath }) =>
-        fs
-            .readdirSync(vendorDirPath)
-            .filter(fileBasename => fileBasename.endsWith(".js"))
-            .map(fileBasename => pathJoin(vendorDirPath, fileBasename))
-            .forEach(filePath => {
-                {
-                    const mapFilePath = `${filePath}.map`;
+        fs.writeFileSync(filePath, content_modified);
+    }
 
-                    if (fs.existsSync(mapFilePath)) {
-                        fs.unlinkSync(mapFilePath);
+    const extraBundleFileBasenames = new Set<string>();
+
+    (["backend", "frontend"] as const)
+        .map(backendOrFrontend => ({
+            vendorDirPath: pathJoin(distDirPath, "vendor", backendOrFrontend),
+            backendOrFrontend
+        }))
+        .filter(({ vendorDirPath }) => fs.existsSync(vendorDirPath))
+        .forEach(({ backendOrFrontend, vendorDirPath }) =>
+            fs
+                .readdirSync(vendorDirPath)
+                .filter(fileBasename => fileBasename.endsWith(".js"))
+                .map(fileBasename => pathJoin(vendorDirPath, fileBasename))
+                .forEach(filePath => {
+                    {
+                        const mapFilePath = `${filePath}.map`;
+
+                        if (fs.existsSync(mapFilePath)) {
+                            fs.unlinkSync(mapFilePath);
+                        }
                     }
-                }
 
-                webpack_bundle: {
-                    if (
-                        backendOrFrontend === "frontend" &&
-                        pathBasename(filePath) === "oidc-client-ts.js"
-                    ) {
-                        fs.writeFileSync(
-                            filePath,
-                            Buffer.from(
-                                fs
-                                    .readFileSync(
-                                        pathJoin(
-                                            __dirname,
-                                            "..",
-                                            "node_modules",
-                                            "oidc-client-ts",
-                                            "dist",
-                                            "umd",
-                                            "oidc-client-ts.js"
+                    webpack_bundle: {
+                        if (
+                            backendOrFrontend === "frontend" &&
+                            pathBasename(filePath) === "oidc-client-ts.js"
+                        ) {
+                            fs.writeFileSync(
+                                filePath,
+                                Buffer.from(
+                                    fs
+                                        .readFileSync(
+                                            pathJoin(
+                                                __dirname,
+                                                "..",
+                                                "node_modules",
+                                                "oidc-client-ts",
+                                                "dist",
+                                                "umd",
+                                                "oidc-client-ts.js"
+                                            )
                                         )
-                                    )
-                                    .toString("utf8")
-                                    .replace("//# sourceMappingURL=oidc-client-ts.js.map", ""),
+                                        .toString("utf8")
+                                        .replace("//# sourceMappingURL=oidc-client-ts.js.map", ""),
+                                    "utf8"
+                                )
+                            );
+
+                            break webpack_bundle;
+                        }
+
+                        const cacheDirPath = pathJoin(
+                            __dirname,
+                            "..",
+                            "node_modules",
+                            ".cache",
+                            "scripts"
+                        );
+
+                        if (!fs.existsSync(cacheDirPath)) {
+                            fs.mkdirSync(cacheDirPath, { recursive: true });
+                        }
+
+                        const webpackConfigJsFilePath = pathJoin(cacheDirPath, "webpack.config.js");
+                        const webpackOutputDirPath = pathJoin(cacheDirPath, "webpack_output");
+                        const webpackOutputFilePath = pathJoin(webpackOutputDirPath, "index.js");
+
+                        fs.writeFileSync(
+                            webpackConfigJsFilePath,
+                            Buffer.from(
+                                [
+                                    `const path = require('path');`,
+                                    ``,
+                                    `module.exports = {`,
+                                    `   mode: 'production',`,
+                                    `  entry: '${filePath}',`,
+                                    `  output: {`,
+                                    `    path: '${webpackOutputDirPath}',`,
+                                    `    filename: '${pathBasename(webpackOutputFilePath)}',`,
+                                    `    libraryTarget: 'commonjs2',`,
+                                    `  },`,
+                                    `  target: "${(() => {
+                                        switch (backendOrFrontend) {
+                                            case "frontend":
+                                                return "web";
+                                            case "backend":
+                                                return "node";
+                                        }
+                                    })()}",`,
+                                    `  module: {`,
+                                    `    rules: [`,
+                                    `      {`,
+                                    `        test: /\.js$/,`,
+                                    `        use: {`,
+                                    `          loader: 'babel-loader',`,
+                                    `          options: {`,
+                                    `            presets: ['@babel/preset-env'],`,
+                                    `          }`,
+                                    `        }`,
+                                    `      }`,
+                                    `    ]`,
+                                    `  }`,
+                                    `};`
+                                ].join("\n"),
                                 "utf8"
                             )
                         );
 
-                        break webpack_bundle;
+                        run(
+                            `npx webpack --config ${pathRelative(
+                                process.cwd(),
+                                webpackConfigJsFilePath
+                            )}`
+                        );
+
+                        fs.readdirSync(webpackOutputDirPath)
+                            .filter(fileBasename => !fileBasename.endsWith(".txt"))
+                            .map(fileBasename => pathJoin(webpackOutputDirPath, fileBasename))
+                            .forEach(bundleFilePath => {
+                                assert(bundleFilePath.endsWith(".js"));
+
+                                if (pathBasename(bundleFilePath) === "index.js") {
+                                    fs.renameSync(webpackOutputFilePath, filePath);
+                                } else {
+                                    const bundleFileBasename = pathBasename(bundleFilePath);
+
+                                    assert(!extraBundleFileBasenames.has(bundleFileBasename));
+                                    extraBundleFileBasenames.add(bundleFileBasename);
+
+                                    fs.renameSync(
+                                        bundleFilePath,
+                                        pathJoin(pathDirname(filePath), bundleFileBasename)
+                                    );
+                                }
+                            });
+
+                        fs.rmSync(webpackOutputDirPath, { recursive: true });
                     }
-
-                    const cacheDirPath = pathJoin(__dirname, "..", "node_modules", ".cache", "scripts");
-
-                    if (!fs.existsSync(cacheDirPath)) {
-                        fs.mkdirSync(cacheDirPath, { recursive: true });
-                    }
-
-                    const webpackConfigJsFilePath = pathJoin(cacheDirPath, "webpack.config.js");
-                    const webpackOutputDirPath = pathJoin(cacheDirPath, "webpack_output");
-                    const webpackOutputFilePath = pathJoin(webpackOutputDirPath, "index.js");
 
                     fs.writeFileSync(
-                        webpackConfigJsFilePath,
+                        filePath,
                         Buffer.from(
                             [
-                                `const path = require('path');`,
-                                ``,
-                                `module.exports = {`,
-                                `   mode: 'production',`,
-                                `  entry: '${filePath}',`,
-                                `  output: {`,
-                                `    path: '${webpackOutputDirPath}',`,
-                                `    filename: '${pathBasename(webpackOutputFilePath)}',`,
-                                `    libraryTarget: 'commonjs2',`,
-                                `  },`,
-                                `  target: "${(() => {
-                                    switch (backendOrFrontend) {
-                                        case "frontend":
-                                            return "web";
-                                        case "backend":
-                                            return "node";
-                                    }
-                                })()}",`,
-                                `  module: {`,
-                                `    rules: [`,
-                                `      {`,
-                                `        test: /\.js$/,`,
-                                `        use: {`,
-                                `          loader: 'babel-loader',`,
-                                `          options: {`,
-                                `            presets: ['@babel/preset-env'],`,
-                                `          }`,
-                                `        }`,
-                                `      }`,
-                                `    ]`,
-                                `  }`,
-                                `};`
+                                fs.readFileSync(filePath).toString("utf8"),
+                                `exports.__oidcSpaBundle = true;`
                             ].join("\n"),
                             "utf8"
                         )
                     );
-
-                    run(`npx webpack --config ${pathRelative(process.cwd(), webpackConfigJsFilePath)}`);
-
-                    fs.readdirSync(webpackOutputDirPath)
-                        .filter(fileBasename => !fileBasename.endsWith(".txt"))
-                        .map(fileBasename => pathJoin(webpackOutputDirPath, fileBasename))
-                        .forEach(bundleFilePath => {
-                            assert(bundleFilePath.endsWith(".js"));
-
-                            if (pathBasename(bundleFilePath) === "index.js") {
-                                fs.renameSync(webpackOutputFilePath, filePath);
-                            } else {
-                                const bundleFileBasename = pathBasename(bundleFilePath);
-
-                                assert(!extraBundleFileBasenames.has(bundleFileBasename));
-                                extraBundleFileBasenames.add(bundleFileBasename);
-
-                                fs.renameSync(
-                                    bundleFilePath,
-                                    pathJoin(pathDirname(filePath), bundleFileBasename)
-                                );
-                            }
-                        });
-
-                    fs.rmSync(webpackOutputDirPath, { recursive: true });
-                }
-
-                fs.writeFileSync(
-                    filePath,
-                    Buffer.from(
-                        [
-                            fs.readFileSync(filePath).toString("utf8"),
-                            `exports.__oidcSpaBundle = true;`
-                        ].join("\n"),
-                        "utf8"
-                    )
-                );
-            })
-    );
+                })
+        );
+}
 
 console.log(`✓ built in ${((Date.now() - startTime) / 1000).toFixed(2)}s`);
 
