@@ -7,6 +7,7 @@ import {
     dirname as pathDirname
 } from "path";
 import { assert } from "tsafe/assert";
+import { Buffer } from "Buffer";
 
 const startTime = Date.now();
 
@@ -103,7 +104,8 @@ const extraBundleFileBasenames = new Set<string>();
                             `    ]`,
                             `  }`,
                             `};`
-                        ].join("\n")
+                        ].join("\n"),
+                        "utf8"
                     )
                 );
 
@@ -138,7 +140,8 @@ const extraBundleFileBasenames = new Set<string>();
                         [
                             fs.readFileSync(filePath).toString("utf8"),
                             `exports.__oidcSpaBundle = true;`
-                        ].join("\n")
+                        ].join("\n"),
+                        "utf8"
                     )
                 );
             })
