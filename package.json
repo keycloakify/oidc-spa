@@ -11,6 +11,7 @@
         "build": "tsx scripts/build.ts",
         "tsc:cjs": "tsc --module CommonJS --outDir ./dist",
         "tsc:esm": "tsc --module es2020 --outDir ./dist/esm",
+        "watch": "yarn tsc:esm -w",
         "_format": "prettier '**/*.{ts,tsx,json,md}'",
         "format": "yarn _format --write",
         "format:check": "yarn _format --list-different",

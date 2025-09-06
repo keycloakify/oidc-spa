@@ -4,7 +4,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-INPUT="$SCRIPT_DIR/../dist/index.js"
+INPUT="$SCRIPT_DIR/../dist/esm/index.js"
+#INPUT="$SCRIPT_DIR/../dist/index.js"
 #INPUT="$SCRIPT_DIR/../dist/vendor/frontend/oidc-client-ts.js"
 #INPUT="$SCRIPT_DIR/../dist/vendor/frontend/jwt-decode.js"
 #INPUT="$SCRIPT_DIR/../dist/vendor/frontend/tsafe.js"
@@ -19,7 +20,7 @@ OUTPUT="$(mktemp)"
 npx esbuild "$INPUT" \
   --bundle \
   --minify \
-  --format=cjs \
+  --format=esm \
   --platform=browser \
   --outfile="$OUTPUT" \
   >/dev/null

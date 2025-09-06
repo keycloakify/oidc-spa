@@ -91,7 +91,14 @@ for (const targetFormat of ["cjs", "esm"] as const) {
                                                 "node_modules",
                                                 "oidc-client-ts",
                                                 "dist",
-                                                "umd",
+                                                (() => {
+                                                    switch (targetFormat) {
+                                                        case "cjs":
+                                                            return "umd";
+                                                        case "esm":
+                                                            return "esm";
+                                                    }
+                                                })(),
                                                 "oidc-client-ts.js"
                                             )
                                         )
@@ -132,8 +139,18 @@ for (const targetFormat of ["cjs", "esm"] as const) {
                                     `  output: {`,
                                     `    path: '${webpackOutputDirPath}',`,
                                     `    filename: '${pathBasename(webpackOutputFilePath)}',`,
-                                    `    libraryTarget: 'commonjs2',`,
+                                    (() => {
+                                        switch (targetFormat) {
+                                            case "esm":
+                                                return `    library: { type: 'module' },`;
+                                            case "cjs":
+                                                return `    libraryTarget: 'commonjs2',`;
+                                        }
+                                    })(),
                                     `  },`,
+                                    targetFormat !== "esm"
+                                        ? ``
+                                        : `  experiments: { outputModule: true },`,
                                     `  target: "${(() => {
                                         switch (backendOrFrontend) {
                                             case "frontend":
@@ -192,16 +209,18 @@ for (const targetFormat of ["cjs", "esm"] as const) {
                         fs.rmSync(webpackOutputDirPath, { recursive: true });
                     }
 
-                    fs.writeFileSync(
-                        filePath,
-                        Buffer.from(
-                            [
-                                fs.readFileSync(filePath).toString("utf8"),
-                                `exports.__oidcSpaBundle = true;`
-                            ].join("\n"),
-                            "utf8"
-                        )
-                    );
+                    if (targetFormat === "cjs") {
+                        fs.writeFileSync(
+                            filePath,
+                            Buffer.from(
+                                [
+                                    fs.readFileSync(filePath).toString("utf8"),
+                                    `exports.__oidcSpaBundle = true;`
+                                ].join("\n"),
+                                "utf8"
+                            )
+                        );
+                    }
                 })
         );
 }
