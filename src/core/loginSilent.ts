@@ -25,7 +25,7 @@ type ResultOfLoginSilent =
 
 export async function loginSilent(params: {
     oidcClientTsUserManager: OidcClientTsUserManager;
-    stateQueryParamValue_instance: string;
+    stateUrlParamValue_instance: string;
     configId: string;
 
     transformUrlBeforeRedirect:
@@ -41,7 +41,7 @@ export async function loginSilent(params: {
 }): Promise<ResultOfLoginSilent> {
     const {
         oidcClientTsUserManager,
-        stateQueryParamValue_instance,
+        stateUrlParamValue_instance,
         configId,
         transformUrlBeforeRedirect,
         getExtraQueryParams,
@@ -77,10 +77,10 @@ export async function loginSilent(params: {
 
     const { decodeEncryptedAuth, getIsEncryptedAuthResponse, clearSessionStoragePublicKey } =
         await initIframeMessageProtection({
-            stateQueryParamValue: stateQueryParamValue_instance
+            stateUrlParamValue: stateUrlParamValue_instance
         });
 
-    const timeout = setTimeout(async () => {
+    const timer = setTimeout(async () => {
         dResult.resolve({
             outcome: "failure",
             cause: "timeout"
@@ -102,7 +102,7 @@ export async function loginSilent(params: {
 
         const { authResponse } = await decodeEncryptedAuth({ encryptedAuthResponse: event.data });
 
-        const stateData = getStateData({ stateQueryParamValue: authResponse.state });
+        const stateData = getStateData({ stateUrlParamValue: authResponse.state });
 
         assert(stateData !== undefined, "765645");
         assert(stateData.context === "iframe", "250711");
@@ -111,7 +111,7 @@ export async function loginSilent(params: {
             return;
         }
 
-        clearTimeout(timeout);
+        clearTimeout(timer);
 
         window.removeEventListener("message", listener);
 
@@ -164,7 +164,8 @@ export async function loginSilent(params: {
             oidcClientTsUser => {
                 assert(oidcClientTsUser !== null, "oidcClientTsUser is not supposed to be null here");
 
-                clearTimeout(timeout);
+                clearTimeout(timer);
+                window.removeEventListener("message", listener);
 
                 dResult.resolve({
                     outcome: "token refreshed using refresh token",
@@ -179,7 +180,7 @@ export async function loginSilent(params: {
                     // is not pointing to a valid oidc server.
                     // It could be a CORS error on the well-known endpoint but it's unlikely.
 
-                    clearTimeout(timeout);
+                    clearTimeout(timer);
 
                     dResult.resolve({
                         outcome: "failure",
@@ -198,7 +199,7 @@ export async function loginSilent(params: {
         clearSessionStoragePublicKey();
 
         if (result.outcome === "failure") {
-            clearStateStore({ stateQueryParamValue: stateQueryParamValue_instance });
+            clearStateStore({ stateUrlParamValue: stateUrlParamValue_instance });
         }
     });
 

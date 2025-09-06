@@ -18,7 +18,7 @@ import {
     createIframeTimeoutInitializationError,
     createWellKnownOidcConfigurationEndpointUnreachableInitializationError
 } from "./OidcInitializationError";
-import { type StateData, generateStateQueryParamValue, STATE_STORE_KEY_PREFIX } from "./StateData";
+import { type StateData, generateStateUrlParamValue, STATE_STORE_KEY_PREFIX } from "./StateData";
 import { notifyOtherTabsOfLogout, getPrOtherTabLogout } from "./logoutPropagationToOtherTabs";
 import { notifyOtherTabsOfLogin, getPrOtherTabLogin } from "./loginPropagationToOtherTabs";
 import { getConfigId } from "./configId";
@@ -43,6 +43,7 @@ import { initialLocationHref } from "./initialLocationHref";
 import { createGetIsNewBrowserSession } from "./isNewBrowserSession";
 import { trustedFetch } from "./trustedFetch";
 import { getIsOnline } from "../tools/getIsOnline";
+import { isKeycloak } from "../keycloak/isKeycloak";
 
 handleOidcCallback();
 
@@ -94,6 +95,10 @@ export type ParamsOfCreateOidc<
      */
     extraTokenParams?: Record<string, string | undefined> | (() => Record<string, string | undefined>);
     /**
+     * Usage discouraged, it's here because we don't want to assume too much on your
+     * usecase but I can't think of a scenario where you would want anything
+     * other than the current page.
+     *
      * Where to redirect after successful login.
      * Default: window.location.href (here)
      *
@@ -126,6 +131,10 @@ export type ParamsOfCreateOidc<
     idleSessionLifetimeInSeconds?: number;
 
     /**
+     * Usage discouraged, this parameter exists because we don't want to assume
+     * too much about your usecase but I can't think of a scenario where you would
+     * want anything other than the current page.
+     *
      * Default: { redirectTo: "current page" }
      */
     autoLogoutParams?: Parameters<Oidc.LoggedIn<any>["logout"]>[0];
@@ -319,14 +328,8 @@ export async function createOidc_nonMemoized<
         return extraTokenParamsOrGetter;
     })();
 
-    const homeUrl = toFullyQualifiedUrl({
+    const homeUrlAndRedirectUri = toFullyQualifiedUrl({
         urlish: homeUrl_params,
-        doAssertNoQueryParams: true,
-        doOutputWithTrailingSlash: true
-    });
-
-    const callbackUri = toFullyQualifiedUrl({
-        urlish: homeUrl,
         doAssertNoQueryParams: true,
         doOutputWithTrailingSlash: true
     });
@@ -338,8 +341,7 @@ export async function createOidc_nonMemoized<
                 clientId,
                 scopes,
                 configId,
-                homeUrl,
-                callbackUri
+                homeUrlAndRedirectUri
             },
             null,
             2
@@ -354,16 +356,10 @@ export async function createOidc_nonMemoized<
         }
     }
 
-    const stateQueryParamValue_instance = generateStateQueryParamValue();
+    const stateUrlParamValue_instance = generateStateUrlParamValue();
 
     const canUseIframe = (() => {
         if (noIframe) {
-            return false;
-        }
-
-        // NOTE: Electron
-        if (!/https?:\/\//.test(callbackUri)) {
-            log?.("We won't use iframe, callbackUri uses a custom protocol.");
             return false;
         }
 
@@ -408,12 +404,13 @@ export async function createOidc_nonMemoized<
     let isUserStoreInMemoryOnly: boolean;
 
     const oidcClientTsUserManager = new OidcClientTsUserManager({
-        stateQueryParamValue: stateQueryParamValue_instance,
+        stateUrlParamValue: stateUrlParamValue_instance,
         authority: issuerUri,
         client_id: clientId,
-        redirect_uri: callbackUri,
-        silent_redirect_uri: callbackUri,
-        post_logout_redirect_uri: callbackUri,
+        redirect_uri: homeUrlAndRedirectUri,
+        silent_redirect_uri: homeUrlAndRedirectUri,
+        post_logout_redirect_uri: homeUrlAndRedirectUri,
+        response_mode: isKeycloak({ issuerUri }) ? "fragment" : "query",
         response_type: "code",
         scope: Array.from(new Set(["openid", ...scopes])).join(" "),
         automaticSilentRenew: false,
@@ -457,7 +454,7 @@ export async function createOidc_nonMemoized<
         transformUrlBeforeRedirect,
         getExtraQueryParams,
         getExtraTokenParams,
-        homeUrl,
+        homeUrl: homeUrlAndRedirectUri,
         evtIsUserLoggedIn,
         log
     });
@@ -676,7 +673,7 @@ export async function createOidc_nonMemoized<
 
                 const result_loginSilent = await loginSilent({
                     oidcClientTsUserManager,
-                    stateQueryParamValue_instance,
+                    stateUrlParamValue_instance,
                     configId,
                     transformUrlBeforeRedirect,
                     getExtraQueryParams,
@@ -696,7 +693,7 @@ export async function createOidc_nonMemoized<
                             );
                         case "timeout":
                             return createIframeTimeoutInitializationError({
-                                callbackUri,
+                                redirectUri: homeUrlAndRedirectUri,
                                 clientId,
                                 issuerUri,
                                 noIframe
@@ -1022,7 +1019,7 @@ export async function createOidc_nonMemoized<
                     case "current page":
                         return window.location.href;
                     case "home":
-                        return homeUrl;
+                        return homeUrlAndRedirectUri;
                     case "specific url":
                         return toFullyQualifiedUrl({
                             urlish: params.url,
@@ -1128,7 +1125,7 @@ export async function createOidc_nonMemoized<
 
                 const result_loginSilent = await loginSilent({
                     oidcClientTsUserManager,
-                    stateQueryParamValue_instance,
+                    stateUrlParamValue_instance,
                     configId,
                     transformUrlBeforeRedirect,
                     getExtraQueryParams,

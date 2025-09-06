@@ -36,34 +36,34 @@ export namespace StateData {
 const STATE_QUERY_PARAM_VALUE_IDENTIFIER_PREFIX = "b2lkYy1zcGEu";
 const RANDOM_STRING_LENGTH = 32 - STATE_QUERY_PARAM_VALUE_IDENTIFIER_PREFIX.length;
 
-export function generateStateQueryParamValue(): string {
+export function generateStateUrlParamValue(): string {
     return `${STATE_QUERY_PARAM_VALUE_IDENTIFIER_PREFIX}${generateUrlSafeRandom({
         length: RANDOM_STRING_LENGTH
     })}`;
 }
 
-export function getIsStatQueryParamValue(params: { maybeStateQueryParamValue: string }): boolean {
-    const { maybeStateQueryParamValue } = params;
+export function getIsStatQueryParamValue(params: { maybeStateUrlParamValue: string }): boolean {
+    const { maybeStateUrlParamValue } = params;
 
     return (
-        maybeStateQueryParamValue.startsWith(STATE_QUERY_PARAM_VALUE_IDENTIFIER_PREFIX) &&
-        maybeStateQueryParamValue.length ===
+        maybeStateUrlParamValue.startsWith(STATE_QUERY_PARAM_VALUE_IDENTIFIER_PREFIX) &&
+        maybeStateUrlParamValue.length ===
             STATE_QUERY_PARAM_VALUE_IDENTIFIER_PREFIX.length + RANDOM_STRING_LENGTH
     );
 }
 
 export const STATE_STORE_KEY_PREFIX = "oidc.";
 
-function getKey(params: { stateQueryParamValue: string }) {
-    const { stateQueryParamValue } = params;
+function getKey(params: { stateUrlParamValue: string }) {
+    const { stateUrlParamValue } = params;
 
-    return `${STATE_STORE_KEY_PREFIX}${stateQueryParamValue}`;
+    return `${STATE_STORE_KEY_PREFIX}${stateUrlParamValue}`;
 }
 
-function getStateStore(params: { stateQueryParamValue: string }): { data: StateData } | undefined {
-    const { stateQueryParamValue } = params;
+function getStateStore(params: { stateUrlParamValue: string }): { data: StateData } | undefined {
+    const { stateUrlParamValue } = params;
 
-    const item = localStorage.getItem(getKey({ stateQueryParamValue }));
+    const item = localStorage.getItem(getKey({ stateUrlParamValue }));
 
     if (item === null) {
         return undefined;
@@ -81,21 +81,21 @@ function getStateStore(params: { stateQueryParamValue: string }): { data: StateD
     return obj;
 }
 
-function setStateStore(params: { stateQueryParamValue: string; obj: { data: StateData } }) {
-    const { stateQueryParamValue, obj } = params;
+function setStateStore(params: { stateUrlParamValue: string; obj: { data: StateData } }) {
+    const { stateUrlParamValue, obj } = params;
 
-    localStorage.setItem(getKey({ stateQueryParamValue }), JSON.stringify(obj));
+    localStorage.setItem(getKey({ stateUrlParamValue }), JSON.stringify(obj));
 }
 
-export function clearStateStore(params: { stateQueryParamValue: string }) {
-    const { stateQueryParamValue } = params;
-    localStorage.removeItem(getKey({ stateQueryParamValue }));
+export function clearStateStore(params: { stateUrlParamValue: string }) {
+    const { stateUrlParamValue } = params;
+    localStorage.removeItem(getKey({ stateUrlParamValue }));
 }
 
-export function getStateData(params: { stateQueryParamValue: string }): StateData | undefined {
-    const { stateQueryParamValue } = params;
+export function getStateData(params: { stateUrlParamValue: string }): StateData | undefined {
+    const { stateUrlParamValue } = params;
 
-    const stateStore = getStateStore({ stateQueryParamValue });
+    const stateStore = getStateStore({ stateUrlParamValue });
 
     if (stateStore === undefined) {
         return undefined;
@@ -104,15 +104,15 @@ export function getStateData(params: { stateQueryParamValue: string }): StateDat
     return stateStore.data;
 }
 
-export function markStateDataAsProcessedByCallback(params: { stateQueryParamValue: string }) {
-    const { stateQueryParamValue } = params;
+export function markStateDataAsProcessedByCallback(params: { stateUrlParamValue: string }) {
+    const { stateUrlParamValue } = params;
 
-    const obj = getStateStore({ stateQueryParamValue });
+    const obj = getStateStore({ stateUrlParamValue });
 
     assert(obj !== undefined, "180465");
     assert(obj.data.context === "redirect", "649531");
 
     obj.data.hasBeenProcessedByCallback = true;
 
-    setStateStore({ stateQueryParamValue, obj });
+    setStateStore({ stateUrlParamValue, obj });
 }

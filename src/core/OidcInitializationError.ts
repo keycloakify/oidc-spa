@@ -1,5 +1,5 @@
 import { getIsValidRemoteJson } from "../tools/getIsValidRemoteJson";
-import { parseKeycloakIssuerUri } from "../tools/parseKeycloakIssuerUri";
+import { isKeycloak } from "../keycloak/isKeycloak";
 
 export class OidcInitializationError extends Error {
     public readonly isAuthServerLikelyDown: boolean;
@@ -26,8 +26,6 @@ export async function createWellKnownOidcConfigurationEndpointUnreachableInitial
 }): Promise<OidcInitializationError> {
     const { issuerUri } = params;
 
-    const issuerUri_parsed = parseKeycloakIssuerUri(issuerUri);
-
     const WELL_KNOWN_PATH = "/.well-known/openid-configuration";
 
     const commonFallbackMessagePart = [
@@ -36,7 +34,7 @@ export async function createWellKnownOidcConfigurationEndpointUnreachableInitial
         `Endpoint that couldn't be reached: ${issuerUri}${WELL_KNOWN_PATH}`
     ].join("\n");
 
-    if (issuerUri_parsed === undefined) {
+    if (!isKeycloak({ issuerUri })) {
         return new OidcInitializationError({
             messageOrCause: [
                 commonFallbackMessagePart,
@@ -49,15 +47,17 @@ export async function createWellKnownOidcConfigurationEndpointUnreachableInitial
         });
     }
 
+    const keycloakUtils = (await import("../keycloak")).createKeycloakUtils({ issuerUri });
+
     const getCandidateIssuerUri = (params: { kcHttpRelativePath: string | undefined }) => {
         const { kcHttpRelativePath } = params;
 
-        return `${issuerUri_parsed.origin}${
-            kcHttpRelativePath === undefined ? "" : kcHttpRelativePath
-        }/realms/${issuerUri_parsed.realm}`;
+        return `${keycloakUtils.issuerUriParsed.origin}${
+            kcHttpRelativePath ?? ""
+        }/realms/${encodeURIComponent(keycloakUtils.issuerUriParsed.realm)}`;
     };
 
-    if (issuerUri_parsed.kcHttpRelativePath === undefined) {
+    if (keycloakUtils.issuerUriParsed.kcHttpRelativePath === undefined) {
         const issuerUri_candidate = getCandidateIssuerUri({ kcHttpRelativePath: "/auth" });
 
         const isValid = await getIsValidRemoteJson(`${issuerUri_candidate}${WELL_KNOWN_PATH}`);
@@ -84,7 +84,7 @@ export async function createWellKnownOidcConfigurationEndpointUnreachableInitial
                     `Your Keycloak server is configured with KC_HTTP_RELATIVE_PATH=/`,
                     `The issuerUri you provided: ${issuerUri}`,
                     `The correct issuerUri is: ${issuerUri_candidate}`,
-                    `(You should remove the ${issuerUri_parsed.kcHttpRelativePath} portion.)`
+                    `(You should remove the ${keycloakUtils.issuerUriParsed.kcHttpRelativePath} portion.)`
                 ].join("\n"),
                 isAuthServerLikelyDown: false
             });
@@ -96,7 +96,7 @@ export async function createWellKnownOidcConfigurationEndpointUnreachableInitial
             commonFallbackMessagePart,
             ``,
             `Given the shape of the issuerUri you provided, it seems that you are using Keycloak.`,
-            `- Make sure the realm '${issuerUri_parsed.realm}' exists.`,
+            `- Make sure the realm '${keycloakUtils.issuerUriParsed.realm}' exists.`,
             `- Check the KC_HTTP_RELATIVE_PATH that you might have configured your keycloak server with.`,
             `  For example if you have KC_HTTP_RELATIVE_PATH=/xxx the issuerUri should be ${getCandidateIssuerUri(
                 { kcHttpRelativePath: "/xxx" }
@@ -107,22 +107,22 @@ export async function createWellKnownOidcConfigurationEndpointUnreachableInitial
 }
 
 export async function createIframeTimeoutInitializationError(params: {
-    callbackUri: string;
+    redirectUri: string;
     issuerUri: string;
     clientId: string;
     noIframe: boolean;
 }): Promise<OidcInitializationError> {
-    const { callbackUri, issuerUri, clientId, noIframe } = params;
+    const { redirectUri, issuerUri, clientId, noIframe } = params;
 
     iframe_blocked: {
         if (noIframe) {
             break iframe_blocked;
         }
 
-        const headersOrError = await fetch(callbackUri).then(
+        const headersOrError = await fetch(redirectUri).then(
             response => {
                 if (!response.ok) {
-                    return new Error(`${callbackUri} responded with a ${response.status} status code.`);
+                    return new Error(`${redirectUri} responded with a ${response.status} status code.`);
                 }
 
                 return {
@@ -197,7 +197,7 @@ export async function createIframeTimeoutInitializationError(params: {
         return new OidcInitializationError({
             isAuthServerLikelyDown: false,
             messageOrCause: [
-                `${callbackUri} is currently served by your web server with the HTTP header \`${key_problem}: ${headers[key_problem]}\`.\n`,
+                `${redirectUri} is currently served by your web server with the HTTP header \`${key_problem}: ${headers[key_problem]}\`.\n`,
                 "This header prevents the silent sign-in process from working.\n",
                 "Refer to this documentation page to fix this issue: https://docs.oidc-spa.dev/v/v7/resources/iframe-related-issues"
             ].join(" ")
@@ -217,28 +217,28 @@ export async function createIframeTimeoutInitializationError(params: {
             `- Either the client ID "${clientId}" does not exist, or\n`,
             `- You forgot to add the OIDC callback URL to the list of Valid Redirect URIs.\n`,
             `Client ID: "${clientId}"\n`,
-            `Callback URL to add to the list of Valid Redirect URIs: "${callbackUri}"\n\n`,
-            ...(() => {
-                const kc = parseKeycloakIssuerUri(issuerUri);
-
-                if (!kc) {
+            `Callback URL to add to the list of Valid Redirect URIs: "${redirectUri}"\n\n`,
+            ...(await (async () => {
+                if (!isKeycloak({ issuerUri })) {
                     return [
                         "Check the documentation of your OIDC server to learn how to configure the public client (Authorization Code Flow + PKCE) properly."
                     ];
                 }
 
+                const kc = (await import("../keycloak")).createKeycloakUtils({ issuerUri });
+
                 return [
                     `It seems you are using Keycloak. Follow these steps to resolve the issue:\n\n`,
                     `1. Go to the Keycloak admin console: ${kc.adminConsoleUrl_master}\n`,
                     `2. Log in as an admin user.\n`,
-                    `3. In the top left corner select the realm "${kc.realm}".\n`,
+                    `3. In the top left corner select the realm "${kc.issuerUriParsed.realm}".\n`,
                     `4. In the left menu, click on "Clients".\n`,
                     `5. Locate the client "${clientId}" in the list and click on it.\n`,
-                    `6. Find "Valid Redirect URIs" and add "${callbackUri}" to the list.\n`,
+                    `6. Find "Valid Redirect URIs" and add "${redirectUri}" to the list.\n`,
                     `7. Save the changes.\n\n`,
                     `For more information, refer to the documentation: https://docs.oidc-spa.dev/v/v7/providers-configuration/keycloak`
                 ];
-            })(),
+            })()),
             "\n\n",
             "If nothing works, you can try disabling the use of iframe: https://docs.oidc-spa.dev/resources/iframe-related-issues\n",
             "with some OIDC provider it might solve the issue."
@@ -246,7 +246,7 @@ export async function createIframeTimeoutInitializationError(params: {
     });
 }
 
-export function createFailedToFetchTokenEndpointInitializationError(params: {
+export async function createFailedToFetchTokenEndpointInitializationError(params: {
     issuerUri: string;
     clientId: string;
 }) {
@@ -260,27 +260,27 @@ export function createFailedToFetchTokenEndpointInitializationError(params: {
             `Make sure you have added '${window.location.origin}' to the list of Web Origins`,
             `in the '${clientId}' client configuration of your OIDC server.\n`,
             "\n",
-            ...(() => {
-                const kc = parseKeycloakIssuerUri(issuerUri);
-
-                if (kc === undefined) {
+            ...(await (async () => {
+                if (!isKeycloak({ issuerUri })) {
                     return [
                         "Check the documentation of your OIDC server to learn how to configure the public client (Authorization Code Flow + PKCE) properly."
                     ];
                 }
 
+                const kc = (await import("../keycloak")).createKeycloakUtils({ issuerUri });
+
                 return [
                     `Since it seems that you are using Keycloak, here are the steps to follow:\n`,
                     `1. Go to the Keycloak admin console: ${kc.adminConsoleUrl_master}\n`,
                     `2. Log in as an admin user.\n`,
-                    `3. In the top left corner select the realm "${kc.realm}".\n`,
+                    `3. In the top left corner select the realm "${kc.issuerUriParsed.realm}".\n`,
                     `4. In the left menu, click on "Clients".\n`,
                     `5. Find '${clientId}' in the list of clients and click on it.\n`,
                     `6. Find 'Web Origins' and add '${window.location.origin}' to the list.\n`,
                     `7. Save the changes.\n\n`,
                     `More info: https://docs.oidc-spa.dev/v/v7/providers-configuration/keycloak`
                 ];
-            })()
+            })())
         ].join(" ")
     });
 }

@@ -1,7 +1,7 @@
 import { useOidc, getOidc } from "../oidc";
 import { useEffect, useState } from "react";
 import { decodeJwt } from "oidc-spa/tools/decodeJwt";
-import { parseKeycloakIssuerUri } from "oidc-spa/tools/parseKeycloakIssuerUri";
+import { isKeycloak, createKeycloakUtils } from "oidc-spa/keycloak";
 
 export default function ProtectedPage() {
     // Here we can safely assume that the user is logged in.
@@ -15,7 +15,7 @@ export default function ProtectedPage() {
         assert: "user logged in"
     });
 
-    const parsedKeycloakIssuerUri = parseKeycloakIssuerUri(issuerUri);
+    const keycloakUtils = isKeycloak({ issuerUri }) ? createKeycloakUtils({ issuerUri }) : undefined;
 
     const { decodedAccessToken } = useDecodedAccessToken_DIAGNOSTIC_ONLY();
 
@@ -42,7 +42,7 @@ export default function ProtectedPage() {
             <br />
             <button onClick={() => renewTokens()}>Renew tokens </button>
             <br />
-            {parsedKeycloakIssuerUri !== undefined && (
+            {keycloakUtils !== undefined && (
                 <>
                     <br />
                     <button
@@ -82,7 +82,7 @@ export default function ProtectedPage() {
                     </button>
                     <br />
                     <a
-                        href={parsedKeycloakIssuerUri.getAccountUrl({
+                        href={keycloakUtils.getAccountUrl({
                             clientId,
                             backToAppFromAccountUrl: import.meta.env.BASE_URL
                         })}

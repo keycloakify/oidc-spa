@@ -28,6 +28,8 @@
         "./mock/react": "./dist/mock/react.js",
         "./entrypoint": "./dist/entrypoint.js",
         "./backend": "./dist/backend.js",
+        "./keycloak": "./dist/keycloak/index.js",
+        "./keycloak-js": "./dist/keycloak-js.js",
         "./tools/decodeJwt": "./dist/tools/decodeJwt.js",
         "./tools/parseKeycloakIssuerUri": "./dist/tools/parseKeycloakIssuerUri.js"
     },
