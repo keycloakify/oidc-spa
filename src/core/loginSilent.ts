@@ -80,7 +80,7 @@ export async function loginSilent(params: {
             stateUrlParamValue: stateUrlParamValue_instance
         });
 
-    const timeout = setTimeout(async () => {
+    const timer = setTimeout(async () => {
         dResult.resolve({
             outcome: "failure",
             cause: "timeout"
@@ -111,7 +111,7 @@ export async function loginSilent(params: {
             return;
         }
 
-        clearTimeout(timeout);
+        clearTimeout(timer);
 
         window.removeEventListener("message", listener);
 
@@ -164,7 +164,8 @@ export async function loginSilent(params: {
             oidcClientTsUser => {
                 assert(oidcClientTsUser !== null, "oidcClientTsUser is not supposed to be null here");
 
-                clearTimeout(timeout);
+                clearTimeout(timer);
+                window.removeEventListener("message", listener);
 
                 dResult.resolve({
                     outcome: "token refreshed using refresh token",
@@ -179,7 +180,7 @@ export async function loginSilent(params: {
                     // is not pointing to a valid oidc server.
                     // It could be a CORS error on the well-known endpoint but it's unlikely.
 
-                    clearTimeout(timeout);
+                    clearTimeout(timer);
 
                     dResult.resolve({
                         outcome: "failure",

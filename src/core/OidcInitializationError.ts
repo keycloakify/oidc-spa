@@ -53,8 +53,8 @@ export async function createWellKnownOidcConfigurationEndpointUnreachableInitial
         const { kcHttpRelativePath } = params;
 
         return `${keycloakUtils.issuerUriParsed.origin}${
-            kcHttpRelativePath === undefined ? "" : kcHttpRelativePath
-        }/realms/${keycloakUtils.issuerUriParsed.realm}`;
+            kcHttpRelativePath ?? ""
+        }/realms/${encodeURIComponent(keycloakUtils.issuerUriParsed.realm)}`;
     };
 
     if (keycloakUtils.issuerUriParsed.kcHttpRelativePath === undefined) {

@@ -40,12 +40,12 @@ export function createKeycloakUtils(params: { issuerUri: string }): KeycloakUtil
 
     const issuerUriParsed = parseKeycloakIssuerUri({ issuerUri });
 
-    const getAdminConsoleUrl = (realm: string) =>
-        `${issuerUriParsed.origin}${issuerUriParsed.kcHttpRelativePath}/admin/${realm}/console`;
+    const keycloakServerUrl = `${issuerUriParsed.origin}${issuerUriParsed.kcHttpRelativePath ?? ""}`;
 
-    const realmUrl = `${issuerUriParsed.origin}${
-        issuerUriParsed.kcHttpRelativePath
-    }/realms/${encodeURIComponent(issuerUriParsed.realm)}`;
+    const getAdminConsoleUrl = (realm: string) =>
+        `${keycloakServerUrl}/admin/${encodeURIComponent(realm)}/console`;
+
+    const realmUrl = `${keycloakServerUrl}/realms/${encodeURIComponent(issuerUriParsed.realm)}`;
 
     return {
         issuerUriParsed,
@@ -53,7 +53,7 @@ export function createKeycloakUtils(params: { issuerUri: string }): KeycloakUtil
         adminConsoleUrl_master: getAdminConsoleUrl("master"),
         getAccountUrl: ({ clientId, backToAppFromAccountUrl, locale }) => {
             const accountUrlObj = new URL(
-                `${issuerUriParsed.origin}${issuerUriParsed.kcHttpRelativePath}/realms/${issuerUriParsed.realm}/account`
+                `${keycloakServerUrl}/realms/${issuerUriParsed.realm}/account`
             );
             accountUrlObj.searchParams.set("referrer", clientId);
             accountUrlObj.searchParams.set(
@@ -72,14 +72,14 @@ export function createKeycloakUtils(params: { issuerUri: string }): KeycloakUtil
             trustedFetch(`${realmUrl}/account`, {
                 headers: {
                     Accept: "application/json",
-                    Authorization: `bearer ${accessToken}`
+                    Authorization: `Bearer ${accessToken}`
                 }
             }).then(r => r.json()),
         fetchUserInfo: ({ accessToken }) =>
             trustedFetch(`${realmUrl}/protocol/openid-connect/userinfo`, {
                 headers: {
                     Accept: "application/json",
-                    Authorization: `bearer ${accessToken}`
+                    Authorization: `Bearer ${accessToken}`
                 }
             }).then(r => r.json()),
         transformUrlBeforeRedirectForRegister: authorizationUrl => {

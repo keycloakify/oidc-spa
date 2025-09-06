@@ -1,10 +1,7 @@
-/**
- * Assume issuerUri with no trailing slashes
- */
 export function isKeycloak(params: { issuerUri: string }): boolean {
     const { issuerUri } = params;
 
-    const url = new URL(issuerUri);
+    const url = new URL(issuerUri.replace(/\/$/, ""));
 
     const split = url.pathname.split("/realms/");
 

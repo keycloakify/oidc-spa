@@ -782,7 +782,7 @@ export class Keycloak {
         assert(oidc !== undefined);
 
         const extraQueryParams_commons: Record<string, string | undefined> = {
-            claim:
+            claims:
                 acr === undefined
                     ? undefined
                     : JSON.stringify({
@@ -986,7 +986,7 @@ export class Keycloak {
      *   alert('Failed to refresh the token, or the session has expired');
      * });
      */
-    async updateToken(minValidity?: number): Promise<boolean> {
+    async updateToken(minValidity: number = 5): Promise<boolean> {
         const internalState = internalStateByInstance.get(this);
 
         assert(internalState !== undefined);
@@ -999,7 +999,7 @@ export class Keycloak {
 
         assert(oidc !== undefined);
 
-        assert(oidc.isUserLoggedIn, "updateToken called to early");
+        assert(oidc.isUserLoggedIn, "updateToken called too early");
 
         if (!this.isTokenExpired(minValidity)) {
             return false;

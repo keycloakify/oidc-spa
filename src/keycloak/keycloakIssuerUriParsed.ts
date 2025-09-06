@@ -13,7 +13,7 @@ export function parseKeycloakIssuerUri(params: { issuerUri: string }): KeycloakI
 
     assert(isKeycloak({ issuerUri }));
 
-    const url = new URL(issuerUri);
+    const url = new URL(issuerUri.replace(/\/$/, ""));
 
     const split = url.pathname.split("/realms/");
 
