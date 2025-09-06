@@ -41,11 +41,8 @@ import {
 } from "./ongoingLoginOrRefreshProcesses";
 import { initialLocationHref } from "./initialLocationHref";
 import { createGetIsNewBrowserSession } from "./isNewBrowserSession";
-import { trustedFetch } from "./trustedFetch";
 import { getIsOnline } from "../tools/getIsOnline";
 import { isKeycloak } from "../keycloak/isKeycloak";
-
-handleOidcCallback();
 
 // NOTE: Replaced at build time
 const VERSION = "{{OIDC_SPA_VERSION}}";
@@ -442,7 +439,6 @@ export async function createOidc_nonMemoized<
         }),
         stateStore: new WebStorageStateStore({ store: localStorage, prefix: STATE_STORE_KEY_PREFIX }),
         client_secret: __unsafe_clientSecret,
-        fetch: trustedFetch,
         metadata: __metadata
     });
 

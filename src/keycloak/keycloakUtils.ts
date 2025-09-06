@@ -1,4 +1,3 @@
-import { trustedFetch } from "../core/trustedFetch";
 import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";
 
 import { type KeycloakIssuerUriParsed, parseKeycloakIssuerUri } from "./keycloakIssuerUriParsed";
@@ -69,14 +68,14 @@ export function createKeycloakUtils(params: { issuerUri: string }): KeycloakUtil
             return accountUrlObj.href;
         },
         fetchUserProfile: ({ accessToken }) =>
-            trustedFetch(`${realmUrl}/account`, {
+            fetch(`${realmUrl}/account`, {
                 headers: {
                     Accept: "application/json",
                     Authorization: `Bearer ${accessToken}`
                 }
             }).then(r => r.json()),
         fetchUserInfo: ({ accessToken }) =>
-            trustedFetch(`${realmUrl}/protocol/openid-connect/userinfo`, {
+            fetch(`${realmUrl}/protocol/openid-connect/userinfo`, {
                 headers: {
                     Accept: "application/json",
                     Authorization: `Bearer ${accessToken}`

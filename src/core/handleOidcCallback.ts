@@ -7,10 +7,7 @@ import {
 import { assert, id } from "../vendor/frontend/tsafe";
 import type { AuthResponse } from "./AuthResponse";
 import { initialLocationHref } from "./initialLocationHref";
-import { captureFetch } from "./trustedFetch";
 import { encryptAuthResponse } from "./iframeMessageProtection";
-
-captureFetch();
 
 const globalContext = {
     previousCall: id<{ isHandled: boolean } | undefined>(undefined)
