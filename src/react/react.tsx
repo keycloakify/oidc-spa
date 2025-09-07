@@ -1,13 +1,4 @@
-import {
-    useEffect,
-    useState,
-    createContext,
-    useContext,
-    type ReactNode,
-    type ComponentType,
-    type FC,
-    type JSX
-} from "react";
+import { useEffect, useState, useMemo, type ReactNode, type ComponentType, type FC } from "react";
 import {
     type Oidc,
     createOidc,
@@ -83,13 +74,6 @@ export namespace OidcReact {
 }
 
 type OidcReactApi<DecodedIdToken extends Record<string, unknown>, AutoLogin extends boolean> = {
-    OidcProvider: AutoLogin extends true
-        ? (props: {
-              fallback?: ReactNode;
-              ErrorFallback?: (props: { initializationError: OidcInitializationError }) => ReactNode;
-              children: ReactNode;
-          }) => JSX.Element
-        : (props: { fallback?: ReactNode; children: ReactNode }) => JSX.Element;
     useOidc: AutoLogin extends true
         ? {
               (params?: { assert: "user logged in" }): OidcReact.LoggedIn<DecodedIdToken>;
@@ -102,13 +86,26 @@ type OidcReactApi<DecodedIdToken extends Record<string, unknown>, AutoLogin exte
     getOidc: () => Promise<
         AutoLogin extends true ? Oidc.LoggedIn<DecodedIdToken> : Oidc<DecodedIdToken>
     >;
+    OidcInitializationErrorGate: (props: {
+        ErrorFallback: (props: { initializationError: OidcInitializationError }) => ReactNode;
+        children: ReactNode;
+    }) => ReactNode;
+    /** @deprecated Use Suspense instead. For handling initialization error, use OidcInitializationErrorGate */
+    OidcProvider: AutoLogin extends true
+        ? (props: {
+              fallback?: ReactNode;
+              ErrorFallback?: (props: { initializationError: OidcInitializationError }) => ReactNode;
+              children: ReactNode;
+          }) => ReactNode
+        : (props: { fallback?: ReactNode; children: ReactNode }) => ReactNode;
+    /** @see: https://docs.oidc-spa.dev/v/v6/error-management */
 } & (AutoLogin extends true
     ? {}
     : {
           withLoginEnforced: <Props extends Record<string, unknown>>(
               Component: ComponentType<Props>,
               params?: {
-                  onRedirecting: () => JSX.Element | null;
+                  onRedirecting: () => ReactNode;
               }
           ) => FC<Props>;
           enforceLogin: (loaderParams: {
@@ -139,12 +136,8 @@ export function createOidcReactApi_dependencyInjection<
 > {
     const dReadyToCreate = new Deferred<void>();
 
-    const oidcContext = createContext<{ oidc: Oidc<DecodedIdToken>; fallback: ReactNode } | undefined>(
-        undefined
-    );
-
     // NOTE: It can be InitializationError only if autoLogin is true
-    const prOidcOrInitializationError = (async () => {
+    const prOidcOrAutoLoginInitializationError = (async () => {
         // We're doing this here just for people that wouldn't have
         // configured the early init in entrypoint.
         {
@@ -186,73 +179,141 @@ export function createOidcReactApi_dependencyInjection<
         return oidc;
     })();
 
-    let prOidcOrInitializationError_resolvedValue:
-        | Oidc<DecodedIdToken>
-        | OidcInitializationError
-        | undefined = undefined;
-    prOidcOrInitializationError.then(value => (prOidcOrInitializationError_resolvedValue = value));
+    const { OidcInitializationErrorGate } = (() => {
+        let oidcOrAutoLoginInitializationError:
+            | Awaited<typeof prOidcOrAutoLoginInitializationError>
+            | undefined = undefined;
+
+        prOidcOrAutoLoginInitializationError.then(value => (oidcOrAutoLoginInitializationError = value));
+
+        function OidcInitializationErrorGate(props: {
+            ErrorFallback: (props: { initializationError: OidcInitializationError }) => ReactNode;
+            children: ReactNode;
+        }): ReactNode {
+            const { ErrorFallback, children } = props;
+
+            if (oidcOrAutoLoginInitializationError === undefined) {
+                dReadyToCreate.resolve();
+                throw prOidcOrAutoLoginInitializationError;
+            }
+
+            const initializationError = useMemo(() => {
+                assert(oidcOrAutoLoginInitializationError !== undefined);
+
+                if (oidcOrAutoLoginInitializationError instanceof OidcInitializationError) {
+                    return oidcOrAutoLoginInitializationError;
+                }
+
+                const oidc = oidcOrAutoLoginInitializationError;
+
+                if (oidc.isUserLoggedIn) {
+                    return undefined;
+                }
+
+                return oidc.initializationError;
+            }, []);
+
+            if (initializationError !== undefined) {
+                return <ErrorFallback initializationError={initializationError} />;
+            }
+
+            return children;
+        }
+
+        return { OidcInitializationErrorGate };
+    })();
 
     function OidcProvider(props: {
         fallback?: ReactNode;
         ErrorFallback?: (props: { initializationError: OidcInitializationError }) => ReactNode;
         children: ReactNode;
-    }) {
+    }): ReactNode {
         const { fallback, ErrorFallback, children } = props;
 
-        const [oidcOrInitializationError, setOidcOrInitializationError] = useState<
-            Oidc<DecodedIdToken> | OidcInitializationError | undefined
-        >(prOidcOrInitializationError_resolvedValue);
+        const [oidcOrAutoLoginInitializationError, setOidcOrAutoLoginInitializationError] = useState<
+            Awaited<typeof prOidcOrAutoLoginInitializationError> | undefined
+        >(undefined);
 
         useEffect(() => {
-            if (oidcOrInitializationError !== undefined) {
-                return;
-            }
+            let isActive = true;
 
             dReadyToCreate.resolve();
-            prOidcOrInitializationError.then(setOidcOrInitializationError);
+
+            prOidcOrAutoLoginInitializationError.then(oidcOrAutoLoginInitializationError => {
+                if (!isActive) {
+                    return;
+                }
+
+                setOidcOrAutoLoginInitializationError(oidcOrAutoLoginInitializationError);
+            });
+
+            return () => {
+                isActive = false;
+            };
         }, []);
 
-        if (oidcOrInitializationError === undefined) {
-            return <>{fallback === undefined ? null : fallback}</>;
+        if (oidcOrAutoLoginInitializationError === undefined) {
+            return fallback;
         }
 
-        if (oidcOrInitializationError instanceof OidcInitializationError) {
-            const initializationError = oidcOrInitializationError;
+        const initializationError = useMemo(() => {
+            if (oidcOrAutoLoginInitializationError instanceof OidcInitializationError) {
+                return oidcOrAutoLoginInitializationError;
+            }
 
-            return (
-                <>
-                    {ErrorFallback === undefined ? (
-                        <h1 style={{ color: "red" }}>
-                            An error occurred while initializing the OIDC client:&nbsp;
-                            {initializationError.message}
-                        </h1>
-                    ) : (
-                        <ErrorFallback initializationError={initializationError} />
-                    )}
-                </>
+            const oidc = oidcOrAutoLoginInitializationError;
+
+            if (oidc.isUserLoggedIn) {
+                return undefined;
+            }
+
+            return oidc.initializationError;
+        }, []);
+
+        if (initializationError !== undefined) {
+            return ErrorFallback === undefined ? null : (
+                <ErrorFallback initializationError={initializationError} />
             );
         }
 
-        const oidc = oidcOrInitializationError;
-
-        return (
-            <oidcContext.Provider value={{ oidc, fallback: fallback ?? null }}>
-                {children}
-            </oidcContext.Provider>
-        );
+        return children;
     }
+
+    const { getOidc, useOidc } = (() => {
+        const prOidc = prOidcOrAutoLoginInitializationError.then(value =>
+            value instanceof OidcInitializationError ? new Promise<never>(() => {}) : value
+        );
+
+        let oidc: Oidc<DecodedIdToken> | undefined = undefined;
+
+        prOidc.then(value => (oidc = value));
+
+        async function getOidc(): Promise<Oidc<DecodedIdToken>> {
+            dReadyToCreate.resolve();
+            return prOidc;
+        }
+
+        function useOidc(): Oidc<DecodedIdToken> {
+            if (oidc === undefined) {
+                dReadyToCreate.resolve();
+                throw prOidc;
+            }
+
+            return oidc;
+        }
+
+        return { getOidc, useOidc };
+    })();
 
     const useAutoLogoutWarningCountdown: OidcReact.LoggedIn<DecodedIdToken>["useAutoLogoutWarningCountdown"] =
         ({ warningDurationSeconds }) => {
-            const contextValue = useContext(oidcContext);
-
-            assert(contextValue !== undefined);
-
-            const { oidc } = contextValue;
+            const oidc = useOidc();
 
             const [secondsLeft, setSecondsLeft] = useState<number | undefined>(undefined);
 
             useEffect(() => {
+                assert(oidc !== undefined);
+
                 if (!oidc.isUserLoggedIn) {
                     return;
                 }
@@ -274,16 +335,12 @@ export function createOidcReactApi_dependencyInjection<
             return { secondsLeft };
         };
 
-    function useOidc(params?: {
+    function useOidcReact(params?: {
         assert?: "user logged in" | "user not logged in";
     }): OidcReact<DecodedIdToken> {
         const { assert: assert_params } = params ?? {};
 
-        const contextValue = useContext(oidcContext);
-
-        assert(contextValue !== undefined, "You must use useOidc inside the corresponding OidcProvider");
-
-        const { oidc } = contextValue;
+        const oidc = useOidc();
 
         check_assertion: {
             if (assert_params === undefined) {
@@ -313,7 +370,7 @@ export function createOidcReactApi_dependencyInjection<
             }
         }
 
-        const [, reRenderIfDecodedIdTokenChanged] = useState(
+        const [memoDep, reRenderIfDecodedIdTokenChanged] = useState(
             !oidc.isUserLoggedIn ? undefined : oidc.getDecodedIdToken()
         );
 
@@ -331,31 +388,44 @@ export function createOidcReactApi_dependencyInjection<
             return unsubscribe;
         }, []);
 
-        const common: OidcReact.Common = {
-            params: oidc.params,
-            useAutoLogoutWarningCountdown
-        };
+        const login = useMemo(
+            () =>
+                oidc.isUserLoggedIn
+                    ? undefined
+                    : id<OidcReact.NotLoggedIn["login"]>(
+                          ({ doesCurrentHrefRequiresAuth = false, ...rest } = {}) =>
+                              oidc.login({ doesCurrentHrefRequiresAuth, ...rest })
+                      ),
+            []
+        );
 
-        if (!oidc.isUserLoggedIn) {
-            return id<OidcReact.NotLoggedIn>({
+        const oidcReact = useMemo((): OidcReact<DecodedIdToken> => {
+            const common: OidcReact.Common = {
+                params: oidc.params,
+                useAutoLogoutWarningCountdown
+            };
+
+            if (!oidc.isUserLoggedIn) {
+                assert(login !== undefined);
+                return id<OidcReact.NotLoggedIn>({
+                    ...common,
+                    isUserLoggedIn: false,
+                    login,
+                    initializationError: oidc.initializationError
+                });
+            }
+
+            return id<OidcReact.LoggedIn<DecodedIdToken>>({
                 ...common,
-                isUserLoggedIn: false,
-                login: ({ doesCurrentHrefRequiresAuth = false, ...rest } = {}) =>
-                    oidc.login({ doesCurrentHrefRequiresAuth, ...rest }),
-                initializationError: oidc.initializationError
+                isUserLoggedIn: true,
+                decodedIdToken: oidc.getDecodedIdToken(),
+                logout: oidc.logout,
+                renewTokens: oidc.renewTokens,
+                goToAuthServer: oidc.goToAuthServer,
+                isNewBrowserSession: oidc.isNewBrowserSession,
+                backFromAuthServer: oidc.backFromAuthServer
             });
-        }
-
-        const oidcReact: OidcReact.LoggedIn<DecodedIdToken> = {
-            ...common,
-            isUserLoggedIn: true,
-            decodedIdToken: oidc.getDecodedIdToken(),
-            logout: oidc.logout,
-            renewTokens: oidc.renewTokens,
-            goToAuthServer: oidc.goToAuthServer,
-            isNewBrowserSession: oidc.isNewBrowserSession,
-            backFromAuthServer: oidc.backFromAuthServer
-        };
+        }, [memoDep]);
 
         return oidcReact;
     }
@@ -363,17 +433,13 @@ export function createOidcReactApi_dependencyInjection<
     function withLoginEnforced<Props extends Record<string, unknown>>(
         Component: ComponentType<Props>,
         params?: {
-            onRedirecting?: () => JSX.Element | null;
+            onRedirecting?: () => ReactNode;
         }
     ): FC<Props> {
         const { onRedirecting } = params ?? {};
 
         function ComponentWithLoginEnforced(props: Props) {
-            const contextValue = useContext(oidcContext);
-
-            assert(contextValue !== undefined, "094283");
-
-            const { oidc, fallback } = contextValue;
+            const oidc = useOidc();
 
             useEffect(() => {
                 if (oidc.isUserLoggedIn) {
@@ -384,7 +450,7 @@ export function createOidcReactApi_dependencyInjection<
             }, []);
 
             if (!oidc.isUserLoggedIn) {
-                return onRedirecting === undefined ? fallback : onRedirecting();
+                return onRedirecting === undefined ? null : onRedirecting();
             }
 
             return <Component {...props} />;
@@ -440,24 +506,10 @@ export function createOidcReactApi_dependencyInjection<
         }
     }
 
-    async function getOidc(): Promise<Oidc<DecodedIdToken>> {
-        dReadyToCreate.resolve();
-
-        const oidcOrInitializationError = await prOidcOrInitializationError;
-
-        if (oidcOrInitializationError instanceof OidcInitializationError) {
-            const error = oidcOrInitializationError;
-            throw error;
-        }
-
-        const oidc = oidcOrInitializationError;
-
-        return oidc;
-    }
-
     const oidcReact: OidcReactApi<DecodedIdToken, false> = {
         OidcProvider,
-        useOidc: useOidc as any,
+        OidcInitializationErrorGate,
+        useOidc: useOidcReact as any,
         getOidc,
         withLoginEnforced,
         enforceLogin
