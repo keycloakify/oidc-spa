@@ -1,5 +1,3 @@
-import { overwriteReadonlyProp } from "../vendor/frontend/tsafe";
-
 export class Deferred<T> {
     public readonly pr: Promise<T>;
 
@@ -13,12 +11,10 @@ export class Deferred<T> {
 
         this.pr = new Promise<T>((resolve_, reject_) => {
             resolve = value => {
-                overwriteReadonlyProp(this, "isPending", false);
                 resolve_(value);
             };
 
             reject = error => {
-                overwriteReadonlyProp(this, "isPending", false);
                 reject_(error);
             };
         });
@@ -26,8 +22,6 @@ export class Deferred<T> {
         this.resolve = resolve;
         this.reject = reject;
     }
-
-    public readonly isPending: boolean = true;
 }
 
 export namespace Deferred {
