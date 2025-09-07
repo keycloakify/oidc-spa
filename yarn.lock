@@ -3251,13 +3251,6 @@ tr46@~0.0.3:
   resolved "https://registry.yarnpkg.com/tr46/-/tr46-0.0.3.tgz#8184fd347dac9cdc185992f3a6622e14b9d9ab6a"
   integrity sha512-N3WMsuqV66lT30CrXNbEjx4GEwlow3v6rr4mCcv6prnfwhS01rkgyFdjPNBYd9br7LpXV1+Emh01fHnq2Gdgrw==
 
-ts-add-js-extension@^1.6.6:
-  version "1.6.6"
-  resolved "https://registry.yarnpkg.com/ts-add-js-extension/-/ts-add-js-extension-1.6.6.tgz#325d5e466f18ab88ebe23ef3638a88c5af135784"
-  integrity sha512-rPOBNrOULi/CjVHraGrDa0vuWDmuMszmIXGNaGe2UGfrBH0/bZWTTsh82uQ+INKp9cJYziKNTCG2knzBlWvW4A==
-  dependencies:
-    typescript "^5.8.2"
-
 ts-node@^10.9.1:
   version "10.9.2"
   resolved "https://registry.yarnpkg.com/ts-node/-/ts-node-10.9.2.tgz#70f021c9e185bccdca820e26dc413805c101c71f"
@@ -3282,10 +3275,10 @@ tsafe@^1.6.6:
   resolved "https://registry.yarnpkg.com/tsafe/-/tsafe-1.7.2.tgz#0f63d414876287ad01b135f832722f93e22da374"
   integrity sha512-dAPfQLhCfCRre5qs+Z5Q2a7s2CV7RxffZUmvj7puGaePYjECzWREJFd3w4XSFe/T5tbxgowfItA/JSSZ6Ma3dA==
 
-tsafe@^1.8.7:
-  version "1.8.7"
-  resolved "https://registry.yarnpkg.com/tsafe/-/tsafe-1.8.7.tgz#164192bbab72490e01b471de9b51203dcb0a7c00"
-  integrity sha512-s5JN0dwPupPSdacmim7q9dtdU76gGLr2Rvbfzn+2YvSDmtSGxDiP1ityANdLvgQ46qGw0aU2MwF0ZUP/oP6cWg==
+tsafe@^1.8.9:
+  version "1.8.9"
+  resolved "https://registry.yarnpkg.com/tsafe/-/tsafe-1.8.9.tgz#9313bfe62b9eb2153bf90e31918a0cc8431be5f6"
+  integrity sha512-TtwH4IHaA4/ep5jY+IA4Rt1UWcBpWpQ9257CNR1kRh55eoWa/k8t4skId3o8Ecr+WCSMYxC9aOjXBE8ZgE6JnA==
 
 tslib@^2.1.0, tslib@^2.6.2:
   version "2.6.3"
@@ -3311,11 +3304,6 @@ typescript@5.7.2:
   version "5.7.2"
   resolved "https://registry.yarnpkg.com/typescript/-/typescript-5.7.2.tgz#3169cf8c4c8a828cde53ba9ecb3d2b1d5dd67be6"
   integrity sha512-i5t66RHxDvVN40HfDd1PsEThGNnlMCMT3jMUuoh9/0TaqWevNontacunWyN02LA9/fIbEWlcHZcgTKb9QoaLfg==
-
-typescript@^5.8.2:
-  version "5.9.2"
-  resolved "https://registry.yarnpkg.com/typescript/-/typescript-5.9.2.tgz#d93450cddec5154a2d5cabe3b8102b83316fb2a6"
-  integrity sha512-CWBzXQrc/qOkhidw1OzBTQuYRbfyxDXJMVJ1XNwUHGROVmuaeiEm3OslpZ1RV96d7SKKjZKrSJu3+t/xlw3R9A==
 
 undici-types@~5.26.4:
   version "5.26.5"
