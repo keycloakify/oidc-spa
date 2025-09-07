@@ -97,14 +97,10 @@ jobs:
         registry-url: https://registry.npmjs.org/
     - uses: bahmutov/npm-install@v1
     - run: yarn build
-    - run: npx -y -p denoify@1.5.7 enable_short_npm_import_path
-      env:
-        DRY_RUN: "0"
-    - uses: garronej/ts-ci@v2.1.0
-      with: 
-        action_name: remove_dark_mode_specific_images_from_readme
     - name: Publishing on NPM
       run: |
+        cd dist
+
         if [ "$(npm show . version)" = "$VERSION" ]; then
           echo "This version is already published"
           exit 0

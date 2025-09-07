@@ -3,7 +3,7 @@ import {
     WebStorageStateStore,
     type User as OidcClientTsUser,
     InMemoryWebStorage
-} from "../vendor/frontend/oidc-client-ts-and-jwt-decode";
+} from "../vendor/frontend/oidc-client-ts";
 import type { OidcMetadata } from "./OidcMetadata";
 import { id, assert, is, type Equals } from "../vendor/frontend/tsafe";
 import { setTimeout, clearTimeout } from "../tools/workerTimers";
@@ -12,12 +12,7 @@ import { createEvtIsUserActive } from "./evtIsUserActive";
 import { createStartCountdown } from "../tools/startCountdown";
 import { toHumanReadableDuration } from "../tools/toHumanReadableDuration";
 import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";
-import {
-    OidcInitializationError,
-    createFailedToFetchTokenEndpointInitializationError,
-    createIframeTimeoutInitializationError,
-    createWellKnownOidcConfigurationEndpointUnreachableInitializationError
-} from "./OidcInitializationError";
+import { OidcInitializationError } from "./OidcInitializationError";
 import { type StateData, generateStateUrlParamValue, STATE_STORE_KEY_PREFIX } from "./StateData";
 import { notifyOtherTabsOfLogout, getPrOtherTabLogout } from "./logoutPropagationToOtherTabs";
 import { notifyOtherTabsOfLogin, getPrOtherTabLogin } from "./loginPropagationToOtherTabs";
@@ -41,11 +36,8 @@ import {
 } from "./ongoingLoginOrRefreshProcesses";
 import { initialLocationHref } from "./initialLocationHref";
 import { createGetIsNewBrowserSession } from "./isNewBrowserSession";
-import { trustedFetch } from "./trustedFetch";
 import { getIsOnline } from "../tools/getIsOnline";
 import { isKeycloak } from "../keycloak/isKeycloak";
-
-handleOidcCallback();
 
 // NOTE: Replaced at build time
 const VERSION = "{{OIDC_SPA_VERSION}}";
@@ -442,7 +434,6 @@ export async function createOidc_nonMemoized<
         }),
         stateStore: new WebStorageStateStore({ store: localStorage, prefix: STATE_STORE_KEY_PREFIX }),
         client_secret: __unsafe_clientSecret,
-        fetch: trustedFetch,
         metadata: __metadata
     });
 
@@ -516,7 +507,9 @@ export async function createOidc_nonMemoized<
                             assert(error instanceof Error, "741947");
 
                             if (error.message === "Failed to fetch") {
-                                return createFailedToFetchTokenEndpointInitializationError({
+                                return (
+                                    await import("./diagnostic")
+                                ).createFailedToFetchTokenEndpointInitializationError({
                                     clientId,
                                     issuerUri
                                 });
@@ -686,18 +679,20 @@ export async function createOidc_nonMemoized<
                 if (result_loginSilent.outcome === "failure") {
                     switch (result_loginSilent.cause) {
                         case "can't reach well-known oidc endpoint":
-                            return createWellKnownOidcConfigurationEndpointUnreachableInitializationError(
+                            return (
+                                await import("./diagnostic")
+                            ).createWellKnownOidcConfigurationEndpointUnreachableInitializationError({
+                                issuerUri
+                            });
+                        case "timeout":
+                            return (await import("./diagnostic")).createIframeTimeoutInitializationError(
                                 {
-                                    issuerUri
+                                    redirectUri: homeUrlAndRedirectUri,
+                                    clientId,
+                                    issuerUri,
+                                    noIframe
                                 }
                             );
-                        case "timeout":
-                            return createIframeTimeoutInitializationError({
-                                redirectUri: homeUrlAndRedirectUri,
-                                clientId,
-                                issuerUri,
-                                noIframe
-                            });
                     }
 
                     assert<Equals<typeof result_loginSilent.cause, never>>(false);
@@ -719,7 +714,9 @@ export async function createOidc_nonMemoized<
                     assert(error instanceof Error, "433344");
 
                     if (error.message === "Failed to fetch") {
-                        return createFailedToFetchTokenEndpointInitializationError({
+                        return (
+                            await import("./diagnostic")
+                        ).createFailedToFetchTokenEndpointInitializationError({
                             clientId,
                             issuerUri
                         });

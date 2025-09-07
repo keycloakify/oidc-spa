@@ -51,6 +51,10 @@ export class Keycloak {
     /**
      * Creates a new Keycloak client instance.
      * @param config A configuration object or path to a JSON config file.
+     *
+     * NOTE oidc-spa: Currently not supporting GenericOidcConfig (providing explicitly authorization_endpoint ect)
+     * But we could if with the __metadata parameter of oidc-spa.
+     * I'm not seeing the usecase when ran against keycloak right now so not doing it.
      */
     constructor(params: ConstructorParams) {
         const issuerUri = `${params.url.replace(/\/$/, "")}/realms/${params.realm}`;

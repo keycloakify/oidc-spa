@@ -1,24 +1,21 @@
 {
     "compilerOptions": {
-        "module": "CommonJS",
-        "target": "es5",
+        "target": "ES2020",
         "moduleResolution": "node",
-        "lib": ["es2015", "DOM", "ES2019.Object"],
+        "lib": ["ES2020", "DOM", "DOM.Iterable"],
         "esModuleInterop": true,
         "declaration": true,
-        // Do not change or the linking script will stop working
-        "outDir": "./dist",
         "sourceMap": true,
         "newLine": "LF",
         "noUnusedLocals": true,
         "noUnusedParameters": true,
         "incremental": true,
         "strict": true,
-        "downlevelIteration": true,
         "jsx": "react-jsx",
         "noFallthroughCasesInSwitch": true,
-        "skipLibCheck": true
+        "skipLibCheck": true,
+        // NOTE: Only for not getting error while developing, will be overwritten
+        "module": "es2020"
     },
-    "include": ["src"],
-    "exclude": ["src/**/*.deno.ts", "src/**/*.deno.tsx"]
+    "include": ["src"]
 }
