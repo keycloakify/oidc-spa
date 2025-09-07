@@ -54,15 +54,12 @@ export async function loginSilent(params: {
     const dResult = new Deferred<ResultOfLoginSilent>();
 
     const timeoutDelayMs: number = (() => {
-        if (autoLogin) {
-            return 25_000;
-        }
-
-        const downlinkAndRtt = getDownlinkAndRtt();
         const isDev = getIsDev();
 
+        const downlinkAndRtt = getDownlinkAndRtt();
+
         // Base delay is the minimum delay we should wait in any case
-        const BASE_DELAY_MS = isDev ? 9_000 : 7_000;
+        const BASE_DELAY_MS = isDev ? 9_000 : autoLogin ? 25_000 : 7_000;
 
         if (downlinkAndRtt === undefined) {
             return BASE_DELAY_MS;
@@ -82,12 +79,44 @@ export async function loginSilent(params: {
             stateUrlParamValue: stateUrlParamValue_instance
         });
 
-    const timer = setTimeout(async () => {
-        dResult.resolve({
-            outcome: "failure",
-            cause: "timeout"
-        });
-    }, timeoutDelayMs);
+    let clearTimeouts: (params: { wasSuccess: boolean }) => void;
+    {
+        let hasLoggedWarningMessage = false;
+
+        const timeouts = [
+            setTimeout(() => {
+                dResult.resolve({
+                    outcome: "failure",
+                    cause: "timeout"
+                });
+            }, timeoutDelayMs),
+            setTimeout(() => {
+                console.warn(
+                    [
+                        "oidc-spa: Session restoration is taking longer than expected.",
+                        "This likely indicates a misconfiguration.",
+                        `Waiting ${Math.floor(
+                            timeoutDelayMs / 1_000
+                        )} seconds before running diagnostics.`,
+                        "Once the timeout expires, helpful debugging information will be printed to the console."
+                    ].join(" ")
+                );
+                hasLoggedWarningMessage = true;
+            }, 2_000)
+        ];
+
+        clearTimeouts = ({ wasSuccess }) => {
+            timeouts.forEach(clearTimeout);
+            if (wasSuccess && hasLoggedWarningMessage) {
+                console.log(
+                    [
+                        "oidc-spa: Never mind, the auth server was just slow to respond.",
+                        "You can safely ignore the previous warning."
+                    ].join(" ")
+                );
+            }
+        };
+    }
 
     const listener = async (event: MessageEvent) => {
         if (event.origin !== window.location.origin) {
@@ -113,7 +142,7 @@ export async function loginSilent(params: {
             return;
         }
 
-        clearTimeout(timer);
+        clearTimeouts({ wasSuccess: true });
 
         window.removeEventListener("message", listener);
 
@@ -166,7 +195,7 @@ export async function loginSilent(params: {
             oidcClientTsUser => {
                 assert(oidcClientTsUser !== null, "oidcClientTsUser is not supposed to be null here");
 
-                clearTimeout(timer);
+                clearTimeouts({ wasSuccess: true });
                 window.removeEventListener("message", listener);
 
                 dResult.resolve({
@@ -182,7 +211,11 @@ export async function loginSilent(params: {
                     // is not pointing to a valid oidc server.
                     // It could be a CORS error on the well-known endpoint but it's unlikely.
 
-                    clearTimeout(timer);
+                    // NOTE: This error should happen well before we displayed
+                    // the warning notifying that something is probably misconfigured.
+                    // wasSuccess shouldn't really be a required parameter but we do it
+                    // for peace of mind.
+                    clearTimeouts({ wasSuccess: false });
 
                     dResult.resolve({
                         outcome: "failure",
