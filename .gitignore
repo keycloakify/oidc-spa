@@ -42,3 +42,4 @@ jspm_packages
 
 /.yarn_home
 /dist
+pnpm-lock.yaml
