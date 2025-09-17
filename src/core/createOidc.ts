@@ -970,6 +970,8 @@ export async function createOidc_nonMemoized<
 
     let wouldHaveAutoLoggedOutIfBrowserWasOnline = false;
 
+    let prOngoingTokenRenewal: Promise<void> | undefined = undefined;
+
     const oidc_loggedIn = id<Oidc.LoggedIn<DecodedIdToken>>({
         ...oidc_common,
         isUserLoggedIn: true,
@@ -977,6 +979,15 @@ export async function createOidc_nonMemoized<
             if (wouldHaveAutoLoggedOutIfBrowserWasOnline) {
                 await oidc_loggedIn.logout(autoLogoutParams);
                 assert(false);
+            }
+
+            if (prOngoingTokenRenewal === undefined) {
+                // NOTE: Give a chance to renewOnLocalTimeShift to do it's job
+                await new Promise<void>(resolve => setTimeout(resolve, 0));
+            }
+
+            if (prOngoingTokenRenewal !== undefined) {
+                await prOngoingTokenRenewal;
             }
 
             renew_tokens: {
@@ -1248,8 +1259,10 @@ export async function createOidc_nonMemoized<
                 });
             }
 
-            return async params => {
-                const { extraTokenParams: extraTokenParams_local } = params ?? {};
+            async function renewTokens_mutexed(params: {
+                extraTokenParams?: Record<string, string | undefined>;
+            }) {
+                const { extraTokenParams: extraTokenParams_local } = params;
 
                 const extraTokenParams = {
                     ...getExtraTokenParams?.(),
@@ -1285,6 +1298,18 @@ export async function createOidc_nonMemoized<
                 handleFinally();
 
                 return ongoingCall.pr;
+            }
+
+            return params => {
+                const { extraTokenParams } = params ?? {};
+
+                prOngoingTokenRenewal = renewTokens_mutexed({ extraTokenParams });
+
+                prOngoingTokenRenewal.then(() => {
+                    prOngoingTokenRenewal = undefined;
+                });
+
+                return prOngoingTokenRenewal;
             };
         })(),
         subscribeToTokensChange: onTokenChange => {
@@ -1338,6 +1363,47 @@ export async function createOidc_nonMemoized<
             location.reload();
         });
     }
+
+    // NOTE: Pessimistic renewal of token on potential clock adjustment.
+    (function renewOnLocalTimeShift() {
+        // NOTE: If we can't confidently silently refresh tokens we won't risk reloading
+        // the page just to cover the local time drift edge case.
+        if (!currentTokens.hasRefreshToken && !canUseIframe) {
+            return;
+        }
+
+        let timer: ReturnType<typeof setTimeout> | undefined = undefined;
+
+        (async () => {
+            while (true) {
+                const before = Date.now();
+
+                await new Promise<void>(resolve => {
+                    timer = setTimeout(resolve, 5_000);
+                });
+
+                const after = Date.now();
+
+                if (Math.abs(after - before) > 1_000) {
+                    log?.("Renewing token now as local time might have shifted");
+                    // NOTE: This **will** happen, even if there is no local time drift.
+                    // For example when the computer wakes up after sleep.
+                    // But it doesn't matter, we'll just make a token renewal that was probably
+                    // not necessary. It's best than risking to deem expired token as valid.
+                    oidc_loggedIn.renewTokens();
+                    return;
+                }
+            }
+        })();
+
+        const { unsubscribe: tokenChangeUnsubscribe } = oidc_loggedIn.subscribeToTokensChange(() => {
+            if (timer !== undefined) {
+                clearTimeout(timer);
+            }
+            tokenChangeUnsubscribe();
+            renewOnLocalTimeShift();
+        });
+    })();
 
     (function scheduleRenew() {
         if (!currentTokens.hasRefreshToken && !canUseIframe) {
