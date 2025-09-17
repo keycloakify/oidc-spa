@@ -330,7 +330,7 @@ export class Keycloak {
 
         if (!oidc.isUserLoggedIn) {
             console.warn(
-                "Trying to read keycloak.realAccess when keycloak.realmAccess is false is a logical error in your application"
+                "Trying to read keycloak.realAccess when keycloak.authenticated is false is a logical error in your application"
             );
             return undefined;
         }
@@ -389,7 +389,7 @@ export class Keycloak {
 
         if (!oidc.isUserLoggedIn) {
             console.warn(
-                "Trying to read keycloak.token when keycloak.token is false is a logical error in your application"
+                "Trying to read keycloak.token when keycloak.authenticated is false is a logical error in your application"
             );
             return undefined;
         }
@@ -423,7 +423,7 @@ export class Keycloak {
 
         if (!oidc.isUserLoggedIn) {
             console.warn(
-                "Trying to read keycloak.token when keycloak.tokenParsed is false is a logical error in your application"
+                "Trying to read keycloak.tokenParsed when keycloak.authenticated is false is a logical error in your application"
             );
             return undefined;
         }
@@ -451,7 +451,7 @@ export class Keycloak {
 
         if (!oidc.isUserLoggedIn) {
             console.warn(
-                "Trying to read keycloak.token when keycloak.refreshToken is false is a logical error in your application"
+                "Trying to read keycloak.refreshToken when keycloak.authenticated is false is a logical error in your application"
             );
             return undefined;
         }
@@ -485,7 +485,7 @@ export class Keycloak {
 
         if (!oidc.isUserLoggedIn) {
             console.warn(
-                "Trying to read keycloak.token when keycloak.refreshTokenParsed is false is a logical error in your application"
+                "Trying to read keycloak.refreshTokenParsed when keycloak.authenticated is false is a logical error in your application"
             );
             return undefined;
         }
@@ -517,7 +517,7 @@ export class Keycloak {
 
         if (!oidc.isUserLoggedIn) {
             console.warn(
-                "Trying to read keycloak.token when keycloak.token is false is a logical error in your application"
+                "Trying to read keycloak.idToken when keycloak.authenticated is false is a logical error in your application"
             );
             return undefined;
         }
@@ -551,7 +551,7 @@ export class Keycloak {
 
         if (!oidc.isUserLoggedIn) {
             console.warn(
-                "Trying to read keycloak.token when keycloak.refreshTokenParsed is false is a logical error in your application"
+                "Trying to read keycloak.idTokenParsed when keycloak.authenticated is false is a logical error in your application"
             );
             return undefined;
         }
@@ -566,10 +566,37 @@ export class Keycloak {
      * The estimated time difference between the browser time and the Keycloak
      * server in seconds. This value is just an estimation, but is accurate
      * enough when determining if a token is expired or not.
-     *
-     * NOTE oidc-spa: Not supported.
      */
-    timeSkew = null;
+    get timeSkew(): number | null {
+        const internalState = internalStateByInstance.get(this);
+
+        assert(internalState !== undefined);
+
+        if (!this.didInitialize) {
+            const { timeSkew } = internalState.initOptions ?? {};
+
+            if (timeSkew === undefined) {
+                return null;
+            }
+
+            return timeSkew;
+        }
+
+        const { oidc, tokens } = internalState;
+
+        assert(oidc !== undefined);
+
+        if (!oidc.isUserLoggedIn) {
+            console.warn(
+                "Trying to read keycloak.timeSkew when keycloak.authenticated is false is a logical error in your application"
+            );
+            return null;
+        }
+
+        assert(tokens !== undefined);
+
+        return tokens.getServerDateNow() - Date.now();
+    }
 
     /**
      * Whether the instance has been initialized by calling `.init()`.

@@ -982,7 +982,7 @@ export async function createOidc_nonMemoized<
             renew_tokens: {
                 {
                     const msBeforeExpirationOfTheAccessToken =
-                        currentTokens.accessTokenExpirationTime - Date.now();
+                        currentTokens.accessTokenExpirationTime - currentTokens.getServerDateNow();
 
                     if (msBeforeExpirationOfTheAccessToken > 30_000) {
                         break renew_tokens;
@@ -990,7 +990,8 @@ export async function createOidc_nonMemoized<
                 }
 
                 {
-                    const msElapsedSinceCurrentTokenWereIssued = Date.now() - currentTokens.issuedAtTime;
+                    const msElapsedSinceCurrentTokenWereIssued =
+                        currentTokens.getServerDateNow() - currentTokens.issuedAtTime;
 
                     if (msElapsedSinceCurrentTokenWereIssued < 5_000) {
                         break renew_tokens;
@@ -1351,7 +1352,7 @@ export async function createOidc_nonMemoized<
 
         const msBeforeExpiration =
             (currentTokens.refreshTokenExpirationTime ?? currentTokens.accessTokenExpirationTime) -
-            Date.now();
+            currentTokens.getServerDateNow();
 
         const typeOfTheTokenWeGotTheTtlFrom =
             currentTokens.refreshTokenExpirationTime !== undefined ? "refresh" : "access";
@@ -1359,10 +1360,6 @@ export async function createOidc_nonMemoized<
         const RENEW_MS_BEFORE_EXPIRES = 30_000;
 
         if (msBeforeExpiration <= RENEW_MS_BEFORE_EXPIRES) {
-            // NOTE: We just got a new token that is about to expire. This means that
-            // the refresh token has reached it's max SSO time.
-            // ...or that the refresh token have a very short lifespan...
-            // anyway, no need to keep alive, it will probably redirect on the next getTokens() or refreshTokens() call
             log?.(
                 [
                     "Disabling auto renew mechanism. We just got fresh tokens",

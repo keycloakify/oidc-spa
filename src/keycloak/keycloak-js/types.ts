@@ -139,11 +139,8 @@ export interface KeycloakInitOptions {
     /**
      * Set an initial value for skew between local time and Keycloak server in
      * seconds (only together with `token` or `refreshToken`).
-     *
-     * NOTE oidc-spa: Not supported
      */
-    //timeSkew?: number;
-    timeSkew?: undefined;
+    timeSkew?: number;
 
     /**
      * Set to enable/disable monitoring login state.

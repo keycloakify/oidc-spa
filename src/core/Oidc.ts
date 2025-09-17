@@ -98,6 +98,7 @@ export declare namespace Oidc {
     export namespace Tokens {
         export type Common<DecodedIdToken> = {
             accessToken: string;
+            /** Millisecond epoch in the server's time */
             accessTokenExpirationTime: number;
             idToken: string;
             decodedIdToken: DecodedIdToken;
@@ -112,8 +113,11 @@ export declare namespace Oidc {
              * `decodedIdToken_original` is the actual decoded payload of the  id_token, untransformed.
              * */
             decodedIdToken_original: DecodedIdToken_base;
-            /** Read from id_token's JWT, iat claim value, it's a JavaScript timestamp (millisecond epoch) */
+            /** Millisecond epoch in the server's time, read from id_token's JWT, iat claim value */
             issuedAtTime: number;
+
+            /** To use instead of Date.now() if you ever need to tell if a token is expired or not */
+            getServerDateNow: () => number;
         };
 
         export type WithRefreshToken<DecodedIdToken> = Common<DecodedIdToken> & {
