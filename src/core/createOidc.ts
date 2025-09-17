@@ -1029,7 +1029,10 @@ export async function createOidc_nonMemoized<
                 prUnlock: new Promise<never>(() => {})
             });
 
-            window.addEventListener("pageshow", () => {
+            window.addEventListener("pageshow", event => {
+                if (!event.persisted) {
+                    return;
+                }
                 location.reload();
             });
 

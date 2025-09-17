@@ -29,7 +29,11 @@ export function setTimeout(callback: () => void, delay: number): TimerHandle {
 
     const start = Date.now();
 
-    const onPageshow = () => {
+    const onPageshow = (event: { persisted: boolean }) => {
+        if (!event.persisted) {
+            return;
+        }
+
         workerTimers.clearTimeout(timerHandle_n);
 
         const elapsed = Date.now() - start;

@@ -278,11 +278,8 @@ export function retrieveRedirectAuthResponseAndStateData(params: {
 }
 
 function reloadOnBfCacheNavigation() {
-    const start = Date.now();
-    window.addEventListener("pageshow", () => {
-        const elapsed = Date.now() - start;
-
-        if (elapsed < 100) {
+    window.addEventListener("pageshow", event => {
+        if (!event.persisted) {
             return;
         }
         location.reload();

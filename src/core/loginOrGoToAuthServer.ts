@@ -124,7 +124,10 @@ export function createLoginOrGoToAuthServer(params: {
 
             bf_cache_handling: {
                 if (rest.doForceReloadOnBfCache) {
-                    window.removeEventListener("pageshow", () => {
+                    window.removeEventListener("pageshow", event => {
+                        if (!event.persisted) {
+                            return;
+                        }
                         location.reload();
                     });
                     break bf_cache_handling;
@@ -132,7 +135,11 @@ export function createLoginOrGoToAuthServer(params: {
 
                 localStorage.setItem(LOCAL_STORAGE_KEY_TO_CLEAR_WHEN_USER_LOGGED_IN, "true");
 
-                const callback = () => {
+                const callback = (event: { persisted: boolean }) => {
+                    if (!event.persisted) {
+                        return;
+                    }
+
                     window.removeEventListener("pageshow", callback);
 
                     log?.(
