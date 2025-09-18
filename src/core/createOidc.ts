@@ -1088,6 +1088,7 @@ export async function createOidc_nonMemoized<
             return new Promise<never>(() => {});
         },
         renewTokens: (() => {
+            // NOTE: Cannot throw (or if it does it's our fault)
             async function renewTokens_nonMutexed(params: {
                 extraTokenParams: Record<string, string | undefined>;
             }) {
@@ -1243,12 +1244,12 @@ export async function createOidc_nonMemoized<
                   }
                 | undefined = undefined;
 
-            function handleFinally() {
+            function handleThen() {
                 assert(ongoingCall !== undefined, "131276");
 
                 const { pr } = ongoingCall;
 
-                pr.finally(() => {
+                pr.then(() => {
                     assert(ongoingCall !== undefined, "549462");
 
                     if (ongoingCall.pr !== pr) {
@@ -1275,7 +1276,7 @@ export async function createOidc_nonMemoized<
                         extraTokenParams
                     };
 
-                    handleFinally();
+                    handleThen();
 
                     return ongoingCall.pr;
                 }
@@ -1286,16 +1287,14 @@ export async function createOidc_nonMemoized<
 
                 ongoingCall = {
                     pr: (async () => {
-                        try {
-                            await ongoingCall.pr;
-                        } catch {}
+                        await ongoingCall.pr;
 
                         return renewTokens_nonMutexed({ extraTokenParams });
                     })(),
                     extraTokenParams
                 };
 
-                handleFinally();
+                handleThen();
 
                 return ongoingCall.pr;
             }
