@@ -25,21 +25,6 @@ type ConstructorParams = KeycloakServerConfig & {
     homeUrl: string;
 };
 
-type InternalState = {
-    constructorParams: ConstructorParams;
-    keycloakUtils: KeycloakUtils;
-    issuerUri: string;
-    dInitialized: Deferred<void>;
-    initOptions: KeycloakInitOptions | undefined;
-    oidc: Oidc<Record<string, unknown>> | undefined;
-    tokens: Oidc.Tokens<Record<string, unknown>> | undefined;
-    profile: KeycloakProfile | undefined;
-    userInfo: KeycloakUserInfo | undefined;
-    $onTokenExpired: StatefulEvt<(() => void) | undefined>;
-};
-
-const internalStateByInstance = new WeakMap<Keycloak, InternalState>();
-
 /**
  * This module provides a drop-in replacement for `keycloak-js`,
  * designed for teams migrating to `oidc-spa` with minimal changes.
@@ -48,6 +33,19 @@ const internalStateByInstance = new WeakMap<Keycloak, InternalState>();
  * it is a full alternative implementation aligned with the `keycloak-js` API.
  */
 export class Keycloak {
+    readonly #state: {
+        constructorParams: ConstructorParams;
+        keycloakUtils: KeycloakUtils;
+        issuerUri: string;
+        dInitialized: Deferred<void>;
+        initOptions: KeycloakInitOptions | undefined;
+        oidc: Oidc<Record<string, unknown>> | undefined;
+        tokens: Oidc.Tokens<Record<string, unknown>> | undefined;
+        profile: KeycloakProfile | undefined;
+        userInfo: KeycloakUserInfo | undefined;
+        $onTokenExpired: StatefulEvt<(() => void) | undefined>;
+    };
+
     /**
      * Creates a new Keycloak client instance.
      * @param config A configuration object or path to a JSON config file.
@@ -59,7 +57,7 @@ export class Keycloak {
     constructor(params: ConstructorParams) {
         const issuerUri = `${params.url.replace(/\/$/, "")}/realms/${params.realm}`;
 
-        internalStateByInstance.set(this, {
+        this.#state = {
             constructorParams: params,
             dInitialized: new Deferred(),
             initOptions: undefined,
@@ -70,7 +68,7 @@ export class Keycloak {
             profile: undefined,
             userInfo: undefined,
             $onTokenExpired: createStatefulEvt(() => undefined)
-        });
+        };
     }
 
     /**
@@ -81,23 +79,19 @@ export class Keycloak {
     async init(initOptions: KeycloakInitOptions = {}): Promise<boolean> {
         const { onLoad = "check-sso", redirectUri, enableLogging, scope, locale } = initOptions;
 
-        const internalState = internalStateByInstance.get(this);
-
-        assert(internalState !== undefined);
-
-        if (internalState.initOptions !== undefined) {
-            if (JSON.stringify(internalState.initOptions) !== JSON.stringify(initOptions)) {
+        if (this.#state.initOptions !== undefined) {
+            if (JSON.stringify(this.#state.initOptions) !== JSON.stringify(initOptions)) {
                 throw new Error("Can't call init() multiple time with different params");
             }
-            await internalState.dInitialized.pr;
-            const { oidc } = internalState;
+            await this.#state.dInitialized.pr;
+            const { oidc } = this.#state;
             assert(oidc !== undefined);
             return oidc.isUserLoggedIn;
         }
 
-        internalState.initOptions = initOptions;
+        this.#state.initOptions = initOptions;
 
-        const { constructorParams, issuerUri } = internalState;
+        const { constructorParams, issuerUri } = this.#state;
 
         const autoLogin = onLoad === "login-required";
 
@@ -106,7 +100,7 @@ export class Keycloak {
         const oidcOrError = await createOidc({
             homeUrl: constructorParams.homeUrl,
             issuerUri,
-            clientId: internalState.constructorParams.clientId,
+            clientId: this.#state.constructorParams.clientId,
             autoLogin,
             postLoginRedirectUrl: redirectUri,
             debugLogs: enableLogging,
@@ -142,101 +136,123 @@ export class Keycloak {
 
         const oidc = oidcOrError;
 
-        internalState.oidc = oidc;
-
         if (oidc.isUserLoggedIn) {
-            {
-                const tokens = await oidc.getTokens();
+            const tokens = await oidc.getTokens();
 
-                const onNewToken = (tokens_new: Oidc.Tokens<Record<string, unknown>>) => {
-                    internalState.tokens = tokens_new;
-                    this.onAuthRefreshSuccess?.();
-                };
+            const onNewToken = (tokens_new: Oidc.Tokens<Record<string, unknown>>) => {
+                this.#state.tokens = tokens_new;
+                this.onAuthRefreshSuccess?.();
+            };
 
-                onNewToken(tokens);
+            onNewToken(tokens);
 
-                oidc.subscribeToTokensChange(onNewToken);
-            }
-
-            {
-                const { $onTokenExpired } = internalState;
-
-                let clear: (() => void) | undefined = undefined;
-
-                $onTokenExpired.subscribe(onTokenExpired => {
-                    clear?.();
-
-                    if (onTokenExpired === undefined) {
-                        return;
-                    }
-
-                    let timer: ReturnType<typeof workerTimers.setTimeout> | undefined = undefined;
-
-                    const onNewToken = () => {
-                        if (timer !== undefined) {
-                            workerTimers.clearTimeout(timer);
-                        }
-
-                        const { tokens } = internalState;
-                        assert(tokens !== undefined);
-
-                        timer = workerTimers.setTimeout(() => {
-                            onTokenExpired.call(this);
-                        }, Math.max(tokens.accessTokenExpirationTime - Date.now() - 3_000, 0));
-                    };
-
-                    onNewToken();
-
-                    const { unsubscribe } = oidc.subscribeToTokensChange(onNewToken);
-
-                    clear = () => {
-                        if (timer !== undefined) {
-                            workerTimers.clearTimeout(timer);
-                        }
-                        unsubscribe();
-                    };
-                });
-            }
-
-            onActionUpdate_call: {
-                if (this.onActionUpdate === undefined) {
-                    break onActionUpdate_call;
-                }
-
-                const { backFromAuthServer } = oidc;
-
-                if (backFromAuthServer === undefined) {
-                    break onActionUpdate_call;
-                }
-
-                const status = backFromAuthServer.result.kc_action_status;
-
-                if (!isAmong(["success", "cancelled", "error"], status)) {
-                    break onActionUpdate_call;
-                }
-
-                const action = backFromAuthServer.extraQueryParams.kc_action;
-
-                if (action === undefined) {
-                    break onActionUpdate_call;
-                }
-
-                this.onActionUpdate(status, action);
-            }
+            oidc.subscribeToTokensChange(onNewToken);
         }
 
-        if (!oidc.isUserLoggedIn && oidc.initializationError !== undefined) {
+        this.#state.oidc = oidc;
+        this.#state.dInitialized.resolve();
+
+        this.onReady?.(oidc.isUserLoggedIn);
+
+        onAuthSuccess_call: {
+            if (!oidc.isUserLoggedIn) {
+                break onAuthSuccess_call;
+            }
+
+            this.onAuthSuccess?.();
+        }
+
+        onAuthError_call: {
+            if (oidc.isUserLoggedIn) {
+                break onAuthError_call;
+            }
+
+            if (oidc.initializationError === undefined) {
+                break onAuthError_call;
+            }
+
             this.onAuthError?.({
                 error: oidc.initializationError.name,
                 error_description: oidc.initializationError.message
             });
         }
 
-        internalState.dInitialized.resolve();
+        onActionUpdate_call: {
+            if (!oidc.isUserLoggedIn) {
+                break onActionUpdate_call;
+            }
 
-        this.onReady?.(oidc.isUserLoggedIn);
-        if (oidc.isUserLoggedIn) {
-            this.onAuthSuccess?.();
+            if (this.onActionUpdate === undefined) {
+                break onActionUpdate_call;
+            }
+
+            const { backFromAuthServer } = oidc;
+
+            if (backFromAuthServer === undefined) {
+                break onActionUpdate_call;
+            }
+
+            const status = backFromAuthServer.result.kc_action_status;
+
+            if (!isAmong(["success", "cancelled", "error"], status)) {
+                break onActionUpdate_call;
+            }
+
+            const action = backFromAuthServer.extraQueryParams.kc_action;
+
+            if (action === undefined) {
+                break onActionUpdate_call;
+            }
+
+            this.onActionUpdate(status, action);
+        }
+
+        schedule_onTokenExpired_call: {
+            if (!oidc.isUserLoggedIn) {
+                break schedule_onTokenExpired_call;
+            }
+
+            const { $onTokenExpired } = this.#state;
+
+            let clear: (() => void) | undefined = undefined;
+
+            const next = (onTokenExpired: (() => void) | undefined) => {
+                clear?.();
+
+                if (onTokenExpired === undefined) {
+                    return;
+                }
+
+                let timer: ReturnType<typeof workerTimers.setTimeout> | undefined = undefined;
+
+                const onNewToken = () => {
+                    if (timer !== undefined) {
+                        workerTimers.clearTimeout(timer);
+                    }
+
+                    const { tokens } = this.#state;
+                    assert(tokens !== undefined);
+
+                    timer = workerTimers.setTimeout(() => {
+                        onTokenExpired.call(this);
+                    }, Math.max(tokens.accessTokenExpirationTime - tokens.getServerDateNow() - 3_000, 0));
+                };
+
+                onNewToken();
+
+                const { unsubscribe } = oidc.subscribeToTokensChange(onNewToken);
+
+                clear = () => {
+                    if (timer !== undefined) {
+                        workerTimers.clearTimeout(timer);
+                    }
+                    unsubscribe();
+                };
+            };
+
+            next($onTokenExpired.current);
+
+            $onTokenExpired.subscribe(next);
         }
 
         return oidc.isUserLoggedIn;
@@ -250,11 +266,7 @@ export class Keycloak {
             return false;
         }
 
-        const internalState = internalStateByInstance.get(this);
-
-        assert(internalState !== undefined);
-
-        const { oidc } = internalState;
+        const { oidc } = this.#state;
 
         assert(oidc !== undefined);
 
@@ -269,11 +281,7 @@ export class Keycloak {
             return undefined;
         }
 
-        const internalState = internalStateByInstance.get(this);
-
-        assert(internalState !== undefined);
-
-        const { oidc, tokens } = internalState;
+        const { oidc, tokens } = this.#state;
 
         assert(oidc !== undefined);
 
@@ -320,11 +328,7 @@ export class Keycloak {
             return undefined;
         }
 
-        const internalState = internalStateByInstance.get(this);
-
-        assert(internalState !== undefined);
-
-        const { oidc, tokens } = internalState;
+        const { oidc, tokens } = this.#state;
 
         assert(oidc !== undefined);
 
@@ -349,11 +353,7 @@ export class Keycloak {
             return undefined;
         }
 
-        const internalState = internalStateByInstance.get(this);
-
-        assert(internalState !== undefined);
-
-        const { oidc, tokens } = internalState;
+        const { oidc, tokens } = this.#state;
 
         assert(oidc !== undefined);
 
@@ -375,15 +375,11 @@ export class Keycloak {
      * requests to services.
      */
     get token(): string | undefined {
-        const internalState = internalStateByInstance.get(this);
-
-        assert(internalState !== undefined);
-
         if (!this.didInitialize) {
-            return internalState.initOptions?.token;
+            return this.#state.initOptions?.token;
         }
 
-        const { oidc, tokens } = internalState;
+        const { oidc, tokens } = this.#state;
 
         assert(oidc !== undefined);
 
@@ -403,12 +399,8 @@ export class Keycloak {
      * The parsed token as a JavaScript object.
      */
     get tokenParsed(): KeycloakTokenParsed | undefined {
-        const internalState = internalStateByInstance.get(this);
-
-        assert(internalState !== undefined);
-
         if (!this.didInitialize) {
-            const { token } = internalState.initOptions ?? {};
+            const { token } = this.#state.initOptions ?? {};
 
             if (token === undefined) {
                 return undefined;
@@ -417,7 +409,7 @@ export class Keycloak {
             return decodeJwt(token) as KeycloakTokenParsed;
         }
 
-        const { oidc, tokens } = internalState;
+        const { oidc, tokens } = this.#state;
 
         assert(oidc !== undefined);
 
@@ -437,15 +429,11 @@ export class Keycloak {
      * The base64 encoded refresh token that can be used to retrieve a new token.
      */
     get refreshToken(): string | undefined {
-        const internalState = internalStateByInstance.get(this);
-
-        assert(internalState !== undefined);
-
         if (!this.didInitialize) {
-            return internalState.initOptions?.refreshToken;
+            return this.#state.initOptions?.refreshToken;
         }
 
-        const { oidc, tokens } = internalState;
+        const { oidc, tokens } = this.#state;
 
         assert(oidc !== undefined);
 
@@ -465,12 +453,8 @@ export class Keycloak {
      * The parsed refresh token as a JavaScript object.
      */
     get refreshTokenParsed(): KeycloakTokenParsed | undefined {
-        const internalState = internalStateByInstance.get(this);
-
-        assert(internalState !== undefined);
-
         if (!this.didInitialize) {
-            const { refreshToken } = internalState.initOptions ?? {};
+            const { refreshToken } = this.#state.initOptions ?? {};
 
             if (refreshToken === undefined) {
                 return undefined;
@@ -479,7 +463,7 @@ export class Keycloak {
             return decodeJwt(refreshToken) as KeycloakTokenParsed;
         }
 
-        const { oidc, tokens } = internalState;
+        const { oidc, tokens } = this.#state;
 
         assert(oidc !== undefined);
 
@@ -503,15 +487,11 @@ export class Keycloak {
      * The base64 encoded ID token.
      */
     get idToken(): string | undefined {
-        const internalState = internalStateByInstance.get(this);
-
-        assert(internalState !== undefined);
-
         if (!this.didInitialize) {
-            return internalState.initOptions?.idToken;
+            return this.#state.initOptions?.idToken;
         }
 
-        const { oidc, tokens } = internalState;
+        const { oidc, tokens } = this.#state;
 
         assert(oidc !== undefined);
 
@@ -531,12 +511,8 @@ export class Keycloak {
      * The parsed id token as a JavaScript object.
      */
     get idTokenParsed(): KeycloakTokenParsed | undefined {
-        const internalState = internalStateByInstance.get(this);
-
-        assert(internalState !== undefined);
-
         if (!this.didInitialize) {
-            const { idToken } = internalState.initOptions ?? {};
+            const { idToken } = this.#state.initOptions ?? {};
 
             if (idToken === undefined) {
                 return undefined;
@@ -545,7 +521,7 @@ export class Keycloak {
             return decodeJwt(idToken) as KeycloakTokenParsed;
         }
 
-        const { oidc, tokens } = internalState;
+        const { oidc, tokens } = this.#state;
 
         assert(oidc !== undefined);
 
@@ -568,12 +544,8 @@ export class Keycloak {
      * enough when determining if a token is expired or not.
      */
     get timeSkew(): number | null {
-        const internalState = internalStateByInstance.get(this);
-
-        assert(internalState !== undefined);
-
         if (!this.didInitialize) {
-            const { timeSkew } = internalState.initOptions ?? {};
+            const { timeSkew } = this.#state.initOptions ?? {};
 
             if (timeSkew === undefined) {
                 return null;
@@ -582,7 +554,7 @@ export class Keycloak {
             return timeSkew;
         }
 
-        const { oidc, tokens } = internalState;
+        const { oidc, tokens } = this.#state;
 
         assert(oidc !== undefined);
 
@@ -602,19 +574,14 @@ export class Keycloak {
      * Whether the instance has been initialized by calling `.init()`.
      */
     get didInitialize(): boolean {
-        const internalState = internalStateByInstance.get(this);
-        assert(internalState !== undefined);
-        return internalState.oidc !== undefined;
+        return this.#state.oidc !== undefined;
     }
 
     /**
      * @private Undocumented.
      */
     get loginRequired(): boolean {
-        const internalState = internalStateByInstance.get(this);
-        assert(internalState !== undefined);
-
-        const { initOptions } = internalState;
+        const { initOptions } = this.#state;
 
         if (initOptions === undefined) {
             return false;
@@ -627,11 +594,9 @@ export class Keycloak {
      * @private Undocumented.
      */
     get authServerUrl(): string {
-        const internalState = internalStateByInstance.get(this);
-        assert(internalState !== undefined);
         const {
             keycloakUtils: { issuerUriParsed }
-        } = internalState;
+        } = this.#state;
 
         return `${issuerUriParsed.origin}${issuerUriParsed.kcHttpRelativePath}`;
     }
@@ -640,11 +605,9 @@ export class Keycloak {
      * @private Undocumented.
      */
     get realm(): string {
-        const internalState = internalStateByInstance.get(this);
-        assert(internalState !== undefined);
         const {
             keycloakUtils: { issuerUriParsed }
-        } = internalState;
+        } = this.#state;
 
         return issuerUriParsed.realm;
     }
@@ -653,9 +616,7 @@ export class Keycloak {
      * @private Undocumented.
      */
     get clientId(): string {
-        const internalState = internalStateByInstance.get(this);
-        assert(internalState !== undefined);
-        const { constructorParams } = internalState;
+        const { constructorParams } = this.#state;
         return constructorParams.clientId;
     }
 
@@ -663,9 +624,7 @@ export class Keycloak {
      * @private Undocumented.
      */
     get redirectUri(): string | undefined {
-        const internalState = internalStateByInstance.get(this);
-        assert(internalState !== undefined);
-        const { initOptions } = internalState;
+        const { initOptions } = this.#state;
         if (initOptions === undefined) {
             return undefined;
         }
@@ -680,9 +639,7 @@ export class Keycloak {
             return undefined;
         }
 
-        const internalState = internalStateByInstance.get(this);
-        assert(internalState !== undefined);
-        const { oidc, tokens } = internalState;
+        const { oidc, tokens } = this.#state;
 
         assert(oidc !== undefined);
 
@@ -706,9 +663,7 @@ export class Keycloak {
      * @private Undocumented.
      */
     get profile(): KeycloakProfile | undefined {
-        const internalState = internalStateByInstance.get(this);
-        assert(internalState !== undefined);
-        const { profile } = internalState;
+        const { profile } = this.#state;
         return profile;
     }
 
@@ -716,9 +671,7 @@ export class Keycloak {
      * @private Undocumented.
      */
     get userInfo(): KeycloakUserInfo | undefined {
-        const internalState = internalStateByInstance.get(this);
-        assert(internalState !== undefined);
-        const { userInfo } = internalState;
+        const { userInfo } = this.#state;
         return userInfo;
     }
 
@@ -764,15 +717,11 @@ export class Keycloak {
      * obtain a new access token.
      */
     set onTokenExpired(value: (() => void) | undefined) {
-        const internalState = internalStateByInstance.get(this);
-        assert(internalState !== undefined);
-        const { $onTokenExpired } = internalState;
+        const { $onTokenExpired } = this.#state;
         $onTokenExpired.current = value;
     }
     get onTokenExpired() {
-        const internalState = internalStateByInstance.get(this);
-        assert(internalState !== undefined);
-        const { $onTokenExpired } = internalState;
+        const { $onTokenExpired } = this.#state;
         return $onTokenExpired.current;
     }
 
@@ -801,14 +750,11 @@ export class Keycloak {
             doesCurrentHrefRequiresAuth
         } = options ?? {};
 
-        const internalState = internalStateByInstance.get(this);
-        assert(internalState !== undefined);
-
         if (!this.didInitialize) {
-            await internalState.dInitialized.pr;
+            await this.#state.dInitialized.pr;
         }
 
-        const { oidc, keycloakUtils } = internalState;
+        const { oidc, keycloakUtils } = this.#state;
 
         assert(oidc !== undefined);
 
@@ -863,15 +809,11 @@ export class Keycloak {
      * @param options Logout options.
      */
     async logout(options?: KeycloakLogoutOptions): Promise<never> {
-        const internalState = internalStateByInstance.get(this);
-
-        assert(internalState !== undefined);
-
         if (!this.didInitialize) {
-            await internalState.dInitialized.pr;
+            await this.#state.dInitialized.pr;
         }
 
-        const { oidc, initOptions } = internalState;
+        const { oidc, initOptions } = this.#state;
 
         assert(oidc !== undefined);
         assert(initOptions !== undefined);
@@ -949,11 +891,7 @@ export class Keycloak {
     createAccountUrl(options?: KeycloakAccountOptions & { locale?: string }): string {
         const { locale, redirectUri } = options ?? {};
 
-        const internalState = internalStateByInstance.get(this);
-
-        assert(internalState !== undefined);
-
-        const { keycloakUtils } = internalState;
+        const { keycloakUtils } = this.#state;
 
         return keycloakUtils.getAccountUrl({
             clientId: this.clientId,
@@ -968,9 +906,6 @@ export class Keycloak {
      * @param minValidity If not specified, `0` is used.
      */
     isTokenExpired(minValidity: number = 0): boolean {
-        const internalState = internalStateByInstance.get(this);
-        assert(internalState !== undefined);
-
         let accessTokenExpirationTime: number;
 
         if (!this.didInitialize) {
@@ -985,7 +920,7 @@ export class Keycloak {
 
             accessTokenExpirationTime = time;
         } else {
-            const { tokens } = internalState;
+            const { tokens } = this.#state;
             assert(tokens !== undefined);
 
             accessTokenExpirationTime = tokens.accessTokenExpirationTime;
@@ -1018,15 +953,11 @@ export class Keycloak {
      * });
      */
     async updateToken(minValidity: number = 5): Promise<boolean> {
-        const internalState = internalStateByInstance.get(this);
-
-        assert(internalState !== undefined);
-
         if (!this.didInitialize) {
-            await internalState.dInitialized.pr;
+            await this.#state.dInitialized.pr;
         }
 
-        const { oidc } = internalState;
+        const { oidc } = this.#state;
 
         assert(oidc !== undefined);
 
@@ -1082,14 +1013,11 @@ export class Keycloak {
      * @returns A promise to set functions to be invoked on success or error.
      */
     async loadUserProfile(): Promise<KeycloakProfile> {
-        const internalState = internalStateByInstance.get(this);
-        assert(internalState !== undefined);
-
         if (!this.didInitialize) {
-            await internalState.dInitialized.pr;
+            await this.#state.dInitialized.pr;
         }
 
-        const { oidc, keycloakUtils } = internalState;
+        const { oidc, keycloakUtils } = this.#state;
 
         assert(oidc !== undefined);
 
@@ -1097,21 +1025,18 @@ export class Keycloak {
 
         const { accessToken } = await oidc.getTokens();
 
-        return (internalState.profile = await keycloakUtils.fetchUserProfile({ accessToken }));
+        return (this.#state.profile = await keycloakUtils.fetchUserProfile({ accessToken }));
     }
 
     /**
      * @private Undocumented.
      */
     async loadUserInfo(): Promise<KeycloakUserInfo> {
-        const internalState = internalStateByInstance.get(this);
-        assert(internalState !== undefined);
-
         if (!this.didInitialize) {
-            await internalState.dInitialized.pr;
+            await this.#state.dInitialized.pr;
         }
 
-        const { oidc, keycloakUtils } = internalState;
+        const { oidc, keycloakUtils } = this.#state;
 
         assert(oidc !== undefined);
 
@@ -1119,6 +1044,20 @@ export class Keycloak {
 
         const { accessToken } = await oidc.getTokens();
 
-        return (internalState.userInfo = await keycloakUtils.fetchUserInfo({ accessToken }));
+        return (this.#state.userInfo = await keycloakUtils.fetchUserInfo({ accessToken }));
+    }
+
+    /** Get the underlying oidc-spa instance */
+    get oidc(): Oidc<Record<string, unknown>> {
+        assert(
+            this.didInitialize,
+            "Cannot get keycloak.oidc before the init() method was called and have resolved."
+        );
+
+        const { oidc } = this.#state;
+
+        assert(oidc !== undefined);
+
+        return oidc;
     }
 }
