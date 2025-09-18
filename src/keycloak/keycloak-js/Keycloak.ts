@@ -1024,4 +1024,18 @@ export class Keycloak {
 
         return (this.#state.userInfo = await keycloakUtils.fetchUserInfo({ accessToken }));
     }
+
+    /** Get the underlying oidc-spa instance */
+    get oidc(): Oidc<Record<string, unknown>> {
+        assert(
+            this.didInitialize,
+            "Cannot get keycloak.oidc before the init() method was called and have resolved."
+        );
+
+        const { oidc } = this.#state;
+
+        assert(oidc !== undefined);
+
+        return oidc;
+    }
 }
