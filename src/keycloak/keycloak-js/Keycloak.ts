@@ -595,7 +595,7 @@ export class Keycloak {
 
         assert(tokens !== undefined);
 
-        return tokens.getServerDateNow() - Date.now();
+        return Math.ceil((tokens.getServerDateNow() - Date.now()) / 1000);
     }
 
     /**
