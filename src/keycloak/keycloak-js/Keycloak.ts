@@ -136,101 +136,123 @@ export class Keycloak {
 
         const oidc = oidcOrError;
 
-        this.#state.oidc = oidc;
-
         if (oidc.isUserLoggedIn) {
-            {
-                const tokens = await oidc.getTokens();
+            const tokens = await oidc.getTokens();
 
-                const onNewToken = (tokens_new: Oidc.Tokens<Record<string, unknown>>) => {
-                    this.#state.tokens = tokens_new;
-                    this.onAuthRefreshSuccess?.();
-                };
+            const onNewToken = (tokens_new: Oidc.Tokens<Record<string, unknown>>) => {
+                this.#state.tokens = tokens_new;
+                this.onAuthRefreshSuccess?.();
+            };
 
-                onNewToken(tokens);
+            onNewToken(tokens);
 
-                oidc.subscribeToTokensChange(onNewToken);
-            }
-
-            {
-                const { $onTokenExpired } = this.#state;
-
-                let clear: (() => void) | undefined = undefined;
-
-                $onTokenExpired.subscribe(onTokenExpired => {
-                    clear?.();
-
-                    if (onTokenExpired === undefined) {
-                        return;
-                    }
-
-                    let timer: ReturnType<typeof workerTimers.setTimeout> | undefined = undefined;
-
-                    const onNewToken = () => {
-                        if (timer !== undefined) {
-                            workerTimers.clearTimeout(timer);
-                        }
-
-                        const { tokens } = this.#state;
-                        assert(tokens !== undefined);
-
-                        timer = workerTimers.setTimeout(() => {
-                            onTokenExpired.call(this);
-                        }, Math.max(tokens.accessTokenExpirationTime - Date.now() - 3_000, 0));
-                    };
-
-                    onNewToken();
-
-                    const { unsubscribe } = oidc.subscribeToTokensChange(onNewToken);
-
-                    clear = () => {
-                        if (timer !== undefined) {
-                            workerTimers.clearTimeout(timer);
-                        }
-                        unsubscribe();
-                    };
-                });
-            }
-
-            onActionUpdate_call: {
-                if (this.onActionUpdate === undefined) {
-                    break onActionUpdate_call;
-                }
-
-                const { backFromAuthServer } = oidc;
-
-                if (backFromAuthServer === undefined) {
-                    break onActionUpdate_call;
-                }
-
-                const status = backFromAuthServer.result.kc_action_status;
-
-                if (!isAmong(["success", "cancelled", "error"], status)) {
-                    break onActionUpdate_call;
-                }
-
-                const action = backFromAuthServer.extraQueryParams.kc_action;
-
-                if (action === undefined) {
-                    break onActionUpdate_call;
-                }
-
-                this.onActionUpdate(status, action);
-            }
+            oidc.subscribeToTokensChange(onNewToken);
         }
 
-        if (!oidc.isUserLoggedIn && oidc.initializationError !== undefined) {
+        this.#state.oidc = oidc;
+        this.#state.dInitialized.resolve();
+
+        this.onReady?.(oidc.isUserLoggedIn);
+
+        onAuthSuccess_call: {
+            if (!oidc.isUserLoggedIn) {
+                break onAuthSuccess_call;
+            }
+
+            this.onAuthSuccess?.();
+        }
+
+        onAuthError_call: {
+            if (oidc.isUserLoggedIn) {
+                break onAuthError_call;
+            }
+
+            if (oidc.initializationError === undefined) {
+                break onAuthError_call;
+            }
+
             this.onAuthError?.({
                 error: oidc.initializationError.name,
                 error_description: oidc.initializationError.message
             });
         }
 
-        this.#state.dInitialized.resolve();
+        onActionUpdate_call: {
+            if (!oidc.isUserLoggedIn) {
+                break onActionUpdate_call;
+            }
 
-        this.onReady?.(oidc.isUserLoggedIn);
-        if (oidc.isUserLoggedIn) {
-            this.onAuthSuccess?.();
+            if (this.onActionUpdate === undefined) {
+                break onActionUpdate_call;
+            }
+
+            const { backFromAuthServer } = oidc;
+
+            if (backFromAuthServer === undefined) {
+                break onActionUpdate_call;
+            }
+
+            const status = backFromAuthServer.result.kc_action_status;
+
+            if (!isAmong(["success", "cancelled", "error"], status)) {
+                break onActionUpdate_call;
+            }
+
+            const action = backFromAuthServer.extraQueryParams.kc_action;
+
+            if (action === undefined) {
+                break onActionUpdate_call;
+            }
+
+            this.onActionUpdate(status, action);
+        }
+
+        schedule_onTokenExpired_call: {
+            if (!oidc.isUserLoggedIn) {
+                break schedule_onTokenExpired_call;
+            }
+
+            const { $onTokenExpired } = this.#state;
+
+            let clear: (() => void) | undefined = undefined;
+
+            const next = (onTokenExpired: (() => void) | undefined) => {
+                clear?.();
+
+                if (onTokenExpired === undefined) {
+                    return;
+                }
+
+                let timer: ReturnType<typeof workerTimers.setTimeout> | undefined = undefined;
+
+                const onNewToken = () => {
+                    if (timer !== undefined) {
+                        workerTimers.clearTimeout(timer);
+                    }
+
+                    const { tokens } = this.#state;
+                    assert(tokens !== undefined);
+
+                    timer = workerTimers.setTimeout(() => {
+                        onTokenExpired.call(this);
+                    }, Math.max(tokens.accessTokenExpirationTime - tokens.getServerDateNow() - 3_000, 0));
+                };
+
+                onNewToken();
+
+                const { unsubscribe } = oidc.subscribeToTokensChange(onNewToken);
+
+                clear = () => {
+                    if (timer !== undefined) {
+                        workerTimers.clearTimeout(timer);
+                    }
+                    unsubscribe();
+                };
+            };
+
+            next($onTokenExpired.current);
+
+            $onTokenExpired.subscribe(next);
         }
 
         return oidc.isUserLoggedIn;
