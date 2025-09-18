@@ -75,7 +75,8 @@ export function oidcClientTsUserToTokens<DecodedIdToken extends Record<string, u
 
     const issuedAtTime = (() => {
         // NOTE: The id_token is always a JWT as per the protocol.
-        // We don't use Date.now() due to network latency.
+        // We don't use Date.now() due to network latency or if the
+        // local clock is inaccurate.
         const id_token_iat = (() => {
             let iat: number | undefined;
 
@@ -159,7 +160,11 @@ export function oidcClientTsUserToTokens<DecodedIdToken extends Record<string, u
         idToken,
         decodedIdToken,
         decodedIdToken_original,
-        issuedAtTime
+        issuedAtTime,
+        getServerDateNow: (() => {
+            const issuedAtTime_local = oidcClientTsUser.__oidc_spa_localTimeWhenTokenIssued;
+            return () => Date.now() + (issuedAtTime - issuedAtTime_local);
+        })()
     };
 
     const tokens: Oidc.Tokens<DecodedIdToken> =

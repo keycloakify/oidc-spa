@@ -151,7 +151,8 @@ export async function createMockOidc<
                             "See https://docs.oidc-spa.dev/v/v7/mock"
                         ].join("\n")
                     }),
-                issuedAtTime: Date.now()
+                issuedAtTime: Date.now(),
+                getServerDateNow: () => Date.now()
             };
 
             const tokens: Oidc.Tokens<DecodedIdToken> =

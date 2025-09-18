@@ -34,7 +34,7 @@ export function setTimeout(callback: () => void, delay: number): TimerHandle {
 
         const elapsed = Date.now() - start;
 
-        if (elapsed < delay) {
+        if (0 <= elapsed && elapsed < delay) {
             timerHandle_n = workerTimers.setTimeout(callback_actual, delay - elapsed);
         } else {
             callback_actual();
