@@ -1374,17 +1374,20 @@ export async function createOidc_nonMemoized<
 
         let timer: ReturnType<typeof setTimeout> | undefined = undefined;
 
+        const DELAY = 5_000;
+
         (async () => {
             while (true) {
                 const before = Date.now();
-
                 await new Promise<void>(resolve => {
-                    timer = setTimeout(resolve, 5_000);
+                    timer = setTimeout(resolve, DELAY);
                 });
-
                 const after = Date.now();
 
-                if (Math.abs(after - before) > 1_000) {
+                const elapsed_measured = after - before;
+                const elapsed_theoretical = DELAY;
+
+                if (Math.abs(elapsed_measured - elapsed_theoretical) > 1_000) {
                     log?.("Renewing token now as local time might have shifted");
                     // NOTE: This **will** happen, even if there is no local time drift.
                     // For example when the computer wakes up after sleep.
