@@ -451,7 +451,7 @@ export function createOidcReactApi_dependencyInjection<
     return oidcReact;
 }
 
-/** @see: https://docs.oidc-spa.dev/v/v7/usage#react-api */
+/** @see: https://docs.oidc-spa.dev/v/v8/usage#react-api */
 export function createReactOidc<
     DecodedIdToken extends Record<string, unknown> = Oidc.Tokens.DecodedIdToken_base,
     AutoLogin extends boolean = false
