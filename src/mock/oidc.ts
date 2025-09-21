@@ -28,6 +28,8 @@ export type ParamsOfCreateMockOidc<
 
 const URL_SEARCH_PARAM_NAME = "isUserLoggedIn";
 
+const locationHref_moduleEvalTime = location.href;
+
 export async function createMockOidc<
     DecodedIdToken extends Record<string, unknown> = Oidc.Tokens.DecodedIdToken_base,
     AutoLogin extends boolean = false
@@ -46,7 +48,13 @@ export async function createMockOidc<
     const isUserLoggedIn = (() => {
         const { wasPresent, value } = getSearchParam({
             url: toFullyQualifiedUrl({
-                urlish: getRootRelativeOriginalLocationHref(),
+                urlish: (() => {
+                    try {
+                        return getRootRelativeOriginalLocationHref();
+                    } catch {
+                        return locationHref_moduleEvalTime;
+                    }
+                })(),
                 doAssertNoQueryParams: false
             }),
             name: URL_SEARCH_PARAM_NAME
