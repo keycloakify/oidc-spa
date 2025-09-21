@@ -3,7 +3,7 @@ import { createObjectThatThrowsIfAccessed } from "../tools/createObjectThatThrow
 import { id } from "../vendor/frontend/tsafe";
 import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";
 import { getSearchParam, addOrUpdateSearchParam } from "../tools/urlSearchParams";
-import { initialLocationHref } from "../core/initialLocationHref";
+import { getRootRelativeOriginalLocationHref } from "../core/earlyInit";
 
 export type ParamsOfCreateMockOidc<
     DecodedIdToken extends Record<string, unknown> = Record<string, unknown>,
@@ -45,7 +45,10 @@ export async function createMockOidc<
 
     const isUserLoggedIn = (() => {
         const { wasPresent, value } = getSearchParam({
-            url: initialLocationHref,
+            url: toFullyQualifiedUrl({
+                urlish: getRootRelativeOriginalLocationHref(),
+                doAssertNoQueryParams: false
+            }),
             name: URL_SEARCH_PARAM_NAME
         });
 

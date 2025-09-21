@@ -16,13 +16,12 @@ export namespace StateData {
     export namespace Redirect {
         type Common_Redirect = Common & {
             context: "redirect";
-            redirectUrl: string;
-            hasBeenProcessedByCallback: boolean;
+            rootRelativeRedirectUrl: string;
         };
 
         export type Login = Common_Redirect & {
             action: "login";
-            redirectUrl_consentRequiredCase: string;
+            rootRelativeRedirectUrl_consentRequiredCase: string;
             extraQueryParams: Record<string, string>;
         };
 
@@ -81,12 +80,6 @@ function getStateStore(params: { stateUrlParamValue: string }): { data: StateDat
     return obj;
 }
 
-function setStateStore(params: { stateUrlParamValue: string; obj: { data: StateData } }) {
-    const { stateUrlParamValue, obj } = params;
-
-    localStorage.setItem(getKey({ stateUrlParamValue }), JSON.stringify(obj));
-}
-
 export function clearStateStore(params: { stateUrlParamValue: string }) {
     const { stateUrlParamValue } = params;
     localStorage.removeItem(getKey({ stateUrlParamValue }));
@@ -102,17 +95,4 @@ export function getStateData(params: { stateUrlParamValue: string }): StateData 
     }
 
     return stateStore.data;
-}
-
-export function markStateDataAsProcessedByCallback(params: { stateUrlParamValue: string }) {
-    const { stateUrlParamValue } = params;
-
-    const obj = getStateStore({ stateUrlParamValue });
-
-    assert(obj !== undefined, "180465");
-    assert(obj.data.context === "redirect", "649531");
-
-    obj.data.hasBeenProcessedByCallback = true;
-
-    setStateStore({ stateUrlParamValue, obj });
 }

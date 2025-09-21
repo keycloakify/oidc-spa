@@ -8,13 +8,7 @@ import {
     type FC,
     type JSX
 } from "react";
-import {
-    type Oidc,
-    createOidc,
-    type ParamsOfCreateOidc,
-    OidcInitializationError,
-    handleOidcCallback
-} from "../core";
+import { type Oidc, createOidc, type ParamsOfCreateOidc, OidcInitializationError } from "../core";
 import { assert, type Equals, type Param0 } from "../vendor/frontend/tsafe";
 import { id } from "../vendor/frontend/tsafe";
 import type { ValueOrAsyncGetter } from "../tools/ValueOrAsyncGetter";
@@ -145,16 +139,6 @@ export function createOidcReactApi_dependencyInjection<
 
     // NOTE: It can be InitializationError only if autoLogin is true
     const prOidcOrInitializationError = (async () => {
-        // We're doing this here just for people that wouldn't have
-        // configured the early init in entrypoint.
-        {
-            const { isHandled } = handleOidcCallback();
-
-            if (isHandled) {
-                return new Promise<never>(() => {});
-            }
-        }
-
         const params = await (async () => {
             if (typeof paramsOrGetParams === "function") {
                 const getParams = paramsOrGetParams;

@@ -13,14 +13,24 @@ import { createStartCountdown } from "../tools/startCountdown";
 import { toHumanReadableDuration } from "../tools/toHumanReadableDuration";
 import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";
 import { OidcInitializationError } from "./OidcInitializationError";
-import { type StateData, generateStateUrlParamValue, STATE_STORE_KEY_PREFIX } from "./StateData";
+import {
+    type StateData,
+    generateStateUrlParamValue,
+    STATE_STORE_KEY_PREFIX,
+    getStateData
+} from "./StateData";
 import { notifyOtherTabsOfLogout, getPrOtherTabLogout } from "./logoutPropagationToOtherTabs";
 import { notifyOtherTabsOfLogin, getPrOtherTabLogin } from "./loginPropagationToOtherTabs";
 import { getConfigId } from "./configId";
 import { oidcClientTsUserToTokens } from "./oidcClientTsUserToTokens";
 import { loginSilent } from "./loginSilent";
-import { authResponseToUrl } from "./AuthResponse";
-import { handleOidcCallback, retrieveRedirectAuthResponseAndStateData } from "./handleOidcCallback";
+import {
+    authResponseToUrl,
+    getPersistedRedirectAuthResponses,
+    setPersistedRedirectAuthResponses,
+    type AuthResponse
+} from "./AuthResponse";
+import { getRootRelativeOriginalLocationHref, getRedirectAuthResponse } from "./earlyInit";
 import { getPersistedAuthState, persistAuthState } from "./persistedAuthState";
 import type { Oidc } from "./Oidc";
 import { createEvt } from "../tools/Evt";
@@ -34,7 +44,6 @@ import {
     startLoginOrRefreshProcess,
     waitForAllOtherOngoingLoginOrRefreshProcessesToComplete
 } from "./ongoingLoginOrRefreshProcesses";
-import { initialLocationHref } from "./initialLocationHref";
 import { createGetIsNewBrowserSession } from "./isNewBrowserSession";
 import { getIsOnline } from "../tools/getIsOnline";
 import { isKeycloak } from "../keycloak/isKeycloak";
@@ -179,6 +188,20 @@ const globalContext = {
     hasLogoutBeenCalled: id<boolean>(false),
     evtRequestToPersistTokens: createEvt<{ configIdOfInstancePostingTheRequest: string }>()
 };
+
+globalContext.evtRequestToPersistTokens.subscribe(() => {
+    const { authResponse } = getRedirectAuthResponse();
+
+    if (authResponse === undefined) {
+        return;
+    }
+
+    const { authResponses } = getPersistedRedirectAuthResponses();
+
+    setPersistedRedirectAuthResponses({
+        authResponses: [...authResponses, authResponse]
+    });
+});
 
 /** @see: https://docs.oidc-spa.dev/v/v7/usage */
 export async function createOidc<
@@ -340,14 +363,6 @@ export async function createOidc_nonMemoized<
         )}`
     );
 
-    {
-        const { isHandled } = handleOidcCallback();
-
-        if (isHandled) {
-            await new Promise<never>(() => {});
-        }
-    }
-
     const stateUrlParamValue_instance = generateStateUrlParamValue();
 
     const canUseIframe = (() => {
@@ -476,13 +491,72 @@ export async function createOidc_nonMemoized<
           }
     > => {
         handle_redirect_auth_response: {
-            const authResponseAndStateData = retrieveRedirectAuthResponseAndStateData({ configId });
+            let stateDataAndAuthResponse:
+                | { stateData: StateData.Redirect; authResponse: AuthResponse }
+                | undefined = undefined;
 
-            if (authResponseAndStateData === undefined) {
+            get_stateData_and_authResponse: {
+                from_memory: {
+                    const { authResponse, clearAuthResponse } = getRedirectAuthResponse();
+
+                    if (authResponse === undefined) {
+                        break from_memory;
+                    }
+
+                    const stateData = getStateData({ stateUrlParamValue: authResponse.state });
+
+                    if (stateData === undefined) {
+                        break from_memory;
+                    }
+
+                    if (stateData.configId !== configId) {
+                        break from_memory;
+                    }
+
+                    assert(stateData.context === "redirect", "3229492");
+
+                    clearAuthResponse();
+
+                    stateDataAndAuthResponse = { stateData, authResponse };
+
+                    break get_stateData_and_authResponse;
+                }
+
+                // from storage
+                {
+                    const { authResponses } = getPersistedRedirectAuthResponses();
+
+                    for (const authResponse of authResponses) {
+                        const stateData = getStateData({ stateUrlParamValue: authResponse.state });
+
+                        if (stateData === undefined) {
+                            continue;
+                        }
+
+                        if (stateData.configId !== configId) {
+                            continue;
+                        }
+
+                        assert(stateData.context === "redirect", "35935591");
+
+                        setPersistedRedirectAuthResponses({
+                            authResponses: authResponses.filter(
+                                authResponse_i => authResponse_i !== authResponse
+                            )
+                        });
+
+                        stateDataAndAuthResponse = { stateData, authResponse };
+
+                        break get_stateData_and_authResponse;
+                    }
+                }
+            }
+
+            if (stateDataAndAuthResponse === undefined) {
                 break handle_redirect_auth_response;
             }
 
-            const { authResponse, stateData } = authResponseAndStateData;
+            const { stateData, authResponse } = stateDataAndAuthResponse;
 
             switch (stateData.action) {
                 case "login":
@@ -583,6 +657,8 @@ export async function createOidc_nonMemoized<
                         return undefined;
                     }
                     break;
+                default:
+                    assert<Equals<typeof stateData, never>>(false);
             }
         }
 
@@ -761,7 +837,7 @@ export async function createOidc_nonMemoized<
                     await loginOrGoToAuthServer({
                         action: "login",
                         doForceReloadOnBfCache: true,
-                        redirectUrl: initialLocationHref,
+                        redirectUrl: getRootRelativeOriginalLocationHref(),
                         // NOTE: Wether or not it's the preferred behavior, pushing to history
                         // only works on user interaction so it have to be false
                         doNavigateBackToLastPublicUrlIfTheTheUserNavigateBack: false,
@@ -1023,7 +1099,7 @@ export async function createOidc_nonMemoized<
 
             globalContext.hasLogoutBeenCalled = true;
 
-            const postLogoutRedirectUrl: string = (() => {
+            const rootRelativePostLogoutRedirectUrl: string = (() => {
                 switch (params.redirectTo) {
                     case "current page":
                         return window.location.href;
@@ -1035,7 +1111,7 @@ export async function createOidc_nonMemoized<
                             doAssertNoQueryParams: false
                         });
                 }
-            })();
+            })().slice(window.location.origin.length);
 
             await waitForAllOtherOngoingLoginOrRefreshProcessesToComplete({
                 prUnlock: new Promise<never>(() => {})
@@ -1050,11 +1126,10 @@ export async function createOidc_nonMemoized<
 
             try {
                 await oidcClientTsUserManager.signoutRedirect({
-                    state: id<StateData>({
+                    state: id<StateData.Redirect>({
                         configId,
                         context: "redirect",
-                        redirectUrl: postLogoutRedirectUrl,
-                        hasBeenProcessedByCallback: false,
+                        rootRelativeRedirectUrl: rootRelativePostLogoutRedirectUrl,
                         action: "logout",
                         sessionId
                     }),
@@ -1079,7 +1154,7 @@ export async function createOidc_nonMemoized<
                         sessionId
                     });
 
-                    window.location.href = postLogoutRedirectUrl;
+                    window.location.href = rootRelativePostLogoutRedirectUrl;
                 } else {
                     throw error;
                 }
