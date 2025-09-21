@@ -506,6 +506,7 @@ export async function createOidc_nonMemoized<
                     const stateData = getStateData({ stateUrlParamValue: authResponse.state });
 
                     if (stateData === undefined) {
+                        clearAuthResponse();
                         break from_memory;
                     }
 
@@ -522,7 +523,15 @@ export async function createOidc_nonMemoized<
                     break get_stateData_and_authResponse;
                 }
 
-                // from storage
+                // from storage, this is for race condition in multiple instance
+                // setup where one instance would need to redirect before
+                // the authResponse in memory had the chance to be processed.
+                // This can only happen if:
+                // 1) There are multiple oidc instances in the App.
+                // 2) They are instantiated in a non deterministic order.
+                // 3) We can't use iframe
+                // We practically never persist the auth response and do it only in session
+                // an ephemeral session storage, when we know it's gonna be required.
                 {
                     const { authResponses } = getPersistedRedirectAuthResponses();
 
