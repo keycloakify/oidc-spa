@@ -43,7 +43,6 @@ export function oidcEarlyInit(params: {
         if (freezeFetch) {
             const fetch_trusted = globalThis.fetch;
 
-            Object.freeze(fetch_trusted.prototype);
             Object.freeze(fetch_trusted);
 
             Object.defineProperty(globalThis, "fetch", {
