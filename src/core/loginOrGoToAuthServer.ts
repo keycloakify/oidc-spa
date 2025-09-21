@@ -178,21 +178,39 @@ export function createLoginOrGoToAuthServer(params: {
             doAssertNoQueryParams: false
         });
 
-        log?.(`redirectUrl: ${redirectUrl}`);
+        {
+            const redirectUrl_obj = new URL(redirectUrl);
+            const redirectUrl_originAndPath = `${redirectUrl_obj.origin}${redirectUrl_obj.pathname}`;
+
+            if (!redirectUrl_originAndPath.startsWith(homeUrl)) {
+                throw new Error(
+                    [
+                        `oidc-spa: redirect target ${redirectUrl_originAndPath} is outside of your application.`,
+                        `The homeUrl that you have provided defines the root where your app is hosted: ${homeUrl}.\n`,
+                        `This usually means one of the following:\n`,
+                        `1) The homeUrl is not set correctly. It must be the actual hosting root (for Vite, typically \`import.meta.env.BASE_URL\`).\n`,
+                        `2) You are trying to redirect outside of your application, which is not allowed by OIDC.`
+                    ].join(" ")
+                );
+            }
+        }
+
+        const rootRelativeRedirectUrl = redirectUrl.slice(window.location.origin.length);
+
+        log?.(`redirectUrl: ${rootRelativeRedirectUrl}`);
 
         const stateData: StateData = {
             context: "redirect",
-            redirectUrl,
+            rootRelativeRedirectUrl,
             extraQueryParams: {},
-            hasBeenProcessedByCallback: false,
             configId,
             action: "login",
-            redirectUrl_consentRequiredCase: (() => {
+            rootRelativeRedirectUrl_consentRequiredCase: (() => {
                 switch (rest.action) {
                     case "login":
-                        return lastPublicUrl ?? homeUrl;
+                        return (lastPublicUrl ?? homeUrl).slice(window.location.origin.length);
                     case "go to auth server":
-                        return redirectUrl;
+                        return rootRelativeRedirectUrl;
                 }
             })()
         };

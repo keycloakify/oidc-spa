@@ -3,7 +3,7 @@ import { createObjectThatThrowsIfAccessed } from "../tools/createObjectThatThrow
 import { id } from "../vendor/frontend/tsafe";
 import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";
 import { getSearchParam, addOrUpdateSearchParam } from "../tools/urlSearchParams";
-import { initialLocationHref } from "../core/initialLocationHref";
+import { getRootRelativeOriginalLocationHref } from "../core/earlyInit";
 
 export type ParamsOfCreateMockOidc<
     DecodedIdToken extends Record<string, unknown> = Record<string, unknown>,
@@ -28,6 +28,8 @@ export type ParamsOfCreateMockOidc<
 
 const URL_SEARCH_PARAM_NAME = "isUserLoggedIn";
 
+const locationHref_moduleEvalTime = location.href;
+
 export async function createMockOidc<
     DecodedIdToken extends Record<string, unknown> = Oidc.Tokens.DecodedIdToken_base,
     AutoLogin extends boolean = false
@@ -45,7 +47,16 @@ export async function createMockOidc<
 
     const isUserLoggedIn = (() => {
         const { wasPresent, value } = getSearchParam({
-            url: initialLocationHref,
+            url: toFullyQualifiedUrl({
+                urlish: (() => {
+                    try {
+                        return getRootRelativeOriginalLocationHref();
+                    } catch {
+                        return locationHref_moduleEvalTime;
+                    }
+                })(),
+                doAssertNoQueryParams: false
+            }),
             name: URL_SEARCH_PARAM_NAME
         });
 
@@ -140,7 +151,7 @@ export async function createMockOidc<
                     createObjectThatThrowsIfAccessed<DecodedIdToken>({
                         debugMessage: [
                             "You haven't provided a mocked decodedIdToken",
-                            "See https://docs.oidc-spa.dev/v/v7/mock"
+                            "See https://docs.oidc-spa.dev/v/v8/mock"
                         ].join("\n")
                     }),
                 decodedIdToken_original:
@@ -148,7 +159,7 @@ export async function createMockOidc<
                     createObjectThatThrowsIfAccessed<Oidc.Tokens.DecodedIdToken_base>({
                         debugMessage: [
                             "You haven't provided a mocked decodedIdToken_original",
-                            "See https://docs.oidc-spa.dev/v/v7/mock"
+                            "See https://docs.oidc-spa.dev/v/v8/mock"
                         ].join("\n")
                     }),
                 issuedAtTime: Date.now(),
