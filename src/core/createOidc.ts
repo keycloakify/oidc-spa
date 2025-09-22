@@ -205,7 +205,7 @@ globalContext.evtRequestToPersistTokens.subscribe(() => {
 
 /** @see: https://docs.oidc-spa.dev/v/v8/usage */
 export async function createOidc<
-    DecodedIdToken extends Record<string, unknown> = Record<string, unknown>,
+    DecodedIdToken extends Record<string, unknown> = Oidc.Tokens.DecodedIdToken_base,
     AutoLogin extends boolean = false
 >(
     params: ParamsOfCreateOidc<DecodedIdToken, AutoLogin>
@@ -286,8 +286,8 @@ export async function createOidc<
 }
 
 export async function createOidc_nonMemoized<
-    DecodedIdToken extends Record<string, unknown> = Oidc.Tokens.DecodedIdToken_base,
-    AutoLogin extends boolean = false
+    DecodedIdToken extends Record<string, unknown>,
+    AutoLogin extends boolean
 >(
     params: Omit<
         ParamsOfCreateOidc<DecodedIdToken, AutoLogin>,
