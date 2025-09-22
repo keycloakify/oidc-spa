@@ -286,7 +286,7 @@ export async function createOidc<
 }
 
 export async function createOidc_nonMemoized<
-    DecodedIdToken extends Record<string, unknown> = Record<string, unknown>,
+    DecodedIdToken extends Record<string, unknown> = Oidc.Tokens.DecodedIdToken_base,
     AutoLogin extends boolean = false
 >(
     params: Omit<
