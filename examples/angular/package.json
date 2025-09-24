@@ -23,6 +23,7 @@
   "private": true,
   "dependencies": {
     "oidc-spa": "^8.0.3",
+    "zod": "^4.1.11",
     "@angular/common": "^20.3.0",
     "@angular/compiler": "^20.3.0",
     "@angular/core": "^20.3.0",

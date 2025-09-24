@@ -1,14 +1,20 @@
-import { Component, signal } from '@angular/core';
-import { RouterOutlet } from '@angular/router';
-import { getOidc, get$decodedIdToken } from '../oidc';
+import { Component } from '@angular/core';
+import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { getOidc, get$decodedIdToken, get$secondsLeftBeforeAutoLogout } from '../oidc';
+import { createKeycloakUtils } from 'oidc-spa/keycloak';
 
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive],
   templateUrl: './app.html',
-  styleUrl: './app.css',
 })
 export class App {
   oidc = getOidc();
   $decodedIdToken = get$decodedIdToken();
+  $secondsLeftBeforeAutoLogout = get$secondsLeftBeforeAutoLogout({
+    warningDurationSeconds: 45,
+  });
+  keycloakUtils = createKeycloakUtils({
+    issuerUri: this.oidc.params.issuerUri,
+  });
 }
