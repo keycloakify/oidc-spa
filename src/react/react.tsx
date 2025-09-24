@@ -140,10 +140,10 @@ export function createReactOidc_dependencyInjection<
     // NOTE: It can be InitializationError only if autoLogin is true
     const prOidcOrInitializationError = (async () => {
         const params = await (async () => {
+            await dReadyToCreate.pr;
+
             if (typeof paramsOrGetParams === "function") {
                 const getParams = paramsOrGetParams;
-
-                await dReadyToCreate.pr;
 
                 const params = await getParams();
 
