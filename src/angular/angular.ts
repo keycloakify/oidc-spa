@@ -90,10 +90,10 @@ export function createAngularOidc_dependencyInjection<
     // NOTE: It can be InitializationError only if autoLogin is true
     const prOidcOrAutoLoginInitializationError = (async () => {
         const params = await (async () => {
+            await dReadyToCreate.pr;
+
             if (typeof paramsOrGetParams === "function") {
                 const getParams = paramsOrGetParams;
-
-                await dReadyToCreate.pr;
 
                 const params = await getParams();
 
@@ -198,7 +198,7 @@ export function createAngularOidc_dependencyInjection<
     function getOidcInitializationError(): OidcInitializationError | undefined {
         if (oidcOrAutoLoginInitializationError === undefined) {
             throw new Error(
-                "oidc-spa: getOidcInitializationError() provideOidcInitAwaiter has resolved"
+                "oidc-spa: calling getOidcInitializationError() before provideOidcInitAwaiter has resolved"
             );
         }
 
@@ -301,10 +301,35 @@ export function createAngularOidc_dependencyInjection<
 
         let secondsLeftBeforeAutoLogout$: BehaviorSubject<number | undefined> | undefined = undefined;
 
-        function get$secondsLeftBeforeAutoLogout(): Signal<number | undefined> {
-            return toSignal((secondsLeftBeforeAutoLogout$ ??= createSecondsLeftBeforeAutoLogout$()), {
+        function get$secondsLeftBeforeAutoLogout(params: {
+            warningDurationSeconds: number;
+        }): Signal<number | undefined> {
+            const { warningDurationSeconds } = params;
+
+            secondsLeftBeforeAutoLogout$ ??= createSecondsLeftBeforeAutoLogout$();
+
+            const secondsLeftBeforeAutoLogout$_cropped = new BehaviorSubject<number | undefined>(
+                secondsLeftBeforeAutoLogout$.getValue()
+            );
+
+            secondsLeftBeforeAutoLogout$.subscribe(secondsLeftBeforeAutoLogout => {
+                if (
+                    secondsLeftBeforeAutoLogout === undefined ||
+                    secondsLeftBeforeAutoLogout > warningDurationSeconds
+                ) {
+                    if (secondsLeftBeforeAutoLogout$_cropped.getValue() !== undefined) {
+                        secondsLeftBeforeAutoLogout$_cropped.next(undefined);
+                    }
+                }
+
+                secondsLeftBeforeAutoLogout$_cropped.next(secondsLeftBeforeAutoLogout);
+            });
+
+            const signal = toSignal(secondsLeftBeforeAutoLogout$_cropped, {
                 requireSync: true
             });
+
+            return signal;
         }
 
         return { get$secondsLeftBeforeAutoLogout };
@@ -330,6 +355,7 @@ export function createAngularOidc_dependencyInjection<
     }
 
     const provideOidcInitAwaiter: EnvironmentProviders = provideAppInitializer(async () => {
+        dReadyToCreate.resolve();
         await prOidcOrAutoLoginInitializationError;
     });
 
