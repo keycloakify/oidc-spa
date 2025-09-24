@@ -1,5 +1,4 @@
-import { Component, computed, inject } from '@angular/core';
-import { createKeycloakUtils, isKeycloak } from 'oidc-spa/keycloak';
+import { Component } from '@angular/core';
 import { getOidc, get$decodedIdToken } from '../../oidc';
 
 @Component({
