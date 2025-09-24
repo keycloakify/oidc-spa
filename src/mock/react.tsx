@@ -1,4 +1,4 @@
-import { createOidcReactApi_dependencyInjection } from "../react/react";
+import { createReactOidc_dependencyInjection } from "../react/react";
 import { createMockOidc, type ParamsOfCreateMockOidc } from "./oidc";
 import type { ValueOrAsyncGetter } from "../tools/ValueOrAsyncGetter";
 
@@ -7,5 +7,5 @@ export function createMockReactOidc<
     DecodedIdToken extends Record<string, unknown> = Record<string, unknown>,
     AutoLogin extends boolean = false
 >(params: ValueOrAsyncGetter<ParamsOfCreateMockOidc<DecodedIdToken, AutoLogin>>) {
-    return createOidcReactApi_dependencyInjection(params, createMockOidc);
+    return createReactOidc_dependencyInjection(params, createMockOidc);
 }

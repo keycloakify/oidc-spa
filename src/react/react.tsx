@@ -114,7 +114,7 @@ type OidcReactApi<DecodedIdToken extends Record<string, unknown>, AutoLogin exte
           }) => Promise<void | never>;
       });
 
-export function createOidcReactApi_dependencyInjection<
+export function createReactOidc_dependencyInjection<
     DecodedIdToken extends Record<string, unknown>,
     ParamsOfCreateOidc extends {
         autoLogin?: boolean;
@@ -439,7 +439,7 @@ export function createOidcReactApi_dependencyInjection<
         return oidc;
     }
 
-    const oidcReact: OidcReactApi<DecodedIdToken, false> = {
+    const oidcReactApi: OidcReactApi<DecodedIdToken, false> = {
         OidcProvider,
         useOidc: useOidc as any,
         getOidc,
@@ -448,7 +448,7 @@ export function createOidcReactApi_dependencyInjection<
     };
 
     // @ts-expect-error: We know what we are doing
-    return oidcReact;
+    return oidcReactApi;
 }
 
 /** @see: https://docs.oidc-spa.dev/v/v8/usage#react-api */
@@ -456,5 +456,5 @@ export function createReactOidc<
     DecodedIdToken extends Record<string, unknown> = Oidc.Tokens.DecodedIdToken_base,
     AutoLogin extends boolean = false
 >(params: ValueOrAsyncGetter<ParamsOfCreateOidc<DecodedIdToken, AutoLogin>>) {
-    return createOidcReactApi_dependencyInjection(params, createOidc);
+    return createReactOidc_dependencyInjection(params, createOidc);
 }
