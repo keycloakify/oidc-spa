@@ -7,7 +7,7 @@ import * as fs from "fs";
 const projectDirPath = pathJoin(__dirname, "..");
 
 const commonThirdPartyDeps = (() => {
-    const namespaceModuleNames: string[] = [];
+    const namespaceModuleNames: string[] = ["@angular"];
     const standaloneModuleNames = ["react", "@types/react"];
 
     return [
@@ -51,7 +51,8 @@ const testAppNames = [
     "tanstack-router",
     "tanstack-router-file-based",
     "multi-providers",
-    "react-router-framework"
+    "react-router-framework",
+    "angular"
 ] as const;
 
 const getTestAppPath = (testAppName: (typeof testAppNames)[number]) =>

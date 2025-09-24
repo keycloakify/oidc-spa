@@ -10,10 +10,24 @@
     "@jridgewell/gen-mapping" "^0.3.5"
     "@jridgewell/trace-mapping" "^0.3.24"
 
+"@angular/common@^20.3.1":
+  version "20.3.1"
+  resolved "https://registry.yarnpkg.com/@angular/common/-/common-20.3.1.tgz#e0575075156ba312ef15beeabe24d7d80c15fa2d"
+  integrity sha512-7Ru3BO4MOBQRMu9GJS+061cUsevKNsNAMxXnQtcqEaNyntUg2v0XiMdv4I7pQGtkQjFK17bKAxQ97jqxJfqsRQ==
+  dependencies:
+    tslib "^2.3.0"
+
 "@angular/core@^20.3.1":
   version "20.3.1"
   resolved "https://registry.yarnpkg.com/@angular/core/-/core-20.3.1.tgz#b4340a503362eec9cdfc950a2222f2da0c10bcd7"
   integrity sha512-O03k9ivZ2CvoHXiXGH5WKlWlTtxF2UGMwGXWnV54vGViHwNcvU5Z3h6Ve6mdU9dYMHK9sGljYZnkRpwI3B8mnQ==
+  dependencies:
+    tslib "^2.3.0"
+
+"@angular/platform-browser@^20.3.1":
+  version "20.3.1"
+  resolved "https://registry.yarnpkg.com/@angular/platform-browser/-/platform-browser-20.3.1.tgz#48344d55e91d893fa3efff1996fd3dc49efd8bf1"
+  integrity sha512-JiQWRvyVZDH0N9p+pnMOuTFGaw7jPakWDQCJBOBBLdE6AyOiy8YPBImRMrjNNIEqg36h1a8H32rBorf2TL3ExA==
   dependencies:
     tslib "^2.3.0"
 
