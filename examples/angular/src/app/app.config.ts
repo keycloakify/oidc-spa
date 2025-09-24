@@ -4,6 +4,7 @@ import {
   provideZonelessChangeDetection,
 } from '@angular/core';
 import { provideRouter } from '@angular/router';
+import { provideOidcInitAwaiter } from '../oidc';
 
 import { routes } from './app.routes';
 
@@ -12,5 +13,6 @@ export const appConfig: ApplicationConfig = {
     provideBrowserGlobalErrorListeners(),
     provideZonelessChangeDetection(),
     provideRouter(routes),
+    provideOidcInitAwaiter,
   ],
 };
