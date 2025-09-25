@@ -12,7 +12,6 @@ export const {
   // NOTE: Here you can fetch the issuerUri/clientId if you need to.
 
   return {
-    homeUrl: '/',
     issuerUri: 'https://cloud-iam.oidc-spa.dev/realms/oidc-spa',
     clientId: 'example-angular',
     decodedIdTokenSchema: z.object({
