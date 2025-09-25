@@ -1,6 +1,6 @@
 {
     "name": "oidc-spa",
-    "version": "8.0.3",
+    "version": "8.0.4",
     "description": "Openidconnect client for Single Page Applications",
     "repository": {
         "type": "git",
