@@ -320,6 +320,7 @@ export function createAngularOidc_dependencyInjection<
                     if (secondsLeftBeforeAutoLogout$_cropped.getValue() !== undefined) {
                         secondsLeftBeforeAutoLogout$_cropped.next(undefined);
                     }
+                    return;
                 }
 
                 secondsLeftBeforeAutoLogout$_cropped.next(secondsLeftBeforeAutoLogout);
