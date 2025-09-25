@@ -16,7 +16,10 @@ import { TodoService } from '../services/todo.service';
       reactivity)</small
     >
     <section>
-      <p>Sample todos fetched from JSONPlaceholder:</p>
+      <p>
+        Todos fetched with <code>Authorization: \`Bearer [acess_token]\`</code> in the request's
+        headers:
+      </p>
       @if (todos$ | async; as todos) {
       <ul>
         @for (todo of todos; track todo.id) {
