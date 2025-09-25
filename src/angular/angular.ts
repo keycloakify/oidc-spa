@@ -412,6 +412,17 @@ export function createAngularOidc_dependencyInjection<
 export function createAngularOidc<
     DecodedIdToken extends Record<string, unknown> = Oidc.Tokens.DecodedIdToken_base,
     AutoLogin extends boolean = false
->(params: ValueOrAsyncGetter<ParamsOfCreateOidc<DecodedIdToken, AutoLogin>>) {
-    return createAngularOidc_dependencyInjection(params, createOidc);
+>(params: ValueOrAsyncGetter<Omit<ParamsOfCreateOidc<DecodedIdToken, AutoLogin>, "homeUrl">>) {
+    return createAngularOidc_dependencyInjection(params, params =>
+        createOidc({
+            ...params,
+            homeUrl: (() => {
+                const baseEl = document.querySelector<HTMLBaseElement>("base[href]");
+                if (!baseEl) {
+                    throw new Error('No <base href="..."> element found in the DOM');
+                }
+                return baseEl.getAttribute("href") ?? "/";
+            })()
+        })
+    );
 }
