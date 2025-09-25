@@ -7,7 +7,7 @@ export const {
   getOidc,
   get$decodedIdToken,
   get$secondsLeftBeforeAutoLogout,
-  getOidcInitializationError,
+  getTokens,
 } = createAngularOidc({
   homeUrl: '/',
   issuerUri: 'https://cloud-iam.oidc-spa.dev/realms/oidc-spa',
