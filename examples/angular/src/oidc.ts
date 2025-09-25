@@ -8,13 +8,17 @@ export const {
   get$decodedIdToken,
   get$secondsLeftBeforeAutoLogout,
   getTokens,
-} = createAngularOidc({
-  homeUrl: '/',
-  issuerUri: 'https://cloud-iam.oidc-spa.dev/realms/oidc-spa',
-  clientId: 'example-angular',
-  decodedIdTokenSchema: z.object({
-    iat: z.number(),
-    name: z.string(),
-  }),
-  debugLogs: true,
+} = createAngularOidc(async () => {
+  // NOTE: Here you can fetch the issuerUri/clientId if you need to.
+
+  return {
+    homeUrl: '/',
+    issuerUri: 'https://cloud-iam.oidc-spa.dev/realms/oidc-spa',
+    clientId: 'example-angular',
+    decodedIdTokenSchema: z.object({
+      iat: z.number(),
+      name: z.string(),
+    }),
+    debugLogs: true,
+  };
 });
