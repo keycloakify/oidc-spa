@@ -21,6 +21,7 @@
         "start-tanstack-router-example": "yarn build && tsx scripts/link-in-examples.ts && cd examples/tanstack-router && rm -rf node_modules/.vite && yarn dev",
         "start-tanstack-router-file-based-example": "yarn build && tsx scripts/link-in-examples.ts && cd examples/tanstack-router-file-based && rm -rf node_modules/.vite && yarn dev",
         "start-multi-providers-example": "yarn build && tsx scripts/link-in-examples.ts && cd examples/multi-providers && rm -rf node_modules/.vite && yarn dev",
+        "start-angular-example": "yarn build && tsx scripts/link-in-examples.ts && cd examples/angular && rm -rf .angular/cache && yarn start",
         "size": "bash ./scripts/compute-payload.sh"
     },
     "lint-staged": {
@@ -42,19 +43,32 @@
         "OIDC",
         "keycloak",
         "keycloak-js",
-        "react"
+        "react",
+        "angular"
     ],
     "homepage": "https://docs.oidc-spa.dev/",
     "dependencies": {},
     "peerDependencies": {
         "@types/react": "*",
-        "react": "*"
+        "react": "*",
+        "rxjs": "*",
+        "@angular/core": "*",
+        "@angular/router": "*"
     },
     "peerDependenciesMeta": {
         "react": {
             "optional": true
         },
         "@types/react": {
+            "optional": true
+        },
+        "rxjs": {
+            "optional": true
+        },
+        "@angular/core": {
+            "optional": true
+        },
+        "@angular/router": {
             "optional": true
         }
     },
@@ -85,7 +99,12 @@
         "webpack": "5.93.0",
         "webpack-cli": "5.1.4",
         "worker-timers": "7.1.7",
-        "zod": "^3.23.8"
+        "zod": "^3.23.8",
+        "rxjs": "^7.8.2",
+        "@angular/core": "^20.3.1",
+        "@angular/router": "^20.3.1",
+        "@angular/common": "^20.3.1",
+        "@angular/platform-browser": "^20.3.1"
     },
     "publishConfig": {
         "access": "public"
@@ -107,9 +126,17 @@
             "module": "./dist/esm/react/index.js",
             "default": "./dist/react/index.js"
         },
+        "./angular": {
+            "module": "./dist/esm/angular/index.js",
+            "default": "./dist/angular/index.js"
+        },
         "./mock/react": {
             "module": "./dist/esm/mock/react.js",
             "default": "./dist/mock/react.js"
+        },
+        "./mock/angular": {
+            "module": "./dist/esm/mock/angular.js",
+            "default": "./dist/mock/angular.js"
         },
         "./entrypoint": {
             "module": "./dist/esm/entrypoint.js",
