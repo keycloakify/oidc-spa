@@ -366,6 +366,7 @@ export function createAngularOidc_dependencyInjection<
         const oidcOrAutoLoginInitializationError = await prOidcOrAutoLoginInitializationError;
 
         if (oidcOrAutoLoginInitializationError instanceof OidcInitializationError) {
+            // TODO: Not the correct behavior here.
             return new Promise<never>(() => {});
         }
 

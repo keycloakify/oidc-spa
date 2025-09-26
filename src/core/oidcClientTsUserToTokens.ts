@@ -3,6 +3,7 @@ import { assert, id } from "../vendor/frontend/tsafe";
 import { readExpirationTimeInJwt } from "../tools/readExpirationTimeInJwt";
 import { decodeJwt } from "../tools/decodeJwt";
 import type { Oidc } from "./Oidc";
+import { INFINITY_TIME } from "../tools/INFINITY_TIME";
 
 export function oidcClientTsUserToTokens<DecodedIdToken extends Record<string, unknown>>(params: {
     oidcClientTsUser: OidcClientTsUser;
@@ -187,6 +188,10 @@ export function oidcClientTsUserToTokens<DecodedIdToken extends Record<string, u
 
                           assert(typeof refresh_expires_at === "number", "2033392");
 
+                          if (refresh_expires_at === 0) {
+                              return INFINITY_TIME;
+                          }
+
                           return refresh_expires_at * 1000;
                       }
 
@@ -198,6 +203,10 @@ export function oidcClientTsUserToTokens<DecodedIdToken extends Record<string, u
                           }
 
                           assert(typeof refresh_expires_in === "number", "2033425330");
+
+                          if (refresh_expires_in === 0) {
+                              return INFINITY_TIME;
+                          }
 
                           return issuedAtTime + refresh_expires_in * 1000;
                       }
