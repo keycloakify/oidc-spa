@@ -56,9 +56,12 @@ type OidcAngularApi<DecodedIdToken extends Record<string, unknown>, AutoLogin ex
         warningDurationSeconds: number;
     }) => Signal<number | undefined>;
 
-    getTokens: () => Promise<
-        | { isUserLoggedIn: false; prTokens?: never }
-        | { isUserLoggedIn: true; prTokens: Promise<Oidc.Tokens<DecodedIdToken>> }
+    getAccessToken: () => Promise<
+        AutoLogin extends true
+            ? { isUserLoggedIn: true; accessToken: string }
+            :
+                  | { isUserLoggedIn: false; accessToken?: never }
+                  | { isUserLoggedIn: true; accessToken: string }
     >;
 
     provideOidcInitAwaiter: EnvironmentProviders;
@@ -336,9 +339,8 @@ export function createAngularOidc_dependencyInjection<
         return { get$secondsLeftBeforeAutoLogout };
     })();
 
-    async function getTokens(): Promise<
-        | { isUserLoggedIn: false; prTokens?: never }
-        | { isUserLoggedIn: true; prTokens: Promise<Oidc.Tokens<DecodedIdToken>> }
+    async function getAccessToken(): Promise<
+        { isUserLoggedIn: false; accessToken?: never } | { isUserLoggedIn: true; accessToken: string }
     > {
         const oidcOrAutoLoginInitializationError = await prOidcOrAutoLoginInitializationError;
 
@@ -349,7 +351,7 @@ export function createAngularOidc_dependencyInjection<
         const oidc = oidcOrAutoLoginInitializationError;
 
         return oidc.isUserLoggedIn
-            ? { isUserLoggedIn: true, prTokens: oidc.getTokens() }
+            ? { isUserLoggedIn: true, accessToken: (await oidc.getTokens()).accessToken }
             : {
                   isUserLoggedIn: false
               };
@@ -400,7 +402,7 @@ export function createAngularOidc_dependencyInjection<
         getOidcInitializationError,
         get$decodedIdToken,
         get$secondsLeftBeforeAutoLogout,
-        getTokens,
+        getAccessToken,
         provideOidcInitAwaiter,
         enforceLoginGuard
     });

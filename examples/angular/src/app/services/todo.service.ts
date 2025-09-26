@@ -1,7 +1,7 @@
 import { HttpClient, HttpInterceptorFn } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
-import { defer, Observable, mergeAll } from 'rxjs';
-import { getTokens } from '../../oidc';
+import { type Observable, from, switchMap } from 'rxjs';
+import { getAccessToken } from '../../oidc';
 
 export interface Todo {
   userId: number;
@@ -17,21 +17,19 @@ export const todoApiInterceptor: HttpInterceptorFn = (req, next) => {
     return next(req);
   }
 
-  return defer(async () => {
-    const { isUserLoggedIn, prTokens } = await getTokens();
+  return from(getAccessToken()).pipe(
+    switchMap(({ isUserLoggedIn, accessToken }) => {
+      if (!isUserLoggedIn) {
+        throw new Error("Assertion Error: Call to the TODO API while the user isn't logged in.");
+      }
 
-    if (!isUserLoggedIn) {
-      throw new Error('The TODO API requires the user to be logged in.');
-    }
-
-    const { accessToken } = await prTokens;
-
-    return next(
-      req.clone({
-        setHeaders: { Authorization: `Bearer ${accessToken}` },
-      })
-    );
-  }).pipe(mergeAll());
+      return next(
+        req.clone({
+          setHeaders: { Authorization: `Bearer ${accessToken}` },
+        })
+      );
+    })
+  );
 };
 
 @Injectable({ providedIn: 'root' })

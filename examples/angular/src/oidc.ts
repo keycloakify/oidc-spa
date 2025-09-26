@@ -7,7 +7,7 @@ export const {
   getOidc,
   get$decodedIdToken,
   get$secondsLeftBeforeAutoLogout,
-  getTokens,
+  getAccessToken,
 } = createAngularOidc(async () => {
   // NOTE: Here you can fetch the issuerUri/clientId if you need to.
 
