@@ -12,5 +12,9 @@ export function readExpirationTimeInJwt(token: string): number | undefined {
         return undefined;
     }
 
+    if (exp === 0) {
+        return Number.POSITIVE_INFINITY;
+    }
+
     return exp * 1000;
 }

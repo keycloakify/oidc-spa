@@ -187,6 +187,10 @@ export function oidcClientTsUserToTokens<DecodedIdToken extends Record<string, u
 
                           assert(typeof refresh_expires_at === "number", "2033392");
 
+                          if (refresh_expires_at === 0) {
+                              return Number.POSITIVE_INFINITY;
+                          }
+
                           return refresh_expires_at * 1000;
                       }
 
@@ -198,6 +202,10 @@ export function oidcClientTsUserToTokens<DecodedIdToken extends Record<string, u
                           }
 
                           assert(typeof refresh_expires_in === "number", "2033425330");
+
+                          if (refresh_expires_in === 0) {
+                              return Number.POSITIVE_INFINITY;
+                          }
 
                           return issuedAtTime + refresh_expires_in * 1000;
                       }

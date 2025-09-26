@@ -1502,6 +1502,14 @@ export async function createOidc_nonMemoized<
             return;
         }
 
+        if (
+            currentTokens.refreshTokenExpirationTime !== undefined &&
+            currentTokens.refreshTokenExpirationTime >= Number.POSITIVE_INFINITY
+        ) {
+            log?.("The refresh_token never expires, disabling auto-renewal mechanism");
+            return;
+        }
+
         const msBeforeExpiration =
             (currentTokens.refreshTokenExpirationTime ?? currentTokens.accessTokenExpirationTime) -
             currentTokens.getServerDateNow();
@@ -1612,8 +1620,17 @@ export async function createOidc_nonMemoized<
                 return undefined;
             }
 
+            if (currentTokens.refreshTokenExpirationTime >= Number.POSITIVE_INFINITY) {
+                return 0;
+            }
+
             return (currentTokens.refreshTokenExpirationTime - currentTokens.issuedAtTime) / 1000;
         };
+
+        if (getCurrentRefreshTokenTtlInSeconds() === 0) {
+            log?.("The refresh_token never expires, disabling auto logout mechanism");
+            break auto_logout;
+        }
 
         if (getCurrentRefreshTokenTtlInSeconds() === undefined) {
             log?.(
