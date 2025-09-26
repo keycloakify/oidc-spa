@@ -4,6 +4,7 @@ import { id } from "../vendor/frontend/tsafe";
 import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";
 import { getSearchParam, addOrUpdateSearchParam } from "../tools/urlSearchParams";
 import { getRootRelativeOriginalLocationHref } from "../core/earlyInit";
+import { INFINITY_TIME } from "../tools/INFINITY_TIME";
 
 export type ParamsOfCreateMockOidc<
     DecodedIdToken extends Record<string, unknown> = Record<string, unknown>,
@@ -144,7 +145,7 @@ export async function createMockOidc<
         ...(() => {
             const tokens_common: Oidc.Tokens.Common<DecodedIdToken> = {
                 accessToken: mockedTokens.accessToken ?? "mocked-access-token",
-                accessTokenExpirationTime: mockedTokens.accessTokenExpirationTime ?? Infinity,
+                accessTokenExpirationTime: mockedTokens.accessTokenExpirationTime ?? INFINITY_TIME,
                 idToken: mockedTokens.idToken ?? "mocked-id-token",
                 decodedIdToken:
                     mockedTokens.decodedIdToken ??

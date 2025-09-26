@@ -47,6 +47,7 @@ import {
 import { createGetIsNewBrowserSession } from "./isNewBrowserSession";
 import { getIsOnline } from "../tools/getIsOnline";
 import { isKeycloak } from "../keycloak/isKeycloak";
+import { INFINITY_TIME } from "../tools/INFINITY_TIME";
 
 // NOTE: Replaced at build time
 const VERSION = "{{OIDC_SPA_VERSION}}";
@@ -1504,7 +1505,7 @@ export async function createOidc_nonMemoized<
 
         if (
             currentTokens.refreshTokenExpirationTime !== undefined &&
-            currentTokens.refreshTokenExpirationTime >= Number.POSITIVE_INFINITY
+            currentTokens.refreshTokenExpirationTime >= INFINITY_TIME
         ) {
             log?.("The refresh_token never expires, disabling auto-renewal mechanism");
             return;
@@ -1620,7 +1621,7 @@ export async function createOidc_nonMemoized<
                 return undefined;
             }
 
-            if (currentTokens.refreshTokenExpirationTime >= Number.POSITIVE_INFINITY) {
+            if (currentTokens.refreshTokenExpirationTime >= INFINITY_TIME) {
                 return 0;
             }
 

@@ -1,5 +1,6 @@
 import { decodeJwt } from "./decodeJwt";
 import { assert } from "../vendor/frontend/tsafe";
+import { INFINITY_TIME } from "./INFINITY_TIME";
 
 // Return undefined if token provided wasn't a JWT or if it hasn't an exp claim number
 export function readExpirationTimeInJwt(token: string): number | undefined {
@@ -13,7 +14,7 @@ export function readExpirationTimeInJwt(token: string): number | undefined {
     }
 
     if (exp === 0) {
-        return Number.POSITIVE_INFINITY;
+        return INFINITY_TIME;
     }
 
     return exp * 1000;
