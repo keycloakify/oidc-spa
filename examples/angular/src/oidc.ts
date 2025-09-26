@@ -17,6 +17,11 @@ export const {
     decodedIdTokenSchema: z.object({
       iat: z.number(),
       name: z.string(),
+      realm_access: z
+        .object({
+          roles: z.array(z.string()),
+        })
+        .optional(),
     }),
     debugLogs: true,
   };
