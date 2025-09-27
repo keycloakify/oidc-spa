@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { Oidc } from 'oidc-spa/angular';
 import { z } from 'zod';
 
-export const decodedIdTokenSchema = z.object({
+const decodedIdTokenSchema = z.object({
   iat: z.number(),
   name: z.string(),
   realm_access: z
@@ -15,4 +15,6 @@ export const decodedIdTokenSchema = z.object({
 export type DecodedIdToken = z.infer<typeof decodedIdTokenSchema>;
 
 @Injectable({ providedIn: 'root' })
-export class AppOidc extends Oidc<DecodedIdToken> {}
+export class AppOidc extends Oidc<DecodedIdToken> {
+  override decodedIdTokenSchema = decodedIdTokenSchema;
+}

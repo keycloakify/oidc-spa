@@ -4,20 +4,20 @@ import {
     makeEnvironmentProviders,
     provideAppInitializer
 } from "@angular/core";
-import { OidcService as OidcServiceBase, type DecodedIdToken } from "../angular/oidc.service";
+import { OidcService as OidcServiceBase } from "../angular/oidc.service";
 import type { ParamsOfCreateMockOidc } from "./oidc";
 import { getBaseHref } from "../tools/getBaseHref";
 
-export function provideOidc<T_DecodedIdToken extends Record<string, unknown> = DecodedIdToken>(
+export function provideOidc<T_DecodedIdToken extends Record<string, unknown>>(
     params: Omit<ParamsOfCreateMockOidc<T_DecodedIdToken, boolean>, "homeUrl">,
-    angularAdapterSpecificOptions?: {
-        OidcService?: typeof OidcServiceBase<T_DecodedIdToken>;
+    angularAdapterSpecificOptions: {
+        OidcService: typeof OidcServiceBase<T_DecodedIdToken>;
     }
 ): EnvironmentProviders {
     const OidcService = angularAdapterSpecificOptions?.OidcService ?? OidcServiceBase;
 
     return makeEnvironmentProviders([
-        OidcService,
+        OidcService as any,
         provideAppInitializer(async () => {
             const service = inject(OidcService);
 

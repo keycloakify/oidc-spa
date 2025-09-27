@@ -8,13 +8,11 @@ import { toSignal } from "@angular/core/rxjs-interop";
 import type { ReadonlyBehaviorSubject } from "../tools/ReadonlyBehaviorSubject";
 import { Router, type ActivatedRouteSnapshot } from "@angular/router";
 
-export interface RegisterDecodedIdToken {}
+export abstract class OidcService<
+    T_DecodedIdToken extends Record<string, unknown> = Oidc.Tokens.DecodedIdToken_base
+> {
+    abstract decodedIdTokenSchema?: { parse: (x: unknown) => T_DecodedIdToken } | undefined;
 
-export type DecodedIdToken = RegisterDecodedIdToken extends { DecodedIdToken: infer T_DecodedIdToken }
-    ? T_DecodedIdToken
-    : Oidc.Tokens.DecodedIdToken_base;
-
-export class OidcService<T_DecodedIdToken extends Record<string, unknown> = DecodedIdToken> {
     #dState = new Deferred<{
         oidc: Oidc<T_DecodedIdToken> | undefined;
         initializationError: OidcInitializationError | undefined;

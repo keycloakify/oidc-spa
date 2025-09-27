@@ -7,13 +7,13 @@ import {
     provideAppInitializer
 } from "@angular/core";
 import type { ValueOrAsyncGetter } from "../tools/ValueOrAsyncGetter";
-import { OidcService as OidcServiceBase, type DecodedIdToken } from "./oidc.service";
+import { OidcService as OidcServiceBase } from "./oidc.service";
 import { getBaseHref } from "../tools/getBaseHref";
 
-export function provideOidc<T_DecodedIdToken extends Record<string, unknown> = DecodedIdToken>(
+export function provideOidc<T_DecodedIdToken extends Record<string, unknown>>(
     params: ValueOrAsyncGetter<Omit<ParamsOfCreateOidc<T_DecodedIdToken, boolean>, "homeUrl">>,
-    angularAdapterSpecificOptions?: {
-        Oidc?: typeof OidcServiceBase<T_DecodedIdToken>;
+    angularAdapterSpecificOptions: {
+        Oidc: typeof OidcServiceBase<T_DecodedIdToken>;
         awaitInitialization?: boolean;
     }
 ): EnvironmentProviders {
@@ -24,7 +24,7 @@ export function provideOidc<T_DecodedIdToken extends Record<string, unknown> = D
     const { awaitInitialization = true } = angularAdapterSpecificOptions ?? {};
 
     return makeEnvironmentProviders([
-        OidcService,
+        OidcService as any,
         provideAppInitializer(async () => {
             const service = inject(OidcService);
 
