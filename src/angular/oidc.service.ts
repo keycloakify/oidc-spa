@@ -101,8 +101,90 @@ export class OidcService<T_DecodedIdToken extends Record<string, unknown> = Deco
         return this.#getOidc({ callerName: "isUserLoggedIn" }).isUserLoggedIn;
     }
 
-    #decodedIdToken$: BehaviorSubject<T_DecodedIdToken> | undefined = undefined;
+    async login(params: {
+        /**
+         * Add extra query parameters to the url before redirecting to the login pages.
+         */
+        extraQueryParams?: Record<string, string | undefined>;
+        /**
+         * Where to redirect after successful login.
+         * Default: window.location.href (here)
+         *
+         * It does not need to include the origin, eg: "/dashboard"
+         */
+        redirectUrl?: string;
 
+        /**
+         * Transform the url before redirecting to the login pages.
+         * Prefer using the extraQueryParams parameter if you're only adding query parameters.
+         */
+        transformUrlBeforeRedirect?: (url: string) => string;
+    }): Promise<never> {
+        await this.prInitialized;
+
+        const oidc = this.#getOidc({ callerName: "login" });
+
+        if (oidc.isUserLoggedIn) {
+            throw new Error(
+                [
+                    "oidc-spa: login() called but the user is already logged in.",
+                    "If you wish to send the user to the login page for some update",
+                    "use oidc.goToAuthServer() instead"
+                ].join(" ")
+            );
+        }
+
+        return oidc.login({
+            ...params,
+            doesCurrentHrefRequiresAuth: false
+        });
+    }
+
+    async renewTokens(params?: {
+        extraTokenParams?: Record<string, string | undefined>;
+    }): Promise<void> {
+        await this.prInitialized;
+
+        const oidc = this.#getOidc({ callerName: "renewTokens" });
+
+        if (!oidc.isUserLoggedIn) {
+            throw new Error("oidc-spa: renewTokens() called but the user is not logged in.");
+        }
+
+        return oidc.renewTokens(params);
+    }
+
+    async logout(
+        params: { redirectTo: "home" | "current page" } | { redirectTo: "specific url"; url: string }
+    ): Promise<never> {
+        await this.prInitialized;
+
+        const oidc = this.#getOidc({ callerName: "logout" });
+
+        if (!oidc.isUserLoggedIn) {
+            throw new Error("oidc-spa: logout() called but the user is not logged in.");
+        }
+
+        return oidc.logout(params);
+    }
+
+    async goToAuthServer(params: {
+        extraQueryParams?: Record<string, string | undefined>;
+        redirectUrl?: string;
+        transformUrlBeforeRedirect?: (url: string) => string;
+    }): Promise<never> {
+        await this.prInitialized;
+
+        const oidc = this.#getOidc({ callerName: "goToAuthServer" });
+
+        if (!oidc.isUserLoggedIn) {
+            throw new Error("oidc-spa: goToAuthServer() called but the user is not logged in.");
+        }
+
+        return oidc.goToAuthServer(params);
+    }
+
+    #decodedIdToken$: BehaviorSubject<T_DecodedIdToken> | undefined = undefined;
     get decodedIdToken$(): ReadonlyBehaviorSubject<T_DecodedIdToken> {
         if (this.#decodedIdToken$ !== undefined) {
             return this.#decodedIdToken$;
@@ -144,7 +226,6 @@ export class OidcService<T_DecodedIdToken extends Record<string, unknown> = Deco
     }
 
     #$decodedIdToken: Signal<T_DecodedIdToken> | undefined = undefined;
-
     get $decodedIdToken(): Signal<T_DecodedIdToken> {
         return (this.#$decodedIdToken ??= toSignal(this.decodedIdToken$, { requireSync: true }));
     }
@@ -197,7 +278,6 @@ export class OidcService<T_DecodedIdToken extends Record<string, unknown> = Deco
     }
 
     #map_$secondsLeftBeforeAutoLogoutByWarningDurationSeconds = new Map<number, Signal<number | null>>();
-
     get$secondsLeftBeforeAutoLogout(params: { warningDurationSeconds: number }): Signal<number | null> {
         const { warningDurationSeconds } = params;
 
