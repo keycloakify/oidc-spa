@@ -320,4 +320,14 @@ export class OidcService<T_DecodedIdToken extends Record<string, unknown> = Deco
 
         return $secondsLeftBeforeAutoLogout;
     }
+
+    get isNewBrowserSession() {
+        const oidc = this.#getOidc({ callerName: "isNewBrowserSession" });
+
+        if (!oidc.isUserLoggedIn) {
+            throw new Error("oidc-spa: isNewBrowserSession was used but the used is not logged in");
+        }
+
+        return oidc.isNewBrowserSession;
+    }
 }
