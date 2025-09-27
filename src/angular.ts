@@ -16,6 +16,7 @@ import type { ReadonlyBehaviorSubject } from "./tools/ReadonlyBehaviorSubject";
 import { Router, type CanActivateFn } from "@angular/router";
 import type { ValueOrAsyncGetter } from "./tools/ValueOrAsyncGetter";
 import { getBaseHref } from "./tools/getBaseHref";
+import type { ConcreteClass } from "./tools/ConcreteClass";
 
 export type ParamsOfProvide = {
     issuerUri: string;
@@ -132,10 +133,23 @@ export type ParamsOfProvide = {
      * or non-standard deployments), and you cannot fix the server-side configuration.
      */
     __metadata?: Partial<OidcMetadata>;
+
+    /**
+     * You can use oidc.$secondsLeftBeforeAutoLogout to display an overlay/update the tab title
+     * to indicate to your user that they are going to be logged out if they don't interact
+     * with the app.
+     * This value let you define how long before how long before auto logout this warning should
+     * start showing.
+     * Default is 45 seconds.
+     */
+    autoLogoutWarningDurationSeconds?: number;
 };
 
 assert<
-    Equals<ParamsOfProvide, Omit<ParamsOfCreateOidc<any, boolean>, "homeUrl" | "decodedIdTokenSchema">>
+    Equals<
+        Omit<ParamsOfProvide, "autoLogoutWarningDurationSeconds">,
+        Omit<ParamsOfCreateOidc<any, boolean>, "homeUrl" | "decodedIdTokenSchema">
+    >
 >;
 
 export type ParamsOfProvideMock = {
@@ -145,7 +159,7 @@ export type ParamsOfProvideMock = {
     isUserInitiallyLoggedIn?: boolean;
 };
 
-export class OidcService<
+export abstract class AbstractOidcService<
     T_DecodedIdToken extends Record<string, unknown> = Oidc.Tokens.DecodedIdToken_base
 > {
     protected autoLogin: boolean = false;
@@ -159,8 +173,12 @@ export class OidcService<
     protected mockDecodedIdToken: (() => Promise<T_DecodedIdToken>) | T_DecodedIdToken | undefined =
         undefined;
 
+    #autoLogoutWarningDurationSeconds = 45;
+
     static provide(params: ValueOrAsyncGetter<ParamsOfProvide>): EnvironmentProviders {
         const paramsOrGetParams = params;
+
+        assert(is<ConcreteClass<typeof AbstractOidcService>>(this));
 
         return makeEnvironmentProviders([
             this,
@@ -169,12 +187,18 @@ export class OidcService<
 
                 instance.#initialize({
                     prOidcOrInitializationError: (async () => {
-                        const [{ createOidc }, params] = await Promise.all([
-                            import("./core"),
-                            typeof paramsOrGetParams === "function"
-                                ? paramsOrGetParams()
-                                : paramsOrGetParams
-                        ]);
+                        const [{ createOidc }, { autoLogoutWarningDurationSeconds, ...params }] =
+                            await Promise.all([
+                                import("./core"),
+                                typeof paramsOrGetParams === "function"
+                                    ? paramsOrGetParams()
+                                    : paramsOrGetParams
+                            ]);
+
+                        if (autoLogoutWarningDurationSeconds !== undefined) {
+                            instance.#autoLogoutWarningDurationSeconds =
+                                autoLogoutWarningDurationSeconds;
+                        }
 
                         try {
                             return createOidc({
@@ -199,6 +223,8 @@ export class OidcService<
     }
 
     static provideMock(params: ParamsOfProvideMock): EnvironmentProviders {
+        assert(is<ConcreteClass<typeof AbstractOidcService>>(this));
+
         return makeEnvironmentProviders([
             this,
             provideAppInitializer(async () => {
@@ -330,20 +356,24 @@ export class OidcService<
         return state.initializationError;
     }
 
+    #getAutoLoginAndInitializationErrorAccessErrorMessage(params: { callerName: string }) {
+        const { callerName } = params;
+
+        return [
+            `oidc-spa: ${callerName} was accessed but initialization failed.`,
+            "You are using `autoLogin: true`, so there is no anonymous state.",
+            "Handle this by gating your UI:",
+            "if (oidc.initializationError) show an error/fallback."
+        ].join(" ");
+    }
+
     #getOidc(params: { callerName: string }) {
         const { callerName } = params;
         const state = this.#getState({ callerName });
         if (state.oidc === undefined) {
             // initialization failed
             assert(state.initializationError !== undefined);
-            throw new Error(
-                [
-                    `oidc-spa: ${callerName} was accessed but initialization failed.`,
-                    "You are using `autoLogin: true`, so there is no anonymous state.",
-                    "Handle this by gating your UI:",
-                    "if (oidc.initializationError) show an error/fallback."
-                ].join(" ")
-            );
+            throw new Error(this.#getAutoLoginAndInitializationErrorAccessErrorMessage({ callerName }));
         }
         return state.oidc;
     }
@@ -453,9 +483,20 @@ export class OidcService<
         );
 
         (async () => {
-            await this.prInitialized;
+            const { initializationError, oidc } = await this.#dState.pr;
 
-            const oidc = this.#getOidc({ callerName: "decodedIdToken" });
+            if (initializationError !== undefined) {
+                decodedIdToken$.next(
+                    createObjectThatThrowsIfAccessed({
+                        debugMessage: this.#getAutoLoginAndInitializationErrorAccessErrorMessage({
+                            callerName: "decodedIdToken"
+                        })
+                    })
+                );
+                return;
+            }
+
+            assert(oidc !== undefined);
 
             if (!oidc.isUserLoggedIn) {
                 decodedIdToken$.next(
@@ -504,49 +545,33 @@ export class OidcService<
               };
     }
 
-    #map_$secondsLeftBeforeAutoLogoutByWarningDurationSeconds = new Map<number, Signal<number | null>>();
-    get$secondsLeftBeforeAutoLogout(params: { warningDurationSeconds: number }): Signal<number | null> {
-        const { warningDurationSeconds } = params;
-
-        {
-            const $secondsLeftBeforeAutoLogout =
-                this.#map_$secondsLeftBeforeAutoLogoutByWarningDurationSeconds.get(
-                    warningDurationSeconds
-                );
-
-            if ($secondsLeftBeforeAutoLogout !== undefined) {
-                return $secondsLeftBeforeAutoLogout;
-            }
-        }
-
-        const oidc = this.#getOidc({ callerName: "get$secondsLeftBeforeAutoLogout" });
-
+    readonly secondsLeftBeforeAutoLogout$: Signal<number | null> = (() => {
         const secondsLeftBeforeAutoLogout$ = new BehaviorSubject<number | null>(null);
 
-        if (oidc.isUserLoggedIn) {
+        (async () => {
+            const { oidc } = await this.#dState.pr;
+
+            if (oidc === undefined) {
+                return;
+            }
+
+            if (!oidc.isUserLoggedIn) {
+                return;
+            }
+
             oidc.subscribeToAutoLogoutCountdown(({ secondsLeft }) => {
-                if (secondsLeft === undefined || secondsLeft > warningDurationSeconds) {
+                if (secondsLeft === undefined || secondsLeft > this.#autoLogoutWarningDurationSeconds) {
                     if (secondsLeftBeforeAutoLogout$.getValue() !== null) {
                         secondsLeftBeforeAutoLogout$.next(null);
                     }
                     return;
                 }
-
                 secondsLeftBeforeAutoLogout$.next(secondsLeft);
             });
-        }
+        })();
 
-        const $secondsLeftBeforeAutoLogout = toSignal(secondsLeftBeforeAutoLogout$, {
-            requireSync: true
-        });
-
-        this.#map_$secondsLeftBeforeAutoLogoutByWarningDurationSeconds.set(
-            warningDurationSeconds,
-            $secondsLeftBeforeAutoLogout
-        );
-
-        return $secondsLeftBeforeAutoLogout;
-    }
+        return toSignal(secondsLeftBeforeAutoLogout$, { requireSync: true });
+    })();
 
     get isNewBrowserSession() {
         const oidc = this.#getOidc({ callerName: "isNewBrowserSession" });

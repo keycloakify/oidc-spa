@@ -1653,8 +1653,6 @@ export async function createOidc_nonMemoized<
                     );
                 };
 
-                invokeAllCallbacks({ secondsLeft });
-
                 if (secondsLeft === 0) {
                     cancel_if_offline: {
                         const { isOnline, prOnline } = getIsOnline();
@@ -1693,6 +1691,8 @@ export async function createOidc_nonMemoized<
 
                     await oidc_loggedIn.logout(autoLogoutParams);
                 }
+
+                invokeAllCallbacks({ secondsLeft });
             }
         });
 
