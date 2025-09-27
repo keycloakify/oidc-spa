@@ -127,8 +127,8 @@
             "default": "./dist/react/index.js"
         },
         "./angular": {
-            "module": "./dist/esm/angular/index.js",
-            "default": "./dist/angular/index.js"
+            "module": "./dist/esm/angular.js",
+            "default": "./dist/angular.js"
         },
         "./mock/react": {
             "module": "./dist/esm/mock/react.js",
