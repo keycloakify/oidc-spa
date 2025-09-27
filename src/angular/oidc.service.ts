@@ -26,11 +26,7 @@ export class OidcService<T_DecodedIdToken extends Record<string, unknown> = Deco
         return this.#dState.pr.then(() => undefined);
     }
 
-    get isInitialized() {
-        return this.#dState.getState().hasResolved;
-    }
-
-    _initialize(params: {
+    __initialize(params: {
         prOidcOrInitializationError: Promise<Oidc<T_DecodedIdToken> | OidcInitializationError>;
     }): void {
         const { prOidcOrInitializationError } = params;
@@ -60,10 +56,10 @@ export class OidcService<T_DecodedIdToken extends Record<string, unknown> = Deco
             throw new Error(
                 [
                     `oidc-spa: ${callerName} called before`,
-                    "`oidcService.prInitialized` resolved.",
+                    "`oidc.prInitialized` resolved.",
                     "You are using `awaitInitialization: false`.",
-                    "Await `oidcService.prInitialized` before using synchronous members",
-                    "of oidcService."
+                    "Await `oidc.prInitialized` before using synchronous members",
+                    "of oidc."
                 ].join(" ")
             );
         }
@@ -86,7 +82,7 @@ export class OidcService<T_DecodedIdToken extends Record<string, unknown> = Deco
                     `oidc-spa: ${callerName} was accessed but initialization failed.`,
                     "You are using `autoLogin: true`, so there is no anonymous state.",
                     "Handle this by gating your UI:",
-                    "if (oidcService.initializationError) show an error/fallback."
+                    "if (oidc.initializationError) show an error/fallback."
                 ].join(" ")
             );
         }
@@ -122,7 +118,7 @@ export class OidcService<T_DecodedIdToken extends Record<string, unknown> = Deco
                             `oidc-spa: Trying to read properties of decodedIdToken, the user`,
                             `isn't currently logged in, this does not make sense.`,
                             `You are responsible for controlling the flow of your app and`,
-                            `not try to read the decodedIdToken when oidcService.isUserLoggedIn is false.`
+                            `not try to read the decodedIdToken when oidc.isUserLoggedIn is false.`
                         ].join(" ")
                     });
                 }
@@ -147,10 +143,10 @@ export class OidcService<T_DecodedIdToken extends Record<string, unknown> = Deco
         return (this.#decodedIdToken$ = decodedIdToken$);
     }
 
-    #sigDecodedIdToken: Signal<T_DecodedIdToken> | undefined = undefined;
+    #$decodedIdToken: Signal<T_DecodedIdToken> | undefined = undefined;
 
-    get sigDecodedIdToken(): Signal<T_DecodedIdToken> {
-        return (this.#sigDecodedIdToken ??= toSignal(this.decodedIdToken$, { requireSync: true }));
+    get $decodedIdToken(): Signal<T_DecodedIdToken> {
+        return (this.#$decodedIdToken ??= toSignal(this.decodedIdToken$, { requireSync: true }));
     }
 
     async getAccessToken(): Promise<
@@ -200,23 +196,23 @@ export class OidcService<T_DecodedIdToken extends Record<string, unknown> = Deco
         return canActivateFn;
     }
 
-    #sigSecondsLeftBeforeAutoLogoutByWarningDurationSeconds = new Map<number, Signal<number | null>>();
+    #map_$secondsLeftBeforeAutoLogoutByWarningDurationSeconds = new Map<number, Signal<number | null>>();
 
-    getSigSecondsLeftBeforeAutoLogout(params: {
-        warningDurationSeconds: number;
-    }): Signal<number | null> {
+    get$secondsLeftBeforeAutoLogout(params: { warningDurationSeconds: number }): Signal<number | null> {
         const { warningDurationSeconds } = params;
 
         {
-            const sigSecondsLeftBeforeAutoLogout =
-                this.#sigSecondsLeftBeforeAutoLogoutByWarningDurationSeconds.get(warningDurationSeconds);
+            const $secondsLeftBeforeAutoLogout =
+                this.#map_$secondsLeftBeforeAutoLogoutByWarningDurationSeconds.get(
+                    warningDurationSeconds
+                );
 
-            if (sigSecondsLeftBeforeAutoLogout !== undefined) {
-                return sigSecondsLeftBeforeAutoLogout;
+            if ($secondsLeftBeforeAutoLogout !== undefined) {
+                return $secondsLeftBeforeAutoLogout;
             }
         }
 
-        const oidc = this.#getOidc({ callerName: "getSigSecondsLeftBeforeAutoLogout" });
+        const oidc = this.#getOidc({ callerName: "get$secondsLeftBeforeAutoLogout" });
 
         const secondsLeftBeforeAutoLogout$ = new BehaviorSubject<number | null>(null);
 
@@ -233,15 +229,15 @@ export class OidcService<T_DecodedIdToken extends Record<string, unknown> = Deco
             });
         }
 
-        const sigSecondsLeftBeforeAutoLogout = toSignal(secondsLeftBeforeAutoLogout$, {
+        const $secondsLeftBeforeAutoLogout = toSignal(secondsLeftBeforeAutoLogout$, {
             requireSync: true
         });
 
-        this.#sigSecondsLeftBeforeAutoLogoutByWarningDurationSeconds.set(
+        this.#map_$secondsLeftBeforeAutoLogoutByWarningDurationSeconds.set(
             warningDurationSeconds,
-            sigSecondsLeftBeforeAutoLogout
+            $secondsLeftBeforeAutoLogout
         );
 
-        return sigSecondsLeftBeforeAutoLogout;
+        return $secondsLeftBeforeAutoLogout;
     }
 }

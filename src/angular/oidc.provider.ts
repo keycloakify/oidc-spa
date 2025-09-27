@@ -45,7 +45,7 @@ export function provideOidc<T_DecodedIdToken extends Record<string, unknown> = D
                 }
             })();
 
-            service._initialize({
+            service.__initialize({
                 prOidcOrInitializationError
             });
 
