@@ -1,6 +1,7 @@
 import { inject } from '@angular/core';
 import { Router, Routes, RedirectCommand } from '@angular/router';
-import { enforceLoginGuard, Oidc } from 'oidc-spa/angular';
+import { enforceLoginGuard } from 'oidc-spa/angular';
+import { AppOidc } from './services/oidc.service';
 
 export const routes: Routes = [
   { path: '', loadComponent: () => import('./pages/public').then((c) => c.Public) },
@@ -8,9 +9,9 @@ export const routes: Routes = [
     path: 'protected',
     loadComponent: () => import('./pages/protected').then((c) => c.Protected),
     canActivate: [
-      enforceLoginGuard(),
+      enforceLoginGuard(AppOidc as any),
       async () => {
-        const oidc = inject(Oidc);
+        const oidc = inject(AppOidc);
         const router = inject(Router);
 
         /*
