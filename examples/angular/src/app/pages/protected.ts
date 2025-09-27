@@ -1,14 +1,14 @@
 import { AsyncPipe } from '@angular/common';
 import { Component, inject } from '@angular/core';
-import { getOidc, get$decodedIdToken } from '../../oidc';
+import { AppOidc } from '../services/oidc.service';
 import { TodoService } from '../services/todo.service';
 
 @Component({
   selector: 'app-protected',
   imports: [AsyncPipe],
   template: `
-    <h4>Hello {{ $decodedIdToken().name }}</h4>
-    <p>The access/id tokens where issued at: {{ $decodedIdToken().iat }}</p>
+    <h4>Hello {{ oidc.$decodedIdToken().name }}</h4>
+    <p>The access/id tokens where issued at: {{ oidc.$decodedIdToken().iat }}</p>
     <button (click)="oidc.renewTokens()">Renew tokens</button>
     &nbsp;
     <small
@@ -17,7 +17,7 @@ import { TodoService } from '../services/todo.service';
     >
     <section>
       <p>
-        Todos fetched with <code>Authorization: \`Bearer [acess_token]\`</code> in the request's
+        Todos fetched with <code>Authorization: Bearer [acess_token]</code> in the request's
         headers:
       </p>
       @if (todos$ | async; as todos) {
@@ -37,8 +37,7 @@ import { TodoService } from '../services/todo.service';
   `,
 })
 export class Protected {
-  oidc = getOidc({ assert: 'user logged in' });
-  $decodedIdToken = get$decodedIdToken();
+  oidc = inject(AppOidc);
   private readonly todoService = inject(TodoService);
   readonly todos$ = this.todoService.getTodos();
 }

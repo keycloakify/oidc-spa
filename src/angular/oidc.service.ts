@@ -1,4 +1,3 @@
-import { Injectable } from "@angular/core";
 import { BehaviorSubject } from "rxjs";
 import { type Oidc, OidcInitializationError } from "../core";
 import { Deferred } from "../tools/Deferred";
@@ -7,7 +6,7 @@ import { createObjectThatThrowsIfAccessed } from "../tools/createObjectThatThrow
 import { type Signal, inject } from "@angular/core";
 import { toSignal } from "@angular/core/rxjs-interop";
 import type { ReadonlyBehaviorSubject } from "../tools/ReadonlyBehaviorSubject";
-import { type CanActivateFn, Router } from "@angular/router";
+import { Router, type ActivatedRouteSnapshot } from "@angular/router";
 
 export interface RegisterDecodedIdToken {}
 
@@ -15,7 +14,6 @@ export type DecodedIdToken = RegisterDecodedIdToken extends { DecodedIdToken: in
     ? T_DecodedIdToken
     : Oidc.Tokens.DecodedIdToken_base;
 
-@Injectable()
 export class OidcService<T_DecodedIdToken extends Record<string, unknown> = DecodedIdToken> {
     #dState = new Deferred<{
         oidc: Oidc<T_DecodedIdToken> | undefined;
@@ -101,7 +99,7 @@ export class OidcService<T_DecodedIdToken extends Record<string, unknown> = Deco
         return this.#getOidc({ callerName: "isUserLoggedIn" }).isUserLoggedIn;
     }
 
-    async login(params: {
+    async login(params?: {
         /**
          * Add extra query parameters to the url before redirecting to the login pages.
          */
@@ -244,37 +242,32 @@ export class OidcService<T_DecodedIdToken extends Record<string, unknown> = Deco
               };
     }
 
-    enforceLoginGuard() {
-        const canActivateFn: CanActivateFn = async route => {
-            const router = inject(Router);
+    async enforceLogin(route: ActivatedRouteSnapshot): Promise<void | never> {
+        const router = inject(Router);
 
-            await this.prInitialized;
+        await this.prInitialized;
 
-            const oidc = this.#getOidc({ callerName: "canActivateFn" });
+        const oidc = this.#getOidc({ callerName: "canActivateFn" });
 
-            if (!oidc.isUserLoggedIn) {
-                const redirectUrl = (() => {
-                    const tree = router.createUrlTree(
-                        route.url.map(u => u.path),
-                        {
-                            queryParams: route.queryParams
-                        }
-                    );
-                    return router.serializeUrl(tree);
-                })();
+        if (!oidc.isUserLoggedIn) {
+            const redirectUrl = router.serializeUrl(
+                router.createUrlTree(
+                    route.url.map(u => u.path),
+                    {
+                        queryParams: route.queryParams,
+                        fragment: route.fragment ?? undefined
+                    }
+                )
+            );
 
-                const doesCurrentHrefRequiresAuth =
-                    location.href.replace(/\/$/, "") === redirectUrl.replace(/\/$/, "");
+            const doesCurrentHrefRequiresAuth =
+                location.href.replace(/\/$/, "") === redirectUrl.replace(/\/$/, "");
 
-                await oidc.login({
-                    doesCurrentHrefRequiresAuth,
-                    redirectUrl
-                });
-            }
-
-            return true;
-        };
-        return canActivateFn;
+            await oidc.login({
+                doesCurrentHrefRequiresAuth,
+                redirectUrl
+            });
+        }
     }
 
     #map_$secondsLeftBeforeAutoLogoutByWarningDurationSeconds = new Map<number, Signal<number | null>>();

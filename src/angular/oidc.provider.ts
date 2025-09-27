@@ -13,13 +13,13 @@ import { getBaseHref } from "../tools/getBaseHref";
 export function provideOidc<T_DecodedIdToken extends Record<string, unknown> = DecodedIdToken>(
     params: ValueOrAsyncGetter<Omit<ParamsOfCreateOidc<T_DecodedIdToken, boolean>, "homeUrl">>,
     angularAdapterSpecificOptions?: {
-        OidcService?: typeof OidcServiceBase<T_DecodedIdToken>;
+        Oidc?: typeof OidcServiceBase<T_DecodedIdToken>;
         awaitInitialization?: boolean;
     }
 ): EnvironmentProviders {
     const paramsOrGetParams = params;
 
-    const OidcService = angularAdapterSpecificOptions?.OidcService ?? OidcServiceBase;
+    const OidcService = angularAdapterSpecificOptions?.Oidc ?? OidcServiceBase;
 
     const { awaitInitialization = true } = angularAdapterSpecificOptions ?? {};
 

@@ -17,11 +17,11 @@
             <a routerLink="/protected" routerLinkActive #rla2="routerLinkActive"
                   [style]="{ fontWeight: rla2.isActive ? 'bold' : 'normal' }">My protected page</a>
       </div>
-      @if (oidcService.isUserLoggedIn) {
+      @if (oidc.isUserLoggedIn) {
       <div>
-            <span>Hello {{ sigDecodedIdToken().name }}</span>
+            <span>Hello {{ oidc.$decodedIdToken().name }}</span>
             &nbsp; &nbsp;
-            <button (click)="oidcService.logout({ redirectTo: 'home' })">Logout</button>
+            <button (click)="oidc.logout({ redirectTo: 'home' })">Logout</button>
       </div>
       } @else {
       <div>
@@ -41,7 +41,7 @@
 
 <router-outlet />
 
-@if ($secondsLeftBeforeAutoLogout() !== undefined) {
+@if ($secondsLeftBeforeAutoLogout() !== null) {
 <!-- Full screen overlay, blurred background -->
 <div [style]="{
       position: 'fixed',
