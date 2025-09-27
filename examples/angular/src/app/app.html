@@ -17,11 +17,11 @@
             <a routerLink="/protected" routerLinkActive #rla2="routerLinkActive"
                   [style]="{ fontWeight: rla2.isActive ? 'bold' : 'normal' }">My protected page</a>
       </div>
-      @if (oidc.isUserLoggedIn) {
+      @if (oidcService.isUserLoggedIn) {
       <div>
-            <span>Hello {{ $decodedIdToken().name }}</span>
+            <span>Hello {{ sigDecodedIdToken().name }}</span>
             &nbsp; &nbsp;
-            <button (click)="oidc.logout({ redirectTo: 'home' })">Logout</button>
+            <button (click)="oidcService.logout({ redirectTo: 'home' })">Logout</button>
       </div>
       } @else {
       <div>

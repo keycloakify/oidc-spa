@@ -1,0 +1,247 @@
+import { Injectable } from "@angular/core";
+import { BehaviorSubject } from "rxjs";
+import { type Oidc, OidcInitializationError } from "../core";
+import { Deferred } from "../tools/Deferred";
+import { assert } from "../vendor/frontend/tsafe";
+import { createObjectThatThrowsIfAccessed } from "../tools/createObjectThatThrowsIfAccessed";
+import { type Signal, inject } from "@angular/core";
+import { toSignal } from "@angular/core/rxjs-interop";
+import type { ReadonlyBehaviorSubject } from "../tools/ReadonlyBehaviorSubject";
+import { type CanActivateFn, Router } from "@angular/router";
+
+export interface RegisterDecodedIdToken {}
+
+export type DecodedIdToken = RegisterDecodedIdToken extends { DecodedIdToken: infer T_DecodedIdToken }
+    ? T_DecodedIdToken
+    : Oidc.Tokens.DecodedIdToken_base;
+
+@Injectable()
+export class OidcService<T_DecodedIdToken extends Record<string, unknown> = DecodedIdToken> {
+    #dState = new Deferred<{
+        oidc: Oidc<T_DecodedIdToken> | undefined;
+        initializationError: OidcInitializationError | undefined;
+    }>();
+
+    get prInitialized(): Promise<void> {
+        return this.#dState.pr.then(() => undefined);
+    }
+
+    get isInitialized() {
+        return this.#dState.getState().hasResolved;
+    }
+
+    _initialize(params: {
+        prOidcOrInitializationError: Promise<Oidc<T_DecodedIdToken> | OidcInitializationError>;
+    }): void {
+        const { prOidcOrInitializationError } = params;
+
+        prOidcOrInitializationError.then(oidcOrInitializationError => {
+            let initializationError: OidcInitializationError | undefined = undefined;
+            let oidc: Oidc<T_DecodedIdToken> | undefined = undefined;
+
+            if (oidcOrInitializationError instanceof OidcInitializationError) {
+                initializationError = oidcOrInitializationError;
+            } else {
+                oidc = oidcOrInitializationError;
+                initializationError = oidc.isUserLoggedIn ? undefined : oidc.initializationError;
+            }
+
+            this.#dState.resolve({
+                oidc,
+                initializationError
+            });
+        });
+    }
+
+    #getState(params: { callerName: string }) {
+        const { callerName } = params;
+        const { hasResolved, value } = this.#dState.getState();
+        if (!hasResolved) {
+            throw new Error(
+                [
+                    `oidc-spa: ${callerName} called before`,
+                    "`oidcService.prInitialized` resolved.",
+                    "You are using `awaitInitialization: false`.",
+                    "Await `oidcService.prInitialized` before using synchronous members",
+                    "of oidcService."
+                ].join(" ")
+            );
+        }
+        return value;
+    }
+
+    get initializationError(): OidcInitializationError | undefined {
+        const state = this.#getState({ callerName: "initializationError" });
+        return state.initializationError;
+    }
+
+    #getOidc(params: { callerName: string }) {
+        const { callerName } = params;
+        const state = this.#getState({ callerName });
+        if (state.oidc === undefined) {
+            // initialization failed
+            assert(state.initializationError !== undefined);
+            throw new Error(
+                [
+                    `oidc-spa: ${callerName} was accessed but initialization failed.`,
+                    "You are using `autoLogin: true`, so there is no anonymous state.",
+                    "Handle this by gating your UI:",
+                    "if (oidcService.initializationError) show an error/fallback."
+                ].join(" ")
+            );
+        }
+        return state.oidc;
+    }
+
+    get issuerUri() {
+        return this.#getOidc({ callerName: "issuerUri" }).params.issuerUri;
+    }
+
+    get clientId() {
+        return this.#getOidc({ callerName: "clientId" }).params.clientId;
+    }
+
+    get isUserLoggedIn() {
+        return this.#getOidc({ callerName: "isUserLoggedIn" }).isUserLoggedIn;
+    }
+
+    #decodedIdToken$: BehaviorSubject<T_DecodedIdToken> | undefined = undefined;
+
+    get decodedIdToken$(): ReadonlyBehaviorSubject<T_DecodedIdToken> {
+        if (this.#decodedIdToken$ !== undefined) {
+            return this.#decodedIdToken$;
+        }
+
+        const oidc = this.#getOidc({ callerName: "decodedIdToken$" });
+
+        const decodedIdToken$ = new BehaviorSubject<T_DecodedIdToken>(
+            (() => {
+                if (!oidc.isUserLoggedIn) {
+                    return createObjectThatThrowsIfAccessed({
+                        debugMessage: [
+                            `oidc-spa: Trying to read properties of decodedIdToken, the user`,
+                            `isn't currently logged in, this does not make sense.`,
+                            `You are responsible for controlling the flow of your app and`,
+                            `not try to read the decodedIdToken when oidcService.isUserLoggedIn is false.`
+                        ].join(" ")
+                    });
+                }
+
+                return oidc.getDecodedIdToken();
+            })()
+        );
+
+        if (oidc.isUserLoggedIn) {
+            oidc.subscribeToTokensChange(() => {
+                const value_new = oidc.getDecodedIdToken();
+                const value_current = decodedIdToken$.getValue();
+
+                if (value_new === value_current) {
+                    return;
+                }
+
+                decodedIdToken$.next(value_new);
+            });
+        }
+
+        return (this.#decodedIdToken$ = decodedIdToken$);
+    }
+
+    #sigDecodedIdToken: Signal<T_DecodedIdToken> | undefined = undefined;
+
+    get sigDecodedIdToken(): Signal<T_DecodedIdToken> {
+        return (this.#sigDecodedIdToken ??= toSignal(this.decodedIdToken$, { requireSync: true }));
+    }
+
+    async getAccessToken(): Promise<
+        { isUserLoggedIn: false; accessToken?: never } | { isUserLoggedIn: true; accessToken: string }
+    > {
+        await this.prInitialized;
+
+        const oidc = this.#getOidc({ callerName: "getAccessToken" });
+
+        return oidc.isUserLoggedIn
+            ? { isUserLoggedIn: true, accessToken: (await oidc.getTokens()).accessToken }
+            : {
+                  isUserLoggedIn: false
+              };
+    }
+
+    enforceLoginGuard() {
+        const canActivateFn: CanActivateFn = async route => {
+            const router = inject(Router);
+
+            await this.prInitialized;
+
+            const oidc = this.#getOidc({ callerName: "canActivateFn" });
+
+            if (!oidc.isUserLoggedIn) {
+                const redirectUrl = (() => {
+                    const tree = router.createUrlTree(
+                        route.url.map(u => u.path),
+                        {
+                            queryParams: route.queryParams
+                        }
+                    );
+                    return router.serializeUrl(tree);
+                })();
+
+                const doesCurrentHrefRequiresAuth =
+                    location.href.replace(/\/$/, "") === redirectUrl.replace(/\/$/, "");
+
+                await oidc.login({
+                    doesCurrentHrefRequiresAuth,
+                    redirectUrl
+                });
+            }
+
+            return true;
+        };
+        return canActivateFn;
+    }
+
+    #sigSecondsLeftBeforeAutoLogoutByWarningDurationSeconds = new Map<number, Signal<number | null>>();
+
+    getSigSecondsLeftBeforeAutoLogout(params: {
+        warningDurationSeconds: number;
+    }): Signal<number | null> {
+        const { warningDurationSeconds } = params;
+
+        {
+            const sigSecondsLeftBeforeAutoLogout =
+                this.#sigSecondsLeftBeforeAutoLogoutByWarningDurationSeconds.get(warningDurationSeconds);
+
+            if (sigSecondsLeftBeforeAutoLogout !== undefined) {
+                return sigSecondsLeftBeforeAutoLogout;
+            }
+        }
+
+        const oidc = this.#getOidc({ callerName: "getSigSecondsLeftBeforeAutoLogout" });
+
+        const secondsLeftBeforeAutoLogout$ = new BehaviorSubject<number | null>(null);
+
+        if (oidc.isUserLoggedIn) {
+            oidc.subscribeToAutoLogoutCountdown(({ secondsLeft }) => {
+                if (secondsLeft === undefined || secondsLeft > warningDurationSeconds) {
+                    if (secondsLeftBeforeAutoLogout$.getValue() !== null) {
+                        secondsLeftBeforeAutoLogout$.next(null);
+                    }
+                    return;
+                }
+
+                secondsLeftBeforeAutoLogout$.next(secondsLeft);
+            });
+        }
+
+        const sigSecondsLeftBeforeAutoLogout = toSignal(secondsLeftBeforeAutoLogout$, {
+            requireSync: true
+        });
+
+        this.#sigSecondsLeftBeforeAutoLogoutByWarningDurationSeconds.set(
+            warningDurationSeconds,
+            sigSecondsLeftBeforeAutoLogout
+        );
+
+        return sigSecondsLeftBeforeAutoLogout;
+    }
+}
