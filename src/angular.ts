@@ -222,7 +222,7 @@ export abstract class AbstractOidcService<
         ]);
     }
 
-    static provideMock(params: ParamsOfProvideMock): EnvironmentProviders {
+    static provideMock(params: ParamsOfProvideMock = {}): EnvironmentProviders {
         assert(is<ConcreteClass<typeof AbstractOidcService>>(this));
 
         return makeEnvironmentProviders([
