@@ -23,11 +23,18 @@
                         [style]="{ fontWeight: rla2.isActive ? 'bold' : 'normal' }">My protected page</a>
 
                   @defer (when oidc.prInitialized | async) {
-                  @if (canShowAdminLink) {
                   &nbsp; &nbsp;
                   <a routerLink="/admin-only" routerLinkActive #rla3="routerLinkActive"
-                        [style]="{ fontWeight: rla3.isActive ? 'bold' : 'normal' }">Admin only</a>
-                  }
+                        [style]="{
+                          fontWeight: rla3.isActive ? 'bold' : 'normal',
+                          cursor: canShowAdminLink ? 'pointer' : 'not-allowed',
+                          opacity: canShowAdminLink ? '1' : '0.5'
+                        }"
+                        [attr.aria-disabled]="canShowAdminLink ? null : true"
+                        >Admin only</a>
+                  } @placeholder {
+                  &nbsp; &nbsp;
+                  <a routerLink="/admin-only" routerLinkActive>Admin only</a>
                   }
             </span>
       </div>
