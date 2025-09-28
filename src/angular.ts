@@ -13,7 +13,7 @@ import {
 } from "@angular/core";
 import { toSignal } from "@angular/core/rxjs-interop";
 import type { ReadonlyBehaviorSubject } from "./tools/ReadonlyBehaviorSubject";
-import { Router, type ActivatedRouteSnapshot } from "@angular/router";
+import { Router, type CanActivateFn } from "@angular/router";
 import type { ValueOrAsyncGetter } from "./tools/ValueOrAsyncGetter";
 import { getBaseHref } from "./tools/getBaseHref";
 import type { ConcreteClass } from "./tools/ConcreteClass";
@@ -264,35 +264,38 @@ export abstract class AbstractOidcService<
         ]);
     }
 
-    static async enforceLoginGuard(route: ActivatedRouteSnapshot): Promise<true | never> {
-        const instance = inject(this);
-        const router = inject(Router);
+    static enforceLoginGuard() {
+        const canActivateFn = (async route => {
+            const instance = inject(this);
+            const router = inject(Router);
 
-        await instance.prInitialized;
+            await instance.prInitialized;
 
-        const oidc = instance.#getOidc({ callerName: "enforceLoginGuard" });
+            const oidc = instance.#getOidc({ callerName: "enforceLoginGuard" });
 
-        if (!oidc.isUserLoggedIn) {
-            const redirectUrl = router.serializeUrl(
-                router.createUrlTree(
-                    route.url.map(u => u.path),
-                    {
-                        queryParams: route.queryParams,
-                        fragment: route.fragment ?? undefined
-                    }
-                )
-            );
+            if (!oidc.isUserLoggedIn) {
+                const redirectUrl = router.serializeUrl(
+                    router.createUrlTree(
+                        route.url.map(u => u.path),
+                        {
+                            queryParams: route.queryParams,
+                            fragment: route.fragment ?? undefined
+                        }
+                    )
+                );
 
-            const doesCurrentHrefRequiresAuth =
-                location.href.replace(/\/$/, "") === redirectUrl.replace(/\/$/, "");
+                const doesCurrentHrefRequiresAuth =
+                    location.href.replace(/\/$/, "") === redirectUrl.replace(/\/$/, "");
 
-            await oidc.login({
-                doesCurrentHrefRequiresAuth,
-                redirectUrl
-            });
-        }
+                await oidc.login({
+                    doesCurrentHrefRequiresAuth,
+                    redirectUrl
+                });
+            }
 
-        return true;
+            return true;
+        }) satisfies CanActivateFn;
+        return canActivateFn;
     }
 
     #dState = new Deferred<{

@@ -1,5 +1,5 @@
 import { inject } from '@angular/core';
-import { Router, Routes, RedirectCommand, type CanActivateFn } from '@angular/router';
+import { Router, Routes, RedirectCommand } from '@angular/router';
 import { Oidc } from './services/oidc.service';
 
 export const routes: Routes = [
@@ -7,7 +7,7 @@ export const routes: Routes = [
   {
     path: 'protected',
     loadComponent: () => import('./pages/protected').then((c) => c.Protected),
-    canActivate: [Oidc.enforceLoginGuard],
+    canActivate: [Oidc.enforceLoginGuard()],
   },
   {
     path: 'admin-only',
@@ -17,7 +17,7 @@ export const routes: Routes = [
         const oidc = inject(Oidc);
         const router = inject(Router);
 
-        await Oidc.enforceLoginGuard(route);
+        await Oidc.enforceLoginGuard()(route);
 
         if ((oidc.$decodedIdToken().realm_access?.roles ?? []).includes('admin')) {
           return true;
