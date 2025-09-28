@@ -10,6 +10,12 @@ import { routes } from './app.routes';
 import { todoApiInterceptor } from './services/todo.service';
 import { Oidc } from './services/oidc.service';
 import { firstValueFrom } from 'rxjs';
+import { environment } from '../environments/environment';
+
+type RemoteOidcConfig = {
+  issuerUri: string;
+  clientId: string;
+};
 
 export const appConfig: ApplicationConfig = {
   providers: [
@@ -17,19 +23,19 @@ export const appConfig: ApplicationConfig = {
     provideZonelessChangeDetection(),
     provideHttpClient(withInterceptors([todoApiInterceptor])),
     provideRouter(routes),
-    Oidc.provide(async () => {
-      const http = inject(HttpClient);
-      const config = await firstValueFrom(
-        http.get<{
-          issuerUri: string;
-          clientId: string;
-        }>('./oidc-config.json')
-      );
-      return {
-        issuerUri: config.issuerUri,
-        clientId: config.clientId,
-        debugLogs: true,
-      };
-    }),
+    environment.useMockOidc
+      ? Oidc.provideMock({
+          isUserInitiallyLoggedIn: true,
+        })
+      : Oidc.provide(async () => {
+          const http = inject(HttpClient);
+          const config = await firstValueFrom(http.get<RemoteOidcConfig>('./oidc-config.json'));
+
+          return {
+            issuerUri: config.issuerUri,
+            clientId: config.clientId,
+            debugLogs: true,
+          };
+        }),
   ],
 };

@@ -43,6 +43,14 @@
               "optimization": false,
               "extractLicenses": false,
               "sourceMap": true
+            },
+            "mock": {
+              "fileReplacements": [
+                {
+                  "replace": "src/environments/environment.ts",
+                  "with": "src/environments/environment.mock.ts"
+                }
+              ]
             }
           },
           "defaultConfiguration": "production"
@@ -55,6 +63,9 @@
             },
             "development": {
               "buildTarget": "angular:build:development"
+            },
+            "mock": {
+              "buildTarget": "angular:build:mock"
             }
           },
           "defaultConfiguration": "development"
