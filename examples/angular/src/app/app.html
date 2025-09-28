@@ -19,7 +19,7 @@
       </div>
       @if (oidc.isUserLoggedIn) {
       <div>
-            <span>Hello {{ $decodedIdToken().name }}</span>
+            <span>Hello {{ oidc.$decodedIdToken().name }}</span>
             &nbsp; &nbsp;
             <button (click)="oidc.logout({ redirectTo: 'home' })">Logout</button>
       </div>
@@ -41,7 +41,7 @@
 
 <router-outlet />
 
-@if ($secondsLeftBeforeAutoLogout() !== undefined) {
+@if (oidc.$secondsLeftBeforeAutoLogout() ) {
 <!-- Full screen overlay, blurred background -->
 <div [style]="{
       position: 'fixed',
@@ -58,7 +58,7 @@
     }">
       <div>
             <p>Are you still there?</p>
-            <p>You will be logged out in {{ $secondsLeftBeforeAutoLogout() }}</p>
+            <p>You will be logged out in {{ oidc.$secondsLeftBeforeAutoLogout() }}</p>
       </div>
 </div>
 }

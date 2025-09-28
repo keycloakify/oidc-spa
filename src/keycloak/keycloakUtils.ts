@@ -1,5 +1,4 @@
 import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";
-
 import { type KeycloakIssuerUriParsed, parseKeycloakIssuerUri } from "./keycloakIssuerUriParsed";
 
 export type KeycloakUtils = {

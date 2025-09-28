@@ -4,3 +4,4 @@ export { typeGuard } from "tsafe/typeGuard";
 export { noUndefined } from "tsafe/noUndefined";
 export type { Param0 } from "tsafe";
 export { isAmong } from "tsafe/isAmong";
+export { Reflect } from "tsafe/Reflect";

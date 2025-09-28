@@ -56,6 +56,14 @@ export type ParamsOfCreateOidc<
     DecodedIdToken extends Record<string, unknown> = Oidc.Tokens.DecodedIdToken_base,
     AutoLogin extends boolean = false
 > = {
+    /**
+     * What should you put in this parameter?
+     *   - Vite project:             `BASE_URL: import.meta.env.BASE_URL`
+     *   - Create React App project: `BASE_URL: process.env.PUBLIC_URL`
+     *   - Other:                    `BASE_URL: "/"` (Usually, or `/dashboard` if your app is not at the root of the domain)
+     */
+    homeUrl: string;
+
     issuerUri: string;
     clientId: string;
     /**
@@ -109,14 +117,6 @@ export type ParamsOfCreateOidc<
      * This parameter can also be passed to login() directly as `redirectUrl`.
      */
     postLoginRedirectUrl?: string;
-
-    /**
-     * What should you put in this parameter?
-     *   - Vite project:             `BASE_URL: import.meta.env.BASE_URL`
-     *   - Create React App project: `BASE_URL: process.env.PUBLIC_URL`
-     *   - Other:                    `BASE_URL: "/"` (Usually, or `/dashboard` if your app is not at the root of the domain)
-     */
-    homeUrl: string;
 
     decodedIdTokenSchema?: {
         parse: (decodedIdToken_original: Oidc.Tokens.DecodedIdToken_base) => DecodedIdToken;
@@ -1653,8 +1653,6 @@ export async function createOidc_nonMemoized<
                     );
                 };
 
-                invokeAllCallbacks({ secondsLeft });
-
                 if (secondsLeft === 0) {
                     cancel_if_offline: {
                         const { isOnline, prOnline } = getIsOnline();
@@ -1693,6 +1691,8 @@ export async function createOidc_nonMemoized<
 
                     await oidc_loggedIn.logout(autoLogoutParams);
                 }
+
+                invokeAllCallbacks({ secondsLeft });
             }
         });
 

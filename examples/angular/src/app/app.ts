@@ -1,7 +1,8 @@
 import { Component } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
-import { getOidc, get$decodedIdToken, get$secondsLeftBeforeAutoLogout } from '../oidc';
+import { Oidc } from './services/oidc.service';
 import { createKeycloakUtils } from 'oidc-spa/keycloak';
+import { inject } from '@angular/core';
 
 @Component({
   selector: 'app-root',
@@ -9,12 +10,8 @@ import { createKeycloakUtils } from 'oidc-spa/keycloak';
   templateUrl: './app.html',
 })
 export class App {
-  oidc = getOidc();
-  $decodedIdToken = get$decodedIdToken();
-  $secondsLeftBeforeAutoLogout = get$secondsLeftBeforeAutoLogout({
-    warningDurationSeconds: 45,
-  });
+  oidc = inject(Oidc);
   keycloakUtils = createKeycloakUtils({
-    issuerUri: this.oidc.params.issuerUri,
+    issuerUri: this.oidc.issuerUri,
   });
 }

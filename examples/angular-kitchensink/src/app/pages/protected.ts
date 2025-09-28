@@ -11,7 +11,10 @@ import { TodoService } from '../services/todo.service';
     <p>
       You currently have theses roles: {{ oidc.$decodedIdToken().realm_access!.roles.join(', ') }}
     </p>
-    } &nbsp;
+    }
+    <p>The access/id tokens where issued at: {{ oidc.$decodedIdToken().iat }}</p>
+    <button (click)="oidc.renewTokens()">Renew tokens</button>
+    &nbsp;
     <small
       >(NOTE: You don't need to worry about renewing token this button is just to demo
       reactivity)</small

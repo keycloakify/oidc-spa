@@ -22,6 +22,7 @@
         "start-tanstack-router-file-based-example": "yarn build && tsx scripts/link-in-examples.ts && cd examples/tanstack-router-file-based && rm -rf node_modules/.vite && yarn dev",
         "start-multi-providers-example": "yarn build && tsx scripts/link-in-examples.ts && cd examples/multi-providers && rm -rf node_modules/.vite && yarn dev",
         "start-angular-example": "yarn build && tsx scripts/link-in-examples.ts && cd examples/angular && rm -rf .angular/cache && yarn start",
+        "start-angular-kitchensink-example": "yarn build && tsx scripts/link-in-examples.ts && cd examples/angular-kitchensink && rm -rf .angular/cache && yarn start",
         "size": "bash ./scripts/compute-payload.sh"
     },
     "lint-staged": {
@@ -127,8 +128,8 @@
             "default": "./dist/react/index.js"
         },
         "./angular": {
-            "module": "./dist/esm/angular/index.js",
-            "default": "./dist/angular/index.js"
+            "module": "./dist/esm/angular.js",
+            "default": "./dist/angular.js"
         },
         "./mock/react": {
             "module": "./dist/esm/mock/react.js",
