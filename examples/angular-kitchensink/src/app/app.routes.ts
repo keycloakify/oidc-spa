@@ -19,9 +19,7 @@ export const routes: Routes = [
 
         await Oidc.enforceLoginGuard(route);
 
-        const roles = oidc.$decodedIdToken().realm_access?.roles ?? [];
-
-        if (roles.includes('admin')) {
+        if ((oidc.$decodedIdToken().realm_access?.roles ?? []).includes('admin')) {
           return true;
         }
 
