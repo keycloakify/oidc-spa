@@ -1,7 +1,7 @@
 import { HttpClient, HttpInterceptorFn } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { type Observable, from, switchMap } from 'rxjs';
-import { AppOidc } from '../services/oidc.service';
+import { Oidc } from '../services/oidc.service';
 
 export interface Todo {
   userId: number;
@@ -13,7 +13,7 @@ export interface Todo {
 const TODO_API_URL = 'https://jsonplaceholder.typicode.com/todos';
 
 export const todoApiInterceptor: HttpInterceptorFn = (req, next) => {
-  const oidc = inject(AppOidc);
+  const oidc = inject(Oidc);
 
   if (!req.url.startsWith(TODO_API_URL)) {
     return next(req);

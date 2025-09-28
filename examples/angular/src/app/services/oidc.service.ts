@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { Oidc } from 'oidc-spa/angular';
+import { AbstractOidcService } from 'oidc-spa/angular';
 import { z } from 'zod';
 
 const decodedIdTokenSchema = z.object({
@@ -15,6 +15,8 @@ const decodedIdTokenSchema = z.object({
 export type DecodedIdToken = z.infer<typeof decodedIdTokenSchema>;
 
 @Injectable({ providedIn: 'root' })
-export class AppOidc extends Oidc<DecodedIdToken> {
+export class Oidc extends AbstractOidcService<DecodedIdToken> {
   override decodedIdTokenSchema = decodedIdTokenSchema;
+  override autoLogin = false;
+  override providerAwaitsInitialization = true;
 }

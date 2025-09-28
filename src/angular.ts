@@ -545,7 +545,7 @@ export abstract class AbstractOidcService<
               };
     }
 
-    readonly secondsLeftBeforeAutoLogout$: Signal<number | null> = (() => {
+    readonly $secondsLeftBeforeAutoLogout: Signal<number | null> = (() => {
         const secondsLeftBeforeAutoLogout$ = new BehaviorSubject<number | null>(null);
 
         (async () => {

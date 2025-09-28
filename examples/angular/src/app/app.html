@@ -41,7 +41,7 @@
 
 <router-outlet />
 
-@if ($secondsLeftBeforeAutoLogout() !== null) {
+@if (oidc.$secondsLeftBeforeAutoLogout() ) {
 <!-- Full screen overlay, blurred background -->
 <div [style]="{
       position: 'fixed',
@@ -58,7 +58,7 @@
     }">
       <div>
             <p>Are you still there?</p>
-            <p>You will be logged out in {{ $secondsLeftBeforeAutoLogout() }}</p>
+            <p>You will be logged out in {{ oidc.$secondsLeftBeforeAutoLogout() }}</p>
       </div>
 </div>
 }
