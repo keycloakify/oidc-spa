@@ -1,1 +1,1 @@
-export { type Oidc, OidcInitializationError, type ParamsOfCreateOidc, createOidc } from "./core";
+export { AbstractOidcService, type ParamsOfProvide, type ParamsOfProvideMock } from "./angular";
