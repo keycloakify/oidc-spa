@@ -1,9 +1,10 @@
 import { inject } from '@angular/core';
 import { Router, Routes, RedirectCommand } from '@angular/router';
+import { Public } from './pages/public';
 import { Oidc } from './services/oidc.service';
 
 export const routes: Routes = [
-  { path: '', loadComponent: () => import('./pages/public').then((c) => c.Public) },
+  { path: '', component: Public },
   {
     path: 'protected',
     loadComponent: () => import('./pages/protected').then((c) => c.Protected),
