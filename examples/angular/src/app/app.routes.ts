@@ -1,5 +1,4 @@
-import { inject } from '@angular/core';
-import { Router, Routes, RedirectCommand } from '@angular/router';
+import { Routes } from '@angular/router';
 import { Oidc } from './services/oidc.service';
 
 export const routes: Routes = [
@@ -7,21 +6,7 @@ export const routes: Routes = [
   {
     path: 'protected',
     loadComponent: () => import('./pages/protected').then((c) => c.Protected),
-    canActivate: [
-      Oidc.enforceLoginGuard(),
-      /*
-      async () => {
-        const oidc = inject(Oidc);
-        const router = inject(Router);
-
-        if( !oidc.$decodedIdToken().realm_access?.roles.includes('admin') ){
-          return new RedirectCommand(router.parseUrl('/home?error=missing-admin-role'));
-        }
-
-        return true;
-      },
-      */
-    ],
+    canActivate: [Oidc.enforceLoginGuard()],
   },
   { path: '**', redirectTo: '' },
 ];

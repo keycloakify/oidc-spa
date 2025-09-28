@@ -1,17 +1,31 @@
 import { Injectable } from '@angular/core';
 import { AbstractOidcService } from 'oidc-spa/angular';
+import { z } from 'zod';
 
-export type DecodedIdToken = {
-  name: string;
+export type DecodedIdToken = z.infer<typeof decodedIdTokenSchema>;
+
+const decodedIdTokenSchema = z.object({
+  iat: z.number(),
+  name: z.string(),
+  realm_access: z
+    .object({
+      roles: z.array(z.string()),
+    })
+    .optional(),
+});
+
+const mockDecodedIdToken: DecodedIdToken = {
+  iat: Math.floor(Date.now() / 1000),
+  name: 'John',
+  realm_access: {
+    roles: ['admin'],
+  },
 };
 
 @Injectable({ providedIn: 'root' })
 export class Oidc extends AbstractOidcService<DecodedIdToken> {
-  // With this set to false, you are responsible for wrapping every usage of
-  // oidc.isUserLoggedIn, oidc.$decodedIdToken, ect into:
-  // @defer (when oidc.prInitialized | async) { } @placeholder { }
-  // Note you only need to worry about that for public page and for the layout.
-  // The goal of this mode is to make sure that oidc does not delay the
-  // rendering of your marketing pages.
-  override providerAwaitsInitialization = false;
+  override decodedIdTokenSchema = decodedIdTokenSchema;
+  override mockDecodedIdToken = async () => mockDecodedIdToken;
+  override autoLogin = false;
+  override providerAwaitsInitialization = true;
 }
