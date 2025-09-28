@@ -129,14 +129,12 @@
         },
         "./angular": {
             "module": "./dist/esm/angular.js",
-            "default": "./dist/angular.js"
+            "types": "./dist/esm/angular.d.ts",
+            "default": "./dist/esm/angular.js"
         },
         "./mock/react": {
             "module": "./dist/esm/mock/react.js",
             "default": "./dist/mock/react.js"
-        },
-        "./mock/angular": {
-            "module": "./dist/esm/mock/angular.js"
         },
         "./entrypoint": {
             "module": "./dist/esm/entrypoint.js",
