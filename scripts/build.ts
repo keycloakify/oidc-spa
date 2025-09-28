@@ -268,6 +268,11 @@ transformCodebase({
     destDirPath: pathJoin(distDirPath_root, "src")
 });
 
+//NOTE: Remove CJS distribution for Angular
+for (const ext of ["js", "d.ts", "js.map"]) {
+    fs.rmSync(pathJoin(distDirPath_root, `angular.${ext}`));
+}
+
 transformCodebase({
     srcDirPath: distDirPath_root,
     destDirPath: distDirPath_root,

@@ -136,8 +136,7 @@
             "default": "./dist/mock/react.js"
         },
         "./mock/angular": {
-            "module": "./dist/esm/mock/angular.js",
-            "default": "./dist/mock/angular.js"
+            "module": "./dist/esm/mock/angular.js"
         },
         "./entrypoint": {
             "module": "./dist/esm/entrypoint.js",
