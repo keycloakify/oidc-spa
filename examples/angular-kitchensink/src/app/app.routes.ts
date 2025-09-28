@@ -7,20 +7,27 @@ export const routes: Routes = [
   {
     path: 'protected',
     loadComponent: () => import('./pages/protected').then((c) => c.Protected),
+    canActivate: [Oidc.enforceLoginGuard()],
+  },
+  {
+    path: 'admin-only',
+    loadComponent: () => import('./pages/admin-only').then((c) => c.AdminOnly),
     canActivate: [
       Oidc.enforceLoginGuard(),
-      /*
-      async () => {
+      () => {
         const oidc = inject(Oidc);
         const router = inject(Router);
 
-        if( !oidc.$decodedIdToken().realm_access?.roles.includes('admin') ){
-          return new RedirectCommand(router.parseUrl('/home?error=missing-admin-role'));
+        const roles = oidc.$decodedIdToken().realm_access?.roles ?? [];
+
+        if (roles.includes('admin')) {
+          return true;
         }
 
-        return true;
+        alert('Only Admins can access this page');
+
+        return new RedirectCommand(router.parseUrl('/'));
       },
-      */
     ],
   },
   { path: '**', redirectTo: '' },

@@ -21,6 +21,14 @@
                   &nbsp; &nbsp;
                   <a routerLink="/protected" routerLinkActive #rla2="routerLinkActive"
                         [style]="{ fontWeight: rla2.isActive ? 'bold' : 'normal' }">My protected page</a>
+
+                  @defer (when oidc.prInitialized | async) {
+                  @if (canShowAdminLink) {
+                  &nbsp; &nbsp;
+                  <a routerLink="/admin-only" routerLinkActive #rla3="routerLinkActive"
+                        [style]="{ fontWeight: rla3.isActive ? 'bold' : 'normal' }">Admin only</a>
+                  }
+                  }
             </span>
       </div>
 

@@ -1,7 +1,5 @@
 import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";
-import type { ValueOrGetter } from "../tools/ValueOrGetter";
 import { type KeycloakIssuerUriParsed, parseKeycloakIssuerUri } from "./keycloakIssuerUriParsed";
-import { createLazyObject } from "../tools/createLazyObject";
 
 export type KeycloakUtils = {
     issuerUriParsed: KeycloakIssuerUriParsed;
@@ -35,7 +33,7 @@ export type KeycloakUserInfo = {
     [key: string]: any;
 };
 
-function createKeycloakUtils_actual(params: { issuerUri: string }): KeycloakUtils {
+export function createKeycloakUtils(params: { issuerUri: string }): KeycloakUtils {
     const { issuerUri } = params;
 
     const issuerUriParsed = parseKeycloakIssuerUri({ issuerUri });
@@ -88,12 +86,4 @@ function createKeycloakUtils_actual(params: { issuerUri: string }): KeycloakUtil
             return urlObj.href;
         }
     };
-}
-
-export function createKeycloakUtils(params: ValueOrGetter<{ issuerUri: string }>): KeycloakUtils {
-    if (typeof params !== "function") {
-        return createKeycloakUtils_actual(params);
-    }
-
-    return createLazyObject(() => createKeycloakUtils_actual(params()));
 }

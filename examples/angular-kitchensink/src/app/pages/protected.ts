@@ -7,7 +7,11 @@ import { TodoService } from '../services/todo.service';
   selector: 'app-protected',
   imports: [AsyncPipe],
   template: `
-    <h4>Hello {{ oidc.$decodedIdToken().name }}</h4>
+    @if(oidc.$decodedIdToken().realm_access){
+    <p>
+      You currently have theses roles: {{ oidc.$decodedIdToken().realm_access!.roles.join(', ') }}
+    </p>
+    }
     <p>The access/id tokens where issued at: {{ oidc.$decodedIdToken().iat }}</p>
     <button (click)="oidc.renewTokens()">Renew tokens</button>
     &nbsp;
@@ -17,7 +21,7 @@ import { TodoService } from '../services/todo.service';
     >
     <section>
       <p>
-        Todos fetched with <code>Authorization: Bearer [acess_token]</code> in the request's
+        Todos fetched with <code>Authorization: Bearer [access_token]</code> in the request's
         headers:
       </p>
       @if (todos$ | async; as todos) {

@@ -12,7 +12,18 @@ import { inject } from '@angular/core';
 })
 export class App {
   oidc = inject(Oidc);
-  keycloakUtils = createKeycloakUtils(() => ({
-    issuerUri: this.oidc.issuerUri,
-  }));
+  get keycloakUtils() {
+    return createKeycloakUtils({
+      issuerUri: this.oidc.issuerUri,
+    });
+  }
+
+  get canShowAdminLink(): boolean {
+    if (!this.oidc.isUserLoggedIn) {
+      return true;
+    }
+
+    const roles = this.oidc.$decodedIdToken().realm_access?.roles ?? [];
+    return roles.includes('admin');
+  }
 }
