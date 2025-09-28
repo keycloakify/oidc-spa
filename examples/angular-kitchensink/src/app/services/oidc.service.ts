@@ -32,3 +32,25 @@ export class Oidc extends AbstractOidcService<DecodedIdToken> {
   // on public pages and app template.
   override providerAwaitsInitialization = false;
 }
+
+// If you want to validate the shape of the token without Zod:
+/*
+export type DecodedIdToken = {
+  iat: number;
+  name: string;
+};
+
+const decodedIdTokenSchema = {
+  parse: (o: Record<string, unknown>): DecodedIdToken=> {
+
+    const { iat, name } = o;
+
+    if( typeof iat !== "number" || typeof name !== "string" ){
+      throw new Error("Missing claim or wrong claim");
+    }
+
+    return { iat, name };
+
+  }
+};
+*/
