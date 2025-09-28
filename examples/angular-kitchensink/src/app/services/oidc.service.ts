@@ -30,5 +30,5 @@ export class Oidc extends AbstractOidcService<DecodedIdToken> {
   // NOTE: In this mode we are responsible for
   // @defer (when oidc.prInitialized | async) { } @placeholder { Loading... }
   // on public pages and app template.
-  override providerAwaitsInitialization = true;
+  override providerAwaitsInitialization = false;
 }

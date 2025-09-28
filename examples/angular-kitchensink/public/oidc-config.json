@@ -1,0 +1,4 @@
+{
+  "issuerUri": "https://cloud-iam.oidc-spa.dev/realms/oidc-spa",
+  "clientId": "example-angular"
+}
