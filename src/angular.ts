@@ -303,9 +303,7 @@ export abstract class AbstractOidcService<
         initializationError: OidcInitializationError | undefined;
     }>();
 
-    get prInitialized(): Promise<void> {
-        return this.#dState.pr.then(() => undefined);
-    }
+    readonly prInitialized: Promise<true> = this.#dState.pr.then(() => true);
 
     #initialize(params: {
         prOidcOrInitializationError: Promise<Oidc<T_DecodedIdToken> | OidcInitializationError>;
@@ -332,13 +330,13 @@ export abstract class AbstractOidcService<
 
     #getPrInitializedNotResolvedErrorMessage(params: { callerName: string }) {
         const { callerName } = params;
-
         return [
             `oidc-spa: ${callerName} called/accessed before`,
             "`oidc.prInitialized` resolved.",
             "You are using `awaitInitialization: false`.",
-            "Await `oidc.prInitialized` before using synchronous members",
-            "of oidc."
+            "In your template you should wrap your usage of",
+            "oidc.isUserLoggedIn, oidc.$decodedIdToken() ect. into",
+            "@defer (when oidc.prInitialized | async) { } @placeholder { Loading... }"
         ].join(" ");
     }
 
