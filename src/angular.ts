@@ -264,7 +264,7 @@ export abstract class AbstractOidcService<
         ]);
     }
 
-    static enforceLoginGuard() {
+    static get enforceLoginGuard() {
         const canActivateFn = (async route => {
             const instance = inject(this);
             const router = inject(Router);
