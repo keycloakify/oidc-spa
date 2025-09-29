@@ -314,7 +314,7 @@ export abstract class AbstractOidcService<
         return from(this.prInitialized).pipe(
             switchMap(() => {
                 const oidc: Oidc<T_DecodedIdToken> = this.#getOidc({
-                    callerName: "enforceLoginGuard"
+                    callerName: "createBearerTokenInterceptor"
                 }) as Oidc<T_DecodedIdToken>;
                 return from(
                     Promise.all(
@@ -453,7 +453,7 @@ export abstract class AbstractOidcService<
         await this.prInitialized;
 
         const oidc: Oidc<T_DecodedIdToken> = this.#getOidc({
-            callerName: "enforceLoginGuard"
+            callerName: "createAuthGuard"
         }) as Oidc<T_DecodedIdToken>;
 
         return isAccessAllowed({ route, state, oidc });
