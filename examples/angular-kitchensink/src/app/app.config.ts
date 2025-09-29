@@ -22,9 +22,7 @@ const provideOidc = (useMockOidc: boolean) =>
       })
     : Oidc.provide(async () => {
         // should be runned outside angular to prevent http interceptor request piping
-        const config: RemoteOidcConfig = await fetch('./oidc-config.json').then((res) =>
-          res?.json()
-        );
+        const config: RemoteOidcConfig = await fetch('/oidc-config.json').then((res) => res.json());
 
         return {
           issuerUri: config.issuerUri,
