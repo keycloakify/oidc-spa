@@ -410,9 +410,9 @@ export abstract class AbstractOidcService<
         const interceptor: HttpInterceptorFn = (req, next) => {
             const instance = inject(this);
             return instance.#createBearerTokenInterceptor({
-                conditions: conditions.map(c => ({
-                    bearerPrefix,
-                    authorizationHeaderName,
+                bearerPrefix,
+                authorizationHeaderName,
+                conditions: conditions.map<BearerTokenCondition>(c => ({
                     shouldAddToken: async req => findMatchingCondition(req, c)
                 })),
                 req,
