@@ -673,6 +673,8 @@ export async function createOidc_nonMemoized<
             }
         }
 
+        // NOTE: We almost never persist tokens, we have to only to support edge case
+        // of multiple oidc instance in a single App with no iframe support.
         restore_from_session_storage: {
             if (isUserStoreInMemoryOnly) {
                 break restore_from_session_storage;
