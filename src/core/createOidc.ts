@@ -758,7 +758,8 @@ export async function createOidc_nonMemoized<
                     transformUrlBeforeRedirect,
                     getExtraQueryParams,
                     getExtraTokenParams,
-                    autoLogin
+                    autoLogin,
+                    log
                 });
 
                 assert(result_loginSilent.outcome !== "token refreshed using refresh token", "876995");
@@ -1229,7 +1230,8 @@ export async function createOidc_nonMemoized<
                     transformUrlBeforeRedirect,
                     getExtraQueryParams,
                     getExtraTokenParams: () => extraTokenParams,
-                    autoLogin
+                    autoLogin,
+                    log
                 });
 
                 if (result_loginSilent.outcome === "failure") {
