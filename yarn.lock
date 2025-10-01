@@ -3311,9 +3311,9 @@ tsafe@^1.6.6:
   integrity sha512-dAPfQLhCfCRre5qs+Z5Q2a7s2CV7RxffZUmvj7puGaePYjECzWREJFd3w4XSFe/T5tbxgowfItA/JSSZ6Ma3dA==
 
 tsafe@^1.8.9:
-  version "1.8.9"
-  resolved "https://registry.yarnpkg.com/tsafe/-/tsafe-1.8.9.tgz#9313bfe62b9eb2153bf90e31918a0cc8431be5f6"
-  integrity sha512-TtwH4IHaA4/ep5jY+IA4Rt1UWcBpWpQ9257CNR1kRh55eoWa/k8t4skId3o8Ecr+WCSMYxC9aOjXBE8ZgE6JnA==
+  version "1.8.11"
+  resolved "https://registry.yarnpkg.com/tsafe/-/tsafe-1.8.11.tgz#4d383810f265e960c1a11f5fb07af89eafba6ac8"
+  integrity sha512-JbwNT5Ce+EE2jNiac3OB3VhW5z5cA2sWJro4myQF2Bv0vrxe04gO1T9nH/Hn04K3QzV74bGOvxIRdG3Ve1Y8Zw==
 
 tslib@^2.1.0, tslib@^2.6.2:
   version "2.6.3"

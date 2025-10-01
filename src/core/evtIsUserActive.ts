@@ -1,6 +1,7 @@
 import { createEvt, type NonPostableEvt } from "../tools/Evt";
 import { subscribeToUserInteraction } from "../tools/subscribeToUserInteraction";
-import { assert, is, id } from "../vendor/frontend/tsafe";
+import { assert, is } from "../tools/tsafe/assert";
+import { id } from "../tools/tsafe/id";
 import { setTimeout, clearTimeout } from "../tools/workerTimers";
 
 const globalContext = {

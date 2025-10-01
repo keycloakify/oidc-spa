@@ -1,5 +1,5 @@
 import { decodeJwt } from "./decodeJwt";
-import { assert } from "../vendor/frontend/tsafe";
+import { assert } from "../tools/tsafe/assert";
 import { INFINITY_TIME } from "./INFINITY_TIME";
 
 // Return undefined if token provided wasn't a JWT or if it hasn't an exp claim number

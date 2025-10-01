@@ -1,4 +1,5 @@
-import { typeGuard, assert } from "../vendor/frontend/tsafe";
+import { assert } from "../tools/tsafe/assert";
+import { typeGuard } from "../tools/tsafe/typeGuard";
 import { generateUrlSafeRandom } from "../tools/generateUrlSafeRandom";
 
 export type StateData = StateData.IFrame | StateData.Redirect;

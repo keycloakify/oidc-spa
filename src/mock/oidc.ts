@@ -1,6 +1,6 @@
 import type { Oidc } from "../core";
 import { createObjectThatThrowsIfAccessed } from "../tools/createObjectThatThrowsIfAccessed";
-import { id } from "../vendor/frontend/tsafe";
+import { id } from "../tools/tsafe/id";
 import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";
 import { getSearchParam, addOrUpdateSearchParam } from "../tools/urlSearchParams";
 import { getRootRelativeOriginalLocationHref } from "../core/earlyInit";

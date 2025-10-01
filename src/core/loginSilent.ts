@@ -3,7 +3,9 @@ import type {
     User as OidcClientTsUser
 } from "../vendor/frontend/oidc-client-ts";
 import { Deferred } from "../tools/Deferred";
-import { id, assert, noUndefined } from "../vendor/frontend/tsafe";
+import { assert } from "../tools/tsafe/assert";
+import { id } from "../tools/tsafe/id";
+import { noUndefined } from "../tools/tsafe/noUndefined";
 import { getStateData, clearStateStore, type StateData } from "./StateData";
 import { getDownlinkAndRtt } from "../tools/getDownlinkAndRtt";
 import { getIsDev } from "../tools/isDev";

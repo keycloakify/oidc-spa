@@ -1,5 +1,6 @@
 import { Deferred } from "../tools/Deferred";
-import { assert, id } from "../vendor/frontend/tsafe";
+import { assert } from "../tools/tsafe/assert";
+import { id } from "../tools/tsafe/id";
 
 const globalContext = {
     prDone_arr: id<Promise<void>[]>([]),

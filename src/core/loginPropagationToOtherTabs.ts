@@ -1,4 +1,4 @@
-import { assert, is } from "../vendor/frontend/tsafe";
+import { assert, is } from "../tools/tsafe/assert";
 import { Deferred } from "../tools/Deferred";
 
 const globalContext = {

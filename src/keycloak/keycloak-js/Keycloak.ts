@@ -12,7 +12,8 @@ import type {
     KeycloakRegisterOptions,
     KeycloakAccountOptions
 } from "./types";
-import { assert, is, isAmong } from "../../vendor/frontend/tsafe";
+import { assert, is } from "../../tools/tsafe/assert";
+import { isAmong } from "../../tools/tsafe/isAmong";
 import { createOidc, type Oidc, OidcInitializationError } from "../../core";
 import { Deferred } from "../../tools/Deferred";
 import { decodeJwt } from "../../tools/decodeJwt";

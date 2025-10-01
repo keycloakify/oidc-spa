@@ -2,7 +2,7 @@ import { BehaviorSubject } from "rxjs";
 import type { Oidc, OidcInitializationError, ParamsOfCreateOidc } from "./core";
 import type { OidcMetadata } from "./core/OidcMetadata";
 import { Deferred } from "./tools/Deferred";
-import { assert, type Equals, is } from "./vendor/frontend/tsafe";
+import { assert, type Equals, is } from "./tools/tsafe/assert";
 import { createObjectThatThrowsIfAccessed } from "./tools/createObjectThatThrowsIfAccessed";
 import {
     type Signal,

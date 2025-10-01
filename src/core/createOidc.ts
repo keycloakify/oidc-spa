@@ -5,7 +5,8 @@ import {
     InMemoryWebStorage
 } from "../vendor/frontend/oidc-client-ts";
 import type { OidcMetadata } from "./OidcMetadata";
-import { id, assert, is, type Equals } from "../vendor/frontend/tsafe";
+import { assert, is, type Equals } from "../tools/tsafe/assert";
+import { id } from "../tools/tsafe/id";
 import { setTimeout, clearTimeout } from "../tools/workerTimers";
 import { Deferred } from "../tools/Deferred";
 import { createEvtIsUserActive } from "./evtIsUserActive";

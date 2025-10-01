@@ -1,5 +1,6 @@
 import type { User as OidcClientTsUser } from "../vendor/frontend/oidc-client-ts";
-import { assert, id } from "../vendor/frontend/tsafe";
+import { assert } from "../tools/tsafe/assert";
+import { id } from "../tools/tsafe/id";
 import { readExpirationTimeInJwt } from "../tools/readExpirationTimeInJwt";
 import { decodeJwt } from "../tools/decodeJwt";
 import type { Oidc } from "./Oidc";

@@ -1,4 +1,4 @@
-import { assert } from "../vendor/frontend/tsafe";
+import { assert } from "../tools/tsafe/assert";
 import { isKeycloak } from "./isKeycloak";
 
 export type KeycloakIssuerUriParsed = {

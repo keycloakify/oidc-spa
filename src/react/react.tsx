@@ -9,8 +9,9 @@ import {
     type JSX
 } from "react";
 import { type Oidc, createOidc, type ParamsOfCreateOidc, OidcInitializationError } from "../core";
-import { assert, type Equals, type Param0 } from "../vendor/frontend/tsafe";
-import { id } from "../vendor/frontend/tsafe";
+import { assert, type Equals } from "../tools/tsafe/assert";
+import type { Param0 } from "../tools/tsafe/Param0";
+import { id } from "../tools/tsafe/id";
 import type { ValueOrAsyncGetter } from "../tools/ValueOrAsyncGetter";
 import { Deferred } from "../tools/Deferred";
 import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";

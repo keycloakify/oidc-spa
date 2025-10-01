@@ -1,5 +1,5 @@
 import { getStateData, getIsStatQueryParamValue } from "./StateData";
-import { assert, type Equals } from "../vendor/frontend/tsafe";
+import { assert, type Equals } from "../tools/tsafe/assert";
 import type { AuthResponse } from "./AuthResponse";
 import {
     encryptAuthResponse,

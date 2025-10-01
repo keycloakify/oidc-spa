@@ -1,5 +1,5 @@
 import { Deferred } from "./Deferred";
-import { assert, is } from "../vendor/frontend/tsafe";
+import { assert, is } from "../tools/tsafe/assert";
 
 export type NonPostableEvt<T> = {
     waitFor: () => Promise<T>;
