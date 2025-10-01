@@ -38,12 +38,19 @@ function getSessionStorageKey(params: { stateUrlParamValue: string }) {
     return `${SESSION_STORAGE_PREFIX}${stateUrlParamValue}`;
 }
 
-export async function initIframeMessageProtection(params: { stateUrlParamValue: string }) {
-    const { stateUrlParamValue } = params;
+export async function initIframeMessageProtection(params: {
+    stateUrlParamValue: string;
+    log: typeof console.log | undefined;
+}) {
+    const { stateUrlParamValue, log } = params;
 
     const { publicKey, privateKey } = await generateKeys();
 
     const sessionStorageKey = getSessionStorageKey({ stateUrlParamValue });
+
+    log?.(
+        `Writing iframe messaging protection publicKey for state: ${stateUrlParamValue} at sessionStorage -> ${sessionStorageKey}`
+    );
 
     setItem_real.call(sessionStorage, sessionStorageKey, publicKey);
 
@@ -69,6 +76,7 @@ export async function initIframeMessageProtection(params: { stateUrlParamValue: 
     }
 
     function clearSessionStoragePublicKey() {
+        log?.(`Clearing session storage public key at ${sessionStorageKey}`);
         sessionStorage.removeItem(sessionStorageKey);
     }
 
@@ -82,7 +90,7 @@ export async function encryptAuthResponse(params: { authResponse: AuthResponse }
         getSessionStorageKey({ stateUrlParamValue: authResponse.state })
     );
 
-    assert(publicKey !== null, "2293302");
+    assert(publicKey !== null, `2293302 no publicKey for state ${authResponse.state}`);
 
     const { encryptedMessage: encryptedMessage_withoutPrefix } = await asymmetricEncrypt({
         publicKey,

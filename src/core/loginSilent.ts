@@ -42,6 +42,7 @@ export async function loginSilent(params: {
 
     getExtraTokenParams: (() => Record<string, string | undefined>) | undefined;
     autoLogin: boolean;
+    log: typeof console.log | undefined;
 }): Promise<ResultOfLoginSilent> {
     const {
         oidcClientTsUserManager,
@@ -50,7 +51,8 @@ export async function loginSilent(params: {
         transformUrlBeforeRedirect,
         getExtraQueryParams,
         getExtraTokenParams,
-        autoLogin
+        autoLogin,
+        log
     } = params;
 
     const dResult = new Deferred<ResultOfLoginSilent>();
@@ -78,7 +80,8 @@ export async function loginSilent(params: {
 
     const { decodeEncryptedAuth, getIsEncryptedAuthResponse, clearSessionStoragePublicKey } =
         await initIframeMessageProtection({
-            stateUrlParamValue: stateUrlParamValue_instance
+            stateUrlParamValue: stateUrlParamValue_instance,
+            log
         });
 
     let clearTimeouts: (params: { wasSuccess: boolean }) => void;
