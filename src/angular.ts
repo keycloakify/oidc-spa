@@ -214,41 +214,40 @@ export abstract class AbstractOidcService<
                 // Detect platform
                 const platformId = inject(PLATFORM_ID);
 
-                if (isPlatformBrowser(platformId)) {
-                    const instance = inject(this);
-                    instance.#initialize({
-                        prOidcOrInitializationError: (async () => {
-                            const [{ createOidc }, { autoLogoutWarningDurationSeconds, ...params }] =
-                                await Promise.all([
-                                    import("./core"),
-                                    typeof paramsOrGetParams === "function"
-                                        ? paramsOrGetParams()
-                                        : paramsOrGetParams
-                                ]);
+                if (!isPlatformBrowser(platformId)) return;
+                const instance = inject(this);
+                instance.#initialize({
+                    prOidcOrInitializationError: (async () => {
+                        const [{ createOidc }, { autoLogoutWarningDurationSeconds, ...params }] =
+                            await Promise.all([
+                                import("./core"),
+                                typeof paramsOrGetParams === "function"
+                                    ? paramsOrGetParams()
+                                    : paramsOrGetParams
+                            ]);
 
-                            if (autoLogoutWarningDurationSeconds !== undefined) {
-                                instance.#autoLogoutWarningDurationSeconds =
-                                    autoLogoutWarningDurationSeconds;
-                            }
+                        if (autoLogoutWarningDurationSeconds !== undefined) {
+                            instance.#autoLogoutWarningDurationSeconds =
+                                autoLogoutWarningDurationSeconds;
+                        }
 
-                            try {
-                                return createOidc({
-                                    homeUrl: getBaseHref(),
-                                    autoLogin: instance.autoLogin,
-                                    decodedIdTokenSchema: instance.decodedIdTokenSchema,
-                                    ...params
-                                });
-                            } catch (initializationError) {
-                                assert(initializationError instanceof Error);
-                                assert(is<OidcInitializationError>(initializationError));
-                                return initializationError;
-                            }
-                        })()
-                    });
+                        try {
+                            return createOidc({
+                                homeUrl: getBaseHref(),
+                                autoLogin: instance.autoLogin,
+                                decodedIdTokenSchema: instance.decodedIdTokenSchema,
+                                ...params
+                            });
+                        } catch (initializationError) {
+                            assert(initializationError instanceof Error);
+                            assert(is<OidcInitializationError>(initializationError));
+                            return initializationError;
+                        }
+                    })()
+                });
 
-                    if (instance.providerAwaitsInitialization) {
-                        await instance.prInitialized;
-                    }
+                if (instance.providerAwaitsInitialization) {
+                    await instance.prInitialized;
                 }
             })
         ]);
@@ -263,40 +262,39 @@ export abstract class AbstractOidcService<
                 // Detect platform
                 const platformId = inject(PLATFORM_ID);
 
-                if (isPlatformBrowser(platformId)) {
-                    const instance = inject(this);
+                if (!isPlatformBrowser(platformId)) return;
+                const instance = inject(this);
 
-                    instance.#initialize({
-                        prOidcOrInitializationError: (async () => {
-                            const { createMockOidc } = await import("./mock");
+                instance.#initialize({
+                    prOidcOrInitializationError: (async () => {
+                        const { createMockOidc } = await import("./mock");
 
-                            return createMockOidc<Record<string, unknown>, boolean>({
-                                homeUrl: getBaseHref(),
-                                autoLogin: instance.autoLogin,
-                                isUserInitiallyLoggedIn: instance.autoLogin
-                                    ? true
-                                    : params.isUserInitiallyLoggedIn,
-                                mockedParams: {
-                                    issuerUri: params.mockIssuerUri,
-                                    clientId: params.mockClientId
-                                },
-                                mockedTokens: {
-                                    accessToken: params.mockAccessToken,
-                                    decodedIdToken: await (() => {
-                                        if (instance.mockDecodedIdToken === undefined) {
-                                            return undefined;
-                                        }
-                                        if (typeof instance.mockDecodedIdToken === "function") {
-                                            return instance.mockDecodedIdToken();
-                                        }
-                                    })()
-                                }
-                            });
-                        })()
-                    });
+                        return createMockOidc<Record<string, unknown>, boolean>({
+                            homeUrl: getBaseHref(),
+                            autoLogin: instance.autoLogin,
+                            isUserInitiallyLoggedIn: instance.autoLogin
+                                ? true
+                                : params.isUserInitiallyLoggedIn,
+                            mockedParams: {
+                                issuerUri: params.mockIssuerUri,
+                                clientId: params.mockClientId
+                            },
+                            mockedTokens: {
+                                accessToken: params.mockAccessToken,
+                                decodedIdToken: await (() => {
+                                    if (instance.mockDecodedIdToken === undefined) {
+                                        return undefined;
+                                    }
+                                    if (typeof instance.mockDecodedIdToken === "function") {
+                                        return instance.mockDecodedIdToken();
+                                    }
+                                })()
+                            }
+                        });
+                    })()
+                });
 
-                    await instance.prInitialized;
-                }
+                await instance.prInitialized;
             })
         ]);
     }
