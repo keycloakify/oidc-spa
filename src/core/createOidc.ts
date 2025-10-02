@@ -1538,12 +1538,12 @@ export async function createOidc_nonMemoized<
         });
     })();
 
-    (function scheduleRenew() {
+    (function scheduleTokenRefreshToKeepSessionAlive() {
         if (!currentTokens.hasRefreshToken && !canUseIframe) {
             log?.(
                 [
-                    "Disabling token auto refresh mechanism because we",
-                    "have no way to renew the tokens without a full page reload"
+                    "Session keep-alive disabled: no refresh token and no iframe support. ",
+                    "Result: once tokens expire, continuing requires full reload."
                 ].join(" ")
             );
             return;
@@ -1553,7 +1553,34 @@ export async function createOidc_nonMemoized<
             currentTokens.refreshTokenExpirationTime !== undefined &&
             currentTokens.refreshTokenExpirationTime >= INFINITY_TIME
         ) {
-            log?.("The refresh_token never expires, disabling auto-renewal mechanism");
+            const warningLines: string[] = [];
+
+            if (scopes.includes("offline_access")) {
+                warningLines.push("offline_access scope was explicitly requested.");
+            } else if (isKeycloak({ issuerUri })) {
+                warningLines.push("Keycloak likely enabled offline_access by default.");
+            }
+
+            if (warningLines.length > 0) {
+                warningLines.push(
+                    ...[
+                        "Misconfiguration: offline_access is for native apps, not SPAs. ",
+                        "You lose SSO and users must log in after every reload."
+                    ]
+                );
+            }
+
+            const logMessage = [
+                "Refresh token never expires → no need to ping server.",
+                "The backend session will not expire.",
+                ...warningLines
+            ].join(" ");
+
+            if (warningLines.length > 0) {
+                console.warn(`oidc-spa: ${logMessage}`);
+            } else {
+                log?.(logMessage);
+            }
             return;
         }
 
@@ -1569,7 +1596,7 @@ export async function createOidc_nonMemoized<
         if (msBeforeExpiration <= RENEW_MS_BEFORE_EXPIRES) {
             log?.(
                 [
-                    "Disabling auto renew mechanism. We just got fresh tokens",
+                    "Session keep-alive disabled. We just got fresh tokens",
                     (() => {
                         switch (typeOfTheTokenWeGotTheTtlFrom) {
                             case "refresh":
@@ -1653,7 +1680,7 @@ export async function createOidc_nonMemoized<
         const { unsubscribe: tokenChangeUnsubscribe } = oidc_loggedIn.subscribeToTokensChange(() => {
             clearTimeout(timer);
             tokenChangeUnsubscribe();
-            scheduleRenew();
+            scheduleTokenRefreshToKeepSessionAlive();
         });
     })();
 
