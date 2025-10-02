@@ -38,7 +38,7 @@ import { createEvt } from "../tools/Evt";
 import { getHaveSharedParentDomain } from "../tools/haveSharedParentDomain";
 import {
     createLoginOrGoToAuthServer,
-    getPrSafelyRestoredFromBfCacheAfterLoginBackNavigation
+    getPrSafelyRestoredFromBfCacheAfterLoginBackNavigationOrInitializationError
 } from "./loginOrGoToAuthServer";
 import { createEphemeralSessionStorage } from "../tools/EphemeralSessionStorage";
 import {
@@ -49,6 +49,8 @@ import { createGetIsNewBrowserSession } from "./isNewBrowserSession";
 import { getIsOnline } from "../tools/getIsOnline";
 import { isKeycloak } from "../keycloak/isKeycloak";
 import { INFINITY_TIME } from "../tools/INFINITY_TIME";
+import type { WELL_KNOWN_PATH } from "./diagnostic";
+import { getIsValidRemoteJson } from "../tools/getIsValidRemoteJson";
 
 // NOTE: Replaced at build time
 const VERSION = "{{OIDC_SPA_VERSION}}";
@@ -454,7 +456,7 @@ export async function createOidc_nonMemoized<
         metadata: __metadata
     });
 
-    const evtIsUserLoggedIn = createEvt<boolean>();
+    const evtInitializationOutcomeUserNotLoggedIn = createEvt<void>();
 
     const { loginOrGoToAuthServer } = createLoginOrGoToAuthServer({
         configId,
@@ -463,23 +465,13 @@ export async function createOidc_nonMemoized<
         getExtraQueryParams,
         getExtraTokenParams,
         homeUrl: homeUrlAndRedirectUri,
-        evtIsUserLoggedIn,
+        evtInitializationOutcomeUserNotLoggedIn,
         log
     });
 
     const { getIsNewBrowserSession } = createGetIsNewBrowserSession({
         configId,
-        evtUserNotLoggedIn: (() => {
-            const evt = createEvt<void>();
-
-            evtIsUserLoggedIn.subscribe(isUserLoggedIn => {
-                if (!isUserLoggedIn) {
-                    evt.post();
-                }
-            });
-
-            return evt;
-        })()
+        evtInitializationOutcomeUserNotLoggedIn
     });
 
     const { completeLoginOrRefreshProcess } = await startLoginOrRefreshProcess();
@@ -746,6 +738,20 @@ export async function createOidc_nonMemoized<
                 }
 
                 if (!canUseIframe) {
+                    if (
+                        !(await getIsValidRemoteJson(
+                            `${issuerUri}${id<typeof WELL_KNOWN_PATH>(
+                                "/.well-known/openid-configuration"
+                            )}`
+                        ))
+                    ) {
+                        return (
+                            await import("./diagnostic")
+                        ).createWellKnownOidcConfigurationEndpointUnreachableInitializationError({
+                            issuerUri
+                        });
+                    }
+
                     break actual_silent_signin;
                 }
 
@@ -760,7 +766,8 @@ export async function createOidc_nonMemoized<
                     transformUrlBeforeRedirect,
                     getExtraQueryParams,
                     getExtraTokenParams,
-                    autoLogin
+                    autoLogin,
+                    log
                 });
 
                 assert(result_loginSilent.outcome !== "token refreshed using refresh token", "876995");
@@ -834,11 +841,12 @@ export async function createOidc_nonMemoized<
                     completeLoginOrRefreshProcess();
 
                     if (autoLogin && persistedAuthState !== "logged in") {
-                        evtIsUserLoggedIn.post(false);
+                        evtInitializationOutcomeUserNotLoggedIn.post();
                     }
 
                     await waitForAllOtherOngoingLoginOrRefreshProcessesToComplete({
-                        prUnlock: new Promise<never>(() => {})
+                        prUnlock:
+                            getPrSafelyRestoredFromBfCacheAfterLoginBackNavigationOrInitializationError()
                     });
 
                     if (persistedAuthState === "logged in") {
@@ -847,7 +855,9 @@ export async function createOidc_nonMemoized<
                         });
                     }
 
-                    await loginOrGoToAuthServer({
+                    const dCantFetchWellKnownEndpointOrNever = new Deferred<void | never>();
+
+                    loginOrGoToAuthServer({
                         action: "login",
                         doForceReloadOnBfCache: true,
                         redirectUrl: getRootRelativeOriginalLocationHref(),
@@ -866,9 +876,20 @@ export async function createOidc_nonMemoized<
                             }
 
                             return "ensure no interaction";
-                        })()
+                        })(),
+                        onCantFetchWellKnownEndpointError: () => {
+                            dCantFetchWellKnownEndpointOrNever.resolve();
+                        }
                     });
-                    assert(false, "321389");
+
+                    await dCantFetchWellKnownEndpointOrNever.pr;
+
+                    return (
+                        await import("./diagnostic")
+                    ).createFailedToFetchTokenEndpointInitializationError({
+                        clientId,
+                        issuerUri
+                    });
                 }
 
                 if (authResponse_error !== undefined) {
@@ -915,7 +936,7 @@ export async function createOidc_nonMemoized<
             break not_loggedIn_case;
         }
 
-        evtIsUserLoggedIn.post(false);
+        evtInitializationOutcomeUserNotLoggedIn.post();
 
         if (getPersistedAuthState({ configId }) !== "explicitly logged out") {
             persistAuthState({ configId, state: undefined });
@@ -972,7 +993,8 @@ export async function createOidc_nonMemoized<
                         transformUrlBeforeRedirect
                     }) => {
                         await waitForAllOtherOngoingLoginOrRefreshProcessesToComplete({
-                            prUnlock: getPrSafelyRestoredFromBfCacheAfterLoginBackNavigation()
+                            prUnlock:
+                                getPrSafelyRestoredFromBfCacheAfterLoginBackNavigationOrInitializationError()
                         });
 
                         return loginOrGoToAuthServer({
@@ -987,7 +1009,11 @@ export async function createOidc_nonMemoized<
                             interaction:
                                 getPersistedAuthState({ configId }) === "explicitly logged out"
                                     ? "ensure interaction"
-                                    : "directly redirect if active session show login otherwise"
+                                    : "directly redirect if active session show login otherwise",
+                            onCantFetchWellKnownEndpointError: () => {
+                                log?.("Login called but the auth server seems to be down..");
+                                alert("Authentication unavailable please try again later.");
+                            }
                         });
                     },
                     initializationError: undefined
@@ -1018,8 +1044,6 @@ export async function createOidc_nonMemoized<
     }
 
     log?.("User is logged in");
-
-    evtIsUserLoggedIn.post(true);
 
     let currentTokens = oidcClientTsUserToTokens({
         oidcClientTsUser: resultOfLoginProcess.oidcClientTsUser,
@@ -1200,7 +1224,16 @@ export async function createOidc_nonMemoized<
                         extraQueryParams_local: undefined,
                         transformUrlBeforeRedirect_local: undefined,
                         doNavigateBackToLastPublicUrlIfTheTheUserNavigateBack: false,
-                        interaction: "directly redirect if active session show login otherwise"
+                        interaction: "directly redirect if active session show login otherwise",
+                        onCantFetchWellKnownEndpointError: () => {
+                            log?.(
+                                [
+                                    "The auth server seems to be down while we needed to refresh the token",
+                                    "with a full page redirect. Reloading the page"
+                                ].join(" ")
+                            );
+                            window.location.reload();
+                        }
                     });
                     assert(false, "136134");
                 };
@@ -1231,14 +1264,20 @@ export async function createOidc_nonMemoized<
                     transformUrlBeforeRedirect,
                     getExtraQueryParams,
                     getExtraTokenParams: () => extraTokenParams,
-                    autoLogin
+                    autoLogin,
+                    log
                 });
 
                 if (result_loginSilent.outcome === "failure") {
-                    completeLoginOrRefreshProcess();
-                    // NOTE: This is a configuration or network error, okay to throw,
-                    // this exception doesn't have to be handle if it fails it fails.
-                    throw new Error(result_loginSilent.cause);
+                    log?.(
+                        [
+                            `Silent refresh of the token failed with ${result_loginSilent.cause}.`,
+                            `This isn't recoverable, reloading the page.`
+                        ].join(" ")
+                    );
+                    window.location.reload();
+                    await new Promise<never>(() => {});
+                    assert(false);
                 }
 
                 let oidcClientTsUser: OidcClientTsUser;
@@ -1422,7 +1461,11 @@ export async function createOidc_nonMemoized<
                 action: "go to auth server",
                 redirectUrl: redirectUrl ?? window.location.href,
                 extraQueryParams_local: extraQueryParams,
-                transformUrlBeforeRedirect_local: transformUrlBeforeRedirect
+                transformUrlBeforeRedirect_local: transformUrlBeforeRedirect,
+                onCantFetchWellKnownEndpointError: () => {
+                    log?.("goToAuthServer called but the auth server seems to be down..");
+                    alert("Authentication unavailable please try again later.");
+                }
             }),
         backFromAuthServer: resultOfLoginProcess.backFromAuthServer,
         isNewBrowserSession: (() => {

@@ -5,3 +5,4 @@
 /CHANGELOG.md
 /.yarn_home
 /examples/tanstack-router-file-based/src/routeTree.gen.ts
+.angular

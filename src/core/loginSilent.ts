@@ -12,6 +12,7 @@ import { getIsDev } from "../tools/isDev";
 import { type AuthResponse } from "./AuthResponse";
 import { addOrUpdateSearchParam } from "../tools/urlSearchParams";
 import { initIframeMessageProtection } from "./iframeMessageProtection";
+import { getIsOnline } from "../tools/getIsOnline";
 
 type ResultOfLoginSilent =
     | {
@@ -42,6 +43,7 @@ export async function loginSilent(params: {
 
     getExtraTokenParams: (() => Record<string, string | undefined>) | undefined;
     autoLogin: boolean;
+    log: typeof console.log | undefined;
 }): Promise<ResultOfLoginSilent> {
     const {
         oidcClientTsUserManager,
@@ -50,8 +52,18 @@ export async function loginSilent(params: {
         transformUrlBeforeRedirect,
         getExtraQueryParams,
         getExtraTokenParams,
-        autoLogin
+        autoLogin,
+        log
     } = params;
+
+    delay_until_online: {
+        const { isOnline, prOnline } = getIsOnline();
+        if (isOnline) {
+            break delay_until_online;
+        }
+        log?.("The browser seem offline, waiting to get back a connection before proceeding to login");
+        await prOnline;
+    }
 
     const dResult = new Deferred<ResultOfLoginSilent>();
 
