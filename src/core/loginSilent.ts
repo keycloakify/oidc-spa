@@ -61,7 +61,7 @@ export async function loginSilent(params: {
         if (isOnline) {
             break delay_until_online;
         }
-        log?.("The browser seem offline, waiting to get back a connection before proceeding to login");
+        log?.("The browser seems offline, waiting to get back a connection before proceeding to login");
         await prOnline;
     }
 
