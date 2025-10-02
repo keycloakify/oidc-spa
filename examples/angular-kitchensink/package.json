@@ -22,7 +22,7 @@
   },
   "private": true,
   "dependencies": {
-    "oidc-spa": "latest",
+    "oidc-spa": "file:../../dist",
     "zod": "^4.1.11",
     "@angular/common": "^20.3.0",
     "@angular/compiler": "^20.3.0",
