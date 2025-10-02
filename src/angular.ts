@@ -1,9 +1,3 @@
-import { BehaviorSubject } from "rxjs";
-import type { Oidc, OidcInitializationError, ParamsOfCreateOidc } from "./core";
-import type { OidcMetadata } from "./core/OidcMetadata";
-import { Deferred } from "./tools/Deferred";
-import { assert, type Equals, is } from "./tools/tsafe/assert";
-import { createObjectThatThrowsIfAccessed } from "./tools/createObjectThatThrowsIfAccessed";
 import { HttpHandlerFn, HttpInterceptorFn, HttpRequest } from "@angular/common/http";
 import {
     inject,
@@ -29,7 +23,7 @@ import type { ReadonlyBehaviorSubject } from "./tools/ReadonlyBehaviorSubject";
 import type { ValueOrAsyncGetter } from "./tools/ValueOrAsyncGetter";
 import { createObjectThatThrowsIfAccessed } from "./tools/createObjectThatThrowsIfAccessed";
 import { getBaseHref } from "./tools/getBaseHref";
-import { assert, is, type Equals } from "./vendor/frontend/tsafe";
+import { assert, is, type Equals } from "./tools/tsafe/assert";
 
 export type ParamsOfProvide = {
     issuerUri: string;
