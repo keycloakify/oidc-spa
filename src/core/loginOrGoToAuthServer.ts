@@ -146,7 +146,7 @@ export function createLoginOrGoToAuthServer(params: {
                         location.reload();
                     };
 
-                    window.removeEventListener("pageshow", callback);
+                    window.addEventListener("pageshow", callback);
 
                     onCantFetchWellKnownEndpointError = () => {
                         window.removeEventListener("pageshow", callback);
