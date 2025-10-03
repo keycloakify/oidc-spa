@@ -1,4 +1,4 @@
-import { BehaviorSubject } from "rxjs";
+import { BehaviorSubject, from, switchMap } from "rxjs";
 import type { Oidc, OidcInitializationError, ParamsOfCreateOidc } from "./core";
 import type { OidcMetadata } from "./core/OidcMetadata";
 import { Deferred } from "./tools/Deferred";
@@ -11,6 +11,7 @@ import {
     makeEnvironmentProviders,
     provideAppInitializer
 } from "@angular/core";
+import { type HttpInterceptorFn, HttpContextToken } from "@angular/common/http";
 import { toSignal } from "@angular/core/rxjs-interop";
 import type { ReadonlyBehaviorSubject } from "./tools/ReadonlyBehaviorSubject";
 import { Router, type CanActivateFn } from "@angular/router";
@@ -262,6 +263,34 @@ export abstract class AbstractOidcService<
                 await instance.prInitialized;
             })
         ]);
+    }
+
+    static readonly REQUIRE_ACCESS_TOKEN = new HttpContextToken<boolean>(() => false);
+
+    static get accessTokenBearerInterceptor(): HttpInterceptorFn {
+        return (req, next) => {
+            const oidc = inject(this);
+
+            if (!req.context.get(this.REQUIRE_ACCESS_TOKEN)) {
+                return next(req);
+            }
+
+            return from(oidc.getAccessToken()).pipe(
+                switchMap(({ isUserLoggedIn, accessToken }) => {
+                    if (!isUserLoggedIn) {
+                        throw new Error(
+                            [
+                                `oidc-spa: attempted to inject an Authorization bearer token`,
+                                `for ${req.method} ${req.urlWithParams} but the user is not logged in.`,
+                                `You shouldn't be attempting to call API endpoint that require authentication`,
+                                `when the user isn't logged in.`
+                            ].join(" ")
+                        );
+                    }
+                    return next(req.clone({ setHeaders: { Authorization: `Bearer ${accessToken}` } }));
+                })
+            );
+        };
     }
 
     static get enforceLoginGuard() {

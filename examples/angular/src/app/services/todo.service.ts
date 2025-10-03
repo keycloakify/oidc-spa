@@ -1,6 +1,6 @@
-import { HttpClient, HttpInterceptorFn } from '@angular/common/http';
+import { HttpClient, HttpContext } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
-import { type Observable, from, switchMap } from 'rxjs';
+import type { Observable } from 'rxjs';
 import { Oidc } from '../services/oidc.service';
 
 export interface Todo {
@@ -12,28 +12,6 @@ export interface Todo {
 
 const TODO_API_URL = 'https://jsonplaceholder.typicode.com/todos';
 
-export const todoApiInterceptor: HttpInterceptorFn = (req, next) => {
-  const oidc = inject(Oidc);
-
-  if (!req.url.startsWith(TODO_API_URL)) {
-    return next(req);
-  }
-
-  return from(oidc.getAccessToken()).pipe(
-    switchMap(({ isUserLoggedIn, accessToken }) => {
-      if (!isUserLoggedIn) {
-        throw new Error("Assertion Error: Call to the TODO API while the user isn't logged in.");
-      }
-
-      return next(
-        req.clone({
-          setHeaders: { Authorization: `Bearer ${accessToken}` },
-        })
-      );
-    })
-  );
-};
-
 @Injectable({ providedIn: 'root' })
 export class TodoService {
   private readonly http = inject(HttpClient);
@@ -42,6 +20,7 @@ export class TodoService {
   getTodos(): Observable<Todo[]> {
     return this.http.get<Todo[]>(this.apiUrl, {
       params: { _limit: 5 },
+      context: new HttpContext().set(Oidc.REQUIRE_ACCESS_TOKEN, true),
     });
   }
 }

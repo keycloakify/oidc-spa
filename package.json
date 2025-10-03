@@ -54,7 +54,8 @@
         "react": "*",
         "rxjs": "*",
         "@angular/core": "*",
-        "@angular/router": "*"
+        "@angular/router": "*",
+        "@angular/common": "*"
     },
     "peerDependenciesMeta": {
         "react": {
@@ -70,6 +71,9 @@
             "optional": true
         },
         "@angular/router": {
+            "optional": true
+        },
+        "@angular/common": {
             "optional": true
         }
     },
