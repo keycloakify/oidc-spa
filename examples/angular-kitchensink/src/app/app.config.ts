@@ -7,7 +7,7 @@ import {
 import { HttpClient, provideHttpClient, withInterceptors } from '@angular/common/http';
 import { provideRouter } from '@angular/router';
 import { routes } from './app.routes';
-import { Oidc } from './services/oidc.service';
+import { Oidc, REQUIRE_ACCESS_TOKEN } from './services/oidc.service';
 import { firstValueFrom } from 'rxjs';
 import { environment } from '../environments/environment';
 
@@ -20,7 +20,13 @@ export const appConfig: ApplicationConfig = {
   providers: [
     provideBrowserGlobalErrorListeners(),
     provideZonelessChangeDetection(),
-    provideHttpClient(withInterceptors([Oidc.accessTokenBearerInterceptor])),
+    provideHttpClient(
+      withInterceptors([
+        Oidc.createAccessTokenBearerInterceptor({
+          shouldApply: (req) => req.context.get(REQUIRE_ACCESS_TOKEN),
+        }),
+      ])
+    ),
     provideRouter(routes),
     environment.useMockOidc
       ? Oidc.provideMock({

@@ -12,7 +12,14 @@ export const appConfig: ApplicationConfig = {
   providers: [
     provideBrowserGlobalErrorListeners(),
     provideZonelessChangeDetection(),
-    provideHttpClient(withInterceptors([Oidc.accessTokenBearerInterceptor])),
+    provideHttpClient(
+      withInterceptors([
+        Oidc.createAccessTokenBearerInterceptor({
+          shouldApply: (req) =>
+            /^(https:\/\/jsonplaceholder\.typicode\.com)(\/.*)?$/i.test(req.url),
+        }),
+      ])
+    ),
     provideRouter(routes),
     Oidc.provide({
       issuerUri: 'https://cloud-iam.oidc-spa.dev/realms/oidc-spa',

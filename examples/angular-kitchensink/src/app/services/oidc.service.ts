@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { AbstractOidcService } from 'oidc-spa/angular';
 import { z } from 'zod';
+import { HttpContextToken } from '@angular/common/http';
 
 export type DecodedIdToken = z.infer<typeof decodedIdTokenSchema>;
 
@@ -32,6 +33,8 @@ export class Oidc extends AbstractOidcService<DecodedIdToken> {
   // on public pages and app template.
   override providerAwaitsInitialization = false;
 }
+
+export const REQUIRE_ACCESS_TOKEN = new HttpContextToken<boolean>(() => false);
 
 // If you want to validate the shape of the token without Zod:
 /*

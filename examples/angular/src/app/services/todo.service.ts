@@ -20,7 +20,6 @@ export class TodoService {
   getTodos(): Observable<Todo[]> {
     return this.http.get<Todo[]>(this.apiUrl, {
       params: { _limit: 5 },
-      context: new HttpContext().set(Oidc.REQUIRE_ACCESS_TOKEN, true),
     });
   }
 }

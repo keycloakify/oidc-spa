@@ -11,7 +11,7 @@ import {
     makeEnvironmentProviders,
     provideAppInitializer
 } from "@angular/core";
-import { type HttpInterceptorFn, HttpContextToken } from "@angular/common/http";
+import type { HttpInterceptorFn, HttpRequest } from "@angular/common/http";
 import { toSignal } from "@angular/core/rxjs-interop";
 import type { ReadonlyBehaviorSubject } from "./tools/ReadonlyBehaviorSubject";
 import { Router, type CanActivateFn } from "@angular/router";
@@ -265,13 +265,15 @@ export abstract class AbstractOidcService<
         ]);
     }
 
-    static readonly REQUIRE_ACCESS_TOKEN = new HttpContextToken<boolean>(() => false);
+    static createAccessTokenBearerInterceptor(params: {
+        shouldApply: (req: HttpRequest<unknown>) => boolean;
+    }): HttpInterceptorFn {
+        const { shouldApply = () => false } = params;
 
-    static get accessTokenBearerInterceptor(): HttpInterceptorFn {
         return (req, next) => {
             const oidc = inject(this);
 
-            if (!req.context.get(this.REQUIRE_ACCESS_TOKEN)) {
+            if (!shouldApply(req)) {
                 return next(req);
             }
 

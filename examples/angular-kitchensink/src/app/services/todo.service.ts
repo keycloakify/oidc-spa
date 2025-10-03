@@ -1,7 +1,7 @@
 import { HttpClient, HttpContext } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import type { Observable } from 'rxjs';
-import { Oidc } from './oidc.service';
+import { REQUIRE_ACCESS_TOKEN } from './oidc.service';
 
 export interface Todo {
   userId: number;
@@ -20,7 +20,7 @@ export class TodoService {
   getTodos(): Observable<Todo[]> {
     return this.http.get<Todo[]>(this.apiUrl, {
       params: { _limit: 5 },
-      context: new HttpContext().set(Oidc.REQUIRE_ACCESS_TOKEN, true),
+      context: new HttpContext().set(REQUIRE_ACCESS_TOKEN, true),
     });
   }
 }
