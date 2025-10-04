@@ -11,19 +11,17 @@
         "build": "tsx scripts/build.ts",
         "tsc:cjs": "tsc --module CommonJS --outDir ./dist",
         "tsc:esm": "tsc --module es2020 --outDir ./dist/esm",
-        "watch": "yarn run tsc:esm -w",
         "_format": "prettier '**/*.{ts,tsx,json,md}'",
         "format": "yarn _format --write",
         "format:check": "yarn _format --list-different",
-        "link-in-app": "tsx scripts/link-in-app.ts",
-        "start-react-router-example": "yarn build && tsx scripts/link-in-examples.ts && cd examples/react-router && rm -rf node_modules/.vite && yarn dev",
-        "start-react-router-framework-example": "yarn build && tsx scripts/link-in-examples.ts && cd examples/react-router-framework && rm -rf node_modules/.vite && yarn dev",
-        "start-tanstack-router-example": "yarn build && tsx scripts/link-in-examples.ts && cd examples/tanstack-router && rm -rf node_modules/.vite && yarn dev",
-        "start-tanstack-router-file-based-example": "yarn build && tsx scripts/link-in-examples.ts && cd examples/tanstack-router-file-based && rm -rf node_modules/.vite && yarn dev",
-        "start-multi-providers-example": "yarn build && tsx scripts/link-in-examples.ts && cd examples/multi-providers && rm -rf node_modules/.vite && yarn dev",
-        "start-angular-example": "yarn build && tsx scripts/link-in-examples.ts && cd examples/angular && rm -rf .angular/cache && yarn start",
-        "start-angular-kitchensink-example": "yarn build && tsx scripts/link-in-examples.ts && cd examples/angular-kitchensink && rm -rf .angular/cache && yarn start",
-        "size": "bash ./scripts/compute-payload.sh"
+        "size": "bash ./scripts/compute-payload.sh",
+        "start-angular-example": "bash ./scripts/start-example.sh angular start",
+        "start-angular-kitchensink-example": "bash ./scripts/start-example.sh angular-kitchensink start",
+        "start-multi-providers-example": "bash ./scripts/start-example.sh multi-providers dev",
+        "start-react-router-example": "bash ./scripts/start-example.sh react-router dev",
+        "start-react-router-framework-example": "bash ./scripts/start-example.sh react-router-framework dev",
+        "start-tanstack-router-example": "bash ./scripts/start-example.sh tanstack-router dev",
+        "start-tanstack-router-file-based-example": "bash ./scripts/start-example.sh tanstack-router-file-based dev"
     },
     "lint-staged": {
         "*.{ts,tsx,json,md}": [
