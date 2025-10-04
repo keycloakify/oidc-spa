@@ -9,6 +9,7 @@
         "test": "vitest run"
     },
     "dependencies": {
+        "oidc-spa": "latest",
         "@tailwindcss/vite": "^4.0.6",
         "@tanstack/nitro-v2-vite-plugin": "^1.132.31",
         "@tanstack/react-devtools": "^0.7.0",

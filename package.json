@@ -21,7 +21,8 @@
         "start-react-router-example": "bash ./scripts/start-example.sh react-router dev",
         "start-react-router-framework-example": "bash ./scripts/start-example.sh react-router-framework dev",
         "start-tanstack-router-example": "bash ./scripts/start-example.sh tanstack-router dev",
-        "start-tanstack-router-file-based-example": "bash ./scripts/start-example.sh tanstack-router-file-based dev"
+        "start-tanstack-router-file-based-example": "bash ./scripts/start-example.sh tanstack-router-file-based dev",
+        "start-tanstack-start-example": "bash ./scripts/start-example.sh tanstack-start dev"
     },
     "lint-staged": {
         "*.{ts,tsx,json,md}": [
@@ -43,7 +44,8 @@
         "keycloak",
         "keycloak-js",
         "react",
-        "angular"
+        "angular",
+        "TanStack Start"
     ],
     "homepage": "https://docs.oidc-spa.dev/",
     "dependencies": {},
@@ -52,7 +54,8 @@
         "react": "*",
         "rxjs": "*",
         "@angular/core": "*",
-        "@angular/router": "*"
+        "@angular/router": "*",
+        "@tanstack/react-start": "*"
     },
     "peerDependenciesMeta": {
         "react": {
@@ -68,6 +71,9 @@
             "optional": true
         },
         "@angular/router": {
+            "optional": true
+        },
+        "@tanstack/react-start": {
             "optional": true
         }
     },
@@ -103,7 +109,8 @@
         "@angular/core": "^20.3.1",
         "@angular/router": "^20.3.1",
         "@angular/common": "^20.3.1",
-        "@angular/platform-browser": "^20.3.1"
+        "@angular/platform-browser": "^20.3.1",
+        "@tanstack/react-start": "^1.132.0"
     },
     "publishConfig": {
         "access": "public"
@@ -129,6 +136,11 @@
             "module": "./dist/esm/angular.js",
             "types": "./dist/esm/angular.d.ts",
             "default": "./dist/esm/angular.js"
+        },
+        "./tanstack-start/react": {
+            "module": "./dist/esm/tanstack-start/react.js",
+            "types": "./dist/esm/tanstack-start/react.d.ts",
+            "default": "./dist/esm/tanstack-start/react.js"
         },
         "./mock/react": {
             "module": "./dist/esm/mock/react.js",
