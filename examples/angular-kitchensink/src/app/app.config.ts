@@ -7,8 +7,11 @@ import {
 import { HttpClient, provideHttpClient, withInterceptors } from '@angular/common/http';
 import { provideRouter } from '@angular/router';
 import { routes } from './app.routes';
-import { todoApiInterceptor } from './services/todo.service';
-import { Oidc } from './services/oidc.service';
+import {
+  Oidc,
+  REQUIRE_ACCESS_TOKEN,
+  INCLUDE_ACCESS_TOKEN_IF_LOGGED_IN,
+} from './services/oidc.service';
 import { firstValueFrom } from 'rxjs';
 import { environment } from '../environments/environment';
 
@@ -21,7 +24,25 @@ export const appConfig: ApplicationConfig = {
   providers: [
     provideBrowserGlobalErrorListeners(),
     provideZonelessChangeDetection(),
-    provideHttpClient(withInterceptors([todoApiInterceptor])),
+    provideHttpClient(
+      withInterceptors([
+        Oidc.createBearerInterceptor({
+          shouldInjectAccessToken: (req) => {
+            const oidc = inject(Oidc);
+
+            if (req.context.get(REQUIRE_ACCESS_TOKEN)) {
+              return true;
+            }
+
+            if (req.context.get(INCLUDE_ACCESS_TOKEN_IF_LOGGED_IN)) {
+              return oidc.isUserLoggedIn;
+            }
+
+            return false;
+          },
+        }),
+      ])
+    ),
     provideRouter(routes),
     environment.useMockOidc
       ? Oidc.provideMock({

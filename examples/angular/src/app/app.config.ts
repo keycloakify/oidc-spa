@@ -2,18 +2,25 @@ import {
   ApplicationConfig,
   provideBrowserGlobalErrorListeners,
   provideZonelessChangeDetection,
+  inject,
 } from '@angular/core';
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { provideRouter } from '@angular/router';
 import { routes } from './app.routes';
-import { todoApiInterceptor } from './services/todo.service';
 import { Oidc } from './services/oidc.service';
 
 export const appConfig: ApplicationConfig = {
   providers: [
     provideBrowserGlobalErrorListeners(),
     provideZonelessChangeDetection(),
-    provideHttpClient(withInterceptors([todoApiInterceptor])),
+    provideHttpClient(
+      withInterceptors([
+        Oidc.createBearerInterceptor({
+          shouldInjectAccessToken: (req) =>
+            /^(https:\/\/jsonplaceholder\.typicode\.com)(\/.*)?$/i.test(req.url),
+        }),
+      ])
+    ),
     provideRouter(routes),
     Oidc.provide({
       issuerUri: 'https://cloud-iam.oidc-spa.dev/realms/oidc-spa',
