@@ -2,6 +2,7 @@ import {
   ApplicationConfig,
   provideBrowserGlobalErrorListeners,
   provideZonelessChangeDetection,
+  inject,
 } from '@angular/core';
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { provideRouter } from '@angular/router';
@@ -14,8 +15,8 @@ export const appConfig: ApplicationConfig = {
     provideZonelessChangeDetection(),
     provideHttpClient(
       withInterceptors([
-        Oidc.createAccessTokenBearerInterceptor({
-          shouldApply: (req) =>
+        Oidc.createBearerInterceptor({
+          shouldInjectAccessToken: (req) =>
             /^(https:\/\/jsonplaceholder\.typicode\.com)(\/.*)?$/i.test(req.url),
         }),
       ])

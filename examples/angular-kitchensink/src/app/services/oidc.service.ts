@@ -35,6 +35,7 @@ export class Oidc extends AbstractOidcService<DecodedIdToken> {
 }
 
 export const REQUIRE_ACCESS_TOKEN = new HttpContextToken<boolean>(() => false);
+export const INCLUDE_ACCESS_TOKEN_IF_LOGGED_IN = new HttpContextToken<boolean>(() => false);
 
 // If you want to validate the shape of the token without Zod:
 /*
