@@ -11,7 +11,7 @@ import { Oidc } from '../services/oidc.service';
     <h4>This is a page that do not requires the user to be authenticated</h4>
     <section>
       <p>
-        Todos fetched @defer (when oidc.prInitialized | async) {
+        Public todos fetched @defer (when oidc.prInitialized | async) {
         {{ oidc.isUserLoggedIn ? 'with' : 'without' }} } @placeholder { ... }
         <code>Authorization: Bearer [access_token]</code> in the request's headers:
       </p>
