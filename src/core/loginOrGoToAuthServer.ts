@@ -201,7 +201,7 @@ export function createLoginOrGoToAuthServer(params: {
             const redirectUrl_obj = new URL(redirectUrl);
             const redirectUrl_originAndPath = `${redirectUrl_obj.origin}${redirectUrl_obj.pathname}`;
 
-            if (!redirectUrl_originAndPath.startsWith(homeUrl)) {
+            if (!redirectUrl_originAndPath.replace(/\/?$/, "/").startsWith(homeUrl)) {
                 throw new Error(
                     [
                         `oidc-spa: redirect target ${redirectUrl_originAndPath} is outside of your application.`,
