@@ -340,7 +340,7 @@ export abstract class AbstractOidcService<
                 !instance.allowDecodedIdTokenAccessInShouldInjectAccessToken
             ) {
                 throw new Error(
-                    "oidc-spa: Set allowDecodedIdTokenAccessInShouldInjectAccessToken to true"
+                    "oidc-spa: See https://docs.oidc-spa.dev/release-notes/reading-decodedaccesstoken-within-shouldinjectaccesstoken"
                 );
             }
 
