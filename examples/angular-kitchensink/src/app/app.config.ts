@@ -14,7 +14,6 @@ import {
 } from './services/oidc.service';
 import { firstValueFrom } from 'rxjs';
 import { environment } from '../environments/environment';
-import { HttpContext } from '@angular/common/http';
 
 type RemoteOidcConfig = {
   issuerUri: string;
@@ -51,11 +50,7 @@ export const appConfig: ApplicationConfig = {
         })
       : Oidc.provide(async () => {
           const http = inject(HttpClient);
-          const config = await firstValueFrom(
-            http.get<RemoteOidcConfig>('./oidc-config.json', {
-              context: new HttpContext().set(REQUIRE_ACCESS_TOKEN, true),
-            })
-          );
+          const config = await firstValueFrom(http.get<RemoteOidcConfig>('./oidc-config.json'));
 
           return {
             issuerUri: config.issuerUri,
