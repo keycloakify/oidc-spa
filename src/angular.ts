@@ -380,9 +380,11 @@ export abstract class AbstractOidcService<
                                     "you accessed synchronous properties of",
                                     `\`${uncapitalize(name)} = inject(${name})\` that`,
                                     "are only available after initialization completes.",
-                                    `Do not call ${uncapitalize(name)}.isUserLoggedIn or other`,
-                                    "sync props inside shouldInjectAccessToken",
-                                    `at a time when the ${name}.provide(async () => {...}) callback may still be running.`,
+                                    `Requests made inside the ${name}.provide(async () => {...}) callback`,
+                                    `(typically to fetch the params), should not trigger a read of `,
+                                    `${uncapitalize(
+                                        name
+                                    )}.isUserLoggedIn or other properties inside shouldInjectAccessToken()`,
                                     "This creates a causality violation.",
                                     "Reorganize your shouldInjectAccessToken implementation to exit early with `false` in those case,",
                                     "before accessing the property."
