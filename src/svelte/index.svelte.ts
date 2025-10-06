@@ -301,7 +301,7 @@ export function createSvelteOidc_dependencyInjection<
 
         assert(
             oidcContextKey !== undefined,
-            "Oidc not inizitialized, you must call initializeOidc or mountOidc"
+            "Oidc not initialized, you must call initializeOidc or mountOidc"
         );
         const contextValue = getOidcContext<DecodedIdToken>(oidcContextKey);
 
