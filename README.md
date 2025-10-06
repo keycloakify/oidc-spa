@@ -24,14 +24,14 @@
   <a href="https://docs.oidc-spa.dev">Documentation</a>
 </p>
 
-> 🗣️ oidc-spa will be introduced at [KeyConf 2025](https://keyconf.dev/) on the 28 of August.
+> 🗣️ oidc-spa has been introduced at KeyConf 2025, [see replay](https://youtu.be/Z8zIjZx6DK4?si=W1cQN-AOt0pmolql).
 
 A full-featured OpenID Connect / OAuth2 client for single-page applications (SPAs).
 
 With `oidc-spa`, you can seamlessly integrate authentication providers like [Keycloak](https://www.keycloak.org/), [Auth0](https://auth0.com/), or [Microsoft Entra ID](https://www.microsoft.com/en-us/security/business/identity-access/microsoft-entra-id) into your application, purely on the client side,
 [without involving your backend in the token exchange](https://docs.oidc-spa.dev/resources/why-no-client-secret).
 
-In **simple terms**, `oidc-spa` is a library that makes it easy to **add authentication** to your Vite or Create-React-App project.  
+In **simple terms**, `oidc-spa` is a library that makes it easy to **add authentication** to your Vite or Angular project.  
 There are many authentication and user management platforms out there: Okta, Auth0, Entra ID...  
 There are also plenty of self-hosted options like Keycloak, Ory Hydra, and Dex.  
 What all of these have in common is that they implement the OpenID Connect/OAuth2 standard.
@@ -48,7 +48,7 @@ Most OIDC providers push their own client libraries:
 
 -   **Auth0** → `auth0-spa-js`
 -   **Microsoft Entra ID** → `MSAL.js`
--   **Keycloak** → `keycloak-js` (no longer actively promoted, planned for deprecation)
+-   **Keycloak** → `keycloak-js` (no longer actively promoted)
 -   **... and so on.**
 
 These libraries are **tied to a specific provider**. But what if you need to:
@@ -65,7 +65,7 @@ We wanted a **universal solution**, one that is as good or better than all exist
 
 -   🎓 **No OIDC/OAuth2 expertise required**: Easy to setup and use. We're here to help [on Discord](https://discord.gg/mJdYJSdcm4)!
 -   🛠️ **Simple setup**: No need to define `/login` or `/logout` routes, token refreshing is automatic, it just works.
--   ✨ **React integration**: Expose a framework agnostic API but also a React adapter `oidc-spa/react`.
+-   ✨ **React and Angular integration**: Expose a framework agnostic API but also a React adapter `oidc-spa/react` and an Angular adapter `oidc-spa/angular`.
 -   🔥 **No limitation**- For example, everything you could do with `keycloak-js`, you can do with `oidc-spa`.
 -   💬 **Detailed debug messages**: If your OIDC server is not properly configured, it tells you precisely what’s wrong and what you need to do to fix it.
 -   🕣 **Auto logout with countdown**: "You will be logged out in 10... 9... 8...", users see exactly when their session expires.
@@ -81,7 +81,7 @@ We wanted a **universal solution**, one that is as good or better than all exist
 
 ### [oidc-client-ts](https://github.com/authts/oidc-client-ts)
 
-While `oidc-client-ts` is a comprehensive toolkit designed for various applications, `oidc-spa` is specifically built for SPAs with an easy-to-set-up API.  
+While `oidc-client-ts` is a comprehensive toolkit designed for various applications that oidc-spa uses under the hood, `oidc-spa` is specifically built for SPAs with an easy-to-set-up API.  
 But **ease of use** isn't the only difference, `oidc-spa` also provides **out-of-the-box** solutions for features that `oidc-client-ts` leaves up to you to implement, such as:
 
 -   **Login/logout propagation** across tabs
@@ -104,8 +104,6 @@ Beyond that, achieving the same seamless user experience as `oidc-spa` with `key
 ### [NextAuth.js](https://next-auth.js.org/)
 
 Since oidc-spa is built for true SPAs, Next.js applications should use NextAuth.js instead.
-
-> _NOTE: We might create in the future a `oidc-mpa` library for Multi Page Applications that would aim at supporting Next.js projects._
 
 ## 🚀 Quick start
 

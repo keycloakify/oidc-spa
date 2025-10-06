@@ -7,6 +7,7 @@ import type { NonPostableEvt } from "../tools/Evt";
 import { createStatefulEvt } from "../tools/StatefulEvt";
 import { Deferred } from "../tools/Deferred";
 import { addOrUpdateSearchParam, getAllSearchParams } from "../tools/urlSearchParams";
+import { getIsOnline } from "../tools/getIsOnline";
 
 const globalContext = {
     evtHasLoginBeenCalled: createStatefulEvt(() => false)
@@ -19,6 +20,7 @@ namespace Params {
         redirectUrl: string;
         extraQueryParams_local: Record<string, string | undefined> | undefined;
         transformUrlBeforeRedirect_local: ((url: string) => string) | undefined;
+        onCantFetchWellKnownEndpointError: () => void;
     };
 
     export type Login = Common & {
@@ -36,7 +38,7 @@ namespace Params {
     };
 }
 
-export function getPrSafelyRestoredFromBfCacheAfterLoginBackNavigation() {
+export function getPrSafelyRestoredFromBfCacheAfterLoginBackNavigationOrInitializationError() {
     const dOut = new Deferred<void>();
 
     const { unsubscribe } = globalContext.evtHasLoginBeenCalled.subscribe(hasLoginBeenCalled => {
@@ -63,7 +65,7 @@ export function createLoginOrGoToAuthServer(params: {
     getExtraTokenParams: (() => Record<string, string | undefined>) | undefined;
 
     homeUrl: string;
-    evtIsUserLoggedIn: NonPostableEvt<boolean>;
+    evtInitializationOutcomeUserNotLoggedIn: NonPostableEvt<void>;
     log: typeof console.log | undefined;
 }) {
     const {
@@ -76,11 +78,10 @@ export function createLoginOrGoToAuthServer(params: {
         getExtraTokenParams,
 
         homeUrl,
-        evtIsUserLoggedIn,
+        evtInitializationOutcomeUserNotLoggedIn,
+
         log
     } = params;
-
-    const LOCAL_STORAGE_KEY_TO_CLEAR_WHEN_USER_LOGGED_IN = `oidc-spa.login-redirect-initiated:${configId}`;
 
     let lastPublicUrl: string | undefined = undefined;
 
@@ -89,10 +90,23 @@ export function createLoginOrGoToAuthServer(params: {
             redirectUrl: redirectUrl_params,
             extraQueryParams_local,
             transformUrlBeforeRedirect_local,
+            onCantFetchWellKnownEndpointError: onCantFetchWellKnownEndpointError_params,
             ...rest
         } = params;
+        let onCantFetchWellKnownEndpointError = onCantFetchWellKnownEndpointError_params;
 
         log?.(`Calling loginOrGoToAuthServer ${JSON.stringify(params, null, 2)}`);
+
+        delay_until_online: {
+            const { isOnline, prOnline } = getIsOnline();
+            if (isOnline) {
+                break delay_until_online;
+            }
+            log?.(
+                "The browser seem offline, waiting to get back a connection before proceeding to login"
+            );
+            await prOnline;
+        }
 
         login_specific_handling: {
             if (rest.action !== "login") {
@@ -125,16 +139,22 @@ export function createLoginOrGoToAuthServer(params: {
 
             bf_cache_handling: {
                 if (rest.doForceReloadOnBfCache) {
-                    window.removeEventListener("pageshow", event => {
+                    const callback = (event: { persisted: boolean }) => {
                         if (!event.persisted) {
                             return;
                         }
                         location.reload();
-                    });
+                    };
+
+                    window.addEventListener("pageshow", callback);
+
+                    onCantFetchWellKnownEndpointError = () => {
+                        window.removeEventListener("pageshow", callback);
+                        onCantFetchWellKnownEndpointError_params();
+                    };
+
                     break bf_cache_handling;
                 }
-
-                localStorage.setItem(LOCAL_STORAGE_KEY_TO_CLEAR_WHEN_USER_LOGGED_IN, "true");
 
                 const callback = (event: { persisted: boolean }) => {
                     if (!event.persisted) {
@@ -156,21 +176,19 @@ export function createLoginOrGoToAuthServer(params: {
                             window.history.back();
                         }
                     } else {
-                        log?.("The current page doesn't require auth...");
-
-                        if (
-                            localStorage.getItem(LOCAL_STORAGE_KEY_TO_CLEAR_WHEN_USER_LOGGED_IN) === null
-                        ) {
-                            log?.("but the user is now authenticated, reloading the page");
-                            location.reload();
-                        } else {
-                            log?.("and the user doesn't seem to be authenticated, avoiding a reload");
-                            globalContext.evtHasLoginBeenCalled.current = false;
-                        }
+                        // NOTE: We know the user is not logged in because login can only be called when not logged in.
+                        log?.("The current page doesn't require auth, avoiding reloading the page");
+                        globalContext.evtHasLoginBeenCalled.current = false;
                     }
                 };
 
                 window.addEventListener("pageshow", callback);
+
+                onCantFetchWellKnownEndpointError = () => {
+                    window.removeEventListener("pageshow", callback);
+                    globalContext.evtHasLoginBeenCalled.current = false;
+                    onCantFetchWellKnownEndpointError_params();
+                };
             }
         }
 
@@ -183,7 +201,7 @@ export function createLoginOrGoToAuthServer(params: {
             const redirectUrl_obj = new URL(redirectUrl);
             const redirectUrl_originAndPath = `${redirectUrl_obj.origin}${redirectUrl_obj.pathname}`;
 
-            if (!redirectUrl_originAndPath.startsWith(homeUrl)) {
+            if (!redirectUrl_originAndPath.replace(/\/?$/, "/").startsWith(homeUrl)) {
                 throw new Error(
                     [
                         `oidc-spa: redirect target ${redirectUrl_originAndPath} is outside of your application.`,
@@ -327,21 +345,31 @@ export function createLoginOrGoToAuthServer(params: {
                 extraTokenParams:
                     getExtraTokenParams === undefined ? undefined : noUndefined(getExtraTokenParams())
             })
-            .then(() => new Promise<never>(() => {}));
+            .then(
+                () => new Promise<never>(() => {}),
+                (error: Error) => {
+                    if (error.message === "Failed to fetch") {
+                        // NOTE: See ./loginSilent for explanation.
+                        onCantFetchWellKnownEndpointError();
+
+                        return new Promise<never>(() => {});
+                    }
+
+                    // NOTE: Here, except error on our understanding there can't be any other
+                    // error.
+                    assert(false, "30442320");
+                }
+            );
     }
 
-    const { unsubscribe } = evtIsUserLoggedIn.subscribe(isLoggedIn => {
+    const { unsubscribe } = evtInitializationOutcomeUserNotLoggedIn.subscribe(() => {
         unsubscribe();
 
-        if (isLoggedIn) {
-            localStorage.removeItem(LOCAL_STORAGE_KEY_TO_CLEAR_WHEN_USER_LOGGED_IN);
-        } else {
-            const realPushState = history.pushState.bind(history);
-            history.pushState = function pushState(...args) {
-                lastPublicUrl = window.location.href;
-                return realPushState(...args);
-            };
-        }
+        const realPushState = history.pushState.bind(history);
+        history.pushState = function pushState(...args) {
+            lastPublicUrl = window.location.href;
+            return realPushState(...args);
+        };
     });
 
     return {

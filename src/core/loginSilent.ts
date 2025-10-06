@@ -12,6 +12,7 @@ import { getIsDev } from "../tools/isDev";
 import { type AuthResponse } from "./AuthResponse";
 import { addOrUpdateSearchParam } from "../tools/urlSearchParams";
 import { initIframeMessageProtection } from "./iframeMessageProtection";
+import { getIsOnline } from "../tools/getIsOnline";
 
 type ResultOfLoginSilent =
     | {
@@ -54,6 +55,15 @@ export async function loginSilent(params: {
         autoLogin,
         log
     } = params;
+
+    delay_until_online: {
+        const { isOnline, prOnline } = getIsOnline();
+        if (isOnline) {
+            break delay_until_online;
+        }
+        log?.("The browser seems offline, waiting to get back a connection before proceeding to login");
+        await prOnline;
+    }
 
     const dResult = new Deferred<ResultOfLoginSilent>();
 

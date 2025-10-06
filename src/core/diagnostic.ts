@@ -2,12 +2,12 @@ import { OidcInitializationError } from "./OidcInitializationError";
 import { isKeycloak, createKeycloakUtils } from "../keycloak";
 import { getIsValidRemoteJson } from "../tools/getIsValidRemoteJson";
 
+export const WELL_KNOWN_PATH = "/.well-known/openid-configuration";
+
 export async function createWellKnownOidcConfigurationEndpointUnreachableInitializationError(params: {
     issuerUri: string;
 }): Promise<OidcInitializationError> {
     const { issuerUri } = params;
-
-    const WELL_KNOWN_PATH = "/.well-known/openid-configuration";
 
     const commonFallbackMessagePart = [
         `The OIDC server is either down or the issuerUri you provided is incorrect.`,
