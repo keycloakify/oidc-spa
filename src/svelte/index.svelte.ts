@@ -208,7 +208,7 @@ export function createSvelteOidc_dependencyInjection<
     } = () => {
         assert(
             oidcContextKey === undefined,
-            "You must call initializeOidc only once per provider to intiialize"
+            "You must call initializeOidc only once per provider to initialize"
         );
         oidcContextKey = Symbol("oidc");
         const props: Writable<{
