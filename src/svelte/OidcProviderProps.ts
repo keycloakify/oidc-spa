@@ -17,4 +17,5 @@ export type OidcProviderProps<
     appProps: Parameters<typeof mount>[1]["props"];
     oidcOrInitializationError: OidcInitializationError | Oidc<DecodedIdToken> | undefined;
     oidcProps?: OidcProviderOidcProps<AutoLogin>;
+    oidcContextKey: symbol;
 };

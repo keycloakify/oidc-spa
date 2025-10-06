@@ -205,12 +205,19 @@ export function createSvelteOidc_dependencyInjection<
         | undefined = undefined;
     prOidcOrInitializationError.then(value => (prOidcOrInitializationError_resolvedValue = value));
 
+    let oidcContextKey: symbol;
+
     const initializeOidc: () => {
         props: Readable<{
             oidcOrInitializationError: OidcInitializationError | Oidc<DecodedIdToken> | undefined;
         }>;
         setOidcContext: (context: { oidc: Oidc<DecodedIdToken> }) => void;
     } = () => {
+        assert(
+            oidcContextKey === undefined,
+            "You must call initializeOidc only once per provider to intiialize"
+        );
+        oidcContextKey = Symbol("oidc");
         const props: Writable<{
             oidcOrInitializationError: Oidc<DecodedIdToken> | OidcInitializationError | undefined;
         }> = writable({ oidcOrInitializationError: prOidcOrInitializationError_resolvedValue });
@@ -218,7 +225,11 @@ export function createSvelteOidc_dependencyInjection<
         prOidcOrInitializationError.then(value => {
             props.set({ oidcOrInitializationError: value });
         });
-        return { props: readonly(props), setOidcContext };
+        return {
+            props: readonly(props),
+            setOidcContext: (context: { oidc: Oidc<DecodedIdToken> }) =>
+                setOidcContext(oidcContextKey, context)
+        };
     };
 
     const mountOidc = (
@@ -231,6 +242,8 @@ export function createSvelteOidc_dependencyInjection<
     ) => {
         const [App, options, oidcProps] = params;
 
+        assert(oidcContextKey === undefined, "You can call mountOidc only once");
+        oidcContextKey = Symbol("oidc");
         const props: OidcProviderProps<
             DecodedIdToken,
             ParamsOfCreateOidc extends { autoLogin?: true | undefined } ? true : false
@@ -238,7 +251,8 @@ export function createSvelteOidc_dependencyInjection<
             App,
             oidcOrInitializationError: prOidcOrInitializationError_resolvedValue,
             oidcProps,
-            appProps: options.props
+            appProps: options.props,
+            oidcContextKey
         });
         const mounted = mount(OidcProvider, {
             ...options,
@@ -253,7 +267,11 @@ export function createSvelteOidc_dependencyInjection<
 
     const useAutoLogoutWarningCountdown: OidcSvelte.LoggedIn<DecodedIdToken>["useAutoLogoutWarningCountdown"] =
         ({ warningDurationSeconds }) => {
-            const contextValue = getOidcContext();
+            assert(
+                oidcContextKey !== undefined,
+                "Oidc not inizitialized, you must call initializeOidc or mountOidc"
+            );
+            const contextValue = getOidcContext<DecodedIdToken>(oidcContextKey);
 
             assert(contextValue !== undefined);
 
@@ -288,7 +306,11 @@ export function createSvelteOidc_dependencyInjection<
     }): OidcSvelte<DecodedIdToken> {
         const { assert: assert_params } = params ?? {};
 
-        const contextValue = getOidcContext<DecodedIdToken>();
+        assert(
+            oidcContextKey !== undefined,
+            "Oidc not inizitialized, you must call initializeOidc or mountOidc"
+        );
+        const contextValue = getOidcContext<DecodedIdToken>(oidcContextKey);
 
         assert(contextValue !== undefined, "You must use useOidc inside the corresponding OidcProvider");
 
