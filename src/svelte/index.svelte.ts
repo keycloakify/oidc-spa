@@ -324,7 +324,7 @@ export function createSvelteOidc_dependencyInjection<
             switch (assert_params) {
                 case "user logged in":
                     if (!oidc.isUserLoggedIn) {
-                        throw new Error(getMessage("to be logged in but currently they arn't"));
+                        throw new Error(getMessage("to be logged in but currently they aren't"));
                     }
                     break;
                 case "user not logged in":
