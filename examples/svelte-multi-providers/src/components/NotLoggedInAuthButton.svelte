@@ -15,5 +15,5 @@
 </script>
 
 <div>
-    <button onclick={() => login()}>Login with Google or Microsoft</button>{" "}
+    <button onclick={() => login()}>Login with Google or Microsoft</button>
 </div>

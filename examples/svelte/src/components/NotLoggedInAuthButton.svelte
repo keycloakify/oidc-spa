@@ -13,7 +13,7 @@
 </script>
 
 <div>
-    <button onclick={() => login()}>Login</button>{" "}
+    <button onclick={() => login()}>Login</button>
     {#if keycloakUtils !== undefined}
         <button
             onclick={() =>

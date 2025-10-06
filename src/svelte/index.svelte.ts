@@ -131,13 +131,6 @@ type OidcSvelteApi<DecodedIdToken extends Record<string, unknown>, AutoLogin ext
     ? // eslint-disable-next-line @typescript-eslint/no-empty-object-type
       {}
     : {
-          //   withLoginEnforced: Snippet<
-          //       [
-          //           {
-          //               onRedirecting: Snippet;
-          //           }
-          //       ]
-          //   >;
           enforceLogin: (loaderParams: {
               request?: { url?: string };
               cause?: "preload" | string;
