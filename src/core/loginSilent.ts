@@ -90,7 +90,8 @@ export async function loginSilent(params: {
 
     const { decodeEncryptedAuth, getIsEncryptedAuthResponse, clearSessionStoragePublicKey } =
         await initIframeMessageProtection({
-            stateUrlParamValue: stateUrlParamValue_instance
+            stateUrlParamValue: stateUrlParamValue_instance,
+            log
         });
 
     let clearTimeouts: (params: { wasSuccess: boolean }) => void;

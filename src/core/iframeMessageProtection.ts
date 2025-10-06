@@ -3,6 +3,7 @@ import { asymmetricEncrypt, asymmetricDecrypt, generateKeys } from "../tools/asy
 import { type AuthResponse } from "./AuthResponse";
 
 const setItem_real = Storage.prototype.setItem;
+const sessionStorage_original = window.sessionStorage;
 
 const SESSION_STORAGE_PREFIX = "oidc-spa_iframe_authResponse_publicKey_";
 
@@ -38,14 +39,22 @@ function getSessionStorageKey(params: { stateUrlParamValue: string }) {
     return `${SESSION_STORAGE_PREFIX}${stateUrlParamValue}`;
 }
 
-export async function initIframeMessageProtection(params: { stateUrlParamValue: string }) {
-    const { stateUrlParamValue } = params;
+export async function initIframeMessageProtection(params: {
+    stateUrlParamValue: string;
+    log: typeof console.log | undefined;
+}) {
+    const { stateUrlParamValue, log } = params;
 
     const { publicKey, privateKey } = await generateKeys();
 
     const sessionStorageKey = getSessionStorageKey({ stateUrlParamValue });
 
+    log?.(
+        `Writing iframe messaging protection publicKey for state: ${stateUrlParamValue} at sessionStorage -> ${sessionStorageKey}`
+    );
+
     setItem_real.call(sessionStorage, sessionStorageKey, publicKey);
+    setItem_real.call(sessionStorage_original, `${sessionStorageKey}_alt`, publicKey);
 
     function getIsEncryptedAuthResponse(params: { message: unknown }): boolean {
         const { message } = params;
@@ -69,7 +78,9 @@ export async function initIframeMessageProtection(params: { stateUrlParamValue: 
     }
 
     function clearSessionStoragePublicKey() {
+        log?.(`Clearing session storage public key at ${sessionStorageKey}`);
         sessionStorage.removeItem(sessionStorageKey);
+        sessionStorage.removeItem(`${sessionStorageKey}_alt`);
     }
 
     return { getIsEncryptedAuthResponse, decodeEncryptedAuth, clearSessionStoragePublicKey };
@@ -82,7 +93,35 @@ export async function encryptAuthResponse(params: { authResponse: AuthResponse }
         getSessionStorageKey({ stateUrlParamValue: authResponse.state })
     );
 
-    assert(publicKey !== null, "2293302");
+    try {
+        assert(publicKey !== null, `2293302 no publicKey for state ${authResponse.state}`);
+    } catch (error) {
+        {
+            const publicKey = sessionStorage.getItem(
+                `${getSessionStorageKey({ stateUrlParamValue: authResponse.state })}_alt`
+            );
+
+            console.log(`====> PublicKey_alt_1: ${publicKey}`);
+        }
+
+        {
+            const publicKey = sessionStorage_original.getItem(
+                `${getSessionStorageKey({ stateUrlParamValue: authResponse.state })}_alt`
+            );
+
+            console.log(`====> PublicKey_alt_2: ${publicKey}`);
+        }
+
+        {
+            const publicKey = sessionStorage_original.getItem(
+                getSessionStorageKey({ stateUrlParamValue: authResponse.state })
+            );
+
+            console.log(`====> PublicKey_3: ${publicKey}`);
+        }
+
+        throw error;
+    }
 
     const { encryptedMessage: encryptedMessage_withoutPrefix } = await asymmetricEncrypt({
         publicKey,
