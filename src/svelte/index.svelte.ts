@@ -1,5 +1,5 @@
 import { mount, onMount } from "svelte";
-import { derived, writable, type Readable } from "svelte/store";
+import { derived, readonly, Writable, writable, type Readable } from "svelte/store";
 import { createOidc, OidcInitializationError, ParamsOfCreateOidc, type Oidc } from "../core";
 import { Deferred } from "../tools/Deferred";
 import type { ValueOrAsyncGetter } from "../tools/ValueOrAsyncGetter";
@@ -9,7 +9,8 @@ import { assert, type Equals } from "../tools/tsafe/assert";
 import { id } from "../tools/tsafe/id";
 import OidcProvider from "./OidcProvider.svelte";
 import type { OidcProviderOidcProps, OidcProviderProps } from "./OidcProviderProps";
-import { getOidcContext } from "./oidc.context";
+import { getOidcContext, setOidcContext } from "./oidc.context";
+import OidcContextProvider from "./OidcContextProvider.svelte";
 
 const useState = <T>(initialState: T): [Readable<T>, (newState: T) => void] => {
     const state = writable(initialState);
@@ -80,6 +81,37 @@ export namespace OidcSvelte {
 }
 
 type OidcSvelteApi<DecodedIdToken extends Record<string, unknown>, AutoLogin extends boolean> = {
+    /**
+     * Generic initialization function that covers multi-provider and svelte-kit implementations.
+     *
+     * NB: If only one provider is required and the project doesn't use svelte-kit,
+     * it is possible to use `mountOidc`.
+     *
+     */
+    initializeOidc: () => {
+        props: Readable<{
+            oidcOrInitializationError: OidcInitializationError | Oidc<DecodedIdToken> | undefined;
+        }>;
+        setOidcContext: (context: { oidc: Oidc<DecodedIdToken> }) => void;
+    };
+    /**
+     * Default Svelte component responsible to provide oidc context for its children.
+     *
+     * NB: it is mandatory to retrieve and to set oidcContext from `initializeOidc`.
+     * It is possible to use also a custom component, see documentation.
+     */
+    OidcContextProvider: typeof OidcContextProvider;
+    /**
+     * A special version of Svelte's `mount` function that should be used to mount the root component of the application.
+     * It takes the same parameters as `mount` plus an extra one for OIDC configuration.
+     *
+     * NB: this can be used only when having a single OIDC provider and when usign Svelte without svelte-kit.
+     * For a generic initialization referes to `initializeOidc`
+     *
+     * @param {...Parameters<typeof mount>} params - The same parameters as Svelte's `mount` function.
+     * @param {OidcProviderOidcProps<AutoLogin>} oidcProps - The OIDC configuration.
+     * @returns {ReturnType<typeof mount>} The mounted component.
+     */
     mountOidc: (
         ...params: [...Parameters<typeof mount>, OidcProviderOidcProps<AutoLogin>]
     ) => ReturnType<typeof mount>;
@@ -172,6 +204,22 @@ export function createSvelteOidc_dependencyInjection<
         | OidcInitializationError
         | undefined = undefined;
     prOidcOrInitializationError.then(value => (prOidcOrInitializationError_resolvedValue = value));
+
+    const initializeOidc: () => {
+        props: Readable<{
+            oidcOrInitializationError: OidcInitializationError | Oidc<DecodedIdToken> | undefined;
+        }>;
+        setOidcContext: (context: { oidc: Oidc<DecodedIdToken> }) => void;
+    } = () => {
+        const props: Writable<{
+            oidcOrInitializationError: Oidc<DecodedIdToken> | OidcInitializationError | undefined;
+        }> = writable({ oidcOrInitializationError: prOidcOrInitializationError_resolvedValue });
+        dReadyToCreate.resolve();
+        prOidcOrInitializationError.then(value => {
+            props.set({ oidcOrInitializationError: value });
+        });
+        return { props: readonly(props), setOidcContext };
+    };
 
     const mountOidc = (
         ...params: [
@@ -384,6 +432,8 @@ export function createSvelteOidc_dependencyInjection<
     }
 
     const oidcSvelteApi: OidcSvelteApi<DecodedIdToken, false> = {
+        initializeOidc,
+        OidcContextProvider,
         mountOidc,
         useOidc: useOidc as any,
         getOidc,

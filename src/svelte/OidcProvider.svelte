@@ -1,6 +1,7 @@
 <script lang="ts" generics="DecodedIdToken extends Record<string, unknown>, AutoLogin extends boolean">
     import { OidcInitializationError } from "..";
-    import OidcProviderLogged from "./OidcProviderLogged.svelte";
+    import OidcContextProvider from "./OidcContextProvider.svelte";
+    import { setOidcContext } from "./oidc.context";
     import type { OidcProviderProps } from "./OidcProviderProps";
 
     const {
@@ -28,7 +29,7 @@
         </h1>
     {/if}
 {:else}
-    <OidcProviderLogged oidc={oidcOrInitializationError}>
+    <OidcContextProvider oidc={oidcOrInitializationError} {setOidcContext}>
         <App {...appProps} />
-    </OidcProviderLogged>
+    </OidcContextProvider>
 {/if}
