@@ -91,10 +91,6 @@ button:focus-visible {
     filter: drop-shadow(0 0 2em #ff3e00aa);
 }
 
-.card {
-    padding: 2em;
-}
-
 .read-the-docs {
     color: #888;
 }

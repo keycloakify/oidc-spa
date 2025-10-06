@@ -69,16 +69,23 @@ for (const targetFormat of ["cjs", "esm"] as const) {
             break;
         case "esm":
             run(`npx tsc --module es2020 --outDir ${distDirPath}`);
-            const svelteFiles = fs
-                .readdirSync(pathJoin(projectDirPath, "src", "svelte"), { withFileTypes: true })
-                .filter(
-                    f => f.isFile() && (f.name.endsWith(".svelte") || f.name.endsWith(".svelte.d.ts"))
-                );
-            for (let file of svelteFiles) {
-                fs.copyFileSync(
-                    `${file.parentPath}/${file.name}`,
-                    pathJoin(distDirPath, "svelte", `${file.name}`)
-                );
+            {
+                const srcSvelteDirPath = pathJoin(projectDirPath, "src", "svelte");
+                if (fs.existsSync(srcSvelteDirPath)) {
+                    const svelteFiles = fs
+                        .readdirSync(srcSvelteDirPath, { withFileTypes: true })
+                        .filter(
+                            f =>
+                                f.isFile() &&
+                                (f.name.endsWith(".svelte") || f.name.endsWith(".svelte.d.ts"))
+                        );
+                    for (let file of svelteFiles) {
+                        fs.copyFileSync(
+                            pathJoin(srcSvelteDirPath, file.name),
+                            pathJoin(distDirPath, "svelte", `${file.name}`)
+                        );
+                    }
+                }
             }
             break;
     }

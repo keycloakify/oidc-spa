@@ -8,6 +8,7 @@ export type OidcProviderOidcProps<AutoLogin extends boolean> = AutoLogin extends
       }
     : { Fallback?: Component; ErrorFallback?: never };
 
+// Assumes Svelte mount signature: mount(component: Component, options: { target: Element, props?: Record<string, any> })
 export type OidcProviderProps<
     DecodedIdToken extends Record<string, unknown>,
     AutoLogin extends boolean

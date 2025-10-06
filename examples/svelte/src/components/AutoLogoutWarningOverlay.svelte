@@ -11,7 +11,7 @@
     >
         <div>
             <p>Are you still there?</p>
-            <p>You will be logged out in {secondsLeft}</p>
+            <p>You will be logged out in {$secondsLeft}</p>
         </div>
     </div>
 {/if}

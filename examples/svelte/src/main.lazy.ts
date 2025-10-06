@@ -3,12 +3,11 @@ import App from "./App.svelte";
 import Fallback from "./Fallback.svelte";
 import { mountOidc } from "./oidc";
 
-const app = mountOidc(
-    App,
-    {
-        target: document.getElementById("app")!
-    },
-    { Fallback: Fallback }
-);
+const appElement = document.getElementById("app");
+if (!appElement) {
+    throw new Error("Could not find #app element");
+}
+
+const app = mountOidc(App, { target: appElement }, { Fallback: Fallback });
 
 export default app;
