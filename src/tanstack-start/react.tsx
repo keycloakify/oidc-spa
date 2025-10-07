@@ -21,7 +21,16 @@ export namespace Oidc {
             transformUrlBeforeRedirect?: (url: string) => string;
         }) => Promise<never>;
         initializationError: OidcInitializationError | undefined;
-        secondsLeftBeforeAutoLogout: number | undefined;
+
+        autoLogoutState:
+            | {
+                  shouldDisplayWarning: true;
+                  secondsLeftBeforeAutoLogout: number;
+              }
+            | {
+                  shouldDisplayWarning: false;
+                  secondsLeftBeforeAutoLogout?: never;
+              };
 
         decodedIdToken?: never;
         logout?: never;
@@ -194,23 +203,14 @@ export namespace ParamsOfBootstrap {
           });
 }
 
-export type ReturnTypeOfCreate<
-    DecodedIdToken extends Record<string, unknown>,
-    AccessTokenClaims extends Record<string, unknown>,
-    AutoLogin extends boolean
-> = {
+export type ReturnTypeOfCreate<AutoLogin, DecodedIdToken, AccessTokenClaims> = {
     bootstrap: (params: ParamsOfBootstrap<AutoLogin, DecodedIdToken, AccessTokenClaims>) => void;
-
     OidcSuspense: (params: { fallback?: ReactNode; children: ReactNode }) => ReactNode;
-
     useOidc: AutoLogin extends true ? UseOidc.WithAutoLogin<DecodedIdToken> : UseOidc<DecodedIdToken>;
-
     getOidcAccessToken: AutoLogin extends true ? GetOidcAccessToken.WithAutoLogin : GetOidcAccessToken;
-
     getOidcFnMiddleware: AutoLogin extends true
         ? GetOidcFnMiddleware.WithAutoLogin<AccessTokenClaims>
         : GetOidcFnMiddleware<AccessTokenClaims>;
-
     getOidcRequestMiddleware: AutoLogin extends true
         ? GetOidcRequestMiddleware.WithAutoLogin<AccessTokenClaims>
         : GetOidcRequestMiddleware<AccessTokenClaims>;
@@ -229,3 +229,31 @@ export type ReturnTypeOfCreate<
               };
           }) => Promise<void | never>;
       });
+
+type ZodSchemaLike<Input, Output> = {
+    parse: (input: Input) => Output;
+};
+
+export type CreateValidateAndGetAccessTokenClaims<AccessTokenClaims> = (params: {
+    paramsOfBootstrap: ParamsOfBootstrap.Real<true>;
+}) => Promise<{
+    validateAndGetAccessTokenClaims: (params: { accessToken: string }) => Promise<
+        | {
+              isValid: true;
+              accessTokenClaims: AccessTokenClaims;
+          }
+        | {
+              isValid: false;
+              httpErrorCode: 400 | 500;
+              errorMessage: string;
+          }
+    >;
+}>;
+
+export function create<AutoLogin, DecodedIdToken, AccessTokenClaims>(params: {
+    autoLogin: AutoLogin;
+    decodedIdTokenSchema: ZodSchemaLike<Oidc_core.Tokens.DecodedIdToken_base, DecodedIdToken>;
+    createValidateAndGetAccessTokenClaims: CreateValidateAndGetAccessTokenClaims<AccessTokenClaims>;
+}): ReturnTypeOfCreate<AutoLogin, DecodedIdToken, AccessTokenClaims> {
+    return null as any;
+}
