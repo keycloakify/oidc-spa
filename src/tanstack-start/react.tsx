@@ -195,7 +195,7 @@ export namespace ParamsOfBootstrap {
         mockIssuerUri?: string;
         mockClientId?: string;
         mockDecodedIdToken: DecodedIdToken;
-    } & (AccessTokenClaims extends null
+    } & (AccessTokenClaims extends undefined
         ? {}
         : {
               mockAccessTokenClaims: AccessTokenClaims;
@@ -213,7 +213,7 @@ export type OidcSpaApi<AutoLogin, DecodedIdToken, AccessTokenClaims> = {
     bootstrap: (params: ParamsOfBootstrap<AutoLogin, DecodedIdToken, AccessTokenClaims>) => void;
     useOidc: AutoLogin extends true ? UseOidc.WithAutoLogin<DecodedIdToken> : UseOidc<DecodedIdToken>;
     getOidcAccessToken: AutoLogin extends true ? GetOidcAccessToken.WithAutoLogin : GetOidcAccessToken;
-} & (AccessTokenClaims extends null
+} & (AccessTokenClaims extends undefined
     ? {}
     : {
           getOidcFnMiddleware: AutoLogin extends true
@@ -239,7 +239,7 @@ export type OidcSpaApi<AutoLogin, DecodedIdToken, AccessTokenClaims> = {
               }) => Promise<void | never>;
           });
 
-type ZodSchemaLike<Input, Output> = {
+export type ZodSchemaLike<Input, Output> = {
     parse: (input: Input) => Output;
 };
 
@@ -259,10 +259,39 @@ export type CreateValidateAndGetAccessTokenClaims<AccessTokenClaims> = (params: 
     >;
 }>;
 
+/**
+ * Claims defined by RFC 9068: "JSON Web Token (JWT) Profile for OAuth 2.0 Access Tokens"
+ * https://datatracker.ietf.org/doc/html/rfc9068
+ *
+ * These tokens are intended for consumption by resource servers.
+ */
+export type AccessTokenClaims_RFC9068 = {
+    // --- REQUIRED (MUST) ---
+    iss: string; // Issuer Identifier
+    sub: string; // Subject Identifier
+    aud: string | string[]; // Audience(s)
+    exp: number; // Expiration time (seconds since epoch)
+    iat: number; // Issued-at time (seconds since epoch)
+
+    // --- RECOMMENDED (SHOULD) ---
+    client_id?: string; // OAuth2 Client ID that requested the token
+    scope?: string; // Space-separated list of granted scopes
+    jti?: string; // Unique JWT ID (for replay detection)
+
+    // --- OPTIONAL / EXTENSION CLAIMS ---
+    nbf?: number; // Not-before time (standard JWT claim)
+    auth_time?: number; // Time of user authentication (optional)
+    cnf?: Record<string, unknown>; // Confirmation (e.g. proof-of-possession)
+    [key: string]: unknown; // Allow custom claims (e.g. roles, groups)
+};
+
 export function createOidcSpaApi<AutoLogin, DecodedIdToken, AccessTokenClaims>(params: {
     autoLogin: AutoLogin;
-    decodedIdTokenSchema: ZodSchemaLike<Oidc_core.Tokens.DecodedIdToken_base, DecodedIdToken>;
-    createValidateAndGetAccessTokenClaims: CreateValidateAndGetAccessTokenClaims<AccessTokenClaims>;
+    decodedIdTokenSchema: ZodSchemaLike<Oidc_core.Tokens.DecodedIdToken_OidcCoreSpec, DecodedIdToken>;
+    decodedIdTokenDefaultMock: DecodedIdToken;
+    createValidateAndGetAccessTokenClaims:
+        | CreateValidateAndGetAccessTokenClaims<AccessTokenClaims>
+        | undefined;
 }): OidcSpaApi<AutoLogin, DecodedIdToken, AccessTokenClaims> {
     return null as any;
 }
