@@ -209,7 +209,7 @@ export namespace ParamsOfBootstrap {
               });
 }
 
-export type ReturnTypeOfCreate<AutoLogin, DecodedIdToken, AccessTokenClaims> = {
+export type OidcSpaApi<AutoLogin, DecodedIdToken, AccessTokenClaims> = {
     bootstrap: (params: ParamsOfBootstrap<AutoLogin, DecodedIdToken, AccessTokenClaims>) => void;
     useOidc: AutoLogin extends true ? UseOidc.WithAutoLogin<DecodedIdToken> : UseOidc<DecodedIdToken>;
     getOidcAccessToken: AutoLogin extends true ? GetOidcAccessToken.WithAutoLogin : GetOidcAccessToken;
@@ -259,10 +259,10 @@ export type CreateValidateAndGetAccessTokenClaims<AccessTokenClaims> = (params: 
     >;
 }>;
 
-export function create<AutoLogin, DecodedIdToken, AccessTokenClaims>(params: {
+export function createOidcSpaApi<AutoLogin, DecodedIdToken, AccessTokenClaims>(params: {
     autoLogin: AutoLogin;
     decodedIdTokenSchema: ZodSchemaLike<Oidc_core.Tokens.DecodedIdToken_base, DecodedIdToken>;
     createValidateAndGetAccessTokenClaims: CreateValidateAndGetAccessTokenClaims<AccessTokenClaims>;
-}): ReturnTypeOfCreate<AutoLogin, DecodedIdToken, AccessTokenClaims> {
+}): OidcSpaApi<AutoLogin, DecodedIdToken, AccessTokenClaims> {
     return null as any;
 }
