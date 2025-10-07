@@ -14,7 +14,9 @@ export namespace Oidc {
     };
 
     export type NotLoggedIn = Common & {
-        isUserLoggedIn: false;
+        // NOTE: Undefined is when oidc is still initializing, we don't know yet if the user
+        // is logged in or not.
+        isUserLoggedIn: false | undefined;
         login: (params?: {
             extraQueryParams?: Record<string, string | undefined>;
             redirectUrl?: string;
@@ -205,7 +207,6 @@ export namespace ParamsOfBootstrap {
 
 export type ReturnTypeOfCreate<AutoLogin, DecodedIdToken, AccessTokenClaims> = {
     bootstrap: (params: ParamsOfBootstrap<AutoLogin, DecodedIdToken, AccessTokenClaims>) => void;
-    OidcSuspense: (params: { fallback?: ReactNode; children: ReactNode }) => ReactNode;
     useOidc: AutoLogin extends true ? UseOidc.WithAutoLogin<DecodedIdToken> : UseOidc<DecodedIdToken>;
     getOidcAccessToken: AutoLogin extends true ? GetOidcAccessToken.WithAutoLogin : GetOidcAccessToken;
     getOidcFnMiddleware: AutoLogin extends true
@@ -216,8 +217,8 @@ export type ReturnTypeOfCreate<AutoLogin, DecodedIdToken, AccessTokenClaims> = {
         : GetOidcRequestMiddleware<AccessTokenClaims>;
 } & (AutoLogin extends true
     ? {
-          OidcInitializationErrorGate: (props: {
-              renderError: (props: { error: OidcInitializationError }) => ReactNode;
+          OidcInitializationGate: (props: {
+              renderFallback: (props: { error: OidcInitializationError | undefined }) => ReactNode;
               children: ReactNode;
           }) => ReactNode;
       }
