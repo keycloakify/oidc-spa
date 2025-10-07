@@ -195,41 +195,49 @@ export namespace ParamsOfBootstrap {
         mockIssuerUri?: string;
         mockClientId?: string;
         mockDecodedIdToken: DecodedIdToken;
-        mockAccessTokenClaims: AccessTokenClaims;
-    } & (AutoLogin extends true
-        ? {
-              isUserInitiallyLoggedIn?: true;
-          }
+    } & (AccessTokenClaims extends null
+        ? {}
         : {
-              isUserInitiallyLoggedIn: boolean;
-          });
+              mockAccessTokenClaims: AccessTokenClaims;
+          }) &
+        (AutoLogin extends true
+            ? {
+                  isUserInitiallyLoggedIn?: true;
+              }
+            : {
+                  isUserInitiallyLoggedIn: boolean;
+              });
 }
 
 export type ReturnTypeOfCreate<AutoLogin, DecodedIdToken, AccessTokenClaims> = {
     bootstrap: (params: ParamsOfBootstrap<AutoLogin, DecodedIdToken, AccessTokenClaims>) => void;
     useOidc: AutoLogin extends true ? UseOidc.WithAutoLogin<DecodedIdToken> : UseOidc<DecodedIdToken>;
     getOidcAccessToken: AutoLogin extends true ? GetOidcAccessToken.WithAutoLogin : GetOidcAccessToken;
-    getOidcFnMiddleware: AutoLogin extends true
-        ? GetOidcFnMiddleware.WithAutoLogin<AccessTokenClaims>
-        : GetOidcFnMiddleware<AccessTokenClaims>;
-    getOidcRequestMiddleware: AutoLogin extends true
-        ? GetOidcRequestMiddleware.WithAutoLogin<AccessTokenClaims>
-        : GetOidcRequestMiddleware<AccessTokenClaims>;
-} & (AutoLogin extends true
-    ? {
-          OidcInitializationGate: (props: {
-              renderFallback: (props: { error: OidcInitializationError | undefined }) => ReactNode;
-              children: ReactNode;
-          }) => ReactNode;
-      }
+} & (AccessTokenClaims extends null
+    ? {}
     : {
-          enforceLogin: (loaderContext: {
-              cause: "preload" | string;
-              location: {
-                  href: string;
-              };
-          }) => Promise<void | never>;
-      });
+          getOidcFnMiddleware: AutoLogin extends true
+              ? GetOidcFnMiddleware.WithAutoLogin<AccessTokenClaims>
+              : GetOidcFnMiddleware<AccessTokenClaims>;
+          getOidcRequestMiddleware: AutoLogin extends true
+              ? GetOidcRequestMiddleware.WithAutoLogin<AccessTokenClaims>
+              : GetOidcRequestMiddleware<AccessTokenClaims>;
+      }) &
+    (AutoLogin extends true
+        ? {
+              OidcInitializationGate: (props: {
+                  renderFallback: (props: { error: OidcInitializationError | undefined }) => ReactNode;
+                  children: ReactNode;
+              }) => ReactNode;
+          }
+        : {
+              enforceLogin: (loaderContext: {
+                  cause: "preload" | string;
+                  location: {
+                      href: string;
+                  };
+              }) => Promise<void | never>;
+          });
 
 type ZodSchemaLike<Input, Output> = {
     parse: (input: Input) => Output;
