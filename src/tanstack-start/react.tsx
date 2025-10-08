@@ -285,8 +285,10 @@ export type AccessTokenClaims_RFC9068 = {
 
 export function createOidcSpaApi<AutoLogin, DecodedIdToken, AccessTokenClaims>(params: {
     autoLogin: AutoLogin;
-    decodedIdTokenSchema: ZodSchemaLike<Oidc_core.Tokens.DecodedIdToken_OidcCoreSpec, DecodedIdToken>;
-    decodedIdTokenDefaultMock: DecodedIdToken;
+    decodedIdTokenSchema:
+        | ZodSchemaLike<Oidc_core.Tokens.DecodedIdToken_OidcCoreSpec, DecodedIdToken>
+        | undefined;
+    decodedIdTokenDefaultMock: DecodedIdToken | undefined;
     createValidateAndGetAccessTokenClaims:
         | CreateValidateAndGetAccessTokenClaims<AccessTokenClaims>
         | undefined;

@@ -82,8 +82,10 @@ function createOidcSpaApiBuilder<
     AccessTokenClaims extends Record<string, unknown> | undefined = undefined
 >(params: {
     autoLogin: AutoLogin;
-    decodedIdTokenSchema: ZodSchemaLike<Oidc_core.Tokens.DecodedIdToken_OidcCoreSpec, DecodedIdToken>;
-    decodedIdTokenDefaultMock: DecodedIdToken;
+    decodedIdTokenSchema:
+        | ZodSchemaLike<Oidc_core.Tokens.DecodedIdToken_OidcCoreSpec, DecodedIdToken>
+        | undefined;
+    decodedIdTokenDefaultMock: DecodedIdToken | undefined;
     createValidateAndGetAccessTokenClaims:
         | CreateValidateAndGetAccessTokenClaims<AccessTokenClaims>
         | undefined;
@@ -144,3 +146,18 @@ const oidcSpaApiBuilder = createOidcSpaApiBuilder({
 });
 
 export const oidcSpa = oidcSpaApiBuilder;
+
+/*
+import { z } from "zod";
+
+const { useOidc } = oidcSpa
+    .withExpectedDecodedIdTokenShape({
+        decodedIdTokenSchema: z.object({
+            email: z.string()
+        }),
+        decodedIdTokenDefaultMock: {
+            email: ""
+        }
+    })
+    .finalize();
+*/
