@@ -2,7 +2,7 @@ import { getStateData, getIsStatQueryParamValue } from "./StateData";
 import { assert, type Equals } from "../tools/tsafe/assert";
 import type { AuthResponse } from "./AuthResponse";
 import {
-    encryptAuthResponse,
+    postEncryptedAuthResponseToParent,
     preventSessionStorageSetItemOfPublicKeyByThirdParty
 } from "./iframeMessageProtection";
 
@@ -189,9 +189,7 @@ function handleOidcCallback(): { shouldLoadApp: boolean } {
 
     switch (stateData.context) {
         case "iframe":
-            encryptAuthResponse({
-                authResponse
-            }).then(({ encryptedMessage }) => parent.postMessage(encryptedMessage, location.origin));
+            postEncryptedAuthResponseToParent({ authResponse });
             return { shouldLoadApp: false };
         case "redirect": {
             redirectAuthResponse = authResponse;

@@ -3,6 +3,9 @@ import { asymmetricEncrypt, asymmetricDecrypt, generateKeys } from "../tools/asy
 import { type AuthResponse } from "./AuthResponse";
 
 const setItem_real = Storage.prototype.setItem;
+const sessionStorage_original = window.sessionStorage;
+const setTimeout_original: typeof setTimeout = window.setTimeout;
+const alert_original = window.alert;
 
 const SESSION_STORAGE_PREFIX = "oidc-spa_iframe_authResponse_publicKey_";
 
@@ -30,12 +33,31 @@ export function preventSessionStorageSetItemOfPublicKeyByThirdParty() {
     }
 }
 
-const ENCRYPTED_AUTH_RESPONSES_PREFIX = "oidc-spa_encrypted_authResponse_";
-
 function getSessionStorageKey(params: { stateUrlParamValue: string }) {
     const { stateUrlParamValue } = params;
 
     return `${SESSION_STORAGE_PREFIX}${stateUrlParamValue}`;
+}
+
+const ENCRYPTED_AUTH_RESPONSES_PREFIX = "oidc-spa_encrypted_authResponse_";
+
+function getIsEncryptedAuthResponse(params: { message: unknown; stateUrlParamValue: string }): boolean {
+    const { message, stateUrlParamValue } = params;
+
+    return (
+        typeof message === "string" &&
+        message.startsWith(`${ENCRYPTED_AUTH_RESPONSES_PREFIX}${stateUrlParamValue}`)
+    );
+}
+
+function getReadyMessage(params: { stateUrlParamValue: string }) {
+    const { stateUrlParamValue } = params;
+    return `oidc-spa_ready_to_read_publicKey_${stateUrlParamValue}`;
+}
+
+function getIsReadyToReadPublicKeyMessage(params: { message: unknown; stateUrlParamValue: string }) {
+    const { message, stateUrlParamValue } = params;
+    return message === getReadyMessage({ stateUrlParamValue });
 }
 
 export async function initIframeMessageProtection(params: { stateUrlParamValue: string }) {
@@ -45,12 +67,32 @@ export async function initIframeMessageProtection(params: { stateUrlParamValue: 
 
     const sessionStorageKey = getSessionStorageKey({ stateUrlParamValue });
 
-    setItem_real.call(sessionStorage, sessionStorageKey, publicKey);
+    let timer: ReturnType<typeof setTimeout> | undefined = undefined;
 
-    function getIsEncryptedAuthResponse(params: { message: unknown }): boolean {
-        const { message } = params;
+    function setSessionStoragePublicKey() {
+        setItem_real.call(sessionStorage_original, sessionStorageKey, publicKey);
 
-        return typeof message === "string" && message.startsWith(ENCRYPTED_AUTH_RESPONSES_PREFIX);
+        const checkTimeoutCallback = () => {
+            if (sessionStorage.getItem(sessionStorageKey) !== publicKey) {
+                while (true) {
+                    alert_original(
+                        [
+                            "⚠️  Security Alert:",
+                            "oidc-spa detected an attack attempt.",
+                            "For your safety, please close this tab immediately",
+                            "and notify the site administrator."
+                        ].join(" ")
+                    );
+                }
+            }
+            check();
+        };
+
+        function check() {
+            timer = setTimeout_original(checkTimeoutCallback, 5);
+        }
+
+        check();
     }
 
     async function decodeEncryptedAuth(params: {
@@ -59,7 +101,9 @@ export async function initIframeMessageProtection(params: { stateUrlParamValue: 
         const { encryptedAuthResponse } = params;
 
         const { message: authResponse_str } = await asymmetricDecrypt({
-            encryptedMessage: encryptedAuthResponse.slice(ENCRYPTED_AUTH_RESPONSES_PREFIX.length),
+            encryptedMessage: encryptedAuthResponse.slice(
+                ENCRYPTED_AUTH_RESPONSES_PREFIX.length + stateUrlParamValue.length
+            ),
             privateKey
         });
 
@@ -70,26 +114,44 @@ export async function initIframeMessageProtection(params: { stateUrlParamValue: 
 
     function clearSessionStoragePublicKey() {
         sessionStorage.removeItem(sessionStorageKey);
+        clearTimeout(timer);
     }
 
-    return { getIsEncryptedAuthResponse, decodeEncryptedAuth, clearSessionStoragePublicKey };
+    return {
+        getIsReadyToReadPublicKeyMessage,
+        setSessionStoragePublicKey,
+        getIsEncryptedAuthResponse,
+        decodeEncryptedAuth,
+        clearSessionStoragePublicKey
+    };
 }
 
-export async function encryptAuthResponse(params: { authResponse: AuthResponse }) {
+export async function postEncryptedAuthResponseToParent(params: { authResponse: AuthResponse }) {
     const { authResponse } = params;
 
-    const publicKey = sessionStorage.getItem(
-        getSessionStorageKey({ stateUrlParamValue: authResponse.state })
-    );
+    parent.postMessage(getReadyMessage({ stateUrlParamValue: authResponse.state }), location.origin);
 
-    assert(publicKey !== null, "2293302");
+    const readPublicKey = () =>
+        sessionStorage.getItem(getSessionStorageKey({ stateUrlParamValue: authResponse.state }));
+
+    await new Promise<void>(resolve => setTimeout(resolve, 2));
+
+    while (readPublicKey() === null) {
+        await new Promise<void>(resolve => setTimeout(resolve, 2));
+    }
+
+    await new Promise<void>(resolve => setTimeout(resolve, 7));
+
+    const publicKey = readPublicKey();
+
+    assert(publicKey !== null, "2293303");
 
     const { encryptedMessage: encryptedMessage_withoutPrefix } = await asymmetricEncrypt({
         publicKey,
         message: JSON.stringify(authResponse)
     });
 
-    const encryptedMessage = `${ENCRYPTED_AUTH_RESPONSES_PREFIX}${encryptedMessage_withoutPrefix}`;
+    const encryptedMessage = `${ENCRYPTED_AUTH_RESPONSES_PREFIX}${authResponse.state}${encryptedMessage_withoutPrefix}`;
 
-    return { encryptedMessage };
+    parent.postMessage(encryptedMessage, location.origin);
 }
