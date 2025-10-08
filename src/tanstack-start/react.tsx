@@ -11,6 +11,14 @@ export namespace Oidc {
             issuerUri: string;
             clientId: string;
         };
+        autoLogoutState:
+            | {
+                  shouldDisplayWarning: true;
+                  secondsLeftBeforeAutoLogout: number;
+              }
+            | {
+                  shouldDisplayWarning: false;
+              };
     };
 
     export type NotLoggedIn = Common & {
@@ -23,16 +31,6 @@ export namespace Oidc {
             transformUrlBeforeRedirect?: (url: string) => string;
         }) => Promise<never>;
         initializationError: OidcInitializationError | undefined;
-
-        autoLogoutState:
-            | {
-                  shouldDisplayWarning: true;
-                  secondsLeftBeforeAutoLogout: number;
-              }
-            | {
-                  shouldDisplayWarning: false;
-                  secondsLeftBeforeAutoLogout?: never;
-              };
 
         decodedIdToken?: never;
         logout?: never;
