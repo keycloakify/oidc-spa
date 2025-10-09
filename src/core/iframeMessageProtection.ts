@@ -2,10 +2,23 @@ import { assert } from "../tools/tsafe/assert";
 import { asymmetricEncrypt, asymmetricDecrypt, generateKeys } from "../tools/asymmetricEncryption";
 import { type AuthResponse } from "./AuthResponse";
 
-const setItem_real = Storage.prototype.setItem;
-const sessionStorage_original = window.sessionStorage;
-const setTimeout_original: typeof setTimeout = window.setTimeout;
-const alert_original = window.alert;
+let capturedApis:
+    | {
+          setItem: typeof localStorage.setItem;
+          sessionStorage: typeof window.sessionStorage;
+          setTimeout: typeof window.setTimeout;
+          alert: typeof window.alert;
+      }
+    | undefined = undefined;
+
+export function captureApisForIframeProtection() {
+    capturedApis = {
+        setItem: Storage.prototype.setItem,
+        sessionStorage: window.sessionStorage,
+        setTimeout: window.setTimeout,
+        alert: window.alert
+    };
+}
 
 const SESSION_STORAGE_PREFIX = "oidc-spa_iframe_authResponse_publicKey_";
 
@@ -17,7 +30,9 @@ export function preventSessionStorageSetItemOfPublicKeyByThirdParty() {
             );
         }
 
-        return setItem_real.call(this, key, value);
+        assert(capturedApis !== undefined);
+
+        return capturedApis.setItem.call(this, key, value);
     };
 
     {
@@ -67,15 +82,19 @@ export async function initIframeMessageProtection(params: { stateUrlParamValue: 
 
     const sessionStorageKey = getSessionStorageKey({ stateUrlParamValue });
 
-    let timer: ReturnType<typeof setTimeout> | undefined = undefined;
+    let timer: number | undefined = undefined;
 
     function setSessionStoragePublicKey() {
-        setItem_real.call(sessionStorage_original, sessionStorageKey, publicKey);
+        assert(capturedApis !== undefined);
+
+        const { setItem, alert, setTimeout } = capturedApis;
+
+        setItem.call(capturedApis.sessionStorage, sessionStorageKey, publicKey);
 
         const checkTimeoutCallback = () => {
             if (sessionStorage.getItem(sessionStorageKey) !== publicKey) {
                 while (true) {
-                    alert_original(
+                    alert(
                         [
                             "⚠️  Security Alert:",
                             "oidc-spa detected an attack attempt.",
@@ -89,7 +108,7 @@ export async function initIframeMessageProtection(params: { stateUrlParamValue: 
         };
 
         function check() {
-            timer = setTimeout_original(checkTimeoutCallback, 5);
+            timer = setTimeout(checkTimeoutCallback, 5);
         }
 
         check();

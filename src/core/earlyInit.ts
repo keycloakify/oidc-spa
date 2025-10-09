@@ -2,9 +2,11 @@ import { getStateData, getIsStatQueryParamValue } from "./StateData";
 import { assert, type Equals } from "../tools/tsafe/assert";
 import type { AuthResponse } from "./AuthResponse";
 import {
+    captureApisForIframeProtection,
     postEncryptedAuthResponseToParent,
     preventSessionStorageSetItemOfPublicKeyByThirdParty
 } from "./iframeMessageProtection";
+import { isBrowser } from "../tools/isBrowser";
 
 let hasEarlyInitBeenCalled = false;
 
@@ -20,6 +22,12 @@ export function oidcEarlyInit(params: {
     }
 
     hasEarlyInitBeenCalled = true;
+
+    if (!isBrowser) {
+        return { shouldLoadApp: true };
+    }
+
+    captureApisForIframeProtection();
 
     const { freezeFetch, freezeXMLHttpRequest, freezeWebSocket = false } = params ?? {};
 
