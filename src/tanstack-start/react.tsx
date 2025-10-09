@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import type {} from "@tanstack/react-start";
 import type { Oidc as Oidc_core, OidcInitializationError } from "../core";
 import type { FunctionMiddlewareAfterServer, RequestMiddlewareAfterServer } from "@tanstack/react-start";
+import type { ZodSchemaLike } from "../tools/ZodSchemaLike";
 
 export type Oidc<DecodedIdToken> = Oidc.NotLoggedIn | Oidc.LoggedIn<DecodedIdToken>;
 
@@ -190,13 +191,13 @@ export namespace ParamsOfBootstrap {
 
     export type Mock<AutoLogin, DecodedIdToken, AccessTokenClaims> = {
         implementation: "mock";
-        mockIssuerUri?: string;
-        mockClientId?: string;
-        mockDecodedIdToken: DecodedIdToken;
+        issuerUri_mock?: string;
+        clientId_mock?: string;
+        decodedIdToken_mock?: DecodedIdToken;
     } & (AccessTokenClaims extends undefined
         ? {}
         : {
-              mockAccessTokenClaims: AccessTokenClaims;
+              accessTokenClaims_mock?: AccessTokenClaims;
           }) &
         (AutoLogin extends true
             ? {
@@ -237,13 +238,9 @@ export type OidcSpaApi<AutoLogin, DecodedIdToken, AccessTokenClaims> = {
               }) => Promise<void | never>;
           });
 
-export type ZodSchemaLike<Input, Output> = {
-    parse: (input: Input) => Output;
-};
-
 export type CreateValidateAndGetAccessTokenClaims<AccessTokenClaims> = (params: {
-    paramsOfBootstrap: ParamsOfBootstrap.Real<true>;
-}) => Promise<{
+    paramsOfBootstrap: ParamsOfBootstrap<boolean, Record<string, unknown>, AccessTokenClaims>;
+}) => {
     validateAndGetAccessTokenClaims: (params: { accessToken: string }) => Promise<
         | {
               isValid: true;
@@ -251,36 +248,10 @@ export type CreateValidateAndGetAccessTokenClaims<AccessTokenClaims> = (params: 
           }
         | {
               isValid: false;
-              httpErrorCode: 400 | 500;
               errorMessage: string;
+              wwwAuthenticateHeaderErrorDescription: string;
           }
     >;
-}>;
-
-/**
- * Claims defined by RFC 9068: "JSON Web Token (JWT) Profile for OAuth 2.0 Access Tokens"
- * https://datatracker.ietf.org/doc/html/rfc9068
- *
- * These tokens are intended for consumption by resource servers.
- */
-export type AccessTokenClaims_RFC9068 = {
-    // --- REQUIRED (MUST) ---
-    iss: string; // Issuer Identifier
-    sub: string; // Subject Identifier
-    aud: string | string[]; // Audience(s)
-    exp: number; // Expiration time (seconds since epoch)
-    iat: number; // Issued-at time (seconds since epoch)
-
-    // --- RECOMMENDED (SHOULD) ---
-    client_id?: string; // OAuth2 Client ID that requested the token
-    scope?: string; // Space-separated list of granted scopes
-    jti?: string; // Unique JWT ID (for replay detection)
-
-    // --- OPTIONAL / EXTENSION CLAIMS ---
-    nbf?: number; // Not-before time (standard JWT claim)
-    auth_time?: number; // Time of user authentication (optional)
-    cnf?: Record<string, unknown>; // Confirmation (e.g. proof-of-possession)
-    [key: string]: unknown; // Allow custom claims (e.g. roles, groups)
 };
 
 export function createOidcSpaApi<AutoLogin, DecodedIdToken, AccessTokenClaims>(params: {
@@ -288,7 +259,7 @@ export function createOidcSpaApi<AutoLogin, DecodedIdToken, AccessTokenClaims>(p
     decodedIdTokenSchema:
         | ZodSchemaLike<Oidc_core.Tokens.DecodedIdToken_OidcCoreSpec, DecodedIdToken>
         | undefined;
-    decodedIdTokenDefaultMock: DecodedIdToken | undefined;
+    decodedIdToken_mock: DecodedIdToken | undefined;
     createValidateAndGetAccessTokenClaims:
         | CreateValidateAndGetAccessTokenClaims<AccessTokenClaims>
         | undefined;

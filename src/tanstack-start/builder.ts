@@ -1,16 +1,14 @@
 import {
     type OidcSpaApi,
-    type ZodSchemaLike,
-    type AccessTokenClaims_RFC9068,
     type CreateValidateAndGetAccessTokenClaims,
     type ParamsOfBootstrap,
     createOidcSpaApi
 } from "./react";
 import type { Oidc as Oidc_core } from "../core";
-import { createObjectThatThrowsIfAccessed } from "../tools/createObjectThatThrowsIfAccessed";
-import { id } from "../tools/tsafe/id";
 import { assert, type Equals } from "../tools/tsafe/assert";
-import { Reflect } from "../tools/tsafe/Reflect";
+import type { ZodSchemaLike } from "../tools/ZodSchemaLike";
+import type { DecodedAccessToken_RFC9068 as AccessTokenClaims_RFC9068 } from "../backend";
+import { createCreateValidateAndGetAccessTokenClaims_rfc9068 } from "./accessTokenValidation_rfc9068";
 
 export type OidcSpaApiBuilder<
     AutoLogin extends boolean = false,
@@ -34,7 +32,7 @@ export type OidcSpaApiBuilder<
                 Oidc_core.Tokens.DecodedIdToken_OidcCoreSpec,
                 DecodedIdToken
             >;
-            decodedIdTokenDefaultMock?: NoInfer<DecodedIdToken>;
+            decodedIdToken_mock?: NoInfer<DecodedIdToken>;
         }) => OidcSpaApiBuilder<
             AutoLogin,
             DecodedIdToken,
@@ -44,16 +42,18 @@ export type OidcSpaApiBuilder<
         withAccessTokenValidation: {
             <AccessTokenClaims extends Record<string, unknown> = AccessTokenClaims_RFC9068>(params: {
                 type: "RFC 9068: JSON Web Token (JWT) Profile for OAuth 2.0 Access Tokens";
-                accessTokenClaimsSchema?: ZodSchemaLike<any, AccessTokenClaims>;
-                accessTokenClaimDefaultMock?: NoInfer<AccessTokenClaims>;
-                additionalValidation?: (params: {
-                    paramsOfBootstrap: ParamsOfBootstrap<
-                        AutoLogin,
-                        DecodedIdToken,
-                        NoInfer<AccessTokenClaims>
-                    >;
-                    accessTokenClaims: NoInfer<AccessTokenClaims>;
-                }) => boolean;
+                accessTokenClaimsSchema?: ZodSchemaLike<AccessTokenClaims_RFC9068, AccessTokenClaims>;
+                accessTokenClaims_mock?: NoInfer<AccessTokenClaims>;
+
+                expectedAudience?:
+                    | string
+                    | ((params: {
+                          paramsOfBootstrap: ParamsOfBootstrap<
+                              boolean,
+                              Record<string, unknown>,
+                              AccessTokenClaims
+                          >;
+                      }) => string);
             }): OidcSpaApiBuilder<
                 AutoLogin,
                 DecodedIdToken,
@@ -85,7 +85,7 @@ function createOidcSpaApiBuilder<
     decodedIdTokenSchema:
         | ZodSchemaLike<Oidc_core.Tokens.DecodedIdToken_OidcCoreSpec, DecodedIdToken>
         | undefined;
-    decodedIdTokenDefaultMock: DecodedIdToken | undefined;
+    decodedIdToken_mock: DecodedIdToken | undefined;
     createValidateAndGetAccessTokenClaims:
         | CreateValidateAndGetAccessTokenClaims<AccessTokenClaims>
         | undefined;
@@ -95,34 +95,43 @@ function createOidcSpaApiBuilder<
             createOidcSpaApiBuilder({
                 autoLogin: true,
                 decodedIdTokenSchema: params.decodedIdTokenSchema,
-                decodedIdTokenDefaultMock: params.decodedIdTokenDefaultMock,
+                decodedIdToken_mock: params.decodedIdToken_mock,
                 createValidateAndGetAccessTokenClaims: params.createValidateAndGetAccessTokenClaims
             }),
-        withExpectedDecodedIdTokenShape: ({ decodedIdTokenSchema, decodedIdTokenDefaultMock }) =>
+        withExpectedDecodedIdTokenShape: ({ decodedIdTokenSchema, decodedIdToken_mock }) =>
             createOidcSpaApiBuilder({
                 autoLogin: params.autoLogin,
-                decodedIdTokenSchema: decodedIdTokenSchema,
-                // @ts-expect-error: NoInfer<>
-                decodedIdTokenDefaultMock:
-                    // @ts-expect-error: NoInfer<>
-                    id<DecodedIdToken | undefined>(decodedIdTokenDefaultMock) ??
-                    createObjectThatThrowsIfAccessed<DecodedIdToken>({
-                        debugMessage: "Need to provide mock for decodedIdToken"
-                    }),
+                decodedIdTokenSchema,
+                decodedIdToken_mock: decodedIdToken_mock,
                 createValidateAndGetAccessTokenClaims: params.createValidateAndGetAccessTokenClaims
             }),
         withAccessTokenValidation: params_scope =>
             createOidcSpaApiBuilder({
                 autoLogin: params.autoLogin,
                 decodedIdTokenSchema: params.decodedIdTokenSchema,
-                decodedIdTokenDefaultMock: params.decodedIdTokenDefaultMock,
+                decodedIdToken_mock: params.decodedIdToken_mock,
                 createValidateAndGetAccessTokenClaims: ((): any => {
                     switch (params_scope.type) {
-                        case "RFC 9068: JSON Web Token (JWT) Profile for OAuth 2.0 Access Tokens":
-                            // TODO: Implement using oidc-spa/server
-                            return Reflect<CreateValidateAndGetAccessTokenClaims<AccessTokenClaims>>();
-                        case "custom":
-                            return params_scope.createValidateAndGetAccessTokenClaims;
+                        case "RFC 9068: JSON Web Token (JWT) Profile for OAuth 2.0 Access Tokens": {
+                            const { accessTokenClaimsSchema, accessTokenClaims_mock, expectedAudience } =
+                                params_scope;
+
+                            const { createValidateAndGetAccessTokenClaims } =
+                                createCreateValidateAndGetAccessTokenClaims_rfc9068<
+                                    Exclude<AccessTokenClaims, undefined>
+                                >({
+                                    // @ts-expect-error
+                                    accessTokenClaims_mock,
+                                    // @ts-expect-error
+                                    accessTokenClaimsSchema,
+                                    expectedAudience
+                                });
+                            return createValidateAndGetAccessTokenClaims;
+                        }
+                        case "custom": {
+                            const { createValidateAndGetAccessTokenClaims } = params_scope;
+                            return createValidateAndGetAccessTokenClaims;
+                        }
                         default:
                             assert<Equals<typeof params_scope, never>>(false);
                     }
@@ -132,7 +141,7 @@ function createOidcSpaApiBuilder<
             createOidcSpaApi({
                 autoLogin: params.autoLogin,
                 decodedIdTokenSchema: params.decodedIdTokenSchema,
-                decodedIdTokenDefaultMock: params.decodedIdTokenDefaultMock,
+                decodedIdToken_mock: params.decodedIdToken_mock,
                 createValidateAndGetAccessTokenClaims: params.createValidateAndGetAccessTokenClaims
             })
     };
@@ -141,23 +150,8 @@ function createOidcSpaApiBuilder<
 const oidcSpaApiBuilder = createOidcSpaApiBuilder({
     autoLogin: false,
     createValidateAndGetAccessTokenClaims: undefined,
-    decodedIdTokenDefaultMock: undefined,
+    decodedIdToken_mock: undefined,
     decodedIdTokenSchema: undefined
 });
 
 export const oidcSpa = oidcSpaApiBuilder;
-
-/*
-import { z } from "zod";
-
-const { useOidc } = oidcSpa
-    .withExpectedDecodedIdTokenShape({
-        decodedIdTokenSchema: z.object({
-            email: z.string()
-        }),
-        decodedIdTokenDefaultMock: {
-            email: ""
-        }
-    })
-    .finalize();
-*/

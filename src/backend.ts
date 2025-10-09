@@ -5,10 +5,63 @@ import * as jwt from "./vendor/backend/jsonwebtoken";
 import { z } from "./vendor/backend/zod";
 import { Evt } from "./vendor/backend/evt";
 import { throttleTime } from "./vendor/backend/evt";
+import type { ZodSchemaLike } from "./tools/ZodSchemaLike";
 
-export type ParamsOfCreateOidcBackend<DecodedAccessToken extends Record<string, unknown>> = {
+/**
+ * Claims defined by RFC 9068: "JSON Web Token (JWT) Profile for OAuth 2.0 Access Tokens"
+ * https://datatracker.ietf.org/doc/html/rfc9068
+ *
+ * These tokens are intended for consumption by resource servers.
+ */
+export type DecodedAccessToken_RFC9068 = {
+    // --- REQUIRED (MUST) ---
+    iss: string; // Issuer Identifier
+    sub: string; // Subject Identifier
+    aud: string | string[]; // Audience(s)
+    exp: number; // Expiration time (seconds since epoch)
+    iat: number; // Issued-at time (seconds since epoch)
+
+    // --- RECOMMENDED (SHOULD) ---
+    client_id?: string; // OAuth2 Client ID that requested the token
+    scope?: string; // Space-separated list of granted scopes
+    jti?: string; // Unique JWT ID (for replay detection)
+
+    // --- OPTIONAL / EXTENSION CLAIMS ---
+    nbf?: number; // Not-before time (standard JWT claim)
+    auth_time?: number; // Time of user authentication (optional)
+    cnf?: Record<string, unknown>; // Confirmation (e.g. proof-of-possession)
+    [key: string]: unknown; // Allow custom claims (e.g. roles, groups)
+};
+
+const zDecodedAccessToken_RFC9068 = (() => {
+    type TargetType = DecodedAccessToken_RFC9068;
+
+    const zTargetType = z
+        .object({
+            iss: z.string(),
+            sub: z.string(),
+            aud: z.union([z.string(), z.array(z.string())]),
+            exp: z.number(),
+            iat: z.number(),
+            client_id: z.string().optional(),
+            scope: z.string().optional(),
+            jti: z.string().optional(),
+            nbf: z.number().optional(),
+            auth_time: z.number().optional(),
+            cnf: z.record(z.unknown()).optional()
+        })
+        .catchall(z.unknown());
+
+    type InferredType = z.infer<typeof zTargetType>;
+
+    assert<Equals<TargetType, InferredType>>;
+
+    return id<z.ZodType<TargetType>>(zTargetType);
+})();
+
+export type ParamsOfCreateOidcBackend<DecodedAccessToken> = {
     issuerUri: string;
-    decodedAccessTokenSchema?: { parse: (data: unknown) => DecodedAccessToken };
+    decodedAccessTokenSchema?: ZodSchemaLike<DecodedAccessToken_RFC9068, DecodedAccessToken>;
 };
 
 export type OidcBackend<DecodedAccessToken extends Record<string, unknown>> = {
@@ -24,7 +77,9 @@ export type ResultOfAccessTokenVerify<DecodedAccessToken> =
 export namespace ResultOfAccessTokenVerify {
     export type Valid<DecodedAccessToken> = {
         isValid: true;
+
         decodedAccessToken: DecodedAccessToken;
+        decodedAccessToken_original: DecodedAccessToken_RFC9068;
 
         errorCase?: never;
         errorMessage?: never;
@@ -36,13 +91,14 @@ export namespace ResultOfAccessTokenVerify {
         errorMessage: string;
 
         decodedAccessToken?: never;
+        decodedAccessToken_original?: never;
     };
 }
 
-export async function createOidcBackend<DecodedAccessToken extends Record<string, unknown>>(
-    params: ParamsOfCreateOidcBackend<DecodedAccessToken>
-): Promise<OidcBackend<DecodedAccessToken>> {
-    const { issuerUri, decodedAccessTokenSchema = z.record(z.unknown()) } = params;
+export async function createOidcBackend<
+    DecodedAccessToken extends Record<string, unknown> = DecodedAccessToken_RFC9068
+>(params: ParamsOfCreateOidcBackend<DecodedAccessToken>): Promise<OidcBackend<DecodedAccessToken>> {
+    const { issuerUri, decodedAccessTokenSchema } = params;
 
     let publicSigningKeys = await fetchPublicSigningKeys({ issuerUri });
 
@@ -195,7 +251,7 @@ export async function createOidcBackend<DecodedAccessToken extends Record<string
                 accessToken,
                 publicSigningKey.publicKey,
                 { algorithms: [alg] },
-                (err, decoded) => {
+                (err, decodedAccessToken_original) => {
                     invalid: {
                         if (!err) {
                             break invalid;
@@ -221,25 +277,47 @@ export async function createOidcBackend<DecodedAccessToken extends Record<string
                         return;
                     }
 
-                    let decodedAccessToken: DecodedAccessToken;
-
                     try {
-                        decodedAccessToken = decodedAccessTokenSchema.parse(
-                            decoded
-                        ) as DecodedAccessToken;
+                        zDecodedAccessToken_RFC9068.parse(decodedAccessToken_original);
                     } catch (error) {
                         result = id<ResultOfAccessTokenVerify.Invalid>({
                             isValid: false,
                             errorCase: "does not respect schema",
-                            errorMessage: String(error)
+                            errorMessage: [
+                                `The decoded access token does not satisfies`,
+                                `the shape mandated by RFC9068: ${String(error)}`
+                            ].join(" ")
                         });
-
                         return;
+                    }
+
+                    assert(is<DecodedAccessToken_RFC9068>(decodedAccessToken_original));
+
+                    let decodedAccessToken: DecodedAccessToken;
+
+                    if (decodedAccessTokenSchema === undefined) {
+                        //@ts-expect-error
+                        decodedAccessToken = decodedAccessToken_original;
+                    } else {
+                        try {
+                            decodedAccessToken = decodedAccessTokenSchema.parse(
+                                decodedAccessToken_original
+                            );
+                        } catch (error) {
+                            result = id<ResultOfAccessTokenVerify.Invalid>({
+                                isValid: false,
+                                errorCase: "does not respect schema",
+                                errorMessage: String(error)
+                            });
+
+                            return;
+                        }
                     }
 
                     result = id<ResultOfAccessTokenVerify.Valid<DecodedAccessToken>>({
                         isValid: true,
-                        decodedAccessToken: decodedAccessToken
+                        decodedAccessToken,
+                        decodedAccessToken_original
                     });
                 }
             );
