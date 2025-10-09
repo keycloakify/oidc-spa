@@ -32,7 +32,7 @@ const URL_SEARCH_PARAM_NAME = "isUserLoggedIn";
 const locationHref_moduleEvalTime = location.href;
 
 export async function createMockOidc<
-    DecodedIdToken extends Record<string, unknown> = Oidc.Tokens.DecodedIdToken_base,
+    DecodedIdToken extends Record<string, unknown> = Oidc.Tokens.DecodedIdToken_OidcCoreSpec,
     AutoLogin extends boolean = false
 >(
     params: ParamsOfCreateMockOidc<DecodedIdToken, AutoLogin>
