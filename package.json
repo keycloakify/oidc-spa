@@ -138,9 +138,9 @@
             "default": "./dist/esm/angular.js"
         },
         "./tanstack-start/react": {
-            "module": "./dist/esm/tanstack-start/react.js",
-            "types": "./dist/esm/tanstack-start/react.d.ts",
-            "default": "./dist/esm/tanstack-start/react.js"
+            "module": "./dist/esm/tanstack-start/react/index.js",
+            "types": "./dist/esm/tanstack-start/react/index.d.ts",
+            "default": "./dist/esm/tanstack-start/react/index.js"
         },
         "./mock/react": {
             "module": "./dist/esm/mock/react.js",

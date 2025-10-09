@@ -1,8 +1,7 @@
 import type { ReactNode } from "react";
 import type {} from "@tanstack/react-start";
-import type { Oidc as Oidc_core, OidcInitializationError } from "../core";
+import type { Oidc as Oidc_core, OidcInitializationError } from "../../core";
 import type { FunctionMiddlewareAfterServer, RequestMiddlewareAfterServer } from "@tanstack/react-start";
-import type { ZodSchemaLike } from "../tools/ZodSchemaLike";
 
 export type Oidc<DecodedIdToken> = Oidc.NotLoggedIn | Oidc.LoggedIn<DecodedIdToken>;
 
@@ -253,16 +252,3 @@ export type CreateValidateAndGetAccessTokenClaims<AccessTokenClaims> = (params: 
           }
     >;
 };
-
-export function createOidcSpaApi<AutoLogin, DecodedIdToken, AccessTokenClaims>(params: {
-    autoLogin: AutoLogin;
-    decodedIdTokenSchema:
-        | ZodSchemaLike<Oidc_core.Tokens.DecodedIdToken_OidcCoreSpec, DecodedIdToken>
-        | undefined;
-    decodedIdToken_mock: DecodedIdToken | undefined;
-    createValidateAndGetAccessTokenClaims:
-        | CreateValidateAndGetAccessTokenClaims<AccessTokenClaims>
-        | undefined;
-}): OidcSpaApi<AutoLogin, DecodedIdToken, AccessTokenClaims> {
-    return null as any;
-}

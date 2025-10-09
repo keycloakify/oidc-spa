@@ -1,8 +1,8 @@
-import type { CreateValidateAndGetAccessTokenClaims, ParamsOfBootstrap } from "./react";
-import type { DecodedAccessToken_RFC9068 as AccessTokenClaims_RFC9068 } from "../backend";
-import type { ZodSchemaLike } from "../tools/ZodSchemaLike";
-import { createObjectThatThrowsIfAccessed } from "../tools/createObjectThatThrowsIfAccessed";
-import { assert, type Equals, is } from "../tools/tsafe/assert";
+import type { CreateValidateAndGetAccessTokenClaims, ParamsOfBootstrap } from "./types";
+import type { DecodedAccessToken_RFC9068 as AccessTokenClaims_RFC9068 } from "../../backend";
+import type { ZodSchemaLike } from "../../tools/ZodSchemaLike";
+import { createObjectThatThrowsIfAccessed } from "../../tools/createObjectThatThrowsIfAccessed";
+import { assert, type Equals, is } from "../../tools/tsafe/assert";
 
 export function createCreateValidateAndGetAccessTokenClaims_rfc9068<
     AccessTokenClaims extends Record<string, unknown>
@@ -55,7 +55,7 @@ export function createCreateValidateAndGetAccessTokenClaims_rfc9068<
         assert<Equals<(typeof paramsOfBootstrap)["implementation"], "real">>;
 
         const prVerifyAndDecodeAccessToken = (async () => {
-            const { createOidcBackend } = await import("../backend");
+            const { createOidcBackend } = await import("../../backend");
 
             const { verifyAndDecodeAccessToken } = await createOidcBackend({
                 issuerUri: paramsOfBootstrap.issuerUri,
