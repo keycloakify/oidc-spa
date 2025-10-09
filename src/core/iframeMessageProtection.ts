@@ -87,16 +87,24 @@ export async function initIframeMessageProtection(params: { stateUrlParamValue: 
     function setSessionStoragePublicKey() {
         assert(capturedApis !== undefined);
 
-        const { setItem, alert, setTimeout } = capturedApis;
+        const { setItem } = capturedApis;
 
         setItem.call(capturedApis.sessionStorage, sessionStorageKey, publicKey);
+    }
+
+    function startSessionStoragePublicKeyMaliciousWriteDetection() {
+        setSessionStoragePublicKey();
+
+        assert(capturedApis !== undefined);
+
+        const { alert, setTimeout } = capturedApis;
 
         const checkTimeoutCallback = () => {
             if (sessionStorage.getItem(sessionStorageKey) !== publicKey) {
                 while (true) {
                     alert(
                         [
-                            "⚠️  Security Alert:",
+                            "⚠️ Security Alert:",
                             "oidc-spa detected an attack attempt.",
                             "For your safety, please close this tab immediately",
                             "and notify the site administrator."
@@ -138,6 +146,7 @@ export async function initIframeMessageProtection(params: { stateUrlParamValue: 
 
     return {
         getIsReadyToReadPublicKeyMessage,
+        startSessionStoragePublicKeyMaliciousWriteDetection,
         setSessionStoragePublicKey,
         getIsEncryptedAuthResponse,
         decodeEncryptedAuth,

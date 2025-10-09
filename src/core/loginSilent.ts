@@ -90,6 +90,7 @@ export async function loginSilent(params: {
 
     const {
         getIsReadyToReadPublicKeyMessage,
+        startSessionStoragePublicKeyMaliciousWriteDetection,
         setSessionStoragePublicKey,
         decodeEncryptedAuth,
         getIsEncryptedAuthResponse,
@@ -227,6 +228,8 @@ export async function loginSilent(params: {
 
         return url;
     };
+
+    startSessionStoragePublicKeyMaliciousWriteDetection();
 
     oidcClientTsUserManager
         .signinSilent({
