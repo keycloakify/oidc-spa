@@ -1,17 +1,21 @@
+import { useState, useEffect } from "react";
 import type {
     CreateValidateAndGetAccessTokenClaims,
     OidcSpaApi,
     UseOidc,
-    ParamsOfBootstrap
+    ParamsOfBootstrap,
+    Oidc
 } from "./types";
 import type { ZodSchemaLike } from "../../tools/ZodSchemaLike";
 import type { Oidc as Oidc_core } from "../../core";
 import { OidcInitializationError } from "../../core/OidcInitializationError";
 import { Deferred } from "../../tools/Deferred";
 import { isBrowser } from "../../tools/isBrowser";
-import { assert } from "../../tools/tsafe/assert";
+import { assert, type Equals } from "../../tools/tsafe/assert";
 import { infer_import_meta_env_BASE_URL } from "../../tools/infer_import_meta_env_BASE_URL";
 import { createObjectThatThrowsIfAccessed } from "../../tools/createObjectThatThrowsIfAccessed";
+import { createStatefulEvt } from "../../tools/StatefulEvt";
+import { id } from "../../tools/tsafe/id";
 
 export function createOidcSpaApi<
     AutoLogin extends boolean,
@@ -34,14 +38,156 @@ export function createOidcSpaApi<
         createValidateAndGetAccessTokenClaims
     } = params;
 
-    const dBootstrapResult = new Deferred<{
-        paramsOfBootstrap: ParamsOfBootstrap<AutoLogin, DecodedIdToken, AccessTokenClaims>;
-        // NOTE:
-        // undefined means we're running on the server
-        // initializationError means autoLogin and init error
-        // oidcCore means we are on the browser and autoLogin without error or not autoLogin.
-        oidcCoreOrInitializationError: Oidc_core<DecodedIdToken> | OidcInitializationError | undefined;
-    }>();
+    const dParamsOfBootstrap = new Deferred<
+        ParamsOfBootstrap<AutoLogin, DecodedIdToken, AccessTokenClaims>
+    >();
+
+    const dOidcCoreOrInitializationError = new Deferred<
+        Oidc_core<DecodedIdToken> | OidcInitializationError
+    >();
+
+    const evtAutoLogoutState = createStatefulEvt<Oidc.Common["autoLogoutState"]>(() => ({
+        shouldDisplayWarning: false
+    }));
+
+    dOidcCoreOrInitializationError.pr.then(oidcCoreOrInitializationError => {
+        const { hasResolved, value: paramsOfBootstrap } = dParamsOfBootstrap.getState();
+
+        assert(hasResolved);
+
+        if (paramsOfBootstrap.implementation === "mock") {
+            return;
+        }
+        assert<Equals<typeof paramsOfBootstrap.implementation, "real">>;
+
+        const { startCountdownSecondsBeforeAutoLogout = 45 } = paramsOfBootstrap;
+
+        if (
+            oidcCoreOrInitializationError === undefined ||
+            oidcCoreOrInitializationError instanceof OidcInitializationError
+        ) {
+            return;
+        }
+
+        const oidcCore = oidcCoreOrInitializationError;
+
+        if (!oidcCore.isUserLoggedIn) {
+            return;
+        }
+
+        oidcCore.subscribeToAutoLogoutCountdown(({ secondsLeft }) => {
+            const newState: Oidc.Common["autoLogoutState"] = (() => {
+                if (secondsLeft === undefined) {
+                    return {
+                        shouldDisplayWarning: false
+                    };
+                }
+
+                if (secondsLeft > startCountdownSecondsBeforeAutoLogout) {
+                    return {
+                        shouldDisplayWarning: false
+                    };
+                }
+
+                return {
+                    shouldDisplayWarning: true,
+                    secondsLeftBeforeAutoLogout: secondsLeft
+                };
+            })();
+
+            if (!newState.shouldDisplayWarning && !evtAutoLogoutState.current.shouldDisplayWarning) {
+                return;
+            }
+
+            evtAutoLogoutState.current = newState;
+        });
+    });
+
+    function useOidc(params?: {
+        assert?: "user not logged in" | "user logged in";
+    }): Oidc<DecodedIdToken> {
+        const { hasResolved, value: oidcCoreOrInitializationError } =
+            dOidcCoreOrInitializationError.getState();
+
+        if (
+            autoLogin &&
+            (!hasResolved || oidcCoreOrInitializationError instanceof OidcInitializationError)
+        ) {
+            throw new Error(
+                [
+                    "oidc-spa: Since you have enabled autoLogin, your all app should",
+                    "be wrapped into <OidcInitializationGage />"
+                ].join(" ")
+            );
+        }
+
+        assert(!(oidcCoreOrInitializationError instanceof OidcInitializationError));
+
+        if (params?.assert === "user logged in") {
+            if (!hasResolved || !oidcCoreOrInitializationError.isUserLoggedIn) {
+                throw new Error(
+                    [
+                        "oidc-spa: useOidc() was called asserting the user logged in",
+                        "but it's not the case.",
+                        hasResolved
+                            ? "The user is not logged in"
+                            : [
+                                  "The oidc initialization process hasn't completed yet.",
+                                  "We don't know yet if the user is logged in or not at this time."
+                              ].join(" "),
+                        "To make sure this doesn't happen thou should either mark the route as",
+                        "protected with beforeLoad: enforceLogin or control the flow or your app",
+                        "making sure to only mount components that call",
+                        "useOidc({ assert: 'user logged in' }) when you have previously tested that",
+                        "const { isUserLoggedIn } = useOidc() is true in a parent component."
+                    ].join(" ")
+                );
+            }
+        }
+
+        const [oidcCore, setOidcCore] = useState<Oidc_core<DecodedIdToken> | undefined>(
+            params?.assert === "user logged in" ? oidcCoreOrInitializationError : undefined
+        );
+
+        useEffect(() => {
+            if (hasResolved) {
+                return;
+            }
+
+            dOidcCoreOrInitializationError.pr.then(oidcCore => {
+                assert(!(oidcCore instanceof OidcInitializationError));
+
+                setOidcCore(oidcCore);
+            });
+        }, []);
+
+        if (
+            oidcCore !== undefined &&
+            oidcCore.isUserLoggedIn &&
+            params?.assert === "user not logged in"
+        ) {
+            throw new Error(
+                [
+                    "oidc-spa: Used useOidc() asserting the user is NOT logged in",
+                    "but it isn't the case, the user is logged in.",
+                    "Make sure to only mount components that call",
+                    "useOidc({ assert: 'user not logged in' }) when you have previously tested that",
+                    "const { isUserLoggedIn } = useOidc() is falsish in a parent component."
+                ].join(" ")
+            );
+        }
+
+        const common: Oidc.Common = {
+            params: {
+                issuerUri
+            },
+            autoLogoutState: evtAutoLogoutState.current
+        };
+
+        if (oidcCore === undefined) {
+            return id<Oidc.NotLoggedIn>({});
+        }
+    }
 
     let hasBootstrapBeenCalled = false;
 
@@ -54,11 +200,9 @@ export function createOidcSpaApi<
 
         hasBootstrapBeenCalled = true;
 
+        dParamsOfBootstrap.resolve(paramsOfBootstrap);
+
         if (isBrowser) {
-            dBootstrapResult.resolve({
-                paramsOfBootstrap,
-                oidcCoreOrInitializationError: undefined
-            });
             return;
         }
 
@@ -93,10 +237,7 @@ export function createOidcSpaApi<
                             }
                         });
 
-                        dBootstrapResult.resolve({
-                            paramsOfBootstrap,
-                            oidcCoreOrInitializationError: oidcCore
-                        });
+                        dOidcCoreOrInitializationError.resolve(oidcCore);
                     }
                     break;
                 case "real":
@@ -117,17 +258,11 @@ export function createOidcSpaApi<
                             });
                         } catch (error) {
                             assert(error instanceof OidcInitializationError);
-                            dBootstrapResult.resolve({
-                                paramsOfBootstrap,
-                                oidcCoreOrInitializationError: error
-                            });
+                            dOidcCoreOrInitializationError.resolve(error);
                             return;
                         }
 
-                        dBootstrapResult.resolve({
-                            paramsOfBootstrap,
-                            oidcCoreOrInitializationError
-                        });
+                        dOidcCoreOrInitializationError.resolve(oidcCoreOrInitializationError);
                     }
                     break;
             }

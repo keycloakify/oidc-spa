@@ -6,7 +6,7 @@ import type { FunctionMiddlewareAfterServer, RequestMiddlewareAfterServer } from
 export type Oidc<DecodedIdToken> = Oidc.NotLoggedIn | Oidc.LoggedIn<DecodedIdToken>;
 
 export namespace Oidc {
-    export type Common = Oidc_core.Common & {
+    export type Common = {
         params: {
             issuerUri: string;
             clientId: string;
