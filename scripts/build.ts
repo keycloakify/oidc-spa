@@ -63,13 +63,52 @@ for (const targetFormat of ["cjs", "esm"] as const) {
         }
     })();
 
-    switch (targetFormat) {
-        case "cjs":
-            run(`npx tsc --module CommonJS --outDir ${distDirPath}`);
-            break;
-        case "esm":
-            run(`npx tsc --module es2020 --outDir ${distDirPath}`);
-            break;
+    {
+        const tsconfig = JSON.parse(
+            fs.readFileSync(pathJoin(projectDirPath, "tsconfig.json")).toString("utf8")
+        );
+
+        const tsconfigPath_forTarget = pathJoin(cacheDirPath, "tsconfig.json");
+
+        fs.writeFileSync(
+            tsconfigPath_forTarget,
+            JSON.stringify(
+                {
+                    ...tsconfig,
+                    compilerOptions: {
+                        ...tsconfig.compilerOptions,
+                        module: (() => {
+                            switch (targetFormat) {
+                                case "cjs":
+                                    return "CommonJS";
+                                case "esm":
+                                    return "es2020";
+                            }
+                        })(),
+                        outDir: distDirPath
+                    },
+                    include: [pathJoin(projectDirPath, "src")],
+                    exclude: (() => {
+                        switch (targetFormat) {
+                            case "cjs":
+                                return [
+                                    "angular.ts",
+                                    "tanstack-start",
+                                    pathJoin("tools", "infer_import_meta_env_BASE_URL.ts")
+                                ].map(relativePath => pathJoin(projectDirPath, "src", relativePath));
+                            case "esm":
+                                return [pathJoin("vendor", "backend"), "backend"].map(relativePath =>
+                                    pathJoin(projectDirPath, "src", relativePath)
+                                );
+                        }
+                    })()
+                },
+                null,
+                2
+            )
+        );
+
+        run(`npx tsc --project ${tsconfigPath_forTarget}`);
     }
 
     fs.rmSync(pathJoin(distDirPath, "tsconfig.tsbuildinfo"));
@@ -265,6 +304,22 @@ for (const targetFormat of ["cjs", "esm"] as const) {
     }
 }
 
+transformCodebase({
+    srcDirPath: distDirPath_root,
+    destDirPath: pathJoin(distDirPath_root, "esm"),
+    transformSourceCode: ({ fileRelativePath, sourceCode }) => {
+        if (fileRelativePath.startsWith(pathJoin("vendor", "backend"))) {
+            return { modifiedSourceCode: sourceCode };
+        }
+
+        if (fileRelativePath.startsWith("backend")) {
+            return { modifiedSourceCode: sourceCode };
+        }
+
+        return undefined;
+    }
+});
+
 {
     let modifiedPackageJsonContent = fs
         .readFileSync(pathJoin(projectDirPath, "package.json"))
@@ -303,13 +358,6 @@ transformCodebase({
     srcDirPath: pathJoin(projectDirPath, "src"),
     destDirPath: pathJoin(distDirPath_root, "src")
 });
-
-//NOTE: Remove irrelevant CJS distributions.
-for (const relativeFilePathWithoutExt of ["angular", pathJoin("tanstack-start", "react")]) {
-    for (const ext of ["js", "d.ts", "js.map"]) {
-        fs.rmSync(pathJoin(distDirPath_root, `${relativeFilePathWithoutExt}.${ext}`));
-    }
-}
 
 transformCodebase({
     srcDirPath: distDirPath_root,
