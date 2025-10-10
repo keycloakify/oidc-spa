@@ -97,9 +97,7 @@ for (const targetFormat of ["cjs", "esm"] as const) {
                                     pathJoin("tools", "infer_import_meta_env_BASE_URL.ts")
                                 ].map(relativePath => pathJoin(projectDirPath, "src", relativePath));
                             case "esm":
-                                return [pathJoin("vendor", "backend"), "backend"].map(relativePath =>
-                                    pathJoin(projectDirPath, "src", relativePath)
-                                );
+                                return undefined;
                         }
                     })()
                 },
@@ -112,13 +110,6 @@ for (const targetFormat of ["cjs", "esm"] as const) {
     }
 
     fs.rmSync(pathJoin(distDirPath, "tsconfig.tsbuildinfo"));
-
-    if (targetFormat === "esm") {
-        fs.rmSync(pathJoin(distDirPath, "vendor", "backend"), { recursive: true });
-        for (const ext of [".js", ".d.ts", ".js.map"] as const) {
-            fs.rmSync(pathJoin(distDirPath, `backend${ext}`));
-        }
-    }
 
     {
         const version: string = JSON.parse(
@@ -145,12 +136,11 @@ for (const targetFormat of ["cjs", "esm"] as const) {
 
         const extraBundleFileBasenames = new Set<string>();
 
-        (["backend", "frontend"] as const)
+        (["frontend", "backend"] as const)
             .map(backendOrFrontend => ({
                 vendorDirPath: pathJoin(distDirPath, "vendor", backendOrFrontend),
                 backendOrFrontend
             }))
-            .filter(({ vendorDirPath }) => fs.existsSync(vendorDirPath))
             .forEach(({ backendOrFrontend, vendorDirPath }) =>
                 fs
                     .readdirSync(vendorDirPath)
@@ -165,40 +155,73 @@ for (const targetFormat of ["cjs", "esm"] as const) {
                             }
                         }
 
-                        webpack_bundle: {
-                            if (
-                                backendOrFrontend === "frontend" &&
-                                pathBasename(filePath) === "oidc-client-ts.js"
-                            ) {
-                                fs.writeFileSync(
-                                    filePath,
-                                    Buffer.from(
-                                        fs
-                                            .readFileSync(
-                                                pathJoin(
-                                                    __dirname,
-                                                    "..",
-                                                    "node_modules",
-                                                    "oidc-client-ts",
-                                                    "dist",
-                                                    (() => {
-                                                        switch (targetFormat) {
-                                                            case "cjs":
-                                                                return "umd";
-                                                            case "esm":
-                                                                return "esm";
-                                                        }
-                                                    })(),
-                                                    "oidc-client-ts.js"
-                                                )
-                                            )
-                                            .toString("utf8")
-                                            .replace("//# sourceMappingURL=oidc-client-ts.js.map", ""),
-                                        "utf8"
-                                    )
-                                );
+                        // We have a special case for oidc-client-ts, we do it manually instead of relying
+                        // on webpack or esbuild because we want to avoid any extra byte and we know that
+                        // our version of oidc-client-ts has no dependencies so we can copy manually.
+                        vendor_oidc_client_ts: {
+                            if (pathBasename(filePath) !== "oidc-client-ts.js") {
+                                break vendor_oidc_client_ts;
+                            }
 
-                                break webpack_bundle;
+                            assert(backendOrFrontend === "frontend");
+
+                            fs.writeFileSync(
+                                filePath,
+                                Buffer.from(
+                                    fs
+                                        .readFileSync(
+                                            pathJoin(
+                                                __dirname,
+                                                "..",
+                                                "node_modules",
+                                                "oidc-client-ts",
+                                                "dist",
+                                                (() => {
+                                                    switch (targetFormat) {
+                                                        case "cjs":
+                                                            return "umd";
+                                                        case "esm":
+                                                            return "esm";
+                                                    }
+                                                })(),
+                                                "oidc-client-ts.js"
+                                            )
+                                        )
+                                        .toString("utf8")
+                                        .replace("//# sourceMappingURL=oidc-client-ts.js.map", ""),
+                                    "utf8"
+                                )
+                            );
+
+                            return;
+                        }
+
+                        esm_bundle: {
+                            if (targetFormat !== "esm") {
+                                break esm_bundle;
+                            }
+
+                            const bundledFilePath = pathJoin(cacheDirPath, "bundle.js");
+
+                            run(
+                                [
+                                    `npx esbuild`,
+                                    `'${filePath}'`,
+                                    "--bundle",
+                                    "--format=esm",
+                                    "--platform=node",
+                                    `--outfile='${bundledFilePath}'`
+                                ].join(" ")
+                            );
+
+                            fs.copyFileSync(bundledFilePath, filePath);
+
+                            return;
+                        }
+
+                        cjs_bundle: {
+                            if (targetFormat !== "cjs") {
+                                break cjs_bundle;
                             }
 
                             const webpackConfigJsFilePath = pathJoin(cacheDirPath, "webpack.config.js");
@@ -217,18 +240,9 @@ for (const targetFormat of ["cjs", "esm"] as const) {
                                         `  output: {`,
                                         `    path: '${webpackOutputDirPath}',`,
                                         `    filename: '${pathBasename(webpackOutputFilePath)}',`,
-                                        (() => {
-                                            switch (targetFormat) {
-                                                case "esm":
-                                                    return `    library: { type: 'module' },`;
-                                                case "cjs":
-                                                    return `    libraryTarget: 'commonjs2',`;
-                                            }
-                                        })(),
+                                        `    libraryTarget: 'commonjs2',`,
+                                        `    chunkFormat: 'module'`,
                                         `  },`,
-                                        targetFormat !== "esm"
-                                            ? ``
-                                            : `  experiments: { outputModule: true },`,
                                         `  target: "${(() => {
                                             switch (backendOrFrontend) {
                                                 case "frontend":
@@ -285,9 +299,7 @@ for (const targetFormat of ["cjs", "esm"] as const) {
                                 });
 
                             fs.rmSync(webpackOutputDirPath, { recursive: true });
-                        }
 
-                        if (targetFormat === "cjs") {
                             fs.writeFileSync(
                                 filePath,
                                 Buffer.from(
@@ -298,27 +310,13 @@ for (const targetFormat of ["cjs", "esm"] as const) {
                                     "utf8"
                                 )
                             );
+
+                            return;
                         }
                     })
             );
     }
 }
-
-transformCodebase({
-    srcDirPath: distDirPath_root,
-    destDirPath: pathJoin(distDirPath_root, "esm"),
-    transformSourceCode: ({ fileRelativePath, sourceCode }) => {
-        if (fileRelativePath.startsWith(pathJoin("vendor", "backend"))) {
-            return { modifiedSourceCode: sourceCode };
-        }
-
-        if (fileRelativePath.startsWith("backend")) {
-            return { modifiedSourceCode: sourceCode };
-        }
-
-        return undefined;
-    }
-});
 
 {
     let modifiedPackageJsonContent = fs
