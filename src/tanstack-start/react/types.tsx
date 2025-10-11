@@ -1,47 +1,58 @@
 import type { ReactNode } from "react";
-import type {} from "@tanstack/react-start";
 import type { Oidc as Oidc_core, OidcInitializationError } from "../../core";
 import type { FunctionMiddlewareAfterServer, RequestMiddlewareAfterServer } from "@tanstack/react-start";
 import type { GetterOrDirectValue } from "../../tools/GetterOrDirectValue";
+import type { PotentiallyDeferred } from "../../tools/PotentiallyDeferred";
 
 export type Oidc<DecodedIdToken> = Oidc.NotLoggedIn | Oidc.LoggedIn<DecodedIdToken>;
 
 export namespace Oidc {
-    export type Common = {
+    export type NotLoggedIn = NotLoggedIn.NotSettledYet | NotLoggedIn.Settled;
+
+    export namespace NotLoggedIn {
+        export type Common_scope = {
+            login: (params?: {
+                extraQueryParams?: Record<string, string | undefined>;
+                redirectUrl?: string;
+                transformUrlBeforeRedirect?: (url: string) => string;
+            }) => Promise<never>;
+
+            decodedIdToken?: never;
+            logout?: never;
+            renewTokens?: never;
+            goToAuthServer?: never;
+            backFromAuthServer?: never;
+            isNewBrowserSession?: never;
+
+            autoLogoutState: {
+                shouldDisplayWarning: false;
+            };
+        };
+
+        export type NotSettledYet = Common_scope & {
+            params: {
+                issuerUri: PotentiallyDeferred<string>;
+                clientId: PotentiallyDeferred<string>;
+            };
+            isUserLoggedIn: undefined;
+            initializationError?: never;
+        };
+
+        export type Settled = Common_scope & {
+            params: {
+                issuerUri: string;
+                clientId: string;
+            };
+            isUserLoggedIn: false;
+            initializationError: OidcInitializationError | undefined;
+        };
+    }
+
+    export type LoggedIn<DecodedIdToken> = {
         params: {
             issuerUri: string;
             clientId: string;
         };
-        autoLogoutState:
-            | {
-                  shouldDisplayWarning: true;
-                  secondsLeftBeforeAutoLogout: number;
-              }
-            | {
-                  shouldDisplayWarning: false;
-              };
-    };
-
-    export type NotLoggedIn = Common & {
-        // NOTE: Undefined is when oidc is still initializing, we don't know yet if the user
-        // is logged in or not.
-        isUserLoggedIn: false | undefined;
-        login: (params?: {
-            extraQueryParams?: Record<string, string | undefined>;
-            redirectUrl?: string;
-            transformUrlBeforeRedirect?: (url: string) => string;
-        }) => Promise<never>;
-        initializationError: OidcInitializationError | undefined;
-
-        decodedIdToken?: never;
-        logout?: never;
-        renewTokens?: never;
-        goToAuthServer?: never;
-        backFromAuthServer?: never;
-        isNewBrowserSession?: never;
-    };
-
-    export type LoggedIn<DecodedIdToken> = Common & {
         isUserLoggedIn: true;
         decodedIdToken: DecodedIdToken;
         logout: Oidc_core.LoggedIn["logout"];
@@ -58,6 +69,14 @@ export namespace Oidc {
               }
             | undefined;
         isNewBrowserSession: boolean;
+        autoLogoutState:
+            | {
+                  shouldDisplayWarning: true;
+                  secondsLeftBeforeAutoLogout: number;
+              }
+            | {
+                  shouldDisplayWarning: false;
+              };
 
         login?: never;
         initializationError?: never;
