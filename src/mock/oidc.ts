@@ -157,7 +157,7 @@ export async function createMockOidc<
                     }),
                 decodedIdToken_original:
                     mockedTokens.decodedIdToken_original ??
-                    createObjectThatThrowsIfAccessed<Oidc.Tokens.DecodedIdToken_base>({
+                    createObjectThatThrowsIfAccessed<Oidc.Tokens.DecodedIdToken_OidcCoreSpec>({
                         debugMessage: [
                             "You haven't provided a mocked decodedIdToken_original",
                             "See https://docs.oidc-spa.dev/v/v8/mock"

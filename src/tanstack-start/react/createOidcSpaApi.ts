@@ -178,9 +178,7 @@ export function createOidcSpaApi<
         }
 
         const common: Oidc.Common = {
-            params: {
-                issuerUri
-            },
+            params: {},
             autoLogoutState: evtAutoLogoutState.current
         };
 

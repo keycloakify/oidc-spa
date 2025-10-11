@@ -209,7 +209,9 @@ for (const targetFormat of ["cjs", "esm"] as const) {
                                     `'${filePath}'`,
                                     "--bundle",
                                     "--format=esm",
-                                    "--platform=node",
+                                    "--platform=browser",
+                                    "--main-fields=browser,module,main",
+                                    "--conditions=browser",
                                     `--outfile='${bundledFilePath}'`
                                 ].join(" ")
                             );

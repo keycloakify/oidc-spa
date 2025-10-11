@@ -91,9 +91,9 @@ export declare namespace Oidc {
             isNewBrowserSession: boolean;
         };
 
-    export type Tokens<DecodedIdToken extends Record<string, unknown> = Tokens.DecodedIdToken_base> =
-        | Tokens.WithRefreshToken<DecodedIdToken>
-        | Tokens.WithoutRefreshToken<DecodedIdToken>;
+    export type Tokens<
+        DecodedIdToken extends Record<string, unknown> = Tokens.DecodedIdToken_OidcCoreSpec
+    > = Tokens.WithRefreshToken<DecodedIdToken> | Tokens.WithoutRefreshToken<DecodedIdToken>;
 
     export namespace Tokens {
         export type Common<DecodedIdToken> = {

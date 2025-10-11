@@ -56,7 +56,7 @@ import { getIsValidRemoteJson } from "../tools/getIsValidRemoteJson";
 const VERSION = "{{OIDC_SPA_VERSION}}";
 
 export type ParamsOfCreateOidc<
-    DecodedIdToken extends Record<string, unknown> = Oidc.Tokens.DecodedIdToken_base,
+    DecodedIdToken extends Record<string, unknown> = Oidc.Tokens.DecodedIdToken_OidcCoreSpec,
     AutoLogin extends boolean = false
 > = {
     /**
@@ -122,7 +122,7 @@ export type ParamsOfCreateOidc<
     postLoginRedirectUrl?: string;
 
     decodedIdTokenSchema?: {
-        parse: (decodedIdToken_original: Oidc.Tokens.DecodedIdToken_base) => DecodedIdToken;
+        parse: (decodedIdToken_original: Oidc.Tokens.DecodedIdToken_OidcCoreSpec) => DecodedIdToken;
     };
 
     /**
@@ -209,7 +209,7 @@ globalContext.evtRequestToPersistTokens.subscribe(() => {
 
 /** @see: https://docs.oidc-spa.dev/v/v8/usage */
 export async function createOidc<
-    DecodedIdToken extends Record<string, unknown> = Oidc.Tokens.DecodedIdToken_base,
+    DecodedIdToken extends Record<string, unknown> = Oidc.Tokens.DecodedIdToken_OidcCoreSpec,
     AutoLogin extends boolean = false
 >(
     params: ParamsOfCreateOidc<DecodedIdToken, AutoLogin>

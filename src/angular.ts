@@ -160,13 +160,15 @@ export type ParamsOfProvideMock = {
 };
 
 export abstract class AbstractOidcService<
-    T_DecodedIdToken extends Record<string, unknown> = Oidc.Tokens.DecodedIdToken_base
+    T_DecodedIdToken extends Record<string, unknown> = Oidc.Tokens.DecodedIdToken_OidcCoreSpec
 > {
     protected autoLogin: boolean = false;
     protected providerAwaitsInitialization: boolean = true;
     protected decodedIdTokenSchema:
         | {
-              parse: (decodedIdToken_original: Oidc.Tokens.DecodedIdToken_base) => T_DecodedIdToken;
+              parse: (
+                  decodedIdToken_original: Oidc.Tokens.DecodedIdToken_OidcCoreSpec
+              ) => T_DecodedIdToken;
           }
         | undefined = undefined;
 

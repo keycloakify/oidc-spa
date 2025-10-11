@@ -85,7 +85,7 @@ export function createCreateValidateAndGetAccessTokenClaims_rfc9068<
                     errorMessage,
                     decodedAccessToken,
                     decodedAccessToken_original
-                } = verifyAndDecodeAccessToken({ accessToken });
+                } = await verifyAndDecodeAccessToken({ accessToken });
 
                 if (!isValid) {
                     return {
