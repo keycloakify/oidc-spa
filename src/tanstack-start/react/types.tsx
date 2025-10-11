@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import type {} from "@tanstack/react-start";
 import type { Oidc as Oidc_core, OidcInitializationError } from "../../core";
 import type { FunctionMiddlewareAfterServer, RequestMiddlewareAfterServer } from "@tanstack/react-start";
+import type { GetterOrDirectValue } from "../../tools/GetterOrDirectValue";
 
 export type Oidc<DecodedIdToken> = Oidc.NotLoggedIn | Oidc.LoggedIn<DecodedIdToken>;
 
@@ -208,7 +209,12 @@ export namespace ParamsOfBootstrap {
 }
 
 export type OidcSpaApi<AutoLogin, DecodedIdToken, AccessTokenClaims> = {
-    bootstrapOidc: (params: ParamsOfBootstrap<AutoLogin, DecodedIdToken, AccessTokenClaims>) => void;
+    bootstrapOidc: (
+        params: GetterOrDirectValue<
+            { process: { env: Record<string, string | undefined> } },
+            ParamsOfBootstrap<AutoLogin, DecodedIdToken, AccessTokenClaims>
+        >
+    ) => void;
     useOidc: AutoLogin extends true ? UseOidc.WithAutoLogin<DecodedIdToken> : UseOidc<DecodedIdToken>;
     getOidcAccessToken: AutoLogin extends true ? GetOidcAccessToken.WithAutoLogin : GetOidcAccessToken;
 } & (AccessTokenClaims extends undefined

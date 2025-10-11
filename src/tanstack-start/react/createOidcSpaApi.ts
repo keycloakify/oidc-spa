@@ -16,6 +16,8 @@ import { infer_import_meta_env_BASE_URL } from "../../tools/infer_import_meta_en
 import { createObjectThatThrowsIfAccessed } from "../../tools/createObjectThatThrowsIfAccessed";
 import { createStatefulEvt } from "../../tools/StatefulEvt";
 import { id } from "../../tools/tsafe/id";
+import type { GetterOrDirectValue } from "../../tools/GetterOrDirectValue";
+import { createServerFn } from "@tanstack/react-start";
 
 export function createOidcSpaApi<
     AutoLogin extends boolean,
@@ -189,8 +191,13 @@ export function createOidcSpaApi<
 
     let hasBootstrapBeenCalled = false;
 
+    const prModuleCore = !isBrowser ? undefined : import("../../core");
+
     const bootstrapOidc = (
-        paramsOfBootstrap: ParamsOfBootstrap<AutoLogin, DecodedIdToken, AccessTokenClaims>
+        getParamsOfBootstrapOrDirectValue: GetterOrDirectValue<
+            { process: { env: Record<string, string | undefined> } },
+            ParamsOfBootstrap<AutoLogin, DecodedIdToken, AccessTokenClaims>
+        >
     ) => {
         if (hasBootstrapBeenCalled) {
             return;
@@ -198,13 +205,48 @@ export function createOidcSpaApi<
 
         hasBootstrapBeenCalled = true;
 
-        dParamsOfBootstrap.resolve(paramsOfBootstrap);
-
-        if (isBrowser) {
-            return;
-        }
-
         (async () => {
+            const getParamsOfBootstrap =
+                typeof getParamsOfBootstrapOrDirectValue === "function"
+                    ? getParamsOfBootstrapOrDirectValue
+                    : () => getParamsOfBootstrapOrDirectValue;
+
+            if (!isBrowser) {
+                dParamsOfBootstrap.resolve(getParamsOfBootstrap({ process }));
+                return;
+            }
+
+            assert(prModuleCore !== undefined);
+
+            const envNamesToPullFromServer = new Set<string>();
+
+            getParamsOfBootstrap({
+                process: {
+                    env: new Proxy<Record<string, string>>(
+                        {},
+                        {
+                            get: (...[, envName]) => {
+                                assert(typeof envName === "string");
+
+                                envNamesToPullFromServer.add(envName);
+
+                                return "";
+                            }
+                        }
+                    )
+                }
+            });
+
+            const paramsOfBootstrap = getParamsOfBootstrap({
+                process: {
+                    env: await fetchServerEnvVariableValues({
+                        data: {
+                            envVarNames: Array.from(envNamesToPullFromServer)
+                        }
+                    })
+                }
+            });
+
             switch (paramsOfBootstrap.implementation) {
                 case "mock":
                     {
@@ -240,7 +282,7 @@ export function createOidcSpaApi<
                     break;
                 case "real":
                     {
-                        const { createOidc } = await import("../../core");
+                        const { createOidc } = await prModuleCore;
 
                         let oidcCoreOrInitializationError:
                             | Oidc_core<DecodedIdToken>
@@ -267,3 +309,22 @@ export function createOidcSpaApi<
         })();
     };
 }
+
+export const fetchServerEnvVariableValues = createServerFn({ method: "GET" })
+    .inputValidator((data: { envVarNames: string[] }) => {
+        if (typeof data !== "object" || data === null) {
+            throw new Error("Expected an object");
+        }
+
+        const { envVarNames } = data as Record<string, unknown>;
+
+        if (!Array.isArray(envVarNames) || envVarNames.some(name => typeof name !== "string")) {
+            throw new Error("envVarNames must be an array of strings");
+        }
+
+        return { envVarNames };
+    })
+    .handler(async ({ data }) => {
+        const { envVarNames } = data;
+        return Object.fromEntries(envVarNames.map(envVarName => [envVarName, process.env[envVarName]]));
+    });
