@@ -30,29 +30,23 @@ export namespace Oidc {
         };
 
         export type NotSettledYet = Common_scope & {
-            params: {
-                issuerUri: PotentiallyDeferred<string>;
-                clientId: PotentiallyDeferred<string>;
-            };
+            issuerUri: PotentiallyDeferred<string>;
+            clientId: PotentiallyDeferred<string>;
             isUserLoggedIn: undefined;
             initializationError?: never;
         };
 
         export type Settled = Common_scope & {
-            params: {
-                issuerUri: string;
-                clientId: string;
-            };
+            issuerUri: string;
+            clientId: string;
             isUserLoggedIn: false;
             initializationError: OidcInitializationError | undefined;
         };
     }
 
     export type LoggedIn<DecodedIdToken> = {
-        params: {
-            issuerUri: string;
-            clientId: string;
-        };
+        issuerUri: string;
+        clientId: string;
         isUserLoggedIn: true;
         decodedIdToken: DecodedIdToken;
         logout: Oidc_core.LoggedIn["logout"];
