@@ -1,10 +1,13 @@
-import { fetch } from "./vendor/backend/node-fetch";
-import { assert, isAmong, id, type Equals, is, exclude } from "./vendor/backend/tsafe";
-import { JWK } from "./vendor/backend/node-jose";
-import * as jwt from "./vendor/backend/jsonwebtoken";
+import { assert, isAmong, id, type Equals, is } from "./vendor/backend/tsafe";
+import {
+    decodeProtectedHeader,
+    jwtVerify,
+    createLocalJWKSet,
+    errors,
+    type JWTPayload
+} from "./vendor/backend/jose";
 import { z } from "./vendor/backend/zod";
-import { Evt } from "./vendor/backend/evt";
-import { throttleTime } from "./vendor/backend/evt";
+import { Evt, throttleTime } from "./vendor/backend/evt";
 import type { ZodSchemaLike } from "./tools/ZodSchemaLike";
 
 /**
@@ -67,7 +70,7 @@ export type ParamsOfCreateOidcBackend<DecodedAccessToken> = {
 export type OidcBackend<DecodedAccessToken extends Record<string, unknown>> = {
     verifyAndDecodeAccessToken(params: {
         accessToken: string;
-    }): ResultOfAccessTokenVerify<DecodedAccessToken>;
+    }): Promise<ResultOfAccessTokenVerify<DecodedAccessToken>>;
 };
 
 export type ResultOfAccessTokenVerify<DecodedAccessToken> =
@@ -107,8 +110,8 @@ export async function createOidcBackend<
     evtInvalidSignature.pipe(throttleTime(3600_000)).attach(async () => {
         const publicSigningKeys_new = await (async function callee(
             count: number
-        ): Promise<PublicSigningKey[] | undefined> {
-            let wrap;
+        ): Promise<PublicSigningKeys | undefined> {
+            let wrap: PublicSigningKeys | undefined;
 
             try {
                 wrap = await fetchPublicSigningKeys({ issuerUri });
@@ -145,52 +148,26 @@ export async function createOidcBackend<
     });
 
     return {
-        verifyAndDecodeAccessToken: ({ accessToken }) => {
+        verifyAndDecodeAccessToken: async ({ accessToken }) => {
             let kid: string;
-            let alg: jwt.Algorithm;
+            let alg: string;
 
             {
-                const jwtHeader_b64 = accessToken.split(".")[0];
-
-                let jwtHeader: string;
+                let header: ReturnType<typeof decodeProtectedHeader>;
 
                 try {
-                    jwtHeader = Buffer.from(jwtHeader_b64, "base64").toString("utf8");
+                    header = decodeProtectedHeader(accessToken);
                 } catch {
                     return {
                         isValid: false,
                         errorCase: "invalid signature",
-                        errorMessage: "Failed to decode the JWT header as a base64 string"
+                        errorMessage: "Failed to decode the JWT header"
                     };
                 }
 
-                let decodedHeader: unknown;
+                const { kid: kidFromHeader, alg: algFromHeader } = header;
 
-                try {
-                    decodedHeader = JSON.parse(jwtHeader);
-                } catch {
-                    return {
-                        isValid: false,
-                        errorCase: "invalid signature",
-                        errorMessage: "Failed to parse the JWT header as a JSON"
-                    };
-                }
-
-                type DecodedHeader = {
-                    kid: string;
-                    alg: string;
-                };
-
-                const zDecodedHeader = z.object({
-                    kid: z.string(),
-                    alg: z.string()
-                });
-
-                assert<Equals<DecodedHeader, z.infer<typeof zDecodedHeader>>>();
-
-                try {
-                    zDecodedHeader.parse(decodedHeader);
-                } catch {
+                if (typeof kidFromHeader !== "string" || kidFromHeader.length === 0) {
                     return {
                         isValid: false,
                         errorCase: "invalid signature",
@@ -198,46 +175,39 @@ export async function createOidcBackend<
                     };
                 }
 
-                assert(is<DecodedHeader>(decodedHeader));
-
-                {
-                    const supportedAlgs = [
-                        "RS256",
-                        "RS384",
-                        "RS512",
-                        "ES256",
-                        "ES384",
-                        "ES512",
-                        "PS256",
-                        "PS384",
-                        "PS512"
-                    ] as const;
-
-                    assert<
-                        Equals<
-                            (typeof supportedAlgs)[number] | "none" | "HS256" | "HS384" | "HS512",
-                            jwt.Algorithm
-                        >
-                    >();
-
-                    if (!isAmong(supportedAlgs, decodedHeader.alg)) {
-                        return {
-                            isValid: false,
-                            errorCase: "invalid signature",
-                            errorMessage: `Unsupported or too week algorithm ${decodedHeader.alg}`
-                        };
-                    }
+                if (typeof algFromHeader !== "string") {
+                    return {
+                        isValid: false,
+                        errorCase: "invalid signature",
+                        errorMessage: "The decoded JWT header does not specify an algorithm"
+                    };
                 }
 
-                kid = decodedHeader.kid;
-                alg = decodedHeader.alg;
+                const supportedAlgs = [
+                    "RS256",
+                    "RS384",
+                    "RS512",
+                    "ES256",
+                    "ES384",
+                    "ES512",
+                    "PS256",
+                    "PS384",
+                    "PS512"
+                ] as const;
+
+                if (!isAmong(supportedAlgs, algFromHeader as (typeof supportedAlgs)[number])) {
+                    return {
+                        isValid: false,
+                        errorCase: "invalid signature",
+                        errorMessage: `Unsupported or too weak algorithm ${algFromHeader}`
+                    };
+                }
+
+                kid = kidFromHeader;
+                alg = algFromHeader;
             }
 
-            const publicSigningKey = publicSigningKeys.find(
-                publicSigningKey => publicSigningKey.kid === kid
-            );
-
-            if (publicSigningKey === undefined) {
+            if (!publicSigningKeys.kidSet.has(kid)) {
                 return {
                     isValid: false,
                     errorCase: "invalid signature",
@@ -245,96 +215,82 @@ export async function createOidcBackend<
                 };
             }
 
-            let result = id<ResultOfAccessTokenVerify<DecodedAccessToken> | undefined>(undefined);
+            let payload: JWTPayload;
 
-            jwt.verify(
-                accessToken,
-                publicSigningKey.publicKey,
-                { algorithms: [alg] },
-                (err, decodedAccessToken_original) => {
-                    invalid: {
-                        if (!err) {
-                            break invalid;
-                        }
+            try {
+                const verification = await jwtVerify(accessToken, publicSigningKeys.keyResolver, {
+                    algorithms: [alg]
+                });
 
-                        if (err.name === "TokenExpiredError") {
-                            result = id<ResultOfAccessTokenVerify.Invalid>({
-                                isValid: false,
-                                errorCase: "expired",
-                                errorMessage: err.message
-                            });
-                            return;
-                        }
-
-                        evtInvalidSignature.post();
-
-                        result = id<ResultOfAccessTokenVerify.Invalid>({
-                            isValid: false,
-                            errorCase: "invalid signature",
-                            errorMessage: err.message
-                        });
-
-                        return;
-                    }
-
-                    try {
-                        zDecodedAccessToken_RFC9068.parse(decodedAccessToken_original);
-                    } catch (error) {
-                        result = id<ResultOfAccessTokenVerify.Invalid>({
-                            isValid: false,
-                            errorCase: "does not respect schema",
-                            errorMessage: [
-                                `The decoded access token does not satisfies`,
-                                `the shape mandated by RFC9068: ${String(error)}`
-                            ].join(" ")
-                        });
-                        return;
-                    }
-
-                    assert(is<DecodedAccessToken_RFC9068>(decodedAccessToken_original));
-
-                    let decodedAccessToken: DecodedAccessToken;
-
-                    if (decodedAccessTokenSchema === undefined) {
-                        //@ts-expect-error
-                        decodedAccessToken = decodedAccessToken_original;
-                    } else {
-                        try {
-                            decodedAccessToken = decodedAccessTokenSchema.parse(
-                                decodedAccessToken_original
-                            );
-                        } catch (error) {
-                            result = id<ResultOfAccessTokenVerify.Invalid>({
-                                isValid: false,
-                                errorCase: "does not respect schema",
-                                errorMessage: String(error)
-                            });
-
-                            return;
-                        }
-                    }
-
-                    result = id<ResultOfAccessTokenVerify.Valid<DecodedAccessToken>>({
-                        isValid: true,
-                        decodedAccessToken,
-                        decodedAccessToken_original
+                payload = verification.payload;
+            } catch (error) {
+                if (error instanceof errors.JWTExpired) {
+                    return id<ResultOfAccessTokenVerify.Invalid>({
+                        isValid: false,
+                        errorCase: "expired",
+                        errorMessage: error.message
                     });
                 }
-            );
 
-            assert(result !== undefined, "0522e6");
+                evtInvalidSignature.post();
 
-            return result;
+                return id<ResultOfAccessTokenVerify.Invalid>({
+                    isValid: false,
+                    errorCase: "invalid signature",
+                    errorMessage: error instanceof Error ? error.message : String(error)
+                });
+            }
+
+            const decodedAccessToken_unknown = payload as unknown;
+
+            try {
+                zDecodedAccessToken_RFC9068.parse(decodedAccessToken_unknown);
+            } catch (error) {
+                return id<ResultOfAccessTokenVerify.Invalid>({
+                    isValid: false,
+                    errorCase: "does not respect schema",
+                    errorMessage: [
+                        `The decoded access token does not satisfies`,
+                        `the shape mandated by RFC9068: ${String(error)}`
+                    ].join(" ")
+                });
+            }
+
+            assert(is<DecodedAccessToken_RFC9068>(decodedAccessToken_unknown));
+
+            const decodedAccessToken_original = decodedAccessToken_unknown;
+
+            let decodedAccessToken: DecodedAccessToken;
+
+            if (decodedAccessTokenSchema === undefined) {
+                decodedAccessToken = decodedAccessToken_original as unknown as DecodedAccessToken;
+            } else {
+                try {
+                    decodedAccessToken = decodedAccessTokenSchema.parse(decodedAccessToken_original);
+                } catch (error) {
+                    return id<ResultOfAccessTokenVerify.Invalid>({
+                        isValid: false,
+                        errorCase: "does not respect schema",
+                        errorMessage: String(error)
+                    });
+                }
+            }
+
+            return id<ResultOfAccessTokenVerify.Valid<DecodedAccessToken>>({
+                isValid: true,
+                decodedAccessToken,
+                decodedAccessToken_original
+            });
         }
     };
 }
 
-type PublicSigningKey = {
-    kid: string;
-    publicKey: string;
+type PublicSigningKeys = {
+    keyResolver: ReturnType<typeof createLocalJWKSet>;
+    kidSet: Set<string>;
 };
 
-async function fetchPublicSigningKeys(params: { issuerUri: string }): Promise<PublicSigningKey[]> {
+async function fetchPublicSigningKeys(params: { issuerUri: string }): Promise<PublicSigningKeys> {
     const { issuerUri } = params;
 
     const { jwks_uri } = await (async () => {
@@ -403,9 +359,8 @@ async function fetchPublicSigningKeys(params: { issuerUri: string }): Promise<Pu
                 keys: {
                     kid: string;
                     kty: string;
-                    e?: string;
-                    n?: string;
-                    use: string;
+                    use?: string;
+                    alg?: string;
                 }[];
             };
 
@@ -414,9 +369,8 @@ async function fetchPublicSigningKeys(params: { issuerUri: string }): Promise<Pu
                     z.object({
                         kid: z.string(),
                         kty: z.string(),
-                        e: z.string().optional(),
-                        n: z.string().optional(),
-                        use: z.string()
+                        use: z.string().optional(),
+                        alg: z.string().optional()
                     })
                 )
             });
@@ -435,35 +389,38 @@ async function fetchPublicSigningKeys(params: { issuerUri: string }): Promise<Pu
         return { jwks };
     })();
 
-    const publicSigningKeys: PublicSigningKey[] = await Promise.all(
-        jwks.keys
-            .filter(({ use }) => use === "sig")
-            .map(({ kid, kty, e, n }) => {
-                if (kty !== "RSA") {
-                    return undefined;
-                }
+    //const signatureKeys = jwks.keys.filter((key): key is JWKS["keys"][number] & { kid: string } => {
+    const signatureKeys = jwks.keys.filter(key => {
+        if (typeof key.kid !== "string" || key.kid.length === 0) {
+            return false;
+        }
 
-                assert(e !== undefined, "e is undefined");
-                assert(n !== undefined, "n is undefined");
+        if (key.use !== undefined && key.use !== "sig") {
+            return false;
+        }
 
-                return { kid, e, n };
-            })
-            .filter(exclude(undefined))
-            .map(async ({ kid, e, n }) => {
-                const key = await JWK.asKey({ kty: "RSA", e, n });
-                const publicKey = key.toPEM(false);
+        const supportedKty = ["RSA", "EC"] as const;
 
-                return {
-                    kid,
-                    publicKey
-                };
-            })
-    );
+        if (!supportedKty.includes(key.kty as (typeof supportedKty)[number])) {
+            return false;
+        }
+
+        return true;
+    });
 
     assert(
-        publicSigningKeys.length !== 0,
+        signatureKeys.length !== 0,
         `No public signing key found at ${jwks_uri}, ${JSON.stringify(jwks, null, 2)}`
     );
 
-    return publicSigningKeys;
+    const kidSet = new Set(signatureKeys.map(({ kid }) => kid));
+
+    const keyResolver = createLocalJWKSet({
+        keys: signatureKeys
+    });
+
+    return {
+        keyResolver,
+        kidSet
+    };
 }
