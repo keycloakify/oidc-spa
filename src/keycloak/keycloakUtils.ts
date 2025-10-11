@@ -1,5 +1,6 @@
 import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";
 import { type KeycloakIssuerUriParsed, parseKeycloakIssuerUri } from "./keycloakIssuerUriParsed";
+import type { PotentiallyDeferred } from "../tools/PotentiallyDeferred";
 
 export type KeycloakUtils = {
     issuerUriParsed: KeycloakIssuerUriParsed;
@@ -33,8 +34,53 @@ export type KeycloakUserInfo = {
     [key: string]: any;
 };
 
-export function createKeycloakUtils(params: { issuerUri: string }): KeycloakUtils {
-    const { issuerUri } = params;
+export function createKeycloakUtils(params: {
+    issuerUri: PotentiallyDeferred<string>;
+}): Pick<KeycloakUtils, "transformUrlBeforeRedirectForRegister">;
+export function createKeycloakUtils(params: { issuerUri: string }): KeycloakUtils;
+export function createKeycloakUtils(params: {
+    issuerUri: string | PotentiallyDeferred<string>;
+}): KeycloakUtils {
+    let issuerUri: string | undefined;
+
+    set_issuerUri: {
+        if (typeof params.issuerUri === "string") {
+            issuerUri = params.issuerUri;
+            break set_issuerUri;
+        }
+
+        if (params.issuerUri.hasResolved) {
+            issuerUri = params.issuerUri.value;
+            break set_issuerUri;
+        }
+
+        params.issuerUri.prValue.then(value => {
+            issuerUri = value;
+        });
+    }
+
+    function transformUrlBeforeRedirectForRegister(authorizationUrl: string) {
+        if (issuerUri === undefined) {
+            throw new Error(
+                [
+                    "oidc-spa: keycloakUtils.transformUrlBeforeRedirectForRegister() called",
+                    "before we had time to get the value of the issuerUri",
+                    "Explicitly pass issuerUri to createKeycloakUtils() instead of passing a deferred value"
+                ].join(" ")
+            );
+        }
+
+        const urlObj = new URL(authorizationUrl);
+        urlObj.pathname = urlObj.pathname.replace(/\/auth$/, "/registrations");
+        return urlObj.href;
+    }
+
+    if (issuerUri === undefined) {
+        //@ts-expect-error
+        return {
+            transformUrlBeforeRedirectForRegister
+        };
+    }
 
     const issuerUriParsed = parseKeycloakIssuerUri({ issuerUri });
 
@@ -80,10 +126,6 @@ export function createKeycloakUtils(params: { issuerUri: string }): KeycloakUtil
                     Authorization: `Bearer ${accessToken}`
                 }
             }).then(r => r.json()),
-        transformUrlBeforeRedirectForRegister: authorizationUrl => {
-            const urlObj = new URL(authorizationUrl);
-            urlObj.pathname = urlObj.pathname.replace(/\/auth$/, "/registrations");
-            return urlObj.href;
-        }
+        transformUrlBeforeRedirectForRegister
     };
 }
