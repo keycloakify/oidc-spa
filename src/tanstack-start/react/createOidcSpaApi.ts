@@ -12,7 +12,7 @@ import type { Oidc as Oidc_core } from "../../core";
 import { OidcInitializationError } from "../../core/OidcInitializationError";
 import { Deferred } from "../../tools/Deferred";
 import { isBrowser } from "../../tools/isBrowser";
-import { assert, type Equals } from "../../tools/tsafe/assert";
+import { assert, type Equals, is } from "../../tools/tsafe/assert";
 import { infer_import_meta_env_BASE_URL } from "../../tools/infer_import_meta_env_BASE_URL";
 import { createObjectThatThrowsIfAccessed } from "../../tools/createObjectThatThrowsIfAccessed";
 import { createStatefulEvt } from "../../tools/StatefulEvt";
@@ -26,7 +26,7 @@ import { toFullyQualifiedUrl } from "../../tools/toFullyQualifiedUrl";
 export function createOidcSpaApi<
     AutoLogin extends boolean,
     DecodedIdToken extends Record<string, unknown>,
-    AccessTokenClaims extends Record<string, unknown>
+    AccessTokenClaims extends Record<string, unknown> | undefined
 >(params: {
     autoLogin: AutoLogin;
     decodedIdTokenSchema:
@@ -534,7 +534,14 @@ export function createOidcSpaApi<
 
                                 envNamesToPullFromServer.add(envName);
 
-                                return "";
+                                return "oidc_spa_probe";
+                            },
+                            has: (...[, envName]) => {
+                                assert(typeof envName === "string");
+
+                                envNamesToPullFromServer.add(envName);
+
+                                return true;
                             }
                         }
                     )
@@ -775,16 +782,20 @@ export function createOidcSpaApi<
                     }
 
                     return next({
-                        context: id<OidcServerContext.NotLoggedIn>({
-                            isUserLoggedIn: false
-                        })
+                        context: {
+                            oidcContext: id<OidcServerContext<AccessTokenClaims>>(
+                                id<OidcServerContext.NotLoggedIn>({
+                                    isUserLoggedIn: false
+                                })
+                            )
+                        }
                     });
                 }
 
                 const accessToken = (() => {
                     const prefix = "Bearer ";
 
-                    if (authorizationHeaderValue.startsWith(prefix)) {
+                    if (!authorizationHeaderValue.startsWith(prefix)) {
                         return undefined;
                     }
 
@@ -817,6 +828,8 @@ export function createOidcSpaApi<
                 }
 
                 const { accessTokenClaims } = resultOfValidate;
+
+                assert(is<Exclude<AccessTokenClaims, undefined>>(accessTokenClaims));
 
                 check_required_claims: {
                     const getHasRequiredClaims = params?.hasRequiredClaims;
@@ -863,11 +876,15 @@ export function createOidcSpaApi<
                 }
 
                 return next({
-                    context: id<OidcServerContext.LoggedIn<AccessTokenClaims>>({
-                        isUserLoggedIn: true,
-                        accessToken,
-                        accessTokenClaims
-                    })
+                    context: {
+                        oidcContext: id<OidcServerContext<AccessTokenClaims>>(
+                            id<OidcServerContext.LoggedIn<AccessTokenClaims>>({
+                                isUserLoggedIn: true,
+                                accessToken,
+                                accessTokenClaims
+                            })
+                        )
+                    }
                 });
             });
     }

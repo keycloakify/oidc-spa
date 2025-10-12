@@ -134,7 +134,7 @@ function createOidcSpaApiBuilder<
                 })()
             }),
         finalize: () =>
-            createOidcSpaApi({
+            createOidcSpaApi<AutoLogin, DecodedIdToken, AccessTokenClaims>({
                 autoLogin: params.autoLogin,
                 decodedIdTokenSchema: params.decodedIdTokenSchema,
                 decodedIdToken_mock: params.decodedIdToken_mock,
