@@ -7,6 +7,7 @@ import Header from "../components/Header";
 import appCss from "../styles.css?url";
 
 export const Route = createRootRoute({
+    ssr: true,
     head: () => ({
         meta: [
             {
@@ -27,7 +28,6 @@ export const Route = createRootRoute({
             }
         ]
     }),
-
     shellComponent: RootDocument
 });
 
