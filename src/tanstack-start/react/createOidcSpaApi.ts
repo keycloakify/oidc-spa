@@ -662,44 +662,121 @@ export function createOidcSpaApi<
                 doesCurrentHrefRequiresAuth
             });
         }
+    }
 
-        function OidcInitializationGate(props: {
-            renderFallback: (props: {
-                initializationError: OidcInitializationError | undefined;
-            }) => ReactNode;
-            children: ReactNode;
-        }): ReactNode {
-            const { renderFallback, children } = props;
+    function OidcInitializationGate(props: {
+        renderFallback: (props: {
+            initializationError: OidcInitializationError | undefined;
+        }) => ReactNode;
+        children: ReactNode;
+    }): ReactNode {
+        const { renderFallback, children } = props;
 
-            const [oidcCoreOrInitializationError, setOidcCoreOrInitializationError] = useState<
-                Oidc_core<DecodedIdToken> | OidcInitializationError | undefined
-            >(undefined);
+        const [oidcCoreOrInitializationError, setOidcCoreOrInitializationError] = useState<
+            Oidc_core<DecodedIdToken> | OidcInitializationError | undefined
+        >(undefined);
 
-            useEffect(() => {
-                let isActive = true;
+        useEffect(() => {
+            let isActive = true;
 
-                dOidcCoreOrInitializationError.pr.then(oidcCoreOrInitializationError => {
-                    if (!isActive) {
-                        return;
-                    }
-                    setOidcCoreOrInitializationError(oidcCoreOrInitializationError);
-                });
+            dOidcCoreOrInitializationError.pr.then(oidcCoreOrInitializationError => {
+                if (!isActive) {
+                    return;
+                }
+                setOidcCoreOrInitializationError(oidcCoreOrInitializationError);
+            });
 
-                return () => {
-                    isActive = false;
-                };
-            }, []);
+            return () => {
+                isActive = false;
+            };
+        }, []);
 
-            if (
-                oidcCoreOrInitializationError === undefined ||
-                oidcCoreOrInitializationError instanceof OidcInitializationError
-            ) {
-                return renderFallback({ initializationError: oidcCoreOrInitializationError });
+        if (
+            oidcCoreOrInitializationError === undefined ||
+            oidcCoreOrInitializationError instanceof OidcInitializationError
+        ) {
+            return renderFallback({ initializationError: oidcCoreOrInitializationError });
+        }
+
+        return children;
+    }
+
+    console.log(createValidateAndGetAccessTokenClaims);
+
+    // @ts-expect-error
+    return {
+        useOidc,
+        getOidc,
+        bootstrapOidc,
+        enforceLogin,
+        OidcInitializationGate,
+        getOidcFnMiddleware: null as any,
+        getOidcRequestMiddleware: null as any
+    };
+
+    /*
+    const oidcMiddleware = createMiddleware({ type: "function" })
+        .client(async ({ next }) => {
+            let clientToServerOidcContext: ClientToServerOidcContext | undefined | null;
+
+            if (oidcReactApi !== undefined) {
+                const oidc = await oidcReactApi.getOidc();
+
+                if (oidc.isUserLoggedIn) {
+                    const { accessToken, idToken } = await oidc.getTokens_next();
+
+                    clientToServerOidcContext = { accessToken, idToken };
+                } else {
+                    clientToServerOidcContext = undefined;
+                }
+            } else {
+                clientToServerOidcContext = null;
             }
 
-            return children;
-        }
-    }
+            return next({
+                sendContext: {
+                    clientToServerOidcContext
+                }
+            });
+        })
+        .server(async ({ next, context }) => {
+            const { clientToServerOidcContext } = context;
+
+            z.union([zClientToServerOidcContext, z.undefined(), z.null()]).parse(
+                clientToServerOidcContext
+            );
+
+            type OidcServerContext = {
+                decodedIdToken: DecodedIdToken;
+                accessToken: string;
+            };
+
+            let oidcContext: OidcServerContext | undefined | null;
+
+            if (clientToServerOidcContext === null) {
+                oidcContext = null;
+            } else if (clientToServerOidcContext === undefined) {
+                oidcContext = undefined;
+            } else {
+                const { decodedIdToken } = await validateIdToken({
+                    idToken: clientToServerOidcContext.idToken
+                });
+
+                console.log("Token is valid!");
+
+                oidcContext = {
+                    decodedIdToken,
+                    accessToken: clientToServerOidcContext.accessToken
+                };
+            }
+
+            const context_next = { oidcContext };
+
+            return next({
+                context: context_next
+            });
+        });
+        */
 }
 
 const fetchServerEnvVariableValues = createServerFn({ method: "GET" })
