@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import type {
     CreateValidateAndGetAccessTokenClaims,
     OidcSpaApi,
@@ -19,6 +19,7 @@ import { id } from "../../tools/tsafe/id";
 import type { GetterOrDirectValue } from "../../tools/GetterOrDirectValue";
 import { createServerFn } from "@tanstack/react-start";
 import type { PotentiallyDeferred } from "../../tools/PotentiallyDeferred";
+import { toFullyQualifiedUrl } from "../../tools/toFullyQualifiedUrl";
 
 export function createOidcSpaApi<
     AutoLogin extends boolean,
@@ -602,6 +603,84 @@ export function createOidcSpaApi<
             }
         })();
     };
+
+    async function enforceLogin(loaderContext: {
+        cause: "preload" | string;
+        location: {
+            href: string;
+        };
+    }): Promise<void | never> {
+        const { cause } = loaderContext;
+
+        const redirectUrl = (() => {
+            if (loaderContext.location?.href !== undefined) {
+                return toFullyQualifiedUrl({
+                    urlish: loaderContext.location.href,
+                    doAssertNoQueryParams: false
+                });
+            }
+
+            return location.href;
+        })();
+
+        const oidc = await getOidc();
+
+        if (!oidc.isUserLoggedIn) {
+            if (cause === "preload") {
+                throw new Error(
+                    [
+                        "oidc-spa: User is not yet logged in.",
+                        "This is not an error, this is an expected case.",
+                        "It's only TanStack Router using exception as control flow."
+                    ].join(" ")
+                );
+            }
+            const doesCurrentHrefRequiresAuth =
+                location.href.replace(/\/$/, "") === redirectUrl.replace(/\/$/, "");
+
+            await oidc.login({
+                redirectUrl,
+                doesCurrentHrefRequiresAuth
+            });
+        }
+
+        function OidcInitializationGate(props: {
+            renderFallback: (props: {
+                initializationError: OidcInitializationError | undefined;
+            }) => ReactNode;
+            children: ReactNode;
+        }): ReactNode {
+            const { renderFallback, children } = props;
+
+            const [oidcCoreOrInitializationError, setOidcCoreOrInitializationError] = useState<
+                Oidc_core<DecodedIdToken> | OidcInitializationError | undefined
+            >(undefined);
+
+            useEffect(() => {
+                let isActive = true;
+
+                dOidcCoreOrInitializationError.pr.then(oidcCoreOrInitializationError => {
+                    if (!isActive) {
+                        return;
+                    }
+                    setOidcCoreOrInitializationError(oidcCoreOrInitializationError);
+                });
+
+                return () => {
+                    isActive = false;
+                };
+            }, []);
+
+            if (
+                oidcCoreOrInitializationError === undefined ||
+                oidcCoreOrInitializationError instanceof OidcInitializationError
+            ) {
+                return renderFallback({ initializationError: oidcCoreOrInitializationError });
+            }
+
+            return children;
+        }
+    }
 }
 
 const fetchServerEnvVariableValues = createServerFn({ method: "GET" })

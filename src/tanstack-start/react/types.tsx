@@ -280,7 +280,9 @@ export type OidcSpaApi<AutoLogin, DecodedIdToken, AccessTokenClaims> = {
     (AutoLogin extends true
         ? {
               OidcInitializationGate: (props: {
-                  renderFallback: (props: { error: OidcInitializationError | undefined }) => ReactNode;
+                  renderFallback: (props: {
+                      initializationError: OidcInitializationError | undefined;
+                  }) => ReactNode;
                   children: ReactNode;
               }) => ReactNode;
           }
