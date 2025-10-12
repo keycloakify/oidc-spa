@@ -735,6 +735,149 @@ export function createOidcSpaApi<
         return new Error(`oidc-spa: ${errorMessage}`);
     }
 
+    function createFunctionMiddlewareServerFn(params?: {
+        assert?: "user logged in";
+        hasRequiredClaims?: (params: { accessTokenClaims: AccessTokenClaims }) => Promise<boolean>;
+    }) {
+        return async (options: {
+            next: (options: { context: { oidcContext: OidcServerContext<AccessTokenClaims> } }) => any;
+        }): Promise<any> => {
+            const { next } = options;
+
+            const { headers } = getRequest();
+
+            const authorizationHeaderValue = headers.get("Authorization");
+
+            if (authorizationHeaderValue === null) {
+                if (params?.assert === "user logged in") {
+                    const errorMessage = [
+                        "Asserted user logged in for that serverFn request",
+                        "but no access token was attached to the request"
+                    ].join(" ");
+
+                    throw unauthorized({
+                        errorMessage,
+                        wwwAuthenticateHeaderErrorDescription: errorMessage
+                    });
+                }
+
+                return next({
+                    context: {
+                        oidcContext: id<OidcServerContext<AccessTokenClaims>>(
+                            id<OidcServerContext.NotLoggedIn>({
+                                isUserLoggedIn: false
+                            })
+                        )
+                    }
+                });
+            }
+
+            const accessToken = (() => {
+                const prefix = "Bearer ";
+
+                if (!authorizationHeaderValue.startsWith(prefix)) {
+                    return undefined;
+                }
+
+                return authorizationHeaderValue.slice(prefix.length);
+            })();
+
+            if (accessToken === undefined) {
+                const errorMessage =
+                    "Missing well formed Authorization header with Bearer <access_token>";
+
+                throw unauthorized({
+                    errorMessage,
+                    wwwAuthenticateHeaderErrorDescription: errorMessage
+                });
+            }
+
+            assert(prValidateAndGetAccessTokenClaims !== undefined);
+
+            const { validateAndGetAccessTokenClaims } = await prValidateAndGetAccessTokenClaims;
+
+            const resultOfValidate = await validateAndGetAccessTokenClaims({ accessToken });
+
+            if (!resultOfValidate.isValid) {
+                const { errorMessage, wwwAuthenticateHeaderErrorDescription } = resultOfValidate;
+
+                throw unauthorized({
+                    errorMessage,
+                    wwwAuthenticateHeaderErrorDescription
+                });
+            }
+
+            const { accessTokenClaims } = resultOfValidate;
+
+            assert(is<Exclude<AccessTokenClaims, undefined>>(accessTokenClaims));
+
+            check_required_claims: {
+                const getHasRequiredClaims = params?.hasRequiredClaims;
+
+                if (getHasRequiredClaims === undefined) {
+                    break check_required_claims;
+                }
+
+                const accessedClaimNames = new Set<string>();
+
+                const accessTokenClaims_proxy = new Proxy(accessTokenClaims, {
+                    get(...args) {
+                        const [, claimName] = args;
+
+                        record_claim_access: {
+                            if (typeof claimName !== "string") {
+                                break record_claim_access;
+                            }
+
+                            accessedClaimNames.add(claimName);
+                        }
+
+                        return Reflect.get(...args);
+                    }
+                });
+
+                const hasRequiredClaims = await getHasRequiredClaims({
+                    accessTokenClaims: accessTokenClaims_proxy
+                });
+
+                if (hasRequiredClaims) {
+                    break check_required_claims;
+                }
+
+                const errorMessage = [
+                    "Missing or invalid required access token claim.",
+                    `Related to claims: ${Array.from(accessedClaimNames).join(" and/or ")}`
+                ].join(" ");
+
+                throw unauthorized({
+                    errorMessage,
+                    wwwAuthenticateHeaderErrorDescription: errorMessage
+                });
+            }
+
+            return next({
+                context: {
+                    oidcContext: id<OidcServerContext<AccessTokenClaims>>(
+                        id<OidcServerContext.LoggedIn<AccessTokenClaims>>({
+                            isUserLoggedIn: true,
+                            accessToken,
+                            accessTokenClaims
+                        })
+                    )
+                }
+            });
+        };
+    }
+
+    function getOidcRequestMiddleware(params?: {
+        assert?: "user logged in";
+        hasRequiredClaims?: (params: { accessTokenClaims: AccessTokenClaims }) => Promise<boolean>;
+    }) {
+        return createMiddleware({ type: "request" }).server<{
+            oidcContext: OidcServerContext<AccessTokenClaims>;
+        }>(createFunctionMiddlewareServerFn(params));
+    }
+
     function getOidcFnMiddleware(params?: {
         assert?: "user logged in";
         hasRequiredClaims?: (params: { accessTokenClaims: AccessTokenClaims }) => Promise<boolean>;
@@ -763,130 +906,9 @@ export function createOidcSpaApi<
                     }
                 });
             })
-            .server(async ({ next }) => {
-                const { headers } = getRequest();
-
-                const authorizationHeaderValue = headers.get("Authorization");
-
-                if (authorizationHeaderValue === null) {
-                    if (params?.assert === "user logged in") {
-                        const errorMessage = [
-                            "Asserted user logged in for that serverFn request",
-                            "but no access token was attached to the request"
-                        ].join(" ");
-
-                        throw unauthorized({
-                            errorMessage,
-                            wwwAuthenticateHeaderErrorDescription: errorMessage
-                        });
-                    }
-
-                    return next({
-                        context: {
-                            oidcContext: id<OidcServerContext<AccessTokenClaims>>(
-                                id<OidcServerContext.NotLoggedIn>({
-                                    isUserLoggedIn: false
-                                })
-                            )
-                        }
-                    });
-                }
-
-                const accessToken = (() => {
-                    const prefix = "Bearer ";
-
-                    if (!authorizationHeaderValue.startsWith(prefix)) {
-                        return undefined;
-                    }
-
-                    return authorizationHeaderValue.slice(prefix.length);
-                })();
-
-                if (accessToken === undefined) {
-                    const errorMessage =
-                        "Missing well formed Authorization header with Bearer <access_token>";
-
-                    throw unauthorized({
-                        errorMessage,
-                        wwwAuthenticateHeaderErrorDescription: errorMessage
-                    });
-                }
-
-                assert(prValidateAndGetAccessTokenClaims !== undefined);
-
-                const { validateAndGetAccessTokenClaims } = await prValidateAndGetAccessTokenClaims;
-
-                const resultOfValidate = await validateAndGetAccessTokenClaims({ accessToken });
-
-                if (!resultOfValidate.isValid) {
-                    const { errorMessage, wwwAuthenticateHeaderErrorDescription } = resultOfValidate;
-
-                    throw unauthorized({
-                        errorMessage,
-                        wwwAuthenticateHeaderErrorDescription
-                    });
-                }
-
-                const { accessTokenClaims } = resultOfValidate;
-
-                assert(is<Exclude<AccessTokenClaims, undefined>>(accessTokenClaims));
-
-                check_required_claims: {
-                    const getHasRequiredClaims = params?.hasRequiredClaims;
-
-                    if (getHasRequiredClaims === undefined) {
-                        break check_required_claims;
-                    }
-
-                    const accessedClaimNames = new Set<string>();
-
-                    const accessTokenClaims_proxy = new Proxy(accessTokenClaims, {
-                        get(...args) {
-                            const [, claimName] = args;
-
-                            record_claim_access: {
-                                if (typeof claimName !== "string") {
-                                    break record_claim_access;
-                                }
-
-                                accessedClaimNames.add(claimName);
-                            }
-
-                            return Reflect.get(...args);
-                        }
-                    });
-
-                    const hasRequiredClaims = await getHasRequiredClaims({
-                        accessTokenClaims: accessTokenClaims_proxy
-                    });
-
-                    if (hasRequiredClaims) {
-                        break check_required_claims;
-                    }
-
-                    const errorMessage = [
-                        "Missing or invalid required access token claim.",
-                        `Related to claims: ${Array.from(accessedClaimNames).join(" and/or ")}`
-                    ].join(" ");
-
-                    throw unauthorized({
-                        errorMessage,
-                        wwwAuthenticateHeaderErrorDescription: errorMessage
-                    });
-                }
-
-                return next({
-                    context: {
-                        oidcContext: id<OidcServerContext<AccessTokenClaims>>(
-                            id<OidcServerContext.LoggedIn<AccessTokenClaims>>({
-                                isUserLoggedIn: true,
-                                accessToken,
-                                accessTokenClaims
-                            })
-                        )
-                    }
-                });
-            });
+            .server<{
+                oidcContext: OidcServerContext<AccessTokenClaims>;
+            }>(createFunctionMiddlewareServerFn(params));
     }
 
     // @ts-expect-error
@@ -897,7 +919,7 @@ export function createOidcSpaApi<
         enforceLogin,
         OidcInitializationGate,
         getOidcFnMiddleware,
-        getOidcRequestMiddleware: null as any
+        getOidcRequestMiddleware
     };
 }
 
