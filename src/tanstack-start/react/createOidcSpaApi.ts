@@ -3,6 +3,7 @@ import type {
     CreateValidateAndGetAccessTokenClaims,
     OidcSpaApi,
     UseOidc,
+    GetOidc,
     ParamsOfBootstrap
 } from "./types";
 import type { ZodSchemaLike } from "../../tools/ZodSchemaLike";
@@ -421,6 +422,64 @@ export function createOidcSpaApi<
         });
     }
 
+    async function getOidc(params?: {
+        assert?: "user logged in" | "user not logged in";
+    }): Promise<GetOidc.Oidc<DecodedIdToken>> {
+        const oidcCore = await dOidcCoreOrInitializationError.pr;
+
+        if (oidcCore instanceof OidcInitializationError) {
+            return new Promise<never>(() => {});
+        }
+
+        if (params?.assert === "user logged in" && !oidcCore.isUserLoggedIn) {
+            throw new Error(
+                [
+                    "oidc-spa: Called getOidc({ assert: 'user logged in' })",
+                    "but the user is not currently logged in."
+                ].join(" ")
+            );
+        }
+        if (params?.assert === "user not logged in" && oidcCore.isUserLoggedIn) {
+            throw new Error(
+                [
+                    "oidc-spa: Called getOidc({ assert: 'user not logged in' })",
+                    "but the user is currently logged in."
+                ].join(" ")
+            );
+        }
+
+        return oidcCore.isUserLoggedIn
+            ? id<GetOidc.Oidc.LoggedIn<DecodedIdToken>>({
+                  issuerUri: oidcCore.params.issuerUri,
+                  clientId: oidcCore.params.clientId,
+                  isUserLoggedIn: true,
+                  getAccessToken: async () => {
+                      const { accessToken } = await oidcCore.getTokens();
+                      return accessToken;
+                  },
+                  getDecodedIdToken: oidcCore.getDecodedIdToken,
+                  logout: oidcCore.logout,
+                  renewTokens: oidcCore.renewTokens,
+                  goToAuthServer: oidcCore.goToAuthServer,
+                  backFromAuthServer: oidcCore.backFromAuthServer,
+                  isNewBrowserSession: oidcCore.isNewBrowserSession,
+                  subscribeToAutoLogoutState: next => {
+                      next(evtAutoLogoutState.current);
+
+                      const { unsubscribe } = evtAutoLogoutState.subscribe(next);
+
+                      return { unsubscribeFromAutoLogoutState: unsubscribe };
+                  }
+              })
+            : id<GetOidc.Oidc.NotLoggedIn>({
+                  issuerUri: oidcCore.params.issuerUri,
+                  clientId: oidcCore.params.clientId,
+                  isUserLoggedIn: false,
+                  initializationError: oidcCore.initializationError,
+                  login: oidcCore.login
+              });
+    }
+
     let hasBootstrapBeenCalled = false;
 
     const prModuleCore = !isBrowser ? undefined : import("../../core");
@@ -545,7 +604,7 @@ export function createOidcSpaApi<
     };
 }
 
-export const fetchServerEnvVariableValues = createServerFn({ method: "GET" })
+const fetchServerEnvVariableValues = createServerFn({ method: "GET" })
     .inputValidator((data: { envVarNames: string[] }) => {
         if (typeof data !== "object" || data === null) {
             throw new Error("Expected an object");
