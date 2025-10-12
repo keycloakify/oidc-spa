@@ -10,6 +10,7 @@
     },
     "dependencies": {
         "oidc-spa": "latest",
+        "zod": "^4.1.12",
         "@tailwindcss/vite": "^4.0.6",
         "@tanstack/nitro-v2-vite-plugin": "^1.132.31",
         "@tanstack/react-devtools": "^0.7.0",

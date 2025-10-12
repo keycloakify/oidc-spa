@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
 
 import { createFileRoute } from "@tanstack/react-router";
+import { fetchWithAuth, enforceLogin } from "src/oidc";
 
 function getNames() {
-    return fetch("/demo/api/names").then(res => res.json());
+    return fetchWithAuth("/demo/api/names").then(res => res.json());
 }
 
 export const Route = createFileRoute("/demo/start/api-request")({
+    beforeLoad: enforceLogin,
     component: Home
 });
 

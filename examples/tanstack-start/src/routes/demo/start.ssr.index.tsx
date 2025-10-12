@@ -1,7 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/demo/start/ssr/")({
-    component: RouteComponent
+    component: RouteComponent,
+    ssr: true
 });
 
 function RouteComponent() {

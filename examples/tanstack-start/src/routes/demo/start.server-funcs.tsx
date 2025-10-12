@@ -2,12 +2,22 @@ import fs from "node:fs";
 import { useCallback, useState } from "react";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
+import { enforceLogin, getOidcFnMiddleware } from "src/oidc";
 
-const filePath = "todos.json";
+const getFilePath = (params: { userId: string }) => {
+    const { userId } = params;
+    return `todos_${userId}.json`;
+};
 
-async function readTodos() {
+type TodoItem = {
+    id: number;
+    name: string;
+};
+
+async function readTodos(params: { userId: string }): Promise<TodoItem[]> {
+    const { userId } = params;
     return JSON.parse(
-        await fs.promises.readFile(filePath, "utf-8").catch(() =>
+        await fs.promises.readFile(getFilePath({ userId }), "utf-8").catch(() =>
             JSON.stringify(
                 [
                     { id: 1, name: "Get groceries" },
@@ -22,18 +32,35 @@ async function readTodos() {
 
 const getTodos = createServerFn({
     method: "GET"
-}).handler(async () => await readTodos());
+})
+    .middleware([getOidcFnMiddleware({ assert: "user logged in" })])
+    .handler(
+        async ({
+            context: {
+                oidcContext: { accessTokenClaims }
+            }
+        }) =>
+            await readTodos({
+                userId: accessTokenClaims.sub
+            })
+    );
 
 const addTodo = createServerFn({ method: "POST" })
     .inputValidator((d: string) => d)
-    .handler(async ({ data }) => {
-        const todos = await readTodos();
+    .middleware([getOidcFnMiddleware({ assert: "user logged in" })])
+    .handler(async ({ data, context }) => {
+        const { oidcContext } = context;
+
+        const userId = oidcContext.accessTokenClaims.sub;
+
+        const todos = await readTodos({ userId });
         todos.push({ id: todos.length + 1, name: data });
-        await fs.promises.writeFile(filePath, JSON.stringify(todos, null, 2));
+        await fs.promises.writeFile(getFilePath({ userId }), JSON.stringify(todos, null, 2));
         return todos;
     });
 
 export const Route = createFileRoute("/demo/start/server-funcs")({
+    beforeLoad: enforceLogin,
     component: Home,
     loader: async () => await getTodos()
 });

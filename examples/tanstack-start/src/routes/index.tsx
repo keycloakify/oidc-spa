@@ -1,9 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 import { Zap, Server, Route as RouteIcon, Shield, Waves, Sparkles } from "lucide-react";
+import { useOidc } from "src/oidc";
 
 export const Route = createFileRoute("/")({
-    component: App
+    component: App,
+    ssr: true
 });
 
 function App() {
@@ -46,6 +48,8 @@ function App() {
         }
     ];
 
+    const { isUserLoggedIn, decodedIdToken } = useOidc();
+
     return (
         <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900">
             <section className="relative py-20 px-6 text-center overflow-hidden">
@@ -65,7 +69,15 @@ function App() {
                         </h1>
                     </div>
                     <p className="text-2xl md:text-3xl text-gray-300 mb-4 font-light">
-                        The framework for next generation AI applications
+                        {(() => {
+                            if (isUserLoggedIn === undefined) {
+                                return "";
+                            }
+
+                            return isUserLoggedIn
+                                ? `Welcome back ${decodedIdToken.preferred_username}`
+                                : `Hello anonymous visitor!`;
+                        })()}
                     </p>
                     <p className="text-lg text-gray-400 max-w-3xl mx-auto mb-8">
                         Full-stack framework powered by TanStack Router for React and Solid. Build modern

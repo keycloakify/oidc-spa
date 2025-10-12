@@ -1,7 +1,51 @@
 import { Link } from "@tanstack/react-router";
 
 import { useState } from "react";
-import { ChevronDown, ChevronRight, Globe, Home, Layers, Menu, Server, X } from "lucide-react";
+import { ChevronDown, ChevronRight, Home, Menu, Server, X } from "lucide-react";
+import { useOidc } from "src/oidc";
+import { createKeycloakUtils } from "oidc-spa/keycloak";
+
+function AuthButtons() {
+    const { isUserLoggedIn } = useOidc();
+
+    return isUserLoggedIn ? <LoggedInAuthButton /> : <NotLoggedInAuthButton />;
+}
+
+function LoggedInAuthButton() {
+    const { decodedIdToken, logout } = useOidc({ assert: "user logged in" });
+
+    return (
+        <div>
+            <span>Hello {decodedIdToken.preferred_username}</span>
+            &nbsp; &nbsp;
+            <button onClick={() => logout({ redirectTo: "home" })}>Logout</button>
+        </div>
+    );
+}
+
+function NotLoggedInAuthButton() {
+    const { login, issuerUri } = useOidc({ assert: "user not logged in" });
+
+    const keycloakUtils = createKeycloakUtils({ issuerUri });
+
+    return (
+        <div>
+            <button onClick={() => login()}>Login</button>{" "}
+            {keycloakUtils !== undefined && (
+                <button
+                    onClick={() =>
+                        login({
+                            transformUrlBeforeRedirect:
+                                keycloakUtils.transformUrlBeforeRedirectForRegister
+                        })
+                    }
+                >
+                    Register
+                </button>
+            )}
+        </div>
+    );
+}
 
 export default function Header() {
     const [isOpen, setIsOpen] = useState(false);
@@ -22,6 +66,7 @@ export default function Header() {
                         <img src="/tanstack-word-logo-white.svg" alt="TanStack Logo" className="h-10" />
                     </Link>
                 </h1>
+                <AuthButtons />
             </header>
 
             <aside

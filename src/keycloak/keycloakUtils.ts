@@ -34,13 +34,18 @@ export type KeycloakUserInfo = {
     [key: string]: any;
 };
 
-export function createKeycloakUtils(params: {
-    issuerUri: PotentiallyDeferred<string>;
-}): Pick<KeycloakUtils, "transformUrlBeforeRedirectForRegister">;
-export function createKeycloakUtils(params: { issuerUri: string }): KeycloakUtils;
-export function createKeycloakUtils(params: {
+export function createKeycloakUtils<IssuerUri extends PotentiallyDeferred<string> | string>(params: {
+    issuerUri: IssuerUri;
+}): IssuerUri extends string
+    ? KeycloakUtils
+    : Pick<KeycloakUtils, "transformUrlBeforeRedirectForRegister"> {
+    //@ts-expect-error
+    return createKeycloakUtils_real(params);
+}
+
+function createKeycloakUtils_real(params: {
     issuerUri: string | PotentiallyDeferred<string>;
-}): KeycloakUtils {
+}): KeycloakUtils | Pick<KeycloakUtils, "transformUrlBeforeRedirectForRegister"> {
     let issuerUri: string | undefined;
 
     set_issuerUri: {
@@ -76,7 +81,6 @@ export function createKeycloakUtils(params: {
     }
 
     if (issuerUri === undefined) {
-        //@ts-expect-error
         return {
             transformUrlBeforeRedirectForRegister
         };

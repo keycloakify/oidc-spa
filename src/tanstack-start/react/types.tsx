@@ -167,7 +167,7 @@ export type GetOidcFnMiddleware<AccessTokenClaims> = {
 export namespace GetOidcFnMiddleware {
     export type WithAutoLogin<AccessTokenClaims> = (params?: {
         assert?: "user logged in";
-        hasRequiredClaims: (params: { accessTokenClaims: AccessTokenClaims }) => Promise<boolean>;
+        hasRequiredClaims?: (params: { accessTokenClaims: AccessTokenClaims }) => Promise<boolean>;
     }) => TanStackFnMiddleware<{
         oidcContext: OidcServerContext.LoggedIn<AccessTokenClaims>;
     }>;
