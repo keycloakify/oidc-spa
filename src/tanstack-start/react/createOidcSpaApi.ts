@@ -426,6 +426,16 @@ export function createOidcSpaApi<
     async function getOidc(params?: {
         assert?: "user logged in" | "user not logged in";
     }): Promise<GetOidc.Oidc<DecodedIdToken>> {
+        if (!isBrowser) {
+            throw new Error(
+                [
+                    "oidc-spa: getOidc() can't be used on the server",
+                    "if you use it in a loader, make sure to mark the route",
+                    "as `ssr: false`."
+                ].join(" ")
+            );
+        }
+
         const oidcCore = await dOidcCoreOrInitializationError.pr;
 
         if (oidcCore instanceof OidcInitializationError) {
@@ -610,6 +620,15 @@ export function createOidcSpaApi<
             href: string;
         };
     }): Promise<void | never> {
+        if (!isBrowser) {
+            throw new Error(
+                [
+                    "oidc-spa: enforceLogin cannot be used on the server",
+                    "make sure to mark any route that uses it as ssr: false"
+                ].join(" ")
+            );
+        }
+
         const { cause } = loaderContext;
 
         const redirectUrl = (() => {
