@@ -1,10 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import type {
     CreateValidateAndGetAccessTokenClaims,
     OidcSpaApi,
     UseOidc,
-    ParamsOfBootstrap,
-    Oidc
+    ParamsOfBootstrap
 } from "./types";
 import type { ZodSchemaLike } from "../../tools/ZodSchemaLike";
 import type { Oidc as Oidc_core } from "../../core";
@@ -18,6 +17,7 @@ import { createStatefulEvt } from "../../tools/StatefulEvt";
 import { id } from "../../tools/tsafe/id";
 import type { GetterOrDirectValue } from "../../tools/GetterOrDirectValue";
 import { createServerFn } from "@tanstack/react-start";
+import type { PotentiallyDeferred } from "../../tools/PotentiallyDeferred";
 
 export function createOidcSpaApi<
     AutoLogin extends boolean,
@@ -48,9 +48,11 @@ export function createOidcSpaApi<
         Oidc_core<DecodedIdToken> | OidcInitializationError
     >();
 
-    const evtAutoLogoutState = createStatefulEvt<Oidc.Common["autoLogoutState"]>(() => ({
-        shouldDisplayWarning: false
-    }));
+    const evtAutoLogoutState = createStatefulEvt<UseOidc.Oidc.LoggedIn<unknown>["autoLogoutState"]>(
+        () => ({
+            shouldDisplayWarning: false
+        })
+    );
 
     dOidcCoreOrInitializationError.pr.then(oidcCoreOrInitializationError => {
         const { hasResolved, value: paramsOfBootstrap } = dParamsOfBootstrap.getState();
@@ -78,7 +80,7 @@ export function createOidcSpaApi<
         }
 
         oidcCore.subscribeToAutoLogoutCountdown(({ secondsLeft }) => {
-            const newState: Oidc.Common["autoLogoutState"] = (() => {
+            const newState: UseOidc.Oidc.LoggedIn<unknown>["autoLogoutState"] = (() => {
                 if (secondsLeft === undefined) {
                     return {
                         shouldDisplayWarning: false
@@ -107,7 +109,7 @@ export function createOidcSpaApi<
 
     function useOidc(params?: {
         assert?: "user not logged in" | "user logged in";
-    }): Oidc<DecodedIdToken> {
+    }): UseOidc.Oidc<DecodedIdToken> {
         const { hasResolved, value: oidcCoreOrInitializationError } =
             dOidcCoreOrInitializationError.getState();
 
@@ -117,8 +119,8 @@ export function createOidcSpaApi<
         ) {
             throw new Error(
                 [
-                    "oidc-spa: Since you have enabled autoLogin, your all app should",
-                    "be wrapped into <OidcInitializationGage />"
+                    "oidc-spa: Since you have enabled autoLogin, every usage of useOidc()",
+                    "should be made into a descendant of <OidcInitializationGage />"
                 ].join(" ")
             );
         }
@@ -156,11 +158,21 @@ export function createOidcSpaApi<
                 return;
             }
 
+            let isActive = true;
+
             dOidcCoreOrInitializationError.pr.then(oidcCore => {
+                if (!isActive) {
+                    return;
+                }
+
                 assert(!(oidcCore instanceof OidcInitializationError));
 
                 setOidcCore(oidcCore);
             });
+
+            return () => {
+                isActive = false;
+            };
         }, []);
 
         if (
@@ -179,14 +191,234 @@ export function createOidcSpaApi<
             );
         }
 
-        const common: Oidc.Common = {
-            params: {},
-            autoLogoutState: evtAutoLogoutState.current
-        };
+        const [, reRenderIfDecodedIdTokenChanged] = useState<DecodedIdToken | undefined>(() => {
+            if (oidcCore === undefined) {
+                return undefined;
+            }
+
+            if (!oidcCore.isUserLoggedIn) {
+                return undefined;
+            }
+
+            return oidcCore.getDecodedIdToken();
+        });
+
+        const [evtIsDecodedIdTokenUsed] = useState(() => createStatefulEvt<boolean>(() => false));
+
+        useEffect(() => {
+            let isActive = true;
+
+            let unsubscribe: (() => void) | undefined = undefined;
+
+            dOidcCoreOrInitializationError.pr.then(async oidcCore => {
+                if (!isActive) {
+                    return;
+                }
+
+                assert(!(oidcCore instanceof OidcInitializationError));
+
+                if (!oidcCore.isUserLoggedIn) {
+                    return;
+                }
+
+                if (!evtIsDecodedIdTokenUsed.current) {
+                    const dDecodedIdTokenUsed = new Deferred<void>();
+
+                    const { unsubscribe } = evtIsDecodedIdTokenUsed.subscribe(isDecodedIdTokenUsed => {
+                        if (!isDecodedIdTokenUsed) {
+                            return;
+                        }
+                        unsubscribe();
+                        dDecodedIdTokenUsed.resolve();
+                    });
+
+                    await dDecodedIdTokenUsed.pr;
+
+                    if (!isActive) {
+                        return;
+                    }
+                }
+
+                reRenderIfDecodedIdTokenChanged(oidcCore.getDecodedIdToken());
+
+                unsubscribe = oidcCore.subscribeToTokensChange(() => {
+                    reRenderIfDecodedIdTokenChanged(oidcCore.getDecodedIdToken());
+                }).unsubscribe;
+            });
+
+            return () => {
+                isActive = false;
+                unsubscribe?.();
+            };
+        }, []);
+
+        const [evtIsAutoLogoutStateUsed] = useState(() => createStatefulEvt<boolean>(() => false));
+
+        const [, reRenderIfAutoLogoutStateChanged] = useState(() => evtAutoLogoutState.current);
+
+        useEffect(() => {
+            let isActive = true;
+            let unsubscribe: (() => void) | undefined = undefined;
+
+            (async () => {
+                if (!evtIsAutoLogoutStateUsed.current) {
+                    const dAutoLogoutStateUsed = new Deferred<void>();
+
+                    const { unsubscribe } = evtIsAutoLogoutStateUsed.subscribe(isAutoLogoutStateUsed => {
+                        if (!isAutoLogoutStateUsed) {
+                            return;
+                        }
+                        unsubscribe();
+
+                        dAutoLogoutStateUsed.resolve();
+                    });
+
+                    await dAutoLogoutStateUsed.pr;
+
+                    if (!isActive) {
+                        return;
+                    }
+                }
+
+                reRenderIfAutoLogoutStateChanged(evtAutoLogoutState.current);
+
+                unsubscribe = evtAutoLogoutState.subscribe(reRenderIfAutoLogoutStateChanged).unsubscribe;
+            })();
+
+            return () => {
+                isActive = false;
+                unsubscribe?.();
+            };
+        }, []);
 
         if (oidcCore === undefined) {
-            return id<Oidc.NotLoggedIn>({});
+            return id<UseOidc.Oidc.NotLoggedIn.NotSettledYet>({
+                get issuerUri() {
+                    const { hasResolved, value: paramsOfBootstrap } = dParamsOfBootstrap.getState();
+
+                    const select = (
+                        paramsOfBootstrap: ParamsOfBootstrap<
+                            AutoLogin,
+                            DecodedIdToken,
+                            AccessTokenClaims
+                        >
+                    ) => {
+                        switch (paramsOfBootstrap.implementation) {
+                            case "mock": {
+                                if (paramsOfBootstrap.issuerUri_mock === undefined) {
+                                    throw new Error(
+                                        [
+                                            "oidc-spa: Cannot access const { issuerUri } = useOidc()",
+                                            "oidc is running in mock mode but you didn't provide issuerUri_mock",
+                                            "when calling oidcBootstrap({ type: 'mock' })"
+                                        ].join(" ")
+                                    );
+                                }
+                                return paramsOfBootstrap.issuerUri_mock;
+                            }
+                            case "real":
+                                return paramsOfBootstrap.issuerUri;
+                        }
+                    };
+
+                    return hasResolved
+                        ? id<PotentiallyDeferred.Resolved<string>>({
+                              hasResolved: true,
+                              value: select(paramsOfBootstrap)
+                          })
+                        : id<PotentiallyDeferred.NotResolved<string>>({
+                              hasResolved: false,
+                              prValue: dParamsOfBootstrap.pr.then(select)
+                          });
+                },
+                get clientId() {
+                    const { hasResolved, value: paramsOfBootstrap } = dParamsOfBootstrap.getState();
+
+                    const select = (
+                        paramsOfBootstrap: ParamsOfBootstrap<
+                            AutoLogin,
+                            DecodedIdToken,
+                            AccessTokenClaims
+                        >
+                    ) => {
+                        switch (paramsOfBootstrap.implementation) {
+                            case "mock": {
+                                if (paramsOfBootstrap.clientId_mock === undefined) {
+                                    throw new Error(
+                                        [
+                                            "oidc-spa: Cannot access const { clientId } = useOidc()",
+                                            "oidc is running in mock mode but you didn't provide clientId_mock",
+                                            "when calling oidcBootstrap({ type: 'mock' })"
+                                        ].join(" ")
+                                    );
+                                }
+                                return paramsOfBootstrap.clientId_mock;
+                            }
+                            case "real":
+                                return paramsOfBootstrap.clientId;
+                        }
+                    };
+
+                    return hasResolved
+                        ? id<PotentiallyDeferred.Resolved<string>>({
+                              hasResolved: true,
+                              value: select(paramsOfBootstrap)
+                          })
+                        : id<PotentiallyDeferred.NotResolved<string>>({
+                              hasResolved: false,
+                              prValue: dParamsOfBootstrap.pr.then(select)
+                          });
+                },
+                autoLogoutState: { shouldDisplayWarning: false },
+                isUserLoggedIn: undefined,
+                login: async params => {
+                    const oidcCore = await dOidcCoreOrInitializationError.pr;
+
+                    if (oidcCore instanceof OidcInitializationError || oidcCore.isUserLoggedIn) {
+                        return new Promise<never>(() => {});
+                    }
+
+                    return oidcCore.login({
+                        doesCurrentHrefRequiresAuth: false,
+                        ...params
+                    });
+                }
+            });
         }
+
+        if (!oidcCore.isUserLoggedIn) {
+            return id<UseOidc.Oidc.NotLoggedIn>({
+                isUserLoggedIn: false,
+                initializationError: oidcCore.initializationError,
+                issuerUri: oidcCore.params.issuerUri,
+                clientId: oidcCore.params.clientId,
+                autoLogoutState: { shouldDisplayWarning: false },
+                login: params =>
+                    oidcCore.login({
+                        doesCurrentHrefRequiresAuth: false,
+                        ...params
+                    })
+            });
+        }
+
+        return id<UseOidc.Oidc.LoggedIn<DecodedIdToken>>({
+            isUserLoggedIn: true,
+            get decodedIdToken() {
+                evtIsDecodedIdTokenUsed.current = true;
+                return oidcCore.getDecodedIdToken();
+            },
+            logout: oidcCore.logout,
+            renewTokens: oidcCore.renewTokens,
+            goToAuthServer: oidcCore.goToAuthServer,
+            backFromAuthServer: oidcCore.backFromAuthServer,
+            isNewBrowserSession: oidcCore.isNewBrowserSession,
+            get autoLogoutState() {
+                evtIsAutoLogoutStateUsed.current = true;
+                return evtAutoLogoutState.current;
+            },
+            issuerUri: oidcCore.params.issuerUri,
+            clientId: oidcCore.params.clientId
+        });
     }
 
     let hasBootstrapBeenCalled = false;
@@ -239,11 +471,14 @@ export function createOidcSpaApi<
 
             const paramsOfBootstrap = getParamsOfBootstrap({
                 process: {
-                    env: await fetchServerEnvVariableValues({
-                        data: {
-                            envVarNames: Array.from(envNamesToPullFromServer)
-                        }
-                    })
+                    env:
+                        envNamesToPullFromServer.size === 0
+                            ? {}
+                            : await fetchServerEnvVariableValues({
+                                  data: {
+                                      envVarNames: Array.from(envNamesToPullFromServer)
+                                  }
+                              })
                 }
             });
 
