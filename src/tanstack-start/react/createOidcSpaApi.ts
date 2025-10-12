@@ -4,7 +4,8 @@ import type {
     OidcSpaApi,
     UseOidc,
     GetOidc,
-    ParamsOfBootstrap
+    ParamsOfBootstrap,
+    OidcServerContext
 } from "./types";
 import type { ZodSchemaLike } from "../../tools/ZodSchemaLike";
 import type { Oidc as Oidc_core } from "../../core";
@@ -17,14 +18,15 @@ import { createObjectThatThrowsIfAccessed } from "../../tools/createObjectThatTh
 import { createStatefulEvt } from "../../tools/StatefulEvt";
 import { id } from "../../tools/tsafe/id";
 import type { GetterOrDirectValue } from "../../tools/GetterOrDirectValue";
-import { createServerFn } from "@tanstack/react-start";
+import { createServerFn, createMiddleware } from "@tanstack/react-start";
+import { getRequest, setResponseHeader, setResponseStatus } from "@tanstack/react-start-server";
 import type { PotentiallyDeferred } from "../../tools/PotentiallyDeferred";
 import { toFullyQualifiedUrl } from "../../tools/toFullyQualifiedUrl";
 
 export function createOidcSpaApi<
     AutoLogin extends boolean,
     DecodedIdToken extends Record<string, unknown>,
-    AccessTokenClaims
+    AccessTokenClaims extends Record<string, unknown>
 >(params: {
     autoLogin: AutoLogin;
     decodedIdTokenSchema:
@@ -701,7 +703,174 @@ export function createOidcSpaApi<
         return children;
     }
 
-    console.log(createValidateAndGetAccessTokenClaims);
+    const prValidateAndGetAccessTokenClaims =
+        createValidateAndGetAccessTokenClaims === undefined
+            ? undefined
+            : dParamsOfBootstrap.pr.then(paramsOfBootstrap =>
+                  createValidateAndGetAccessTokenClaims({
+                      // @ts-expect-error
+                      paramsOfBootstrap
+                  })
+              );
+
+    function unauthorized(params: {
+        errorMessage: string;
+        wwwAuthenticateHeaderErrorDescription: string;
+    }) {
+        const { errorMessage, wwwAuthenticateHeaderErrorDescription } = params;
+
+        setResponseHeader(
+            "WWW-Authenticate",
+            `Bearer error="invalid_token", error_description="${wwwAuthenticateHeaderErrorDescription}"`
+        );
+        setResponseStatus(401, "Unauthorized");
+
+        return new Error(`oidc-spa: ${errorMessage}`);
+    }
+
+    function getOidcFnMiddleware(params?: {
+        assert?: "user logged in";
+        hasRequiredClaims?: (params: { accessTokenClaims: AccessTokenClaims }) => Promise<boolean>;
+    }) {
+        return createMiddleware({ type: "function" })
+            .client(async ({ next }) => {
+                const oidc = await getOidc();
+
+                if (params?.assert === "user logged in" && !oidc.isUserLoggedIn) {
+                    throw new Error(
+                        [
+                            "oidc-spa: You used getOidcFrMiddleware({ assert: 'user logged in' })",
+                            "but the server function the middleware was attached to was called",
+                            "while the user is not logged in."
+                        ].join(" ")
+                    );
+                }
+
+                if (!oidc.isUserLoggedIn) {
+                    return next();
+                }
+
+                return next({
+                    headers: {
+                        Authorization: `Bearer ${await oidc.getAccessToken()}`
+                    }
+                });
+            })
+            .server(async ({ next }) => {
+                const { headers } = getRequest();
+
+                const authorizationHeaderValue = headers.get("Authorization");
+
+                if (authorizationHeaderValue === null) {
+                    if (params?.assert === "user logged in") {
+                        const errorMessage = [
+                            "Asserted user logged in for that serverFn request",
+                            "but no access token was attached to the request"
+                        ].join(" ");
+
+                        throw unauthorized({
+                            errorMessage,
+                            wwwAuthenticateHeaderErrorDescription: errorMessage
+                        });
+                    }
+
+                    return next({
+                        context: id<OidcServerContext.NotLoggedIn>({
+                            isUserLoggedIn: false
+                        })
+                    });
+                }
+
+                const accessToken = (() => {
+                    const prefix = "Bearer ";
+
+                    if (authorizationHeaderValue.startsWith(prefix)) {
+                        return undefined;
+                    }
+
+                    return authorizationHeaderValue.slice(prefix.length);
+                })();
+
+                if (accessToken === undefined) {
+                    const errorMessage =
+                        "Missing well formed Authorization header with Bearer <access_token>";
+
+                    throw unauthorized({
+                        errorMessage,
+                        wwwAuthenticateHeaderErrorDescription: errorMessage
+                    });
+                }
+
+                assert(prValidateAndGetAccessTokenClaims !== undefined);
+
+                const { validateAndGetAccessTokenClaims } = await prValidateAndGetAccessTokenClaims;
+
+                const resultOfValidate = await validateAndGetAccessTokenClaims({ accessToken });
+
+                if (!resultOfValidate.isValid) {
+                    const { errorMessage, wwwAuthenticateHeaderErrorDescription } = resultOfValidate;
+
+                    throw unauthorized({
+                        errorMessage,
+                        wwwAuthenticateHeaderErrorDescription
+                    });
+                }
+
+                const { accessTokenClaims } = resultOfValidate;
+
+                check_required_claims: {
+                    const getHasRequiredClaims = params?.hasRequiredClaims;
+
+                    if (getHasRequiredClaims === undefined) {
+                        break check_required_claims;
+                    }
+
+                    const accessedClaimNames = new Set<string>();
+
+                    const accessTokenClaims_proxy = new Proxy(accessTokenClaims, {
+                        get(...args) {
+                            const [, claimName] = args;
+
+                            record_claim_access: {
+                                if (typeof claimName !== "string") {
+                                    break record_claim_access;
+                                }
+
+                                accessedClaimNames.add(claimName);
+                            }
+
+                            return Reflect.get(...args);
+                        }
+                    });
+
+                    const hasRequiredClaims = await getHasRequiredClaims({
+                        accessTokenClaims: accessTokenClaims_proxy
+                    });
+
+                    if (hasRequiredClaims) {
+                        break check_required_claims;
+                    }
+
+                    const errorMessage = [
+                        "Missing or invalid required access token claim.",
+                        `Related to claims: ${Array.from(accessedClaimNames).join(" and/or ")}`
+                    ].join(" ");
+
+                    throw unauthorized({
+                        errorMessage,
+                        wwwAuthenticateHeaderErrorDescription: errorMessage
+                    });
+                }
+
+                return next({
+                    context: id<OidcServerContext.LoggedIn<AccessTokenClaims>>({
+                        isUserLoggedIn: true,
+                        accessToken,
+                        accessTokenClaims
+                    })
+                });
+            });
+    }
 
     // @ts-expect-error
     return {
@@ -710,73 +879,9 @@ export function createOidcSpaApi<
         bootstrapOidc,
         enforceLogin,
         OidcInitializationGate,
-        getOidcFnMiddleware: null as any,
+        getOidcFnMiddleware,
         getOidcRequestMiddleware: null as any
     };
-
-    /*
-    const oidcMiddleware = createMiddleware({ type: "function" })
-        .client(async ({ next }) => {
-            let clientToServerOidcContext: ClientToServerOidcContext | undefined | null;
-
-            if (oidcReactApi !== undefined) {
-                const oidc = await oidcReactApi.getOidc();
-
-                if (oidc.isUserLoggedIn) {
-                    const { accessToken, idToken } = await oidc.getTokens_next();
-
-                    clientToServerOidcContext = { accessToken, idToken };
-                } else {
-                    clientToServerOidcContext = undefined;
-                }
-            } else {
-                clientToServerOidcContext = null;
-            }
-
-            return next({
-                sendContext: {
-                    clientToServerOidcContext
-                }
-            });
-        })
-        .server(async ({ next, context }) => {
-            const { clientToServerOidcContext } = context;
-
-            z.union([zClientToServerOidcContext, z.undefined(), z.null()]).parse(
-                clientToServerOidcContext
-            );
-
-            type OidcServerContext = {
-                decodedIdToken: DecodedIdToken;
-                accessToken: string;
-            };
-
-            let oidcContext: OidcServerContext | undefined | null;
-
-            if (clientToServerOidcContext === null) {
-                oidcContext = null;
-            } else if (clientToServerOidcContext === undefined) {
-                oidcContext = undefined;
-            } else {
-                const { decodedIdToken } = await validateIdToken({
-                    idToken: clientToServerOidcContext.idToken
-                });
-
-                console.log("Token is valid!");
-
-                oidcContext = {
-                    decodedIdToken,
-                    accessToken: clientToServerOidcContext.accessToken
-                };
-            }
-
-            const context_next = { oidcContext };
-
-            return next({
-                context: context_next
-            });
-        });
-        */
 }
 
 const fetchServerEnvVariableValues = createServerFn({ method: "GET" })
