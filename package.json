@@ -133,7 +133,7 @@
             "types": "./dist/esm/angular.d.ts",
             "default": "./dist/esm/angular.js"
         },
-        "./tanstack-start-react": {
+        "./react-tanstack-start": {
             "module": "./dist/esm/tanstack-start/react/index.js",
             "types": "./dist/esm/tanstack-start/react/index.d.ts",
             "default": "./dist/esm/tanstack-start/react/index.js"
