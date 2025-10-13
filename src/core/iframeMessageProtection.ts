@@ -89,28 +89,39 @@ export async function initIframeMessageProtection(params: { stateUrlParamValue: 
 
         const { setItem } = capturedApis;
 
+        console.log(`setSessionStoragePublicKey ${sessionStorageKey}`);
+
         setItem.call(capturedApis.sessionStorage, sessionStorageKey, publicKey);
     }
 
     function startSessionStoragePublicKeyMaliciousWriteDetection() {
+        console.log(`startSessionStoragePublicKeyMaliciousWriteDetection: ${sessionStorageKey}`);
+
         setSessionStoragePublicKey();
 
         assert(capturedApis !== undefined);
 
-        const { alert, setTimeout } = capturedApis;
+        const { /*alert,*/ setTimeout } = capturedApis;
 
         const checkTimeoutCallback = () => {
+            console.log(`checkTimeoutCallback called ${sessionStorageKey}`);
+
             if (sessionStorage.getItem(sessionStorageKey) !== publicKey) {
-                while (true) {
-                    alert(
-                        [
-                            "⚠️ Security Alert:",
-                            "oidc-spa detected an attack attempt.",
-                            "For your safety, please close this tab immediately",
-                            "and notify the site administrator."
-                        ].join(" ")
-                    );
-                }
+                //while (true) {
+                console.warn(
+                    [
+                        "⚠️ Security Alert:",
+                        "oidc-spa detected an attack attempt.",
+                        "For your safety, please close this tab immediately",
+                        "and notify the site administrator.",
+                        `sessionStorageKey: ${sessionStorageKey}`,
+                        `sessionStorage.getItem(sessionStorageKey): ${sessionStorage.getItem(
+                            sessionStorageKey
+                        )}`,
+                        `publicKey: ${publicKey}`
+                    ].join("\n")
+                );
+                //}
             }
             check();
         };
@@ -140,6 +151,7 @@ export async function initIframeMessageProtection(params: { stateUrlParamValue: 
     }
 
     function clearSessionStoragePublicKey() {
+        console.log(`Clear session storage public key ${sessionStorageKey}`);
         sessionStorage.removeItem(sessionStorageKey);
         clearTimeout(timer);
     }
