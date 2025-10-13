@@ -93,15 +93,16 @@ export async function initIframeMessageProtection(params: { stateUrlParamValue: 
     }
 
     function startSessionStoragePublicKeyMaliciousWriteDetection() {
-        setSessionStoragePublicKey();
-
         assert(capturedApis !== undefined);
 
-        const { /*alert,*/ setTimeout } = capturedApis;
+        const { alert, setTimeout } = capturedApis;
+
+        sessionStorage.removeItem(sessionStorageKey);
 
         const checkTimeoutCallback = () => {
-            if (sessionStorage.getItem(sessionStorageKey) !== publicKey) {
-                /*
+            const publicKey_inStorage = sessionStorage.getItem(sessionStorageKey);
+
+            if (publicKey_inStorage !== null && publicKey_inStorage !== publicKey) {
                 while (true) {
                     alert(
                         [
@@ -112,7 +113,6 @@ export async function initIframeMessageProtection(params: { stateUrlParamValue: 
                         ].join(" ")
                     );
                 }
-                */
             }
             check();
         };
@@ -161,20 +161,19 @@ export async function postEncryptedAuthResponseToParent(params: { authResponse: 
 
     parent.postMessage(getReadyMessage({ stateUrlParamValue: authResponse.state }), location.origin);
 
-    const readPublicKey = () =>
-        sessionStorage.getItem(getSessionStorageKey({ stateUrlParamValue: authResponse.state }));
-
     await new Promise<void>(resolve => setTimeout(resolve, 2));
 
-    while (readPublicKey() === null) {
-        await new Promise<void>(resolve => setTimeout(resolve, 2));
+    let publicKey: string | null;
+
+    {
+        let sessionStorageKey = getSessionStorageKey({ stateUrlParamValue: authResponse.state });
+
+        while ((publicKey = sessionStorage.getItem(sessionStorageKey)) === null) {
+            await new Promise<void>(resolve => setTimeout(resolve, 2));
+        }
     }
 
     await new Promise<void>(resolve => setTimeout(resolve, 7));
-
-    const publicKey = readPublicKey();
-
-    assert(publicKey !== null, "2293303");
 
     const { encryptedMessage: encryptedMessage_withoutPrefix } = await asymmetricEncrypt({
         publicKey,

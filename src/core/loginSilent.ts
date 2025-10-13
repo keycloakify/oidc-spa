@@ -178,6 +178,11 @@ export async function loginSilent(params: {
 
             window.removeEventListener("message", listener);
 
+            // NOTE: Acknowledge that we're also doing it later but
+            // since there's a aggressive write protection in place
+            // it's good to clear the key ASAP.
+            clearSessionStoragePublicKey();
+
             dEncryptedAuthResponse.resolve(message);
         };
 
