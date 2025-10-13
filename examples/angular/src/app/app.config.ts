@@ -16,7 +16,7 @@ export const appConfig: ApplicationConfig = {
     provideHttpClient(withInterceptors([todoApiInterceptor])),
     provideRouter(routes),
     Oidc.provide({
-      issuerUri: 'https://cloud-iam.oidc-spa.dev/realms/oidc-spa',
+      issuerUri: 'https://phasetwo.oidc-spa.dev/realms/oidc-spa',
       clientId: 'example-angular',
       debugLogs: true,
     }),
