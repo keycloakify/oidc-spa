@@ -8,15 +8,10 @@ import {
     type FC,
     type JSX
 } from "react";
-import {
-    type Oidc,
-    createOidc,
-    type ParamsOfCreateOidc,
-    OidcInitializationError,
-    handleOidcCallback
-} from "../core";
-import { assert, type Equals, type Param0 } from "../vendor/frontend/tsafe";
-import { id } from "../vendor/frontend/tsafe";
+import { type Oidc, createOidc, type ParamsOfCreateOidc, OidcInitializationError } from "../core";
+import { assert, type Equals } from "../tools/tsafe/assert";
+import type { Param0 } from "../tools/tsafe/Param0";
+import { id } from "../tools/tsafe/id";
 import type { ValueOrAsyncGetter } from "../tools/ValueOrAsyncGetter";
 import { Deferred } from "../tools/Deferred";
 import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";
@@ -120,7 +115,7 @@ type OidcReactApi<DecodedIdToken extends Record<string, unknown>, AutoLogin exte
           }) => Promise<void | never>;
       });
 
-export function createOidcReactApi_dependencyInjection<
+export function createReactOidc_dependencyInjection<
     DecodedIdToken extends Record<string, unknown>,
     ParamsOfCreateOidc extends {
         autoLogin?: boolean;
@@ -145,21 +140,11 @@ export function createOidcReactApi_dependencyInjection<
 
     // NOTE: It can be InitializationError only if autoLogin is true
     const prOidcOrInitializationError = (async () => {
-        // We're doing this here just for people that wouldn't have
-        // configured the early init in entrypoint.
-        {
-            const { isHandled } = handleOidcCallback();
-
-            if (isHandled) {
-                return new Promise<never>(() => {});
-            }
-        }
-
         const params = await (async () => {
+            await dReadyToCreate.pr;
+
             if (typeof paramsOrGetParams === "function") {
                 const getParams = paramsOrGetParams;
-
-                await dReadyToCreate.pr;
 
                 const params = await getParams();
 
@@ -455,7 +440,7 @@ export function createOidcReactApi_dependencyInjection<
         return oidc;
     }
 
-    const oidcReact: OidcReactApi<DecodedIdToken, false> = {
+    const oidcReactApi: OidcReactApi<DecodedIdToken, false> = {
         OidcProvider,
         useOidc: useOidc as any,
         getOidc,
@@ -464,13 +449,13 @@ export function createOidcReactApi_dependencyInjection<
     };
 
     // @ts-expect-error: We know what we are doing
-    return oidcReact;
+    return oidcReactApi;
 }
 
-/** @see: https://docs.oidc-spa.dev/v/v7/usage#react-api */
+/** @see: https://docs.oidc-spa.dev/v/v8/usage#react-api */
 export function createReactOidc<
     DecodedIdToken extends Record<string, unknown> = Oidc.Tokens.DecodedIdToken_base,
     AutoLogin extends boolean = false
 >(params: ValueOrAsyncGetter<ParamsOfCreateOidc<DecodedIdToken, AutoLogin>>) {
-    return createOidcReactApi_dependencyInjection(params, createOidc);
+    return createReactOidc_dependencyInjection(params, createOidc);
 }

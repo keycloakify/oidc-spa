@@ -1,5 +1,6 @@
 import { Deferred } from "../tools/Deferred";
-import { assert, id } from "../vendor/frontend/tsafe";
+import { assert } from "../tools/tsafe/assert";
+import { id } from "../tools/tsafe/id";
 
 const globalContext = {
     prDone_arr: id<Promise<void>[]>([]),
@@ -31,6 +32,14 @@ export async function startLoginOrRefreshProcess(): Promise<{
 }
 
 export async function waitForAllOtherOngoingLoginOrRefreshProcessesToComplete(params: {
+    // NOTE: when providing
+    // - prUnlock: new Promise<never>(()=>{}); All the subsequent startLoginOrRefreshProcess()
+    //   will never resolve: No lock can be acquired anymore in this app instance.
+    // - prUnlock: Promise.resolve(); The subsequent startLoginOrRefreshProcess() will resolve
+    //   normally: The lock can be acquired again
+    // - prUnlock: prMightOrMightNotResolve. The lock will be acquirable again assuming the pr ever resolves.
+    //
+    // In any case it does not affect the call that are already running.
     prUnlock: Promise<void>;
 }): Promise<void> {
     const { prUnlock } = params;

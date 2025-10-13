@@ -81,26 +81,30 @@ import { z } from "zod";
 
 const decodedIdTokenSchema = z.object({
     sub: z.string(),
-    preferred_username: z.string()
+    name: z.string()
 });
 
+const autoLogin = false;
 
 export const { OidcProvider, useOidc, getOidc } =
     !import.meta.env.VITE_OIDC_ISSUER ?
         createMockReactOidc({
-            isUserInitiallyLoggedIn: false,
             homeUrl: import.meta.env.BASE_URL,
             mockedTokens: {
                 decodedIdToken: {
                     sub: "123",
-                    preferred_username: "john doe"
+                    name: "John"
                 } satisfies z.infer<typeof decodedIdTokenSchema>
-            }
+            },
+            // NOTE: If autoLogin is set to true this option must be removed
+            isUserInitiallyLoggedIn: true,
+            autoLogin
         }) :
         createReactOidc({
             issuerUri: import.meta.env.VITE_OIDC_ISSUER,
             clientId: import.meta.env.VITE_OIDC_CLIENT_ID,
             homeUrl: import.meta.env.BASE_URL,
-            decodedIdTokenSchema
+            decodedIdTokenSchema,
+            autoLogin
         });
 */

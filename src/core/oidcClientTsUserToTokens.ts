@@ -1,8 +1,10 @@
 import type { User as OidcClientTsUser } from "../vendor/frontend/oidc-client-ts";
-import { assert, id } from "../vendor/frontend/tsafe";
+import { assert } from "../tools/tsafe/assert";
+import { id } from "../tools/tsafe/id";
 import { readExpirationTimeInJwt } from "../tools/readExpirationTimeInJwt";
 import { decodeJwt } from "../tools/decodeJwt";
 import type { Oidc } from "./Oidc";
+import { INFINITY_TIME } from "../tools/INFINITY_TIME";
 
 export function oidcClientTsUserToTokens<DecodedIdToken extends Record<string, unknown>>(params: {
     oidcClientTsUser: OidcClientTsUser;
@@ -75,7 +77,8 @@ export function oidcClientTsUserToTokens<DecodedIdToken extends Record<string, u
 
     const issuedAtTime = (() => {
         // NOTE: The id_token is always a JWT as per the protocol.
-        // We don't use Date.now() due to network latency.
+        // We don't use Date.now() due to network latency or if the
+        // local clock is inaccurate.
         const id_token_iat = (() => {
             let iat: number | undefined;
 
@@ -159,7 +162,11 @@ export function oidcClientTsUserToTokens<DecodedIdToken extends Record<string, u
         idToken,
         decodedIdToken,
         decodedIdToken_original,
-        issuedAtTime
+        issuedAtTime,
+        getServerDateNow: (() => {
+            const issuedAtTime_local = oidcClientTsUser.__oidc_spa_localTimeWhenTokenIssued;
+            return () => Date.now() + (issuedAtTime - issuedAtTime_local);
+        })()
     };
 
     const tokens: Oidc.Tokens<DecodedIdToken> =
@@ -182,6 +189,10 @@ export function oidcClientTsUserToTokens<DecodedIdToken extends Record<string, u
 
                           assert(typeof refresh_expires_at === "number", "2033392");
 
+                          if (refresh_expires_at === 0) {
+                              return INFINITY_TIME;
+                          }
+
                           return refresh_expires_at * 1000;
                       }
 
@@ -193,6 +204,10 @@ export function oidcClientTsUserToTokens<DecodedIdToken extends Record<string, u
                           }
 
                           assert(typeof refresh_expires_in === "number", "2033425330");
+
+                          if (refresh_expires_in === 0) {
+                              return INFINITY_TIME;
+                          }
 
                           return issuedAtTime + refresh_expires_in * 1000;
                       }

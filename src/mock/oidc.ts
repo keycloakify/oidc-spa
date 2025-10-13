@@ -1,9 +1,10 @@
 import type { Oidc } from "../core";
 import { createObjectThatThrowsIfAccessed } from "../tools/createObjectThatThrowsIfAccessed";
-import { id } from "../vendor/frontend/tsafe";
+import { id } from "../tools/tsafe/id";
 import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";
 import { getSearchParam, addOrUpdateSearchParam } from "../tools/urlSearchParams";
-import { initialLocationHref } from "../core/initialLocationHref";
+import { getRootRelativeOriginalLocationHref } from "../core/earlyInit";
+import { INFINITY_TIME } from "../tools/INFINITY_TIME";
 
 export type ParamsOfCreateMockOidc<
     DecodedIdToken extends Record<string, unknown> = Record<string, unknown>,
@@ -28,6 +29,8 @@ export type ParamsOfCreateMockOidc<
 
 const URL_SEARCH_PARAM_NAME = "isUserLoggedIn";
 
+const locationHref_moduleEvalTime = location.href;
+
 export async function createMockOidc<
     DecodedIdToken extends Record<string, unknown> = Oidc.Tokens.DecodedIdToken_base,
     AutoLogin extends boolean = false
@@ -45,7 +48,16 @@ export async function createMockOidc<
 
     const isUserLoggedIn = (() => {
         const { wasPresent, value } = getSearchParam({
-            url: initialLocationHref,
+            url: toFullyQualifiedUrl({
+                urlish: (() => {
+                    try {
+                        return getRootRelativeOriginalLocationHref();
+                    } catch {
+                        return locationHref_moduleEvalTime;
+                    }
+                })(),
+                doAssertNoQueryParams: false
+            }),
             name: URL_SEARCH_PARAM_NAME
         });
 
@@ -133,14 +145,14 @@ export async function createMockOidc<
         ...(() => {
             const tokens_common: Oidc.Tokens.Common<DecodedIdToken> = {
                 accessToken: mockedTokens.accessToken ?? "mocked-access-token",
-                accessTokenExpirationTime: mockedTokens.accessTokenExpirationTime ?? Infinity,
+                accessTokenExpirationTime: mockedTokens.accessTokenExpirationTime ?? INFINITY_TIME,
                 idToken: mockedTokens.idToken ?? "mocked-id-token",
                 decodedIdToken:
                     mockedTokens.decodedIdToken ??
                     createObjectThatThrowsIfAccessed<DecodedIdToken>({
                         debugMessage: [
                             "You haven't provided a mocked decodedIdToken",
-                            "See https://docs.oidc-spa.dev/v/v7/mock"
+                            "See https://docs.oidc-spa.dev/v/v8/mock"
                         ].join("\n")
                     }),
                 decodedIdToken_original:
@@ -148,10 +160,11 @@ export async function createMockOidc<
                     createObjectThatThrowsIfAccessed<Oidc.Tokens.DecodedIdToken_base>({
                         debugMessage: [
                             "You haven't provided a mocked decodedIdToken_original",
-                            "See https://docs.oidc-spa.dev/v/v7/mock"
+                            "See https://docs.oidc-spa.dev/v/v8/mock"
                         ].join("\n")
                     }),
-                issuedAtTime: Date.now()
+                issuedAtTime: Date.now(),
+                getServerDateNow: () => Date.now()
             };
 
             const tokens: Oidc.Tokens<DecodedIdToken> =

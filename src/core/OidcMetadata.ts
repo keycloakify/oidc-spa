@@ -1,5 +1,5 @@
 import { type OidcMetadata as OidcClientTsOidcMetadata } from "../vendor/frontend/oidc-client-ts";
-import { assert, type Equals } from "../vendor/frontend/tsafe";
+import { assert, type Equals } from "../tools/tsafe/assert";
 
 /**
  * OpenID Providers have metadata describing their configuration.

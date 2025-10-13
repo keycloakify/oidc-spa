@@ -1,0 +1,64 @@
+<header style="
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      width: calc(100% - 32px);
+      padding: 8px 16px;
+    ">
+      <span>OIDC-SPA + Angular</span>
+      <div>
+            <a routerLink="/" routerLinkActive #rla="routerLinkActive" [routerLinkActiveOptions]="{ exact: true }"
+                  [style]="{ fontWeight: rla.isActive ? 'bold' : 'normal' }">Home</a>
+            &nbsp; &nbsp; &nbsp;
+            <a routerLink="/protected" routerLinkActive #rla2="routerLinkActive"
+                  [style]="{ fontWeight: rla2.isActive ? 'bold' : 'normal' }">My protected page</a>
+      </div>
+      @if (oidc.isUserLoggedIn) {
+      <div>
+            <span>Hello {{ oidc.$decodedIdToken().name }}</span>
+            &nbsp; &nbsp;
+            <button (click)="oidc.logout({ redirectTo: 'home' })">Logout</button>
+      </div>
+      } @else {
+      <div>
+            <button (click)="oidc.login()">Login</button>
+            <button (click)="
+            oidc.login({
+              transformUrlBeforeRedirect: keycloakUtils.transformUrlBeforeRedirectForRegister,
+            })
+          ">
+                  Register
+            </button>
+      </div>
+      }
+</header>
+
+<br />
+
+<router-outlet />
+
+@if (oidc.$secondsLeftBeforeAutoLogout() ) {
+<!-- Full screen overlay, blurred background -->
+<div [style]="{
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: 'rgba(0,0,0,0.5)',
+      backdropFilter: 'blur(10px)',
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'center',
+      zIndex: 1000,
+    }">
+      <div>
+            <p>Are you still there?</p>
+            <p>You will be logged out in {{ oidc.$secondsLeftBeforeAutoLogout() }}</p>
+      </div>
+</div>
+}

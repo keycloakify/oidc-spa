@@ -1,4 +1,6 @@
-import { assert, typeGuard, id } from "../vendor/frontend/tsafe";
+import { assert } from "../tools/tsafe/assert";
+import { id } from "../tools/tsafe/id";
+import { typeGuard } from "../tools/tsafe/typeGuard";
 
 type SessionStorageItem_Parsed = {
     __brand: "SessionStorageItem_Parsed-v1";

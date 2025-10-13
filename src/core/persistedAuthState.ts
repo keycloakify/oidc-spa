@@ -1,4 +1,5 @@
-import { typeGuard, id } from "../vendor/frontend/tsafe";
+import { typeGuard } from "../tools/tsafe/typeGuard";
+import { id } from "../tools/tsafe/id";
 
 function getKey(params: { configId: string }) {
     const { configId } = params;

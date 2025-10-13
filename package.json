@@ -1,6 +1,6 @@
 {
     "name": "oidc-spa",
-    "version": "7.2.4",
+    "version": "8.1.10",
     "description": "Openidconnect client for Single Page Applications",
     "repository": {
         "type": "git",
@@ -11,17 +11,17 @@
         "build": "tsx scripts/build.ts",
         "tsc:cjs": "tsc --module CommonJS --outDir ./dist",
         "tsc:esm": "tsc --module es2020 --outDir ./dist/esm",
-        "watch": "yarn run tsc:esm -w",
         "_format": "prettier '**/*.{ts,tsx,json,md}'",
         "format": "yarn _format --write",
         "format:check": "yarn _format --list-different",
-        "link-in-app": "tsx scripts/link-in-app.ts",
-        "start-react-router-example": "yarn build && tsx scripts/link-in-examples.ts && cd examples/react-router && rm -rf node_modules/.vite && yarn dev",
-        "start-react-router-framework-example": "yarn build && tsx scripts/link-in-examples.ts && cd examples/react-router-framework && rm -rf node_modules/.vite && yarn dev",
-        "start-tanstack-router-example": "yarn build && tsx scripts/link-in-examples.ts && cd examples/tanstack-router && rm -rf node_modules/.vite && yarn dev",
-        "start-tanstack-router-file-based-example": "yarn build && tsx scripts/link-in-examples.ts && cd examples/tanstack-router-file-based && rm -rf node_modules/.vite && yarn dev",
-        "start-multi-providers-example": "yarn build && tsx scripts/link-in-examples.ts && cd examples/multi-providers && rm -rf node_modules/.vite && yarn dev",
-        "size": "bash ./scripts/compute-payload.sh"
+        "size": "bash ./scripts/compute-payload.sh",
+        "start-angular-example": "bash ./scripts/start-example.sh angular start",
+        "start-angular-kitchensink-example": "bash ./scripts/start-example.sh angular-kitchensink start",
+        "start-multi-providers-example": "bash ./scripts/start-example.sh multi-providers dev",
+        "start-react-router-example": "bash ./scripts/start-example.sh react-router dev",
+        "start-react-router-framework-example": "bash ./scripts/start-example.sh react-router-framework dev",
+        "start-tanstack-router-example": "bash ./scripts/start-example.sh tanstack-router dev",
+        "start-tanstack-router-file-based-example": "bash ./scripts/start-example.sh tanstack-router-file-based dev"
     },
     "lint-staged": {
         "*.{ts,tsx,json,md}": [
@@ -42,19 +42,32 @@
         "OIDC",
         "keycloak",
         "keycloak-js",
-        "react"
+        "react",
+        "angular"
     ],
     "homepage": "https://docs.oidc-spa.dev/",
     "dependencies": {},
     "peerDependencies": {
         "@types/react": "*",
-        "react": "*"
+        "react": "*",
+        "rxjs": "*",
+        "@angular/core": "*",
+        "@angular/router": "*"
     },
     "peerDependenciesMeta": {
         "react": {
             "optional": true
         },
         "@types/react": {
+            "optional": true
+        },
+        "rxjs": {
+            "optional": true
+        },
+        "@angular/core": {
+            "optional": true
+        },
+        "@angular/router": {
             "optional": true
         }
     },
@@ -79,13 +92,18 @@
         "punycode": "^2.3.1",
         "react": "19.1.1",
         "ts-node": "^10.9.1",
-        "tsafe": "^1.8.9",
+        "tsafe": "^1.8.12",
         "tsx": "^4.15.5",
         "typescript": "5.7.2",
         "webpack": "5.93.0",
         "webpack-cli": "5.1.4",
         "worker-timers": "7.1.7",
-        "zod": "^3.23.8"
+        "zod": "^3.23.8",
+        "rxjs": "^7.8.2",
+        "@angular/core": "^20.3.1",
+        "@angular/router": "^20.3.1",
+        "@angular/common": "^20.3.1",
+        "@angular/platform-browser": "^20.3.1"
     },
     "publishConfig": {
         "access": "public"
@@ -106,6 +124,11 @@
         "./react": {
             "module": "./dist/esm/react/index.js",
             "default": "./dist/react/index.js"
+        },
+        "./angular": {
+            "module": "./dist/esm/angular.js",
+            "types": "./dist/esm/angular.d.ts",
+            "default": "./dist/esm/angular.js"
         },
         "./mock/react": {
             "module": "./dist/esm/mock/react.js",
