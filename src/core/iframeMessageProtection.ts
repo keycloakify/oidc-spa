@@ -97,10 +97,11 @@ export async function initIframeMessageProtection(params: { stateUrlParamValue: 
 
         assert(capturedApis !== undefined);
 
-        const { alert, setTimeout } = capturedApis;
+        const { /*alert,*/ setTimeout } = capturedApis;
 
         const checkTimeoutCallback = () => {
             if (sessionStorage.getItem(sessionStorageKey) !== publicKey) {
+                /*
                 while (true) {
                     alert(
                         [
@@ -111,6 +112,7 @@ export async function initIframeMessageProtection(params: { stateUrlParamValue: 
                         ].join(" ")
                     );
                 }
+                */
             }
             check();
         };
