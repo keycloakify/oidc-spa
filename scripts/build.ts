@@ -69,6 +69,24 @@ for (const targetFormat of ["cjs", "esm"] as const) {
             break;
         case "esm":
             run(`npx tsc --module es2020 --outDir ${distDirPath}`);
+            {
+                const srcSvelteDirPath = pathJoin(projectDirPath, "src", "svelte");
+                if (fs.existsSync(srcSvelteDirPath)) {
+                    const svelteFiles = fs
+                        .readdirSync(srcSvelteDirPath, { withFileTypes: true })
+                        .filter(
+                            f =>
+                                f.isFile() &&
+                                (f.name.endsWith(".svelte") || f.name.endsWith(".svelte.d.ts"))
+                        );
+                    for (let file of svelteFiles) {
+                        fs.copyFileSync(
+                            pathJoin(srcSvelteDirPath, file.name),
+                            pathJoin(distDirPath, "svelte", `${file.name}`)
+                        );
+                    }
+                }
+            }
             break;
     }
 
@@ -201,7 +219,7 @@ for (const targetFormat of ["cjs", "esm"] as const) {
                                         `  module: {`,
                                         `    rules: [`,
                                         `      {`,
-                                        `        test: /\.js$/,`,
+                                        `        test: ${/\.js$/},`,
                                         `        use: {`,
                                         `          loader: 'babel-loader',`,
                                         `          options: {`,
@@ -308,6 +326,7 @@ transformCodebase({
 for (const ext of ["js", "d.ts", "js.map"]) {
     fs.rmSync(pathJoin(distDirPath_root, `angular.${ext}`));
 }
+fs.rmSync(pathJoin(distDirPath_root, "svelte"), { force: true, recursive: true });
 
 transformCodebase({
     srcDirPath: distDirPath_root,
