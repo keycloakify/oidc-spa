@@ -55,8 +55,7 @@
         "rxjs": "*",
         "@angular/core": "*",
         "@angular/router": "*",
-        "@tanstack/react-start": "*",
-        "@tanstack/react-start-server": "*"
+        "@tanstack/react-start": "*"
     },
     "peerDependenciesMeta": {
         "react": {
@@ -75,9 +74,6 @@
             "optional": true
         },
         "@tanstack/react-start": {
-            "optional": true
-        },
-        "@tanstack/react-start-server": {
             "optional": true
         }
     },

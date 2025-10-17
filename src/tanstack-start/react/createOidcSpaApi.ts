@@ -19,7 +19,6 @@ import { createStatefulEvt } from "../../tools/StatefulEvt";
 import { id } from "../../tools/tsafe/id";
 import type { GetterOrDirectValue } from "../../tools/GetterOrDirectValue";
 import { createServerFn, createMiddleware } from "@tanstack/react-start";
-import { getRequest, setResponseHeader, setResponseStatus } from "@tanstack/react-start-server";
 import type { PotentiallyDeferred } from "../../tools/PotentiallyDeferred";
 import { toFullyQualifiedUrl } from "../../tools/toFullyQualifiedUrl";
 
@@ -720,19 +719,10 @@ export function createOidcSpaApi<
                   })
               );
 
-    function unauthorized(params: {
-        errorMessage: string;
-        wwwAuthenticateHeaderErrorDescription: string;
-    }) {
-        const { errorMessage, wwwAuthenticateHeaderErrorDescription } = params;
-
-        setResponseHeader(
-            "WWW-Authenticate",
-            `Bearer error="invalid_token", error_description="${wwwAuthenticateHeaderErrorDescription}"`
-        );
-        setResponseStatus(401, "Unauthorized");
-
-        return new Error(`oidc-spa: ${errorMessage}`);
+    async function getTanStackReactStartServerMod() {
+        return (await import(
+            `@tanstack/react-start/server${Date.now() !== 0 && ""}`
+        )) as typeof import("@tanstack/react-start-server");
     }
 
     function createFunctionMiddlewareServerFn(params?: {
@@ -743,6 +733,24 @@ export function createOidcSpaApi<
             next: (options: { context: { oidcContext: OidcServerContext<AccessTokenClaims> } }) => any;
         }): Promise<any> => {
             const { next } = options;
+
+            const { getRequest, setResponseHeader, setResponseStatus } =
+                await getTanStackReactStartServerMod();
+
+            const unauthorized = (params: {
+                errorMessage: string;
+                wwwAuthenticateHeaderErrorDescription: string;
+            }) => {
+                const { errorMessage, wwwAuthenticateHeaderErrorDescription } = params;
+
+                setResponseHeader(
+                    "WWW-Authenticate",
+                    `Bearer error="invalid_token", error_description="${wwwAuthenticateHeaderErrorDescription}"`
+                );
+                setResponseStatus(401, "Unauthorized");
+
+                return new Error(`oidc-spa: ${errorMessage}`);
+            };
 
             const { headers } = getRequest();
 
