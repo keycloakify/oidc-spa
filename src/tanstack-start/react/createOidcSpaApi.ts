@@ -721,7 +721,7 @@ export function createOidcSpaApi<
 
     async function getTanStackReactStartServerMod() {
         return (await import(
-            `@tanstack/react-start/server${Date.now() !== 0 && ""}`
+            `@tanstack/react-start/server${""}`
         )) as typeof import("@tanstack/react-start-server");
     }
 
