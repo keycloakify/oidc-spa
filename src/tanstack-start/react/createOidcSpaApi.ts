@@ -570,7 +570,8 @@ export function createOidcSpaApi<
                         const { createMockOidc } = await import("../../mock/oidc");
 
                         const oidcCore = await createMockOidc({
-                            homeUrl: infer_import_meta_env_BASE_URL(),
+                            //homeUrl: infer_import_meta_env_BASE_URL(),
+                            homeUrl: "/",
                             // NOTE: The `as false` is lying here, it's just to preserve some level of type-safety.
                             autoLogin: autoLogin as false,
                             // NOTE: Same here, the nullish coalescing is lying.
@@ -607,7 +608,8 @@ export function createOidcSpaApi<
 
                         try {
                             oidcCoreOrInitializationError = await createOidc({
-                                homeUrl: infer_import_meta_env_BASE_URL(),
+                                //homeUrl: infer_import_meta_env_BASE_URL(),
+                                homeUrl: "/",
                                 autoLogin,
                                 decodedIdTokenSchema,
                                 issuerUri: paramsOfBootstrap.issuerUri,
