@@ -1,11 +1,26 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 import { Zap, Server, Route as RouteIcon, Shield, Waves, Sparkles } from "lucide-react";
-import { useOidc } from "src/oidc";
+import { createOidcComponent } from "src/oidc";
 
 export const Route = createFileRoute("/")({
     component: App,
     ssr: true
+});
+
+const Greeting = createOidcComponent({
+    pendingComponent: () => <>&nbsp;</>,
+    component: () => {
+        const { isUserLoggedIn, decodedIdToken } = Greeting.useOidc();
+
+        return (
+            <span className="opacity-0 animate-[fadeIn_0.2s_ease-in_forwards]">
+                {isUserLoggedIn
+                    ? `Welcome back ${decodedIdToken.preferred_username}`
+                    : `Hello anonymous visitor!`}
+            </span>
+        );
+    }
 });
 
 function App() {
@@ -48,8 +63,6 @@ function App() {
         }
     ];
 
-    const { isUserLoggedIn, decodedIdToken } = useOidc();
-
     return (
         <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900">
             <section className="relative py-20 px-6 text-center overflow-hidden">
@@ -69,15 +82,7 @@ function App() {
                         </h1>
                     </div>
                     <p className="text-2xl md:text-3xl text-gray-300 mb-4 font-light">
-                        {(() => {
-                            if (isUserLoggedIn === undefined) {
-                                return "";
-                            }
-
-                            return isUserLoggedIn
-                                ? `Welcome back ${decodedIdToken.preferred_username}`
-                                : `Hello anonymous visitor!`;
-                        })()}
+                        <Greeting />
                     </p>
                     <p className="text-lg text-gray-400 max-w-3xl mx-auto mb-8">
                         Full-stack framework powered by TanStack Router for React and Solid. Build modern

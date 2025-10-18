@@ -1,37 +1,40 @@
 import { oidcSpa } from "oidc-spa/react-tanstack-start";
 import { z } from "zod";
 
-const { bootstrapOidc, useOidc, getOidc, enforceLogin, getOidcFnMiddleware, getOidcRequestMiddleware } =
-    oidcSpa
-        .withExpectedDecodedIdTokenShape({
-            decodedIdTokenSchema: z.object({
-                preferred_username: z.string()
-            }),
-            decodedIdToken_mock: {
-                preferred_username: "John Doe"
-            }
-        })
-        .withAccessTokenValidation({
-            type: "RFC 9068: JSON Web Token (JWT) Profile for OAuth 2.0 Access Tokens",
-            expectedAudience: "account",
-            accessTokenClaimsSchema: z.object({
-                sub: z.string()
-            }),
-            accessTokenClaims_mock: {
-                sub: "123"
-            }
-        })
-        .finalize();
+const {
+    bootstrapOidc,
+    createOidcComponent,
+    getOidc,
+    enforceLogin,
+    getOidcFnMiddleware,
+    getOidcRequestMiddleware
+} = oidcSpa
+    .withExpectedDecodedIdTokenShape({
+        decodedIdTokenSchema: z.object({
+            preferred_username: z.string()
+        }),
+        decodedIdToken_mock: {
+            preferred_username: "John Doe"
+        }
+    })
+    .withAccessTokenValidation({
+        type: "RFC 9068: JSON Web Token (JWT) Profile for OAuth 2.0 Access Tokens",
+        expectedAudience: "account",
+        accessTokenClaimsSchema: z.object({
+            sub: z.string()
+        }),
+        accessTokenClaims_mock: {
+            sub: "123"
+        }
+    })
+    .finalize();
 
 bootstrapOidc(({ process }) =>
     process.env.OIDC_USE_MOCK === "true"
         ? {
               implementation: "mock",
               isUserInitiallyLoggedIn: true,
-              issuerUri_mock: "https://auth.my-company.com/realms/myrealm",
-              decodedIdToken_mock: {
-                  preferred_username: process.env.OIDC_MOCK_PREFERRED_USERNAME
-              }
+              issuerUri_mock: "https://auth.my-company.com/realms/myrealm"
           }
         : {
               implementation: "real",
@@ -41,7 +44,7 @@ bootstrapOidc(({ process }) =>
           }
 );
 
-export { useOidc, getOidc, enforceLogin, getOidcFnMiddleware, getOidcRequestMiddleware };
+export { createOidcComponent, getOidc, enforceLogin, getOidcFnMiddleware, getOidcRequestMiddleware };
 
 export const fetchWithAuth: typeof fetch = async (input, init) => {
     const oidc = await getOidc();

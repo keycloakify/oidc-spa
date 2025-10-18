@@ -2,50 +2,65 @@ import { Link } from "@tanstack/react-router";
 
 import { useState } from "react";
 import { ChevronDown, ChevronRight, Home, Menu, Server, X } from "lucide-react";
-import { useOidc } from "src/oidc";
+import { createOidcComponent } from "src/oidc";
 import { createKeycloakUtils } from "oidc-spa/keycloak";
 
-function AuthButtons() {
-    const { isUserLoggedIn } = useOidc();
+const AuthButtons = createOidcComponent({
+    pendingComponent: ({ className }) => <div className={className} />,
+    component: (props: { className?: string }) => {
+        const { className } = props;
 
-    return isUserLoggedIn ? <LoggedInAuthButton /> : <NotLoggedInAuthButton />;
-}
+        const { isUserLoggedIn } = AuthButtons.useOidc();
 
-function LoggedInAuthButton() {
-    const { decodedIdToken, logout } = useOidc({ assert: "user logged in" });
+        return (
+            <div className={["opacity-0 animate-[fadeIn_0.2s_ease-in_forwards]", className].join(" ")}>
+                {isUserLoggedIn ? <LoggedInAuthButton /> : <NotLoggedInAuthButton />}
+            </div>
+        );
+    }
+});
 
-    return (
-        <div>
-            <span>Hello {decodedIdToken.preferred_username}</span>
-            &nbsp; &nbsp;
-            <button onClick={() => logout({ redirectTo: "home" })}>Logout</button>
-        </div>
-    );
-}
+const LoggedInAuthButton = createOidcComponent({
+    assert: "user logged in",
+    component: () => {
+        const { decodedIdToken, logout } = LoggedInAuthButton.useOidc();
 
-function NotLoggedInAuthButton() {
-    const { login, issuerUri } = useOidc({ assert: "user not logged in" });
+        return (
+            <>
+                <span>Hello {decodedIdToken.preferred_username}</span>
+                &nbsp; &nbsp;
+                <button onClick={() => logout({ redirectTo: "home" })}>Logout</button>
+            </>
+        );
+    }
+});
 
-    const keycloakUtils = createKeycloakUtils({ issuerUri });
+const NotLoggedInAuthButton = createOidcComponent({
+    assert: "user not logged in",
+    component: () => {
+        const { login, issuerUri } = NotLoggedInAuthButton.useOidc();
 
-    return (
-        <div>
-            <button onClick={() => login()}>Login</button>{" "}
-            {keycloakUtils !== undefined && (
-                <button
-                    onClick={() =>
-                        login({
-                            transformUrlBeforeRedirect:
-                                keycloakUtils.transformUrlBeforeRedirectForRegister
-                        })
-                    }
-                >
-                    Register
-                </button>
-            )}
-        </div>
-    );
-}
+        const keycloakUtils = createKeycloakUtils({ issuerUri });
+
+        return (
+            <div>
+                <button onClick={() => login()}>Login</button>{" "}
+                {keycloakUtils !== undefined && (
+                    <button
+                        onClick={() =>
+                            login({
+                                transformUrlBeforeRedirect:
+                                    keycloakUtils.transformUrlBeforeRedirectForRegister
+                            })
+                        }
+                    >
+                        Register
+                    </button>
+                )}
+            </div>
+        );
+    }
+});
 
 export default function Header() {
     const [isOpen, setIsOpen] = useState(false);

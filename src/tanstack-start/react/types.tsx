@@ -2,17 +2,34 @@ import type { ReactNode } from "react";
 import type { Oidc as Oidc_core, OidcInitializationError } from "../../core";
 import type { FunctionMiddlewareAfterServer, RequestMiddlewareAfterServer } from "@tanstack/react-start";
 import type { GetterOrDirectValue } from "../../tools/GetterOrDirectValue";
-import type { PotentiallyDeferred } from "../../tools/PotentiallyDeferred";
 
-export type UseOidc<DecodedIdToken> = {
-    (params?: { assert?: undefined }): UseOidc.Oidc<DecodedIdToken>;
-    (params: { assert: "user logged in" }): UseOidc.Oidc.LoggedIn<DecodedIdToken>;
-    (params: { assert: "user not logged in" }): UseOidc.Oidc.NotLoggedIn;
+export type CreateOidcComponent<DecodedIdToken> = {
+    <Props>(params: {
+        assert?: undefined;
+        pendingComponent?: (props: NoInfer<Props>) => ReactNode;
+        component: (props: Props) => ReactNode;
+    }): ((props: Props) => ReactNode) & {
+        useOidc: () => CreateOidcComponent.Oidc<DecodedIdToken>;
+    };
+    <Props>(params: { assert: "user logged in"; component: (props: Props) => ReactNode }): ((
+        props: Props
+    ) => ReactNode) & {
+        useOidc: () => CreateOidcComponent.Oidc.LoggedIn<DecodedIdToken>;
+    };
+    <Props>(params: { assert: "user not logged in"; component: (props: Props) => ReactNode }): ((
+        props: Props
+    ) => ReactNode) & {
+        useOidc: () => CreateOidcComponent.Oidc.NotLoggedIn;
+    };
 };
-export namespace UseOidc {
-    export type WithAutoLogin<DecodedIdToken> = (params?: {
-        assert: "user logged in";
-    }) => Oidc.LoggedIn<DecodedIdToken>;
+
+export namespace CreateOidcComponent {
+    export type WithAutoLogin<DecodedIdToken> = <Props>(params: {
+        pendingComponent?: (params: NoInfer<Props>) => ReactNode;
+        component: (props: Props) => ReactNode;
+    }) => ((props: Props) => ReactNode) & {
+        useOidc: () => Oidc.LoggedIn<DecodedIdToken>;
+    };
 
     export type Oidc<DecodedIdToken> =
         | (Oidc.NotLoggedIn & {
@@ -29,40 +46,25 @@ export namespace UseOidc {
           });
 
     export namespace Oidc {
-        export type NotLoggedIn =
-            | (NotLoggedIn.NotSettledYet & {
-                  initializationError?: never;
-              })
-            | NotLoggedIn.Settled;
+        type Common = {
+            issuerUri: string;
+            clientId: string;
+        };
 
-        export namespace NotLoggedIn {
-            export type Common = {
-                login: (params?: {
-                    extraQueryParams?: Record<string, string | undefined>;
-                    redirectUrl?: string;
-                    transformUrlBeforeRedirect?: (url: string) => string;
-                }) => Promise<never>;
-
-                autoLogoutState: {
-                    shouldDisplayWarning: false;
-                };
+        export type NotLoggedIn = Common & {
+            login: (params?: {
+                extraQueryParams?: Record<string, string | undefined>;
+                redirectUrl?: string;
+                transformUrlBeforeRedirect?: (url: string) => string;
+            }) => Promise<never>;
+            autoLogoutState: {
+                shouldDisplayWarning: false;
             };
+            isUserLoggedIn: false;
+            initializationError: OidcInitializationError | undefined;
+        };
 
-            export type NotSettledYet = Common & {
-                isUserLoggedIn: undefined;
-                issuerUri: PotentiallyDeferred<string>;
-                clientId: PotentiallyDeferred<string>;
-            };
-
-            export type Settled = Common & {
-                isUserLoggedIn: false;
-                initializationError: OidcInitializationError | undefined;
-                issuerUri: string;
-                clientId: string;
-            };
-        }
-
-        export type LoggedIn<DecodedIdToken> = {
+        export type LoggedIn<DecodedIdToken> = Common & {
             isUserLoggedIn: true;
             decodedIdToken: DecodedIdToken;
             logout: Oidc_core.LoggedIn["logout"];
@@ -78,9 +80,6 @@ export namespace UseOidc {
                 | {
                       shouldDisplayWarning: false;
                   };
-
-            issuerUri: string;
-            clientId: string;
         };
     }
 }
@@ -266,7 +265,9 @@ export type OidcSpaApi<AutoLogin, DecodedIdToken, AccessTokenClaims> = {
             ParamsOfBootstrap<AutoLogin, DecodedIdToken, AccessTokenClaims>
         >
     ) => void;
-    useOidc: AutoLogin extends true ? UseOidc.WithAutoLogin<DecodedIdToken> : UseOidc<DecodedIdToken>;
+    createOidcComponent: AutoLogin extends true
+        ? CreateOidcComponent.WithAutoLogin<DecodedIdToken>
+        : CreateOidcComponent<DecodedIdToken>;
     getOidc: AutoLogin extends true ? GetOidc.WithAutoLogin<DecodedIdToken> : GetOidc<DecodedIdToken>;
 } & (AccessTokenClaims extends undefined
     ? {}
