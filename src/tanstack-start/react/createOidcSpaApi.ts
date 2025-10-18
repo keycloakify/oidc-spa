@@ -13,7 +13,7 @@ import { OidcInitializationError } from "../../core/OidcInitializationError";
 import { Deferred } from "../../tools/Deferred";
 import { isBrowser } from "../../tools/isBrowser";
 import { assert, type Equals, is } from "../../tools/tsafe/assert";
-//import { infer_import_meta_env_BASE_URL } from "../../tools/infer_import_meta_env_BASE_URL";
+import { infer_import_meta_env_BASE_URL } from "../../tools/infer_import_meta_env_BASE_URL";
 import { createObjectThatThrowsIfAccessed } from "../../tools/createObjectThatThrowsIfAccessed";
 import { createStatefulEvt } from "../../tools/StatefulEvt";
 import { id } from "../../tools/tsafe/id";
@@ -570,8 +570,7 @@ export function createOidcSpaApi<
                         const { createMockOidc } = await import("../../mock/oidc");
 
                         const oidcCore = await createMockOidc({
-                            //homeUrl: infer_import_meta_env_BASE_URL(),
-                            homeUrl: "/",
+                            homeUrl: infer_import_meta_env_BASE_URL(),
                             // NOTE: The `as false` is lying here, it's just to preserve some level of type-safety.
                             autoLogin: autoLogin as false,
                             // NOTE: Same here, the nullish coalescing is lying.
@@ -608,8 +607,7 @@ export function createOidcSpaApi<
 
                         try {
                             oidcCoreOrInitializationError = await createOidc({
-                                //homeUrl: infer_import_meta_env_BASE_URL(),
-                                homeUrl: "/",
+                                homeUrl: infer_import_meta_env_BASE_URL(),
                                 autoLogin,
                                 decodedIdTokenSchema,
                                 issuerUri: paramsOfBootstrap.issuerUri,
