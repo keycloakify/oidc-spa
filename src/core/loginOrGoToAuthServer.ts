@@ -355,9 +355,10 @@ export function createLoginOrGoToAuthServer(params: {
                         return new Promise<never>(() => {});
                     }
 
-                    // NOTE: Here, except error on our understanding there can't be any other
-                    // error.
-                    assert(false, "30442320");
+                    // NOTE: Here we can get a Crypto.subtle not available in insecure
+                    // context error. If that's the case, the user need a polyfill, it's
+                    // unrecoverable.
+                    throw error;
                 }
             );
     }
