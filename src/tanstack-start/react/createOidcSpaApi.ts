@@ -17,6 +17,7 @@ import { infer_import_meta_env_BASE_URL } from "../../tools/infer_import_meta_en
 import { createObjectThatThrowsIfAccessed } from "../../tools/createObjectThatThrowsIfAccessed";
 import { createStatefulEvt } from "../../tools/StatefulEvt";
 import { id } from "../../tools/tsafe/id";
+import { typeGuard } from "../../tools/tsafe/typeGuard";
 import type { GetterOrDirectValue } from "../../tools/GetterOrDirectValue";
 import { createServerFn, createMiddleware } from "@tanstack/react-start";
 // @ts-expect-error: Since our module is not labeled as ESM we don't have the types here.
@@ -500,7 +501,7 @@ export function createOidcSpaApi<
 
     const bootstrapOidc = (
         getParamsOfBootstrapOrDirectValue: GetterOrDirectValue<
-            { process: { env: Record<string, string | undefined> } },
+            { process: { env: Record<string, string> } },
             ParamsOfBootstrap<AutoLogin, DecodedIdToken, AccessTokenClaims>
         >
     ) => {
@@ -517,50 +518,118 @@ export function createOidcSpaApi<
                     : () => getParamsOfBootstrapOrDirectValue;
 
             if (!isBrowser) {
-                dParamsOfBootstrap.resolve(getParamsOfBootstrap({ process }));
+                const env_proxy = new Proxy<Record<string, string>>(
+                    {},
+                    {
+                        get: (...[, envName]) => {
+                            assert(typeof envName === "string");
+
+                            return process.env[envName] ?? "";
+                        },
+                        has: (...[, envName]) => {
+                            assert(typeof envName === "string");
+                            return true;
+                        }
+                    }
+                );
+
+                dParamsOfBootstrap.resolve(getParamsOfBootstrap({ process: { env: env_proxy } }));
                 return;
             }
 
             assert(prModuleCore !== undefined);
 
-            const envNamesToPullFromServer = new Set<string>();
+            const paramsOfBootstrap = await (async () => {
+                let envNamesToPullFromServer = new Set<string>();
 
-            getParamsOfBootstrap({
-                process: {
-                    env: new Proxy<Record<string, string>>(
-                        {},
-                        {
-                            get: (...[, envName]) => {
-                                assert(typeof envName === "string");
+                const env: Record<string, string> = {};
 
-                                envNamesToPullFromServer.add(envName);
+                const env_proxy = new Proxy(env, {
+                    get: (...[, envName]) => {
+                        assert(typeof envName === "string");
 
-                                return "oidc_spa_probe";
-                            },
-                            has: (...[, envName]) => {
-                                assert(typeof envName === "string");
-
-                                envNamesToPullFromServer.add(envName);
-
-                                return true;
-                            }
+                        if (envName in env) {
+                            return env[envName];
                         }
-                    )
-                }
-            });
 
-            const paramsOfBootstrap = getParamsOfBootstrap({
-                process: {
-                    env:
-                        envNamesToPullFromServer.size === 0
-                            ? {}
-                            : await fetchServerEnvVariableValues({
-                                  data: {
-                                      envVarNames: Array.from(envNamesToPullFromServer)
-                                  }
-                              })
+                        envNamesToPullFromServer.add(envName);
+
+                        return "oidc_spa_probe";
+                    },
+                    has: (...[, envName]) => {
+                        assert(typeof envName === "string");
+
+                        if (envName in env) {
+                            return true;
+                        }
+
+                        envNamesToPullFromServer.add(envName);
+
+                        return true;
+                    }
+                });
+
+                let result:
+                    | {
+                          hasThrown: false;
+                          paramsOfBootstrap: ParamsOfBootstrap<
+                              AutoLogin,
+                              DecodedIdToken,
+                              AccessTokenClaims
+                          >;
+                      }
+                    | {
+                          hasThrown: true;
+                          error: unknown;
+                      }
+                    | undefined = undefined;
+
+                while (true) {
+                    envNamesToPullFromServer = new Set();
+
+                    result = undefined;
+
+                    try {
+                        const paramsOfBootstrap = getParamsOfBootstrap({ process: { env: env_proxy } });
+                        result = {
+                            hasThrown: false,
+                            paramsOfBootstrap
+                        };
+                    } catch (error) {
+                        result = {
+                            hasThrown: true,
+                            error
+                        };
+                    }
+
+                    if (envNamesToPullFromServer.size === 0) {
+                        break;
+                    }
+
+                    Object.entries(
+                        await fetchServerEnvVariableValues({
+                            data: {
+                                envVarNames: Array.from(envNamesToPullFromServer)
+                            }
+                        })
+                    ).forEach(([envName, value]) => {
+                        env[envName] = value;
+                    });
                 }
-            });
+
+                if (result.hasThrown) {
+                    throw new Error(
+                        [
+                            "oidc-spa: The function argument passed to bootstrapOidc",
+                            "has thrown when invoked."
+                        ].join(" "),
+                        //@ts-expect-error
+                        { cause: result.error }
+                    );
+                }
+
+                return result.paramsOfBootstrap;
+            })();
 
             dParamsOfBootstrap.resolve(paramsOfBootstrap);
 
@@ -934,13 +1003,18 @@ const fetchServerEnvVariableValues = createServerFn({ method: "GET" })
 
         const { envVarNames } = data as Record<string, unknown>;
 
-        if (!Array.isArray(envVarNames) || envVarNames.some(name => typeof name !== "string")) {
-            throw new Error("envVarNames must be an array of strings");
-        }
+        assert(
+            typeGuard<string[]>(
+                envVarNames,
+                Array.isArray(envVarNames) && envVarNames.every(name => typeof name === "string")
+            )
+        );
 
         return { envVarNames };
     })
     .handler(async ({ data }) => {
         const { envVarNames } = data;
-        return Object.fromEntries(envVarNames.map(envVarName => [envVarName, process.env[envVarName]]));
+        return Object.fromEntries(
+            envVarNames.map(envVarName => [envVarName, process.env[envVarName] ?? ""])
+        );
     });

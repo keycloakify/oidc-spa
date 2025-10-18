@@ -262,7 +262,7 @@ export namespace ParamsOfBootstrap {
 export type OidcSpaApi<AutoLogin, DecodedIdToken, AccessTokenClaims> = {
     bootstrapOidc: (
         params: GetterOrDirectValue<
-            { process: { env: Record<string, string | undefined> } },
+            { process: { env: Record<string, string> } },
             ParamsOfBootstrap<AutoLogin, DecodedIdToken, AccessTokenClaims>
         >
     ) => void;

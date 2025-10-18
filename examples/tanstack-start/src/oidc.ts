@@ -23,12 +23,23 @@ const { bootstrapOidc, useOidc, getOidc, enforceLogin, getOidcFnMiddleware, getO
         })
         .finalize();
 
-bootstrapOidc(({ process }) => ({
-    implementation: "real",
-    issuerUri: process.env.OIDC_ISSUER_URI!,
-    clientId: process.env.OIDC_CLIENT_ID!,
-    startCountdownSecondsBeforeAutoLogout: 45
-}));
+bootstrapOidc(({ process }) =>
+    process.env.OIDC_USE_MOCK === "true"
+        ? {
+              implementation: "mock",
+              isUserInitiallyLoggedIn: true,
+              issuerUri_mock: "https://auth.my-company.com/realms/myrealm",
+              decodedIdToken_mock: {
+                  preferred_username: process.env.OIDC_MOCK_PREFERRED_USERNAME
+              }
+          }
+        : {
+              implementation: "real",
+              issuerUri: process.env.OIDC_ISSUER_URI,
+              clientId: process.env.OIDC_CLIENT_ID,
+              startCountdownSecondsBeforeAutoLogout: 45
+          }
+);
 
 export { useOidc, getOidc, enforceLogin, getOidcFnMiddleware, getOidcRequestMiddleware };
 
