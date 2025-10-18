@@ -13,7 +13,7 @@ import { OidcInitializationError } from "../../core/OidcInitializationError";
 import { Deferred } from "../../tools/Deferred";
 import { isBrowser } from "../../tools/isBrowser";
 import { assert, type Equals, is } from "../../tools/tsafe/assert";
-import { infer_import_meta_env_BASE_URL } from "../../tools/infer_import_meta_env_BASE_URL";
+//import { infer_import_meta_env_BASE_URL } from "../../tools/infer_import_meta_env_BASE_URL";
 import { createObjectThatThrowsIfAccessed } from "../../tools/createObjectThatThrowsIfAccessed";
 import { createStatefulEvt } from "../../tools/StatefulEvt";
 import { id } from "../../tools/tsafe/id";
