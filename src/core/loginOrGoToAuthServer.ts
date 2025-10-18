@@ -355,10 +355,17 @@ export function createLoginOrGoToAuthServer(params: {
                         return new Promise<never>(() => {});
                     }
 
-                    // NOTE: Here we can get a Crypto.subtle not available in insecure
-                    // context error. If that's the case, the user need a polyfill, it's
-                    // unrecoverable.
-                    throw error;
+                    if (error.message.includes("Crypto.subtle is available only in secure contexts")) {
+                        throw new Error(
+                            [
+                                `oidc-spa: ${error.message}.`,
+                                "To fix this error see:",
+                                "https://docs.oidc-spa.dev/v/v8/resources/fixing-crypto.subtle-is-available-only-in-secure-contexts-https"
+                            ].join(" ")
+                        );
+                    }
+
+                    assert(false, "224238482");
                 }
             );
     }
