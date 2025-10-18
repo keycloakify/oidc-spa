@@ -560,6 +560,8 @@ export function createOidcSpaApi<
                 }
             });
 
+            dParamsOfBootstrap.resolve(paramsOfBootstrap);
+
             switch (paramsOfBootstrap.implementation) {
                 case "mock":
                     {
