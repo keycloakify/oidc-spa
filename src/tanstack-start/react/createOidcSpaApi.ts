@@ -19,6 +19,8 @@ import { createStatefulEvt } from "../../tools/StatefulEvt";
 import { id } from "../../tools/tsafe/id";
 import type { GetterOrDirectValue } from "../../tools/GetterOrDirectValue";
 import { createServerFn, createMiddleware } from "@tanstack/react-start";
+// @ts-expect-error: Since our module is not labeled as ESM we don't have the types here.
+import { getRequest, setResponseHeader, setResponseStatus } from "@tanstack/react-start/server";
 import type { PotentiallyDeferred } from "../../tools/PotentiallyDeferred";
 import { toFullyQualifiedUrl } from "../../tools/toFullyQualifiedUrl";
 
@@ -721,12 +723,6 @@ export function createOidcSpaApi<
                   })
               );
 
-    async function getTanStackReactStartServerMod() {
-        return (await import(
-            `@tanstack/react-start/server${""}`
-        )) as typeof import("@tanstack/react-start-server");
-    }
-
     function createFunctionMiddlewareServerFn(params?: {
         assert?: "user logged in";
         hasRequiredClaims?: (params: { accessTokenClaims: AccessTokenClaims }) => Promise<boolean>;
@@ -735,9 +731,6 @@ export function createOidcSpaApi<
             next: (options: { context: { oidcContext: OidcServerContext<AccessTokenClaims> } }) => any;
         }): Promise<any> => {
             const { next } = options;
-
-            const { getRequest, setResponseHeader, setResponseStatus } =
-                await getTanStackReactStartServerMod();
 
             const unauthorized = (params: {
                 errorMessage: string;
