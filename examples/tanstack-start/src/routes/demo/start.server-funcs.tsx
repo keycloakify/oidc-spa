@@ -4,7 +4,7 @@ import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { enforceLogin, getOidcFnMiddleware } from "src/oidc";
 
-const getFilePath = (params: { userId: string }) => {
+const getUserFilePath = (params: { userId: string }) => {
     const { userId } = params;
     return `todos_${userId}.json`;
 };
@@ -17,7 +17,7 @@ type TodoItem = {
 async function readTodos(params: { userId: string }): Promise<TodoItem[]> {
     const { userId } = params;
     return JSON.parse(
-        await fs.promises.readFile(getFilePath({ userId }), "utf-8").catch(() =>
+        await fs.promises.readFile(getUserFilePath({ userId }), "utf-8").catch(() =>
             JSON.stringify(
                 [
                     { id: 1, name: "Get groceries" },
@@ -55,7 +55,7 @@ const addTodo = createServerFn({ method: "POST" })
 
         const todos = await readTodos({ userId });
         todos.push({ id: todos.length + 1, name: data });
-        await fs.promises.writeFile(getFilePath({ userId }), JSON.stringify(todos, null, 2));
+        await fs.promises.writeFile(getUserFilePath({ userId }), JSON.stringify(todos, null, 2));
         return todos;
     });
 

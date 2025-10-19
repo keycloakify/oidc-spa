@@ -3,24 +3,19 @@ import type { Oidc as Oidc_core, OidcInitializationError } from "../../core";
 import type { FunctionMiddlewareAfterServer, RequestMiddlewareAfterServer } from "@tanstack/react-start";
 import type { GetterOrDirectValue } from "../../tools/GetterOrDirectValue";
 
-export type CreateOidcComponent<DecodedIdToken> = {
-    <Props>(params: {
-        assert?: undefined;
-        pendingComponent?: (props: NoInfer<Props>) => ReactNode;
-        component: (props: Props) => ReactNode;
-    }): ((props: Props) => ReactNode) & {
-        useOidc: () => CreateOidcComponent.Oidc<DecodedIdToken>;
-    };
-    <Props>(params: { assert: "user logged in"; component: (props: Props) => ReactNode }): ((
-        props: Props
-    ) => ReactNode) & {
-        useOidc: () => CreateOidcComponent.Oidc.LoggedIn<DecodedIdToken>;
-    };
-    <Props>(params: { assert: "user not logged in"; component: (props: Props) => ReactNode }): ((
-        props: Props
-    ) => ReactNode) & {
-        useOidc: () => CreateOidcComponent.Oidc.NotLoggedIn;
-    };
+export type CreateOidcComponent<DecodedIdToken> = <
+    Assert extends "user logged in" | "user not logged in" | undefined,
+    Props
+>(params: {
+    assert?: Assert;
+    pendingComponent?: Assert extends undefined ? (props: NoInfer<Props>) => ReactNode : undefined;
+    component: (props: Props) => any;
+}) => ((props: Props) => ReactNode) & {
+    useOidc: () => Assert extends "user logged in"
+        ? CreateOidcComponent.Oidc.LoggedIn<DecodedIdToken>
+        : Assert extends "user not logged in"
+        ? CreateOidcComponent.Oidc.NotLoggedIn
+        : CreateOidcComponent.Oidc<DecodedIdToken>;
 };
 
 export namespace CreateOidcComponent {

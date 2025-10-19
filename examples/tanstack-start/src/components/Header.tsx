@@ -6,7 +6,6 @@ import { createOidcComponent } from "src/oidc";
 import { createKeycloakUtils } from "oidc-spa/keycloak";
 
 const AuthButtons = createOidcComponent({
-    pendingComponent: ({ className }) => <div className={className} />,
     component: (props: { className?: string }) => {
         const { className } = props;
 
@@ -29,7 +28,12 @@ const LoggedInAuthButton = createOidcComponent({
             <>
                 <span>Hello {decodedIdToken.preferred_username}</span>
                 &nbsp; &nbsp;
-                <button onClick={() => logout({ redirectTo: "home" })}>Logout</button>
+                <button
+                    className="px-8 py-2 bg-cyan-500 hover:bg-cyan-600 text-white font-semibold rounded-lg transition-colors shadow-lg shadow-cyan-500/50"
+                    onClick={() => logout({ redirectTo: "home" })}
+                >
+                    Logout
+                </button>
             </>
         );
     }
@@ -43,10 +47,17 @@ const NotLoggedInAuthButton = createOidcComponent({
         const keycloakUtils = createKeycloakUtils({ issuerUri });
 
         return (
-            <div>
-                <button onClick={() => login()}>Login</button>{" "}
+            <>
+                <button
+                    className="px-8 py-2 bg-cyan-500 hover:bg-cyan-600 text-white font-semibold rounded-lg transition-colors shadow-lg shadow-cyan-500/50"
+                    onClick={() => login()}
+                >
+                    Login
+                </button>
+                &nbsp;
                 {keycloakUtils !== undefined && (
                     <button
+                        className="px-8 py-2 bg-cyan-500 hover:bg-cyan-600 text-white font-semibold rounded-lg transition-colors shadow-lg shadow-cyan-500/50"
                         onClick={() =>
                             login({
                                 transformUrlBeforeRedirect:
@@ -57,7 +68,7 @@ const NotLoggedInAuthButton = createOidcComponent({
                         Register
                     </button>
                 )}
-            </div>
+            </>
         );
     }
 });
@@ -81,7 +92,7 @@ export default function Header() {
                         <img src="/tanstack-word-logo-white.svg" alt="TanStack Logo" className="h-10" />
                     </Link>
                 </h1>
-                <AuthButtons />
+                <AuthButtons className="ml-auto" />
             </header>
 
             <aside
