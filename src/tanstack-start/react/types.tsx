@@ -11,11 +11,11 @@ export type CreateOidcComponent<DecodedIdToken> = <
     pendingComponent?: Assert extends undefined ? (props: NoInfer<Props>) => ReactNode : undefined;
     component: (props: Props) => any;
 }) => ((props: Props) => ReactNode) & {
-    useOidc: () => Assert extends "user logged in"
+    useOidc: () => undefined extends Assert
+        ? CreateOidcComponent.Oidc<DecodedIdToken>
+        : "user logged in" extends Assert
         ? CreateOidcComponent.Oidc.LoggedIn<DecodedIdToken>
-        : Assert extends "user not logged in"
-        ? CreateOidcComponent.Oidc.NotLoggedIn
-        : CreateOidcComponent.Oidc<DecodedIdToken>;
+        : CreateOidcComponent.Oidc.NotLoggedIn;
 };
 
 export namespace CreateOidcComponent {
