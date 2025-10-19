@@ -4,8 +4,7 @@ import { Zap, Server, Route as RouteIcon, Shield, Waves, Sparkles } from "lucide
 import { createOidcComponent } from "src/oidc";
 
 export const Route = createFileRoute("/")({
-    component: App,
-    ssr: true
+    component: App
 });
 
 const Greeting = createOidcComponent({

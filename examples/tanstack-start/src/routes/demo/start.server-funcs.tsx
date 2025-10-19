@@ -54,6 +54,7 @@ const addTodo = createServerFn({ method: "POST" })
     });
 
 export const Route = createFileRoute("/demo/start/server-funcs")({
+    ssr: false,
     beforeLoad: enforceLogin,
     component: Home,
     loader: async () => await getTodos()

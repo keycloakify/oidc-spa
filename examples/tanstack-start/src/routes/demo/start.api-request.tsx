@@ -8,6 +8,7 @@ function getNames() {
 }
 
 export const Route = createFileRoute("/demo/start/api-request")({
+    ssr: false,
     beforeLoad: enforceLogin,
     component: Home
 });
