@@ -2,9 +2,10 @@ import { createFileRoute } from "@tanstack/react-router";
 
 import { Zap, Server, Route as RouteIcon, Shield, Waves, Sparkles } from "lucide-react";
 import { createOidcComponent } from "src/oidc";
+import { withHandlingOidcPostLoginNavigation } from "oidc-spa/react-tanstack-start";
 
 export const Route = createFileRoute("/")({
-    component: App
+    component: withHandlingOidcPostLoginNavigation(App)
 });
 
 const Greeting = createOidcComponent({
