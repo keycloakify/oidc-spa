@@ -5,7 +5,10 @@ import { createOidcComponent } from "src/oidc";
 import { withHandlingOidcPostLoginNavigation } from "oidc-spa/react-tanstack-start";
 
 export const Route = createFileRoute("/")({
-    component: withHandlingOidcPostLoginNavigation(App)
+    component: withHandlingOidcPostLoginNavigation(App),
+    pendingComponent: () => (
+        <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900" />
+    )
 });
 
 const Greeting = createOidcComponent({
