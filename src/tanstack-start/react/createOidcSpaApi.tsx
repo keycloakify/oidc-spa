@@ -237,7 +237,7 @@ export function createOidcSpaApi<
         });
     }
 
-    const contextIsSsrFree = createContext<boolean>(false);
+    const context_isFreeOfSsrHydrationConcern = createContext<boolean>(false);
 
     function createOidcComponent<Props extends Record<string, unknown>>(params: {
         assert?: "user logged in" | "user not logged in";
@@ -292,10 +292,14 @@ export function createOidcSpaApi<
                 return renderFallback();
             }
 
-            const isSsrFree = useContext(contextIsSsrFree);
+            // NOTE: When the user assert that the user is logged in or not, they know.
+            // if they knows it means that they learned it somewhere so we are post SSR.
+            // Additionally, in autoLogin mode, the typedef don't allow this param to be provided.
+            const isFreeOfSsrHydrationConcern =
+                useContext(context_isFreeOfSsrHydrationConcern) || assert_params !== undefined;
 
             const [oidcCore, setOidcCore] = useState<Oidc_core<DecodedIdToken> | undefined>(() => {
-                if (!isSsrFree) {
+                if (!isFreeOfSsrHydrationConcern) {
                     return undefined;
                 }
 
@@ -349,9 +353,9 @@ export function createOidcSpaApi<
             }
 
             return (
-                <contextIsSsrFree.Provider value={true}>
+                <context_isFreeOfSsrHydrationConcern.Provider value={true}>
                     <Component {...props} />
-                </contextIsSsrFree.Provider>
+                </context_isFreeOfSsrHydrationConcern.Provider>
             );
         }
 
@@ -716,7 +720,11 @@ export function createOidcSpaApi<
             return renderFallback({ initializationError: oidcCoreOrInitializationError });
         }
 
-        return <contextIsSsrFree.Provider value={true}>{children}</contextIsSsrFree.Provider>;
+        return (
+            <context_isFreeOfSsrHydrationConcern.Provider value={true}>
+                {children}
+            </context_isFreeOfSsrHydrationConcern.Provider>
+        );
     }
 
     const prValidateAndGetAccessTokenClaims =
