@@ -2,10 +2,12 @@ import { getStateData, getIsStatQueryParamValue } from "./StateData";
 import { assert, type Equals } from "../tools/tsafe/assert";
 import type { AuthResponse } from "./AuthResponse";
 import {
-    encryptAuthResponse,
+    captureApisForIframeProtection,
+    postEncryptedAuthResponseToParent,
     preventSessionStorageSetItemOfPublicKeyByThirdParty
 } from "./iframeMessageProtection";
 import { setOidcRequiredPostHydrationReplaceNavigationUrl } from "./requiredPostHydrationReplaceNavigationUrl";
+import { isBrowser } from "../tools/isBrowser";
 
 let hasEarlyInitBeenCalled = false;
 
@@ -22,6 +24,12 @@ export function oidcEarlyInit(params: {
     }
 
     hasEarlyInitBeenCalled = true;
+
+    if (!isBrowser) {
+        return { shouldLoadApp: true };
+    }
+
+    captureApisForIframeProtection();
 
     const {
         freezeFetch,
@@ -200,9 +208,7 @@ function handleOidcCallback(params: { isPostLoginRedirectManual?: boolean }): {
 
     switch (stateData.context) {
         case "iframe":
-            encryptAuthResponse({
-                authResponse
-            }).then(({ encryptedMessage }) => parent.postMessage(encryptedMessage, location.origin));
+            postEncryptedAuthResponseToParent({ authResponse });
             return { shouldLoadApp: false };
         case "redirect": {
             redirectAuthResponse = authResponse;
