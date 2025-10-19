@@ -148,13 +148,13 @@ export type GetOidcFnMiddleware<AccessTokenClaims> = {
         assert?: undefined;
         hasRequiredClaims?: (params: { accessTokenClaims: AccessTokenClaims }) => Promise<boolean>;
     }): GetOidcFnMiddleware.TanStackFnMiddleware<{
-        oidcContext: OidcServerContext<AccessTokenClaims>;
+        oidc: OidcServerContext<AccessTokenClaims>;
     }>;
     (params?: {
         assert?: "user logged in";
         hasRequiredClaims?: (params: { accessTokenClaims: AccessTokenClaims }) => Promise<boolean>;
     }): GetOidcFnMiddleware.TanStackFnMiddleware<{
-        oidcContext: OidcServerContext.LoggedIn<AccessTokenClaims>;
+        oidc: OidcServerContext.LoggedIn<AccessTokenClaims>;
     }>;
 };
 
@@ -163,7 +163,7 @@ export namespace GetOidcFnMiddleware {
         assert?: "user logged in";
         hasRequiredClaims?: (params: { accessTokenClaims: AccessTokenClaims }) => Promise<boolean>;
     }) => TanStackFnMiddleware<{
-        oidcContext: OidcServerContext.LoggedIn<AccessTokenClaims>;
+        oidc: OidcServerContext.LoggedIn<AccessTokenClaims>;
     }>;
 
     export type TanStackFnMiddleware<T> = FunctionMiddlewareAfterServer<
@@ -201,13 +201,13 @@ export type GetOidcRequestMiddleware<AccessTokenClaims> = {
         assert?: undefined;
         hasRequiredClaims: (params: { accessTokenClaims: AccessTokenClaims }) => Promise<boolean>;
     }): GetOidcRequestMiddleware.TanstackRequestMiddleware<{
-        oidcContext: OidcServerContext<AccessTokenClaims>;
+        oidc: OidcServerContext<AccessTokenClaims>;
     }>;
     (params?: {
         assert?: "user logged in";
         hasRequiredClaims: (params: { accessTokenClaims: AccessTokenClaims }) => Promise<boolean>;
     }): GetOidcRequestMiddleware.TanstackRequestMiddleware<{
-        oidcContext: OidcServerContext.LoggedIn<AccessTokenClaims>;
+        oidc: OidcServerContext.LoggedIn<AccessTokenClaims>;
     }>;
 };
 
@@ -216,7 +216,7 @@ export namespace GetOidcRequestMiddleware {
         assert?: "user logged in";
         hasRequiredClaims: (params: { accessTokenClaims: AccessTokenClaims }) => Promise<boolean>;
     }) => TanstackRequestMiddleware<{
-        oidcContext: OidcServerContext.LoggedIn<AccessTokenClaims>;
+        oidc: OidcServerContext.LoggedIn<AccessTokenClaims>;
     }>;
 
     export type TanstackRequestMiddleware<T> = RequestMiddlewareAfterServer<{}, undefined, T>;

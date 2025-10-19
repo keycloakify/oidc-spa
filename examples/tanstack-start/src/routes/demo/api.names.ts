@@ -10,9 +10,9 @@ export const Route = createFileRoute("/demo/api/names")({
             })
         ],
         handlers: {
-            GET: ({ context: { oidcContext } }) => {
+            GET: ({ context: { oidc } }) => {
                 return new Response(
-                    JSON.stringify(["Alice", "Bob", "Charlie", oidcContext.accessTokenClaims.sub]),
+                    JSON.stringify(["Alice", "Bob", "Charlie", oidc.accessTokenClaims.sub]),
                     {
                         headers: {
                             "Content-Type": "application/json"

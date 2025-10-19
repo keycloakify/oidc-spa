@@ -35,23 +35,17 @@ const getTodos = createServerFn({
 })
     .middleware([getOidcFnMiddleware({ assert: "user logged in" })])
     .handler(
-        async ({
-            context: {
-                oidcContext: { accessTokenClaims }
-            }
-        }) =>
+        async ({ context: { oidc } }) =>
             await readTodos({
-                userId: accessTokenClaims.sub
+                userId: oidc.accessTokenClaims.sub
             })
     );
 
 const addTodo = createServerFn({ method: "POST" })
     .inputValidator((d: string) => d)
     .middleware([getOidcFnMiddleware({ assert: "user logged in" })])
-    .handler(async ({ data, context }) => {
-        const { oidcContext } = context;
-
-        const userId = oidcContext.accessTokenClaims.sub;
+    .handler(async ({ data, context: { oidc } }) => {
+        const userId = oidc.accessTokenClaims.sub;
 
         const todos = await readTodos({ userId });
         todos.push({ id: todos.length + 1, name: data });

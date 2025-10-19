@@ -734,7 +734,7 @@ export function createOidcSpaApi<
         hasRequiredClaims?: (params: { accessTokenClaims: AccessTokenClaims }) => Promise<boolean>;
     }) {
         return async (options: {
-            next: (options: { context: { oidcContext: OidcServerContext<AccessTokenClaims> } }) => any;
+            next: (options: { context: { oidc: OidcServerContext<AccessTokenClaims> } }) => any;
         }): Promise<any> => {
             const { next } = options;
 
@@ -772,7 +772,7 @@ export function createOidcSpaApi<
 
                 return next({
                     context: {
-                        oidcContext: id<OidcServerContext<AccessTokenClaims>>(
+                        oidc: id<OidcServerContext<AccessTokenClaims>>(
                             id<OidcServerContext.NotLoggedIn>({
                                 isUserLoggedIn: false
                             })
@@ -866,7 +866,7 @@ export function createOidcSpaApi<
 
             return next({
                 context: {
-                    oidcContext: id<OidcServerContext<AccessTokenClaims>>(
+                    oidc: id<OidcServerContext<AccessTokenClaims>>(
                         id<OidcServerContext.LoggedIn<AccessTokenClaims>>({
                             isUserLoggedIn: true,
                             accessToken,
@@ -883,7 +883,7 @@ export function createOidcSpaApi<
         hasRequiredClaims?: (params: { accessTokenClaims: AccessTokenClaims }) => Promise<boolean>;
     }) {
         return createMiddleware({ type: "request" }).server<{
-            oidcContext: OidcServerContext<AccessTokenClaims>;
+            oidc: OidcServerContext<AccessTokenClaims>;
         }>(createFunctionMiddlewareServerFn(params));
     }
 
@@ -916,7 +916,7 @@ export function createOidcSpaApi<
                 });
             })
             .server<{
-                oidcContext: OidcServerContext<AccessTokenClaims>;
+                oidc: OidcServerContext<AccessTokenClaims>;
             }>(createFunctionMiddlewareServerFn(params));
     }
 
