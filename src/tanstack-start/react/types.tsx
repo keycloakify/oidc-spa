@@ -143,22 +143,22 @@ export namespace GetOidc {
     }
 }
 
-export type GetOidcFnMiddleware<AccessTokenClaims> = {
+export type OidcFnMiddleware<AccessTokenClaims> = {
     (params?: {
         assert?: undefined;
         hasRequiredClaims?: (params: { accessTokenClaims: AccessTokenClaims }) => Promise<boolean>;
-    }): GetOidcFnMiddleware.TanStackFnMiddleware<{
+    }): OidcFnMiddleware.TanStackFnMiddleware<{
         oidc: OidcServerContext<AccessTokenClaims>;
     }>;
     (params?: {
         assert?: "user logged in";
         hasRequiredClaims?: (params: { accessTokenClaims: AccessTokenClaims }) => Promise<boolean>;
-    }): GetOidcFnMiddleware.TanStackFnMiddleware<{
+    }): OidcFnMiddleware.TanStackFnMiddleware<{
         oidc: OidcServerContext.LoggedIn<AccessTokenClaims>;
     }>;
 };
 
-export namespace GetOidcFnMiddleware {
+export namespace OidcFnMiddleware {
     export type WithAutoLogin<AccessTokenClaims> = (params?: {
         assert?: "user logged in";
         hasRequiredClaims?: (params: { accessTokenClaims: AccessTokenClaims }) => Promise<boolean>;
@@ -196,22 +196,22 @@ export namespace OidcServerContext {
     };
 }
 
-export type GetOidcRequestMiddleware<AccessTokenClaims> = {
+export type OidcRequestMiddleware<AccessTokenClaims> = {
     (params?: {
         assert?: undefined;
         hasRequiredClaims: (params: { accessTokenClaims: AccessTokenClaims }) => Promise<boolean>;
-    }): GetOidcRequestMiddleware.TanstackRequestMiddleware<{
+    }): OidcRequestMiddleware.TanstackRequestMiddleware<{
         oidc: OidcServerContext<AccessTokenClaims>;
     }>;
     (params?: {
         assert?: "user logged in";
         hasRequiredClaims: (params: { accessTokenClaims: AccessTokenClaims }) => Promise<boolean>;
-    }): GetOidcRequestMiddleware.TanstackRequestMiddleware<{
+    }): OidcRequestMiddleware.TanstackRequestMiddleware<{
         oidc: OidcServerContext.LoggedIn<AccessTokenClaims>;
     }>;
 };
 
-export namespace GetOidcRequestMiddleware {
+export namespace OidcRequestMiddleware {
     export type WithAutoLogin<AccessTokenClaims> = (params?: {
         assert?: "user logged in";
         hasRequiredClaims: (params: { accessTokenClaims: AccessTokenClaims }) => Promise<boolean>;
@@ -267,12 +267,12 @@ export type OidcSpaApi<AutoLogin, DecodedIdToken, AccessTokenClaims> = {
 } & (AccessTokenClaims extends undefined
     ? {}
     : {
-          getOidcFnMiddleware: AutoLogin extends true
-              ? GetOidcFnMiddleware.WithAutoLogin<AccessTokenClaims>
-              : GetOidcFnMiddleware<AccessTokenClaims>;
-          getOidcRequestMiddleware: AutoLogin extends true
-              ? GetOidcRequestMiddleware.WithAutoLogin<AccessTokenClaims>
-              : GetOidcRequestMiddleware<AccessTokenClaims>;
+          oidcFnMiddleware: AutoLogin extends true
+              ? OidcFnMiddleware.WithAutoLogin<AccessTokenClaims>
+              : OidcFnMiddleware<AccessTokenClaims>;
+          oidcRequestMiddleware: AutoLogin extends true
+              ? OidcRequestMiddleware.WithAutoLogin<AccessTokenClaims>
+              : OidcRequestMiddleware<AccessTokenClaims>;
       }) &
     (AutoLogin extends true
         ? {

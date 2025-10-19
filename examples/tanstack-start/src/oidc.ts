@@ -1,13 +1,13 @@
 import { oidcSpa } from "oidc-spa/react-tanstack-start";
 import { z } from "zod";
 
-const {
+export const {
     bootstrapOidc,
     createOidcComponent,
     getOidc,
     enforceLogin,
-    getOidcFnMiddleware,
-    getOidcRequestMiddleware
+    oidcFnMiddleware,
+    oidcRequestMiddleware
 } = oidcSpa
     .withExpectedDecodedIdTokenShape({
         decodedIdTokenSchema: z.object({
@@ -43,8 +43,6 @@ bootstrapOidc(({ process }) =>
               startCountdownSecondsBeforeAutoLogout: 45
           }
 );
-
-export { createOidcComponent, getOidc, enforceLogin, getOidcFnMiddleware, getOidcRequestMiddleware };
 
 export const fetchWithAuth: typeof fetch = async (input, init) => {
     const oidc = await getOidc();

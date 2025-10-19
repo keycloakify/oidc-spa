@@ -2,7 +2,7 @@ import fs from "node:fs";
 import { useCallback, useState } from "react";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
-import { enforceLogin, getOidcFnMiddleware } from "src/oidc";
+import { enforceLogin, oidcFnMiddleware } from "src/oidc";
 
 const getUserFilePath = (params: { userId: string }) => {
     const { userId } = params;
@@ -33,7 +33,7 @@ async function readTodos(params: { userId: string }): Promise<TodoItem[]> {
 const getTodos = createServerFn({
     method: "GET"
 })
-    .middleware([getOidcFnMiddleware({ assert: "user logged in" })])
+    .middleware([oidcFnMiddleware({ assert: "user logged in" })])
     .handler(
         async ({ context: { oidc } }) =>
             await readTodos({
@@ -43,7 +43,7 @@ const getTodos = createServerFn({
 
 const addTodo = createServerFn({ method: "POST" })
     .inputValidator((d: string) => d)
-    .middleware([getOidcFnMiddleware({ assert: "user logged in" })])
+    .middleware([oidcFnMiddleware({ assert: "user logged in" })])
     .handler(async ({ data, context: { oidc } }) => {
         const userId = oidc.accessTokenClaims.sub;
 

@@ -878,7 +878,7 @@ export function createOidcSpaApi<
         };
     }
 
-    function getOidcRequestMiddleware(params?: {
+    function oidcRequestMiddleware(params?: {
         assert?: "user logged in";
         hasRequiredClaims?: (params: { accessTokenClaims: AccessTokenClaims }) => Promise<boolean>;
     }) {
@@ -887,7 +887,7 @@ export function createOidcSpaApi<
         }>(createFunctionMiddlewareServerFn(params));
     }
 
-    function getOidcFnMiddleware(params?: {
+    function oidcFnMiddleware(params?: {
         assert?: "user logged in";
         hasRequiredClaims?: (params: { accessTokenClaims: AccessTokenClaims }) => Promise<boolean>;
     }) {
@@ -927,8 +927,8 @@ export function createOidcSpaApi<
         bootstrapOidc,
         enforceLogin,
         OidcInitializationGate,
-        getOidcFnMiddleware,
-        getOidcRequestMiddleware
+        oidcFnMiddleware,
+        oidcRequestMiddleware
     };
 }
 

@@ -1,10 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { getOidcRequestMiddleware } from "src/oidc";
+import { oidcRequestMiddleware } from "src/oidc";
 
 export const Route = createFileRoute("/demo/api/names")({
     server: {
         middleware: [
-            getOidcRequestMiddleware({
+            oidcRequestMiddleware({
                 assert: "user logged in",
                 hasRequiredClaims: async () => true
             })
