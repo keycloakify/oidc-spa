@@ -95,11 +95,11 @@ for (const targetFormat of ["cjs", "esm"] as const) {
                                     "angular.ts",
                                     "tanstack-start",
                                     pathJoin("tools", "infer_import_meta_env_BASE_URL.ts")
-                                ].map(relativePath => pathJoin(projectDirPath, "src", relativePath));
+                                ];
                             case "esm":
-                                return undefined;
+                                return ["vite-plugin", pathJoin("vendor", "build-runtime")];
                         }
-                    })()
+                    })().map(relativePath => pathJoin(projectDirPath, "src", relativePath))
                 },
                 null,
                 2
@@ -136,12 +136,20 @@ for (const targetFormat of ["cjs", "esm"] as const) {
 
         const extraBundleFileBasenames = new Set<string>();
 
-        (["frontend", "backend"] as const)
-            .map(backendOrFrontend => ({
-                vendorDirPath: pathJoin(distDirPath, "vendor", backendOrFrontend),
-                backendOrFrontend
+        (["frontend", "backend", "build-runtime"] as const)
+            .filter(targetRuntime => {
+                switch (targetRuntime) {
+                    case "build-runtime":
+                        return targetFormat === "cjs";
+                    default:
+                        return true;
+                }
+            })
+            .map(targetRuntime => ({
+                vendorDirPath: pathJoin(distDirPath, "vendor", targetRuntime),
+                targetRuntime
             }))
-            .forEach(({ backendOrFrontend, vendorDirPath }) =>
+            .forEach(({ vendorDirPath, targetRuntime }) =>
                 fs
                     .readdirSync(vendorDirPath)
                     .filter(fileBasename => fileBasename.endsWith(".js"))
@@ -163,7 +171,7 @@ for (const targetFormat of ["cjs", "esm"] as const) {
                                 break vendor_oidc_client_ts;
                             }
 
-                            assert(backendOrFrontend === "frontend");
+                            assert(targetRuntime === "frontend");
 
                             fs.writeFileSync(
                                 filePath,
@@ -246,10 +254,11 @@ for (const targetFormat of ["cjs", "esm"] as const) {
                                         `    chunkFormat: 'module'`,
                                         `  },`,
                                         `  target: "${(() => {
-                                            switch (backendOrFrontend) {
+                                            switch (targetRuntime) {
                                                 case "frontend":
                                                     return "web";
                                                 case "backend":
+                                                case "build-runtime":
                                                     return "node";
                                             }
                                         })()}",`,

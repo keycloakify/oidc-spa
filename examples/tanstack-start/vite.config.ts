@@ -4,6 +4,7 @@ import viteReact from "@vitejs/plugin-react";
 import viteTsConfigPaths from "vite-tsconfig-paths";
 import tailwindcss from "@tailwindcss/vite";
 import { nitroV2Plugin } from "@tanstack/nitro-v2-vite-plugin";
+import { oidcSpa } from "oidc-spa/vite-plugin";
 
 const config = defineConfig({
     plugins: [
@@ -13,6 +14,7 @@ const config = defineConfig({
             projects: ["./tsconfig.json"]
         }),
         tailwindcss(),
+        oidcSpa({}),
         tanstackStart(),
         viteReact()
     ]

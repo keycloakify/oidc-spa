@@ -110,7 +110,9 @@
         "@angular/common": "^20.3.1",
         "@angular/platform-browser": "^20.3.1",
         "@tanstack/react-start": "^1.132.0",
-        "esbuild": "^0.25.10"
+        "esbuild": "^0.25.10",
+        "magic-string": "^0.30.19",
+        "vite": "^7.1.10"
     },
     "publishConfig": {
         "access": "public"
@@ -136,6 +138,11 @@
             "module": "./dist/esm/angular.js",
             "types": "./dist/esm/angular.d.ts",
             "default": "./dist/esm/angular.js"
+        },
+        "./vite-plugin": {
+            "require": "./dist/vite-plugin/index.js",
+            "types": "./dist/vite-plugin/index.d.ts",
+            "default": "./dist/vite-plugin/index.js"
         },
         "./react-tanstack-start": {
             "module": "./dist/esm/tanstack-start/react/index.js",
