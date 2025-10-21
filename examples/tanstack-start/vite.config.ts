@@ -14,8 +14,14 @@ const config = defineConfig({
             projects: ["./tsconfig.json"]
         }),
         tailwindcss(),
+        (() => {
+            const x = tanstackStart();
+
+            console.log(x);
+
+            return x;
+        })(),
         oidcSpa({}),
-        tanstackStart(),
         viteReact()
     ]
 });

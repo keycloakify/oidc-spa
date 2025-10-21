@@ -1,24 +1,23 @@
 import type { Plugin } from "vite";
-import { MagicString } from "../vendor/build-runtime/magic-string";
+import { detectProjectType, type ProjectType } from "./detectProjectType";
 
-type OidcSpaVitePluginParams = {};
+//import { MagicString } from "../vendor/build-runtime/magic-string";
 
-export function oidcSpa(params?: OidcSpaVitePluginParams) {
-    const {} = params ?? {};
+type OidcSpaVitePluginParams = {
+    freezeFetch: boolean;
+    freezeXMLHttpRequest: boolean;
+    freezeWebSocket: boolean;
+};
 
-    const plugin = {
+export function oidcSpa(_params: OidcSpaVitePluginParams) {
+    let projectType: ProjectType | undefined = undefined;
+
+    const plugin: Plugin = {
         name: "oidc-spa",
-        configResolved: async resolvedConfig => {
-            console.log(MagicString, resolvedConfig);
-        },
-        transform: (code, id) => {
-            console.log({ code, id });
-        },
-        closeBundle: async () => {},
-        transformIndexHtml: html => {
-            console.log(html);
+        configResolved(config) {
+            projectType = detectProjectType(config);
         }
-    } satisfies Plugin;
+    };
 
-    return plugin as any;
+    return plugin;
 }
