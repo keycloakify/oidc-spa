@@ -1,22 +1,18 @@
-import type { ResolvedConfig } from "vite";
-
 export type ProjectType = "tanstack-start" | "react-router-framework" | "other";
 
-const TANSTACK_PLUGIN_NAME = "tanstack-react-start:config";
-const REACT_ROUTER_PLUGIN_NAME = "react-router";
+type ResolvedConfigLike = {
+    plugins: readonly { name: string }[];
+};
 
-export function detectProjectType(config: ResolvedConfig): ProjectType {
-    const pluginNames = new Set(
-        config.plugins
-            .map(plugin => plugin?.name)
-            .filter((name): name is string => typeof name === "string")
-    );
+export function detectProjectType(params: { resolvedConfig: ResolvedConfigLike }): ProjectType {
+    const { resolvedConfig } = params;
+    const pluginNames = new Set(resolvedConfig.plugins.map(plugin => plugin.name));
 
-    if (pluginNames.has(TANSTACK_PLUGIN_NAME)) {
+    if (pluginNames.has("tanstack-react-start:config")) {
         return "tanstack-start";
     }
 
-    if (pluginNames.has(REACT_ROUTER_PLUGIN_NAME)) {
+    if (pluginNames.has("react-router")) {
         return "react-router-framework";
     }
 

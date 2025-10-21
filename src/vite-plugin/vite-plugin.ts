@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import type { Plugin, ResolvedConfig } from "vite";
 import { normalizePath } from "vite";
 import { detectProjectType, type ProjectType } from "./detectProjectType";
+import { assert } from "../tools/tsafe/assert";
 
 //import { MagicString } from "../vendor/build-runtime/magic-string";
 
@@ -49,25 +50,23 @@ const REACT_ROUTER_ENTRY_CANDIDATES = [
 const TANSTACK_ENTRY_CANDIDATES = ["client.tsx", "client.ts", "client.jsx", "client.js"];
 
 export function oidcSpa(params: OidcSpaVitePluginParams = {}) {
-    let projectType: ProjectType | undefined;
     let entryResolution: EntryResolution | undefined;
     let stubSourceCache: string | undefined;
 
     const plugin: Plugin = {
         name: "oidc-spa",
         enforce: "pre",
-        configResolved(config) {
-            projectType = detectProjectType(config);
+        configResolved(resolvedConfig) {
             entryResolution = resolveEntryForProject({
-                config,
-                projectType,
+                config: resolvedConfig,
+                projectType: detectProjectType({ resolvedConfig }),
                 params
             });
+
+            console.log(entryResolution);
         },
         load(id) {
-            if (!entryResolution) {
-                return null;
-            }
+            assert(entryResolution !== undefined);
 
             const { path: rawPath, queryParams } = splitId(id);
             const normalizedRequestPath = normalizeRequestPath(rawPath);
