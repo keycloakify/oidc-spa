@@ -4,7 +4,7 @@ export function infer_import_meta_env_BASE_URL() {
     const url = new URL(import.meta.url);
     const pathname = url.pathname;
 
-    for (const searched of ["/assets/", "/node_modules/.vite/"]) {
+    for (const searched of ["/assets/", "/node_modules/"]) {
         // In Vite builds, JS files live under `${BASE_URL}/assets/...`
         const index = pathname.indexOf(searched);
 

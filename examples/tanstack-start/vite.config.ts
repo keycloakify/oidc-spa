@@ -14,16 +14,22 @@ const config = defineConfig({
             projects: ["./tsconfig.json"]
         }),
         tailwindcss(),
-        (() => {
-            const x = tanstackStart();
-
-            console.log(x);
-
-            return x;
-        })(),
-        oidcSpa({}),
+        tanstackStart(),
+        oidcSpa({
+            freezeFetch: true,
+            freezeWebSocket: true,
+            freezeXMLHttpRequest: true
+        }),
         viteReact()
-    ]
+    ],
+    optimizeDeps: {
+        exclude: [
+            "oidc-spa/entrypoint",
+            "oidc-spa/react-tanstack-start",
+            "oidc-spa/react-tanstack-start/rfcUnifiedClientRetryForSsrLoaders",
+            "oidc-spa/react-tanstack-start/rfcUnifiedClientRetryForSsrLoaders/entrypoint"
+        ]
+    }
 });
 
 export default config;
