@@ -460,13 +460,22 @@ export function createOidcSpaApi<
                     : () => getParamsOfBootstrapOrDirectValue;
 
             if (!isBrowser) {
+                const missingEnvNames = new Set<string>();
+
                 const env_proxy = new Proxy<Record<string, string>>(
                     {},
                     {
                         get: (...[, envName]) => {
                             assert(typeof envName === "string");
 
-                            return process.env[envName] ?? "";
+                            const value = process.env[envName];
+
+                            if (value === undefined) {
+                                missingEnvNames.add(envName);
+                                return "";
+                            }
+
+                            return value;
                         },
                         has: (...[, envName]) => {
                             assert(typeof envName === "string");
@@ -475,7 +484,27 @@ export function createOidcSpaApi<
                     }
                 );
 
-                dParamsOfBootstrap.resolve(getParamsOfBootstrap({ process: { env: env_proxy } }));
+                const paramsOfBootstrap = getParamsOfBootstrap({ process: { env: env_proxy } });
+
+                if (
+                    paramsOfBootstrap.implementation === "real" &&
+                    (!paramsOfBootstrap.issuerUri || !paramsOfBootstrap.clientId)
+                ) {
+                    throw new Error(
+                        [
+                            "oidc-spa: Incorrect configuration provided:\n",
+                            JSON.stringify(paramsOfBootstrap, null, 2),
+                            ...(missingEnvNames.size === 0
+                                ? []
+                                : [
+                                      "\nYou probably forgot to define the environnement variables:",
+                                      Array.from(missingEnvNames).join(", ")
+                                  ])
+                        ].join(" ")
+                    );
+                }
+
+                dParamsOfBootstrap.resolve(paramsOfBootstrap);
                 return;
             }
 
