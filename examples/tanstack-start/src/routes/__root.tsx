@@ -37,9 +37,20 @@ function RootDocument({ children }: { children: React.ReactNode }) {
             <head>
                 <HeadContent />
             </head>
-            <body>
-                <Header />
-                {children}
+            <body
+                className="min-h-screen text-white"
+                style={{
+                    backgroundColor: "#000000",
+                    backgroundImage:
+                        "radial-gradient(ellipse 60% 60% at 0% 100%, #444444 0%, #222222 60%, #000000 100%)"
+                }}
+            >
+                <div className="min-h-screen flex flex-col">
+                    <Header />
+                    <main className="flex flex-1 flex-col">
+                        <div className="flex flex-1 flex-col">{children}</div>
+                    </main>
+                </div>
                 <AutoLogoutWarningOverlay />
                 <TanStackDevtools
                     config={{
