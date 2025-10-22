@@ -2,49 +2,13 @@ import { useEffect, useState } from "react";
 
 import { createFileRoute } from "@tanstack/react-router";
 import { fetchWithAuth, enforceLogin } from "src/oidc";
-import { enableUnifiedClientRetryForSsrLoaders } from "oidc-spa/react-tanstack-start/rfcUnifiedClientRetryForSsrLoaders";
 
 function getNames() {
     return fetchWithAuth("/demo/api/names").then(res => res.json());
 }
 
-export const Route = createFileRoute("/demo/start/api-request")(
-    enableUnifiedClientRetryForSsrLoaders({
-        beforeLoad: enforceLogin,
-        pendingComponent: () => (
-            <div
-                className="flex items-center justify-center min-h-screen p-4 text-white"
-                style={{
-                    backgroundColor: "#000",
-                    backgroundImage:
-                        "radial-gradient(ellipse 60% 60% at 0% 100%, #444 0%, #222 60%, #000 100%)"
-                }}
-            />
-        ),
-        component: Home
-    })
-);
-
-/*
-
 export const Route = createFileRoute("/demo/start/api-request")({
     beforeLoad: enforceLogin,
-    component: Home,
-    errorComponent: ({ error }) => {
-        const isClientOnlySentinel = error.message === "__OIDC-SPA_REQUIRE_CLIENT_SENTINEL__";
-
-        const router = useRouter();
-
-        useEffect(() => {
-            if (!isClientOnlySentinel) {
-                return;
-            }
-
-            router.invalidate();
-        }, []);
-
-        return Route.options.pendingComponent?.({}) ?? null;
-    },
     pendingComponent: () => (
         <div
             className="flex items-center justify-center min-h-screen p-4 text-white"
@@ -54,9 +18,9 @@ export const Route = createFileRoute("/demo/start/api-request")({
                     "radial-gradient(ellipse 60% 60% at 0% 100%, #444 0%, #222 60%, #000 100%)"
             }}
         />
-    )
+    ),
+    component: Home
 });
-*/
 
 function Home() {
     const [names, setNames] = useState<Array<string>>([]);

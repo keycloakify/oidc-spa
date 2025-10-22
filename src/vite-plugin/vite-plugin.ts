@@ -4,8 +4,7 @@ import type { Param0 } from "../tools/tsafe/Param0";
 import type { oidcEarlyInit } from "../entrypoint";
 import { createLoadHandleEntrypoint } from "./handleClientEntrypoint";
 import { excludeModuleExportFromOptimizedDeps } from "./excludeModuleExportFromOptimizedDeps";
-
-//import { MagicString } from "../vendor/build-runtime/magic-string";
+import { transformCreateFileRoute } from "./transformCreateFileRoute";
 
 export type OidcSpaVitePluginParams = Omit<Param0<typeof oidcEarlyInit>, "isPostLoginRedirectManual">;
 
@@ -24,6 +23,14 @@ export function oidcSpa(params: OidcSpaVitePluginParams) {
                 oidcSpaVitePluginParams: params,
                 resolvedConfig
             });
+        },
+        transform(code, id) {
+            const transformed = transformCreateFileRoute({
+                code,
+                id
+            });
+
+            return transformed;
         },
         async load(id) {
             assert(loadHandleEntrypoint !== undefined);
