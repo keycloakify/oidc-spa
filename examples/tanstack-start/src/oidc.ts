@@ -40,7 +40,8 @@ bootstrapOidc(({ process }) =>
               implementation: "real",
               issuerUri: process.env.OIDC_ISSUER_URI,
               clientId: process.env.OIDC_CLIENT_ID,
-              startCountdownSecondsBeforeAutoLogout: 45
+              startCountdownSecondsBeforeAutoLogout: 45,
+              debugLogs: true
           }
 );
 

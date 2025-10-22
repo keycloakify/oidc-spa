@@ -10,21 +10,6 @@ export const Route = createFileRoute("/")({
     )
 });
 
-const Greeting = createOidcComponent({
-    pendingComponent: () => <>&nbsp;</>,
-    component: () => {
-        const { isUserLoggedIn, decodedIdToken } = Greeting.useOidc();
-
-        return (
-            <span className="opacity-0 animate-[fadeIn_0.2s_ease-in_forwards]">
-                {isUserLoggedIn
-                    ? `Welcome back ${decodedIdToken.preferred_username}`
-                    : `Hello anonymous visitor!`}
-            </span>
-        );
-    }
-});
-
 function App() {
     const features = [
         {
@@ -126,3 +111,18 @@ function App() {
         </div>
     );
 }
+
+const Greeting = createOidcComponent({
+    pendingComponent: () => <>&nbsp;</>,
+    component: () => {
+        const { isUserLoggedIn, decodedIdToken } = Greeting.useOidc();
+
+        return (
+            <span className="opacity-0 animate-[fadeIn_0.2s_ease-in_forwards]">
+                {isUserLoggedIn
+                    ? `Welcome back ${decodedIdToken.preferred_username}`
+                    : `Hello anonymous visitor!`}
+            </span>
+        );
+    }
+});
