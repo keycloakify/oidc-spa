@@ -625,7 +625,9 @@ export function createOidcSpaApi<
                                 clientId: paramsOfBootstrap.clientId
                             });
                         } catch (error) {
-                            assert(error instanceof OidcInitializationError);
+                            if (!(error instanceof OidcInitializationError)) {
+                                throw error;
+                            }
                             dOidcCoreOrInitializationError.resolve(error);
                             return;
                         }
