@@ -907,7 +907,7 @@ export function createOidcSpaApi<
                 if (params?.assert === "user logged in" && !oidc.isUserLoggedIn) {
                     throw new Error(
                         [
-                            "oidc-spa: You used getOidcFrMiddleware({ assert: 'user logged in' })",
+                            "oidc-spa: You used oidcFnMiddleware({ assert: 'user logged in' })",
                             "but the server function the middleware was attached to was called",
                             "while the user is not logged in."
                         ].join(" ")
