@@ -4,6 +4,8 @@ import { babelParser, babelTraverse, babelTypes as t } from "../vendor/build-run
 const ENABLE_IMPORT_SPECIFIER = "enableUnifiedClientRetryForSsrLoaders";
 const ENABLE_IMPORT_SOURCE = "oidc-spa/react-tanstack-start/rfcUnifiedClientRetryForSsrLoaders";
 const CREATE_FILE_ROUTE_IDENTIFIER = "createFileRoute";
+const POST_LOGIN_IMPORT_SPECIFIER = "withHandlingOidcPostLoginNavigation";
+const POST_LOGIN_IMPORT_SOURCE = "oidc-spa/react-tanstack-start";
 
 type TransformParams = {
     code: string;
@@ -36,6 +38,9 @@ export function transformCreateFileRoute(params: TransformParams): TransformResu
     const magicString = new MagicString(code);
     let hasCreateFileRouteImport = false;
     let hasEnableImport = false;
+    let hasPostLoginImport = false;
+    let requiresEnableImport = false;
+    let requiresPostLoginImport = false;
     let lastImportEnd: number | undefined;
     let mutated = false;
 
@@ -46,7 +51,7 @@ export function transformCreateFileRoute(params: TransformParams): TransformResu
                 return;
             }
 
-            const end = typeof path.node.end === "number" ? path.node.end : undefined;
+            const end = path.node.end ?? undefined;
             if (typeof end === "number") {
                 lastImportEnd = lastImportEnd === undefined ? end : Math.max(lastImportEnd, end);
             }
@@ -74,12 +79,20 @@ export function transformCreateFileRoute(params: TransformParams): TransformResu
                     hasEnableImport = true;
                 }
             }
+
+            if (sourceValue === POST_LOGIN_IMPORT_SOURCE) {
+                if (
+                    path.node.specifiers.some(
+                        specifier =>
+                            t.isImportSpecifier(specifier) &&
+                            t.isIdentifier(specifier.imported, { name: POST_LOGIN_IMPORT_SPECIFIER })
+                    )
+                ) {
+                    hasPostLoginImport = true;
+                }
+            }
         },
         CallExpression(path) {
-            if (mutated) {
-                return;
-            }
-
             const callee = path.get("callee");
             if (!callee.isCallExpression()) {
                 return;
@@ -100,20 +113,51 @@ export function transformCreateFileRoute(params: TransformParams): TransformResu
                 return;
             }
 
-            if (!objectContainsLoaderOrBeforeLoad(configArg.node)) {
-                return;
+            const configNode = configArg.node;
+            let localMutated = false;
+
+            if (objectContainsLoaderOrBeforeLoad(configNode)) {
+                const start = configNode.start ?? undefined;
+                const end = configNode.end ?? undefined;
+
+                if (typeof start === "number" && typeof end === "number") {
+                    magicString.appendLeft(start, `${ENABLE_IMPORT_SPECIFIER}(`);
+                    magicString.appendRight(end, ")");
+                    requiresEnableImport = true;
+                    localMutated = true;
+                }
             }
 
-            const start = typeof configArg.node.start === "number" ? configArg.node.start : undefined;
-            const end = typeof configArg.node.end === "number" ? configArg.node.end : undefined;
+            const innerArgs = callee.node.arguments ?? [];
+            const isRootRoute =
+                innerArgs.length > 0 && t.isStringLiteral(innerArgs[0]) && innerArgs[0].value === "/";
 
-            if (typeof start !== "number" || typeof end !== "number") {
-                return;
+            if (isRootRoute) {
+                const componentProp = findComponentProperty(configNode);
+                if (componentProp) {
+                    const valueNode = componentProp.value as t.Expression;
+
+                    if (!isWrappedWithHandling(valueNode)) {
+                        const start = valueNode.start ?? undefined;
+                        const end = valueNode.end ?? undefined;
+
+                        if (typeof start === "number" && typeof end === "number") {
+                            const original = code.slice(start, end);
+                            magicString.overwrite(
+                                start,
+                                end,
+                                `${POST_LOGIN_IMPORT_SPECIFIER}(${original})`
+                            );
+                            requiresPostLoginImport = true;
+                            localMutated = true;
+                        }
+                    }
+                }
             }
 
-            const original = code.slice(start, end);
-            magicString.overwrite(start, end, `${ENABLE_IMPORT_SPECIFIER}(${original})`);
-            mutated = true;
+            if (localMutated) {
+                mutated = true;
+            }
         }
     });
 
@@ -121,19 +165,38 @@ export function transformCreateFileRoute(params: TransformParams): TransformResu
         return null;
     }
 
-    if (!hasEnableImport) {
+    const importStatements: string[] = [];
+
+    if (requiresEnableImport && !hasEnableImport) {
+        importStatements.push(`import { ${ENABLE_IMPORT_SPECIFIER} } from "${ENABLE_IMPORT_SOURCE}";`);
+    }
+
+    if (requiresPostLoginImport && !hasPostLoginImport) {
+        importStatements.push(
+            `import { ${POST_LOGIN_IMPORT_SPECIFIER} } from "${POST_LOGIN_IMPORT_SOURCE}";`
+        );
+    }
+
+    if (importStatements.length > 0) {
         const insertionPoint = lastImportEnd ?? 0;
         const prefix = insertionPoint === 0 ? "" : "\n";
-        magicString.appendLeft(
-            insertionPoint,
-            `${prefix}import { ${ENABLE_IMPORT_SPECIFIER} } from "${ENABLE_IMPORT_SOURCE}";\n`
-        );
+        const suffix = "\n";
+        magicString.appendLeft(insertionPoint, `${prefix}${importStatements.join("\n")}${suffix}`);
     }
 
     return {
         code: magicString.toString(),
         map: magicString.generateMap({ hires: true, source: cleanId })
     };
+}
+
+function findComponentProperty(node: t.ObjectExpression): t.ObjectProperty | undefined {
+    return node.properties.find(
+        prop =>
+            t.isObjectProperty(prop) &&
+            ((t.isIdentifier(prop.key) && prop.key.name === "component") ||
+                (t.isStringLiteral(prop.key) && prop.key.value === "component"))
+    ) as t.ObjectProperty | undefined;
 }
 
 function objectContainsLoaderOrBeforeLoad(node: t.ObjectExpression): boolean {
@@ -153,6 +216,12 @@ function objectContainsLoaderOrBeforeLoad(node: t.ObjectExpression): boolean {
 
         return false;
     });
+}
+
+function isWrappedWithHandling(node: t.Node): boolean {
+    return (
+        t.isCallExpression(node) && t.isIdentifier(node.callee, { name: POST_LOGIN_IMPORT_SPECIFIER })
+    );
 }
 
 function isCandidateFile(id: string): boolean {

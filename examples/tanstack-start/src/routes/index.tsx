@@ -2,10 +2,9 @@ import { createFileRoute } from "@tanstack/react-router";
 
 import { Zap, Server, Route as RouteIcon, Shield, Waves, Sparkles } from "lucide-react";
 import { createOidcComponent } from "src/oidc";
-import { withHandlingOidcPostLoginNavigation } from "oidc-spa/react-tanstack-start";
 
 export const Route = createFileRoute("/")({
-    component: withHandlingOidcPostLoginNavigation(App),
+    component: App,
     pendingComponent: () => (
         <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900" />
     )
