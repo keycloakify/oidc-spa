@@ -264,8 +264,8 @@ export function createOidcSpaApi<
                               if (isUserLoggedIn) {
                                   throw new Error(
                                       [
-                                          "oidc-spa: Asserted the user should be logged in",
-                                          "but they arn't. Check your control flow."
+                                          "oidc-spa: Asserted the user should not be logged in",
+                                          "but they are. Check your control flow."
                                       ].join(" ")
                                   );
                               }
@@ -274,8 +274,8 @@ export function createOidcSpaApi<
                               if (!isUserLoggedIn) {
                                   throw new Error(
                                       [
-                                          "oidc-spa: Asserted the user should not be logged in",
-                                          "but they are. Check your control flow."
+                                          "oidc-spa: Asserted the user should be logged in",
+                                          "but they arn't. Check your control flow."
                                       ].join(" ")
                                   );
                               }
