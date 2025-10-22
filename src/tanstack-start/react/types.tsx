@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import type { Oidc as Oidc_core, OidcInitializationError } from "../../core";
 import type { FunctionMiddlewareAfterServer, RequestMiddlewareAfterServer } from "@tanstack/react-start";
 import type { GetterOrDirectValue } from "../../tools/GetterOrDirectValue";
+import type { OidcMetadata } from "../../core/OidcMetadata";
 
 export type CreateOidcComponent<DecodedIdToken> = <
     Assert extends "user logged in" | "user not logged in" | undefined,
@@ -229,9 +230,114 @@ export type ParamsOfBootstrap<AutoLogin, DecodedIdToken, AccessTokenClaims> =
 export namespace ParamsOfBootstrap {
     export type Real<AutoLogin> = {
         implementation: "real";
+
+        /**
+         * See: https://docs.oidc-spa.dev/v/v8/providers-configuration/provider-configuration
+         */
         issuerUri: string;
+        /**
+         * See: https://docs.oidc-spa.dev/v/v8/providers-configuration/provider-configuration
+         */
         clientId: string;
+
+        /**
+         * Default: 45 second.
+         * It defines how long before the auto logout we should start
+         * displaying an overlay message to the user alerting them
+         * like: "Are you still there? You'll be disconnected in 45...44..."
+         * NOTE: This parameter is only UI related! It does not defines
+         * after how much time of inactivity the user should be auto logged out.
+         * This is a server policy (that can be overwrote by idleSessionLifetimeInSeconds)
+         * See: https://docs.oidc-spa.dev/v/v8/auto-logout
+         */
         startCountdownSecondsBeforeAutoLogout?: number;
+        /**
+         * This parameter defines after how many seconds of inactivity the user should be
+         * logged out automatically.
+         *
+         * WARNING: It should be configured on the identity server side
+         * as it's the authoritative source for security policies and not the client.
+         * If you don't provide this parameter it will be inferred from the refresh token expiration time.
+         * Some provider however don't issue a refresh token or do not correctly set the
+         * expiration time. This parameter enable you to hard code the value to compensate
+         * the shortcoming of your auth server.
+         * */
+        idleSessionLifetimeInSeconds?: number;
+
+        /**
+         * The scopes being requested from the OIDC/OAuth2 provider (default: `["profile"]`
+         * (the scope "openid" is added automatically as it's mandatory)
+         **/
+        scopes?: string[];
+
+        /**
+         * Transform the url (authorization endpoint) before redirecting to the login pages.
+         *
+         * The isSilent parameter is true when the redirect is initiated in the background iframe for silent signin.
+         * This can be used to omit ui related query parameters (like `ui_locales`).
+         */
+        transformUrlBeforeRedirect?: (params: { authorizationUrl: string; isSilent: boolean }) => string;
+
+        /**
+         * Extra query params to be added to the authorization endpoint url before redirecting or silent signing in.
+         * You can provide a function that returns those extra query params, it will be called
+         * when login() is called.
+         *
+         * Example: extraQueryParams: ()=> ({ ui_locales: "fr" })
+         *
+         * This parameter can also be passed to login() directly.
+         */
+        extraQueryParams?:
+            | Record<string, string | undefined>
+            | ((params: { isSilent: boolean; url: string }) => Record<string, string | undefined>);
+        /**
+         * Extra body params to be added to the /token POST request.
+         *
+         * It will be used when for the initial request, whenever the token is getting refreshed and if you call `renewTokens()`.
+         * You can also provide this parameter directly to the `renewTokens()` method.
+         *
+         * It can be either a string to string record or a function that returns a string to string record.
+         *
+         * Example: extraTokenParams: ()=> ({ selectedCustomer: "xxx" })
+         *          extraTokenParams: { selectedCustomer: "xxx" }
+         */
+        extraTokenParams?:
+            | Record<string, string | undefined>
+            | (() => Record<string, string | undefined>);
+
+        /**
+         * Default: false
+         *
+         * See: https://docs.oidc-spa.dev/v/v8/resources/iframe-related-issues
+         */
+        noIframe?: boolean;
+
+        debugLogs?: boolean;
+
+        /**
+         * WARNING: This option exists solely as a workaround
+         * for limitations in the Google OAuth API.
+         * See: https://docs.oidc-spa.dev/providers-configuration/google-oauth
+         *
+         * Do not use this for other providers.
+         * If you think you need a client secret in a SPA, you are likely
+         * trying to use a confidential (private) client in the browser,
+         * which is insecure and not supported.
+         */
+        __unsafe_clientSecret?: string;
+
+        /**
+         * This option should only be used as a last resort.
+         *
+         * If your OIDC provider is correctly configured, this should not be necessary.
+         *
+         * The metadata is normally retrieved automatically from:
+         * `${issuerUri}/.well-known/openid-configuration`
+         *
+         * Use this only if that endpoint is not accessible (e.g. due to missing CORS headers
+         * or non-standard deployments), and you cannot fix the server-side configuration.
+         */
+        __metadata?: Partial<OidcMetadata>;
     } & (AutoLogin extends true ? {} : {});
 
     export type Mock<AutoLogin, DecodedIdToken, AccessTokenClaims> = {

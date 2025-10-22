@@ -67,7 +67,13 @@ export type ParamsOfCreateOidc<
      */
     homeUrl: string;
 
+    /**
+     * See: https://docs.oidc-spa.dev/v/v8/providers-configuration/provider-configuration
+     */
     issuerUri: string;
+    /**
+     * See: https://docs.oidc-spa.dev/v/v8/providers-configuration/provider-configuration
+     */
     clientId: string;
     /**
      * The scopes being requested from the OIDC/OAuth2 provider (default: `["profile"]`
@@ -132,6 +138,9 @@ export type ParamsOfCreateOidc<
      * WARNING: It should be configured on the identity server side
      * as it's the authoritative source for security policies and not the client.
      * If you don't provide this parameter it will be inferred from the refresh token expiration time.
+     * Some provider however don't issue a refresh token or do not correctly set the
+     * expiration time. This parameter enable you to hard code the value to compensate
+     * the shortcoming of your auth server.
      * */
     idleSessionLifetimeInSeconds?: number;
 

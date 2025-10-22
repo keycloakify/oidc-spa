@@ -641,17 +641,29 @@ export function createOidcSpaApi<
                     {
                         const { createOidc } = await prModuleCore;
 
+                        const homeUrl = infer_import_meta_env_BASE_URL();
+
                         let oidcCoreOrInitializationError:
                             | Oidc_core<DecodedIdToken>
                             | OidcInitializationError;
 
                         try {
                             oidcCoreOrInitializationError = await createOidc({
-                                homeUrl: infer_import_meta_env_BASE_URL(),
+                                homeUrl,
                                 autoLogin,
                                 decodedIdTokenSchema,
                                 issuerUri: paramsOfBootstrap.issuerUri,
-                                clientId: paramsOfBootstrap.clientId
+                                clientId: paramsOfBootstrap.clientId,
+                                idleSessionLifetimeInSeconds:
+                                    paramsOfBootstrap.idleSessionLifetimeInSeconds,
+                                scopes: paramsOfBootstrap.scopes,
+                                transformUrlBeforeRedirect: paramsOfBootstrap.transformUrlBeforeRedirect,
+                                extraQueryParams: paramsOfBootstrap.extraQueryParams,
+                                extraTokenParams: paramsOfBootstrap.extraTokenParams,
+                                noIframe: paramsOfBootstrap.noIframe,
+                                debugLogs: paramsOfBootstrap.debugLogs,
+                                __unsafe_clientSecret: paramsOfBootstrap.__unsafe_clientSecret,
+                                __metadata: paramsOfBootstrap.__metadata
                             });
                         } catch (error) {
                             if (!(error instanceof OidcInitializationError)) {
