@@ -21,15 +21,7 @@ const config = defineConfig({
             freezeXMLHttpRequest: true
         }),
         viteReact()
-    ],
-    optimizeDeps: {
-        exclude: [
-            "oidc-spa/entrypoint",
-            "oidc-spa/react-tanstack-start",
-            "oidc-spa/react-tanstack-start/rfcUnifiedClientRetryForSsrLoaders",
-            "oidc-spa/react-tanstack-start/rfcUnifiedClientRetryForSsrLoaders/entrypoint"
-        ]
-    }
+    ]
 });
 
 export default config;

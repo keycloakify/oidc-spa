@@ -97,7 +97,11 @@ for (const targetFormat of ["cjs", "esm"] as const) {
                                     pathJoin("tools", "infer_import_meta_env_BASE_URL.ts")
                                 ];
                             case "esm":
-                                return ["vite-plugin", pathJoin("vendor", "build-runtime")];
+                                return [
+                                    "vite-plugin",
+                                    pathJoin("vendor", "build-runtime"),
+                                    pathJoin("tools", "getThisCodebaseRootDirPath_cjs.ts")
+                                ];
                         }
                     })().map(relativePath => pathJoin(projectDirPath, "src", relativePath))
                 },

@@ -3,6 +3,7 @@ import { assert } from "../tools/tsafe/assert";
 import type { Param0 } from "../tools/tsafe/Param0";
 import type { oidcEarlyInit } from "../entrypoint";
 import { createLoadHandleEntrypoint } from "./handleClientEntrypoint";
+import { excludeModuleExportFromOptimizedDeps } from "./excludeModuleExportFromOptimizedDeps";
 
 //import { MagicString } from "../vendor/build-runtime/magic-string";
 
@@ -14,6 +15,10 @@ export function oidcSpa(params: OidcSpaVitePluginParams) {
     const plugin: Plugin = {
         name: "oidc-spa",
         enforce: "pre",
+        config(userConfig) {
+            userConfig = excludeModuleExportFromOptimizedDeps({ userConfig });
+            return userConfig;
+        },
         configResolved(resolvedConfig) {
             loadHandleEntrypoint = createLoadHandleEntrypoint({
                 oidcSpaVitePluginParams: params,
