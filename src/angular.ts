@@ -1,22 +1,29 @@
-import { BehaviorSubject } from "rxjs";
-import type { Oidc, OidcInitializationError, ParamsOfCreateOidc } from "./core";
-import type { OidcMetadata } from "./core/OidcMetadata";
-import { Deferred } from "./tools/Deferred";
-import { assert, type Equals, is } from "./tools/tsafe/assert";
-import { createObjectThatThrowsIfAccessed } from "./tools/createObjectThatThrowsIfAccessed";
+import { HttpHandlerFn, HttpInterceptorFn, HttpRequest } from "@angular/common/http";
 import {
-    type Signal,
     inject,
-    type EnvironmentProviders,
     makeEnvironmentProviders,
-    provideAppInitializer
+    provideAppInitializer,
+    type EnvironmentProviders,
+    type Signal
 } from "@angular/core";
 import { toSignal } from "@angular/core/rxjs-interop";
-import type { ReadonlyBehaviorSubject } from "./tools/ReadonlyBehaviorSubject";
-import { Router, type CanActivateFn } from "@angular/router";
-import type { ValueOrAsyncGetter } from "./tools/ValueOrAsyncGetter";
-import { getBaseHref } from "./tools/getBaseHref";
+import {
+    ActivatedRouteSnapshot,
+    GuardResult,
+    Router,
+    RouterStateSnapshot,
+    type CanActivateFn
+} from "@angular/router";
+import { BehaviorSubject, from, mergeMap, switchMap } from "rxjs";
+import type { Oidc, OidcInitializationError, ParamsOfCreateOidc } from "./core";
+import type { OidcMetadata } from "./core/OidcMetadata";
 import type { ConcreteClass } from "./tools/ConcreteClass";
+import { Deferred } from "./tools/Deferred";
+import type { ReadonlyBehaviorSubject } from "./tools/ReadonlyBehaviorSubject";
+import type { ValueOrAsyncGetter } from "./tools/ValueOrAsyncGetter";
+import { createObjectThatThrowsIfAccessed } from "./tools/createObjectThatThrowsIfAccessed";
+import { getBaseHref } from "./tools/getBaseHref";
+import { assert, is, type Equals } from "./tools/tsafe/assert";
 
 export type ParamsOfProvide = {
     issuerUri: string;
@@ -159,6 +166,25 @@ export type ParamsOfProvideMock = {
     isUserInitiallyLoggedIn?: boolean;
 };
 
+type BearerTokenCondition<
+    T_DecodedIdToken extends Record<string, unknown> = Oidc.Tokens.DecodedIdToken_base
+> = {
+    /**
+     * A function that dynamically determines whether the Bearer token should be included
+     * in the `Authorization` header for a given request.
+     *
+     * This function is asynchronous and receives the following arguments:
+     * - `req`: The `HttpRequest` object representing the current outgoing HTTP request.
+     * - `next`: The `HttpHandlerFn` for forwarding the request to the next handler in the chain.
+     * - `oidc`: The `Oidc` instance representing the authentication context.
+     */
+    shouldAddToken: (
+        req: HttpRequest<unknown>,
+        next: HttpHandlerFn,
+        oidc: Oidc<T_DecodedIdToken>
+    ) => Promise<boolean>;
+};
+
 export abstract class AbstractOidcService<
     T_DecodedIdToken extends Record<string, unknown> = Oidc.Tokens.DecodedIdToken_OidcCoreSpec
 > {
@@ -266,37 +292,222 @@ export abstract class AbstractOidcService<
         ]);
     }
 
-    static get enforceLoginGuard() {
-        const canActivateFn = (async route => {
-            const instance = inject(this);
-            const router = inject(Router);
-
-            await instance.prInitialized;
-
-            const oidc = instance.#getOidc({ callerName: "enforceLoginGuard" });
-
-            if (!oidc.isUserLoggedIn) {
-                const redirectUrl = router.serializeUrl(
-                    router.createUrlTree(
-                        route.url.map(u => u.path),
-                        {
-                            queryParams: route.queryParams,
-                            fragment: route.fragment ?? undefined
-                        }
+    #createBearerTokenInterceptor<
+        T_DecodedIdToken extends Record<string, unknown> = Oidc.Tokens.DecodedIdToken_base
+    >({
+        bearerPrefix,
+        authorizationHeaderName,
+        conditions,
+        req,
+        next
+    }: {
+        bearerPrefix?: string;
+        authorizationHeaderName?: string;
+        conditions: BearerTokenCondition<T_DecodedIdToken>[];
+        req: HttpRequest<unknown>;
+        next: HttpHandlerFn;
+    }): ReturnType<HttpInterceptorFn> {
+        return from(this.prInitialized).pipe(
+            switchMap(() => {
+                const oidc: Oidc<T_DecodedIdToken> = this.#getOidc({
+                    callerName: "createBearerTokenInterceptor"
+                }) as Oidc<T_DecodedIdToken>;
+                return from(
+                    Promise.all(
+                        conditions.map(
+                            async condition => await condition.shouldAddToken(req, next, oidc)
+                        )
                     )
                 );
+            }),
+            mergeMap(evaluatedConditions => {
+                const matchingConditionIndex = evaluatedConditions.findIndex(Boolean);
+                const matchingCondition = conditions[matchingConditionIndex];
 
-                const doesCurrentHrefRequiresAuth =
-                    location.href.replace(/\/$/, "") === redirectUrl.replace(/\/$/, "");
+                if (!matchingCondition) {
+                    return next(req);
+                }
+                return from(this.getAccessToken()).pipe(
+                    switchMap(({ isUserLoggedIn, accessToken }) => {
+                        if (!isUserLoggedIn) {
+                            throw new Error(
+                                `Assertion Error: Call to ${req.url} while the user isn't logged in.`
+                            );
+                        }
+                        const clonedRequest = req.clone({
+                            setHeaders: {
+                                [authorizationHeaderName ?? "Authorization"]: `${
+                                    bearerPrefix ?? "Bearer"
+                                } ${accessToken}`
+                            }
+                        });
+                        return next(clonedRequest);
+                    })
+                );
+            })
+        );
+    }
 
-                await oidc.login({
-                    doesCurrentHrefRequiresAuth,
-                    redirectUrl
-                });
+    static createAdvancedBearerTokenInterceptor<
+        T_DecodedIdToken extends Record<string, unknown> = Oidc.Tokens.DecodedIdToken_base
+    >({
+        bearerPrefix,
+        authorizationHeaderName,
+        conditions
+    }: {
+        bearerPrefix?: string;
+        authorizationHeaderName?: string;
+        conditions?: BearerTokenCondition<T_DecodedIdToken>[];
+    }): HttpInterceptorFn {
+        const bearerConditions = conditions ?? [];
+        const interceptor: HttpInterceptorFn = (req, next) => {
+            const instance = inject(this);
+
+            return instance.#createBearerTokenInterceptor({
+                conditions: bearerConditions,
+                bearerPrefix,
+                next,
+                req,
+                authorizationHeaderName
+            });
+        };
+        return interceptor;
+    }
+
+    static createBasicBearerTokenInterceptor({
+        bearerPrefix,
+        authorizationHeaderName,
+        conditions
+    }: {
+        bearerPrefix?: string;
+        authorizationHeaderName?: string;
+        conditions: {
+            urlPattern: RegExp;
+            httpMethods?: ("GET" | "POST" | "PUT" | "DELETE" | "OPTIONS" | "HEAD" | "PATCH")[];
+        }[];
+    }) {
+        const findMatchingCondition = (
+            { method, url }: HttpRequest<unknown>,
+            {
+                urlPattern,
+                httpMethods = []
+            }: {
+                urlPattern: RegExp;
+                httpMethods?: ("GET" | "POST" | "PUT" | "DELETE" | "OPTIONS" | "HEAD" | "PATCH")[];
             }
+        ): boolean => {
+            const httpMethodTest =
+                httpMethods.length === 0 || httpMethods.join().indexOf(method.toUpperCase()) > -1;
 
-            return true;
-        }) satisfies CanActivateFn;
+            const urlTest = urlPattern.test(url);
+
+            return httpMethodTest && urlTest;
+        };
+        const interceptor: HttpInterceptorFn = (req, next) => {
+            const instance = inject(this);
+            return instance.#createBearerTokenInterceptor({
+                bearerPrefix,
+                authorizationHeaderName,
+                conditions: conditions.map<BearerTokenCondition>(c => ({
+                    shouldAddToken: async req => findMatchingCondition(req, c)
+                })),
+                req,
+                next
+            });
+        };
+
+        return interceptor;
+    }
+
+    static get bearerTokenInterceptor() {
+        const interceptor: HttpInterceptorFn = (req, next) => {
+            const instance = inject(this);
+            return instance.#createBearerTokenInterceptor({
+                conditions: [{ shouldAddToken: async () => true }],
+                req,
+                next
+            });
+        };
+        return interceptor;
+    }
+
+    async #createAuthGuard<
+        T_DecodedIdToken extends Record<string, unknown> = Oidc.Tokens.DecodedIdToken_base
+    >(
+        isAccessAllowed: ({
+            route,
+            state,
+            oidc
+        }: {
+            route: ActivatedRouteSnapshot;
+            state: RouterStateSnapshot;
+            oidc: Oidc<T_DecodedIdToken>;
+        }) => Promise<GuardResult> | GuardResult,
+        route: ActivatedRouteSnapshot,
+        state: RouterStateSnapshot
+    ) {
+        await this.prInitialized;
+
+        const oidc: Oidc<T_DecodedIdToken> = this.#getOidc({
+            callerName: "createAuthGuard"
+        }) as Oidc<T_DecodedIdToken>;
+
+        return isAccessAllowed({ route, state, oidc });
+    }
+
+    static createAuthGuard<
+        T_DecodedIdToken extends Record<string, unknown> = Oidc.Tokens.DecodedIdToken_base
+    >(
+        isAccessAllowed: ({
+            route,
+            state,
+            oidc
+        }: {
+            route: ActivatedRouteSnapshot;
+            state: RouterStateSnapshot;
+            oidc: Oidc<T_DecodedIdToken>;
+        }) => Promise<GuardResult> | GuardResult
+    ): CanActivateFn {
+        const canActivateFn: CanActivateFn = (route, state) => {
+            const instance = inject(this);
+            return instance.#createAuthGuard(isAccessAllowed, route, state);
+        };
+        return canActivateFn;
+    }
+
+    static get enforceLoginGuard(): CanActivateFn {
+        const canActivateFn: CanActivateFn = (route, state) => {
+            const router = inject(Router);
+            const instance = inject(this);
+            return instance.#createAuthGuard(
+                async ({ route, oidc }) => {
+                    if (!oidc.isUserLoggedIn) {
+                        const redirectUrl = router.serializeUrl(
+                            router.createUrlTree(
+                                route.url.map(u => u.path),
+                                {
+                                    queryParams: route.queryParams,
+                                    fragment: route.fragment ?? undefined
+                                }
+                            )
+                        );
+
+                        const doesCurrentHrefRequiresAuth =
+                            location.href.replace(/\/$/, "") === redirectUrl.replace(/\/$/, "");
+
+                        await oidc.login({
+                            doesCurrentHrefRequiresAuth,
+                            redirectUrl
+                        });
+                        return false;
+                    }
+
+                    return true;
+                },
+                route,
+                state
+            );
+        };
         return canActivateFn;
     }
 
