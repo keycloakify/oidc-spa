@@ -200,13 +200,13 @@ export namespace OidcServerContext {
 export type OidcRequestMiddleware<AccessTokenClaims> = {
     (params?: {
         assert?: undefined;
-        hasRequiredClaims: (params: { accessTokenClaims: AccessTokenClaims }) => Promise<boolean>;
+        hasRequiredClaims?: (params: { accessTokenClaims: AccessTokenClaims }) => Promise<boolean>;
     }): OidcRequestMiddleware.TanstackRequestMiddleware<{
         oidc: OidcServerContext<AccessTokenClaims>;
     }>;
     (params?: {
         assert?: "user logged in";
-        hasRequiredClaims: (params: { accessTokenClaims: AccessTokenClaims }) => Promise<boolean>;
+        hasRequiredClaims?: (params: { accessTokenClaims: AccessTokenClaims }) => Promise<boolean>;
     }): OidcRequestMiddleware.TanstackRequestMiddleware<{
         oidc: OidcServerContext.LoggedIn<AccessTokenClaims>;
     }>;
@@ -215,7 +215,7 @@ export type OidcRequestMiddleware<AccessTokenClaims> = {
 export namespace OidcRequestMiddleware {
     export type WithAutoLogin<AccessTokenClaims> = (params?: {
         assert?: "user logged in";
-        hasRequiredClaims: (params: { accessTokenClaims: AccessTokenClaims }) => Promise<boolean>;
+        hasRequiredClaims?: (params: { accessTokenClaims: AccessTokenClaims }) => Promise<boolean>;
     }) => TanstackRequestMiddleware<{
         oidc: OidcServerContext.LoggedIn<AccessTokenClaims>;
     }>;
