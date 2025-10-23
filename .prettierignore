@@ -6,4 +6,6 @@
 /.yarn_home
 /examples/tanstack-router-file-based/src/routeTree.gen.ts
 /examples/tanstack-start/src/routeTree.gen.ts
+/examples/tanstack-start/.output
+/examples/tanstack-start/.nitro
 .angular
