@@ -1,4 +1,4 @@
-import { createOidcComponent } from "src/oidc";
+import { createOidcComponent } from "@/oidc";
 
 export const AutoLogoutWarningOverlay = createOidcComponent({
     component: () => {

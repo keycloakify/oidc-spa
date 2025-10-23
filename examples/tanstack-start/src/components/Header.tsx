@@ -2,7 +2,7 @@ import { Link } from "@tanstack/react-router";
 
 import { useState } from "react";
 import { ChevronDown, ChevronRight, Home, Menu, Server, X } from "lucide-react";
-import { createOidcComponent } from "src/oidc";
+import { createOidcComponent } from "@/oidc";
 import { isKeycloak, createKeycloakUtils } from "oidc-spa/keycloak";
 
 const AuthButtons = createOidcComponent({

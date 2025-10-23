@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { fetchWithAuth, enforceLogin } from "src/oidc";
-import Spinner from "src/components/Spinner";
-import type { TodoItem } from "src/data/todos";
+import { fetchWithAuth, enforceLogin } from "@/oidc";
+import Spinner from "@/components/Spinner";
+import type { TodoItem } from "@/data/todos";
 
 export const Route = createFileRoute("/demo/start/api-request")({
     beforeLoad: enforceLogin,

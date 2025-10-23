@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { oidcRequestMiddleware } from "src/oidc";
-import * as dataTodos from "src/data/todos";
+import { oidcRequestMiddleware } from "@/oidc";
+import { getTodosStore } from "@/data/todos";
 
 export const Route = createFileRoute("/demo/api/todos")({
     server: {
@@ -9,7 +9,9 @@ export const Route = createFileRoute("/demo/api/todos")({
             GET: async ({ context: { oidc } }) => {
                 const userId = oidc.accessTokenClaims.sub;
 
-                const todos = await dataTodos.readTodos({ userId });
+                const todosStore = getTodosStore();
+
+                const todos = await todosStore.readTodos({ userId });
 
                 return new Response(JSON.stringify(todos), {
                     headers: {

@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
-import { enforceLogin, oidcFnMiddleware } from "src/oidc";
-import Spinner from "src/components/Spinner";
+import { enforceLogin, oidcFnMiddleware } from "@/oidc";
+import Spinner from "@/components/Spinner";
 
-import * as dataTodos from "src/data/todos";
+import { getTodosStore } from "@/data/todos";
 
 const getTodos = createServerFn({
     method: "GET"
@@ -13,7 +13,9 @@ const getTodos = createServerFn({
     .handler(async ({ context: { oidc } }) => {
         const userId = oidc.accessTokenClaims.sub;
 
-        return await dataTodos.readTodos({ userId });
+        const todosStore = getTodosStore();
+
+        return await todosStore.readTodos({ userId });
     });
 
 const addTodo = createServerFn({ method: "POST" })
@@ -22,10 +24,12 @@ const addTodo = createServerFn({ method: "POST" })
     .handler(async ({ data, context: { oidc } }) => {
         const userId = oidc.accessTokenClaims.sub;
 
-        const todos = await dataTodos.readTodos({ userId });
+        const todosStore = getTodosStore();
+
+        const todos = await todosStore.readTodos({ userId });
         todos.push({ id: todos.length + 1, name: data });
 
-        await dataTodos.updateTodos({ userId, todos });
+        await todosStore.updateTodos({ userId, todos });
     });
 
 export const Route = createFileRoute("/demo/start/server-funcs")({
