@@ -1,46 +1,20 @@
-import fs from "node:fs";
-import { useCallback, useState } from "react";
+import { useState } from "react";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { enforceLogin, oidcFnMiddleware } from "src/oidc";
 import Spinner from "src/components/Spinner";
 
-const getUserFilePath = (params: { userId: string }) => {
-    const { userId } = params;
-    return `todos_${userId}.json`;
-};
-
-type TodoItem = {
-    id: number;
-    name: string;
-};
-
-async function readTodos(params: { userId: string }): Promise<TodoItem[]> {
-    const { userId } = params;
-    return JSON.parse(
-        await fs.promises.readFile(getUserFilePath({ userId }), "utf-8").catch(() =>
-            JSON.stringify(
-                [
-                    { id: 1, name: "Get groceries" },
-                    { id: 2, name: "Buy a new phone" }
-                ],
-                null,
-                2
-            )
-        )
-    );
-}
+import * as dataTodos from "src/data/todos";
 
 const getTodos = createServerFn({
     method: "GET"
 })
     .middleware([oidcFnMiddleware({ assert: "user logged in" })])
-    .handler(
-        async ({ context: { oidc } }) =>
-            await readTodos({
-                userId: oidc.accessTokenClaims.sub
-            })
-    );
+    .handler(async ({ context: { oidc } }) => {
+        const userId = oidc.accessTokenClaims.sub;
+
+        return await dataTodos.readTodos({ userId });
+    });
 
 const addTodo = createServerFn({ method: "POST" })
     .inputValidator((d: string) => d)
@@ -48,10 +22,10 @@ const addTodo = createServerFn({ method: "POST" })
     .handler(async ({ data, context: { oidc } }) => {
         const userId = oidc.accessTokenClaims.sub;
 
-        const todos = await readTodos({ userId });
+        const todos = await dataTodos.readTodos({ userId });
         todos.push({ id: todos.length + 1, name: data });
-        await fs.promises.writeFile(getUserFilePath({ userId }), JSON.stringify(todos, null, 2));
-        return todos;
+
+        await dataTodos.updateTodos({ userId, todos });
     });
 
 export const Route = createFileRoute("/demo/start/server-funcs")({
@@ -67,46 +41,46 @@ export const Route = createFileRoute("/demo/start/server-funcs")({
 
 function Home() {
     const router = useRouter();
-    let todos = Route.useLoaderData();
+    const todos = Route.useLoaderData();
 
-    const [todo, setTodo] = useState("");
+    const [newTodoInputValue, setNewTodoInputValue] = useState("");
 
-    const submitTodo = useCallback(async () => {
-        todos = await addTodo({ data: todo });
-        setTodo("");
+    const onAddTodoButtonClick = async () => {
+        await addTodo({ data: newTodoInputValue });
+        setNewTodoInputValue("");
         router.invalidate();
-    }, [addTodo, todo]);
+    };
 
     return (
         <div className="flex flex-1 items-center justify-center min-h-full p-4 text-white">
             <div className="w-full max-w-2xl p-8 rounded-xl backdrop-blur-md bg-black/50 shadow-xl border-8 border-black/10">
                 <h1 className="text-2xl mb-4">Start Server Functions - Todo Example</h1>
                 <ul className="mb-4 space-y-2">
-                    {todos?.map(t => (
+                    {todos.map(todo => (
                         <li
-                            key={t.id}
+                            key={todo.id}
                             className="bg-white/10 border border-white/20 rounded-lg p-3 backdrop-blur-sm shadow-md"
                         >
-                            <span className="text-lg text-white">{t.name}</span>
+                            <span className="text-lg text-white">{todo.name}</span>
                         </li>
                     ))}
                 </ul>
                 <div className="flex flex-col gap-2">
                     <input
                         type="text"
-                        value={todo}
-                        onChange={e => setTodo(e.target.value)}
+                        value={newTodoInputValue}
+                        onChange={e => setNewTodoInputValue(e.target.value)}
                         onKeyDown={e => {
                             if (e.key === "Enter") {
-                                submitTodo();
+                                onAddTodoButtonClick();
                             }
                         }}
                         placeholder="Enter a new todo..."
                         className="w-full px-4 py-3 rounded-lg border border-white/20 bg-white/10 backdrop-blur-sm text-white placeholder-white/60 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
                     />
                     <button
-                        disabled={todo.trim().length === 0}
-                        onClick={submitTodo}
+                        disabled={newTodoInputValue.trim().length === 0}
+                        onClick={onAddTodoButtonClick}
                         className="bg-blue-500 hover:bg-blue-600 disabled:bg-blue-500/50 disabled:cursor-not-allowed text-white font-bold py-3 px-4 rounded-lg transition-colors"
                     >
                         Add todo
