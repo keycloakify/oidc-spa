@@ -32,7 +32,7 @@ const URL_SEARCH_PARAM_NAME = "isUserLoggedIn";
 const locationHref_moduleEvalTime = location.href;
 
 export async function createMockOidc<
-    DecodedIdToken extends Record<string, unknown> = Oidc.Tokens.DecodedIdToken_base,
+    DecodedIdToken extends Record<string, unknown> = Oidc.Tokens.DecodedIdToken_OidcCoreSpec,
     AutoLogin extends boolean = false
 >(
     params: ParamsOfCreateMockOidc<DecodedIdToken, AutoLogin>
@@ -157,7 +157,7 @@ export async function createMockOidc<
                     }),
                 decodedIdToken_original:
                     mockedTokens.decodedIdToken_original ??
-                    createObjectThatThrowsIfAccessed<Oidc.Tokens.DecodedIdToken_base>({
+                    createObjectThatThrowsIfAccessed<Oidc.Tokens.DecodedIdToken_OidcCoreSpec>({
                         debugMessage: [
                             "You haven't provided a mocked decodedIdToken_original",
                             "See https://docs.oidc-spa.dev/v/v8/mock"

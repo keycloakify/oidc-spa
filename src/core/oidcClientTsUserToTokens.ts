@@ -9,7 +9,7 @@ import { INFINITY_TIME } from "../tools/INFINITY_TIME";
 export function oidcClientTsUserToTokens<DecodedIdToken extends Record<string, unknown>>(params: {
     oidcClientTsUser: OidcClientTsUser;
     decodedIdTokenSchema?: {
-        parse: (decodedIdToken_original: Oidc.Tokens.DecodedIdToken_base) => DecodedIdToken;
+        parse: (decodedIdToken_original: Oidc.Tokens.DecodedIdToken_OidcCoreSpec) => DecodedIdToken;
     };
     __unsafe_useIdTokenAsAccessToken: boolean;
     decodedIdToken_previous: DecodedIdToken | undefined;
@@ -33,7 +33,7 @@ export function oidcClientTsUserToTokens<DecodedIdToken extends Record<string, u
 
     assert(idToken !== undefined, "No id token provided by the oidc server");
 
-    const decodedIdToken_original = decodeJwt<Oidc.Tokens.DecodedIdToken_base>(idToken);
+    const decodedIdToken_original = decodeJwt<Oidc.Tokens.DecodedIdToken_OidcCoreSpec>(idToken);
 
     if (isFirstInit) {
         log?.(

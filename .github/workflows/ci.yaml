@@ -16,22 +16,19 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - uses: actions/setup-node@v3
+      with:
+        node-version: '22.x'
     - uses: bahmutov/npm-install@v1
     - name: If this step fails run 'yarn format' then commit again.
       run: yarn format:check
   test:
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     needs: test_format
-    strategy:
-      matrix:
-        node: [ '20' ]
-        os: [ ubuntu-latest ]
-    name: Test with Node v${{ matrix.node }} on ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v3
     - uses: actions/setup-node@v3
       with:
-        node-version: ${{ matrix.node }}
+        node-version: '22.x'
     - uses: bahmutov/npm-install@v1
     - run: yarn build
 
@@ -94,6 +91,7 @@ jobs:
         ref: ${{ github.ref }}
     - uses: actions/setup-node@v3
       with:
+        node-version: '22.x'
         registry-url: https://registry.npmjs.org/
     - uses: bahmutov/npm-install@v1
     - run: yarn build

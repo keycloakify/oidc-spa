@@ -355,9 +355,17 @@ export function createLoginOrGoToAuthServer(params: {
                         return new Promise<never>(() => {});
                     }
 
-                    // NOTE: Here, except error on our understanding there can't be any other
-                    // error.
-                    assert(false, "30442320");
+                    if (error.message.includes("Crypto.subtle is available only in secure contexts")) {
+                        throw new Error(
+                            [
+                                `oidc-spa: ${error.message}.`,
+                                "To fix this error see:",
+                                "https://docs.oidc-spa.dev/v/v8/resources/fixing-crypto.subtle-is-available-only-in-secure-contexts-https"
+                            ].join(" ")
+                        );
+                    }
+
+                    assert(false, "224238482");
                 }
             );
     }
