@@ -2,9 +2,12 @@ import { getStateData, getIsStatQueryParamValue } from "./StateData";
 import { assert, type Equals } from "../tools/tsafe/assert";
 import type { AuthResponse } from "./AuthResponse";
 import {
-    encryptAuthResponse,
+    captureApisForIframeProtection,
+    postEncryptedAuthResponseToParent,
     preventSessionStorageSetItemOfPublicKeyByThirdParty
 } from "./iframeMessageProtection";
+import { setOidcRequiredPostHydrationReplaceNavigationUrl } from "./requiredPostHydrationReplaceNavigationUrl";
+import { isBrowser } from "../tools/isBrowser";
 
 let hasEarlyInitBeenCalled = false;
 
@@ -14,6 +17,7 @@ export function oidcEarlyInit(params: {
     // NOTE: Made optional just to avoid breaking change.
     // Will be made mandatory next major.
     freezeWebSocket?: boolean;
+    isPostLoginRedirectManual?: boolean;
 }) {
     if (hasEarlyInitBeenCalled) {
         throw new Error("oidc-spa: oidcEarlyInit() Should be called only once");
@@ -21,9 +25,20 @@ export function oidcEarlyInit(params: {
 
     hasEarlyInitBeenCalled = true;
 
-    const { freezeFetch, freezeXMLHttpRequest, freezeWebSocket = false } = params ?? {};
+    if (!isBrowser) {
+        return { shouldLoadApp: true };
+    }
 
-    const { shouldLoadApp } = handleOidcCallback();
+    captureApisForIframeProtection();
+
+    const {
+        freezeFetch,
+        freezeXMLHttpRequest,
+        freezeWebSocket = false,
+        isPostLoginRedirectManual = false
+    } = params ?? {};
+
+    const { shouldLoadApp } = handleOidcCallback({ isPostLoginRedirectManual });
 
     if (shouldLoadApp) {
         if (freezeXMLHttpRequest) {
@@ -104,7 +119,11 @@ export function getRootRelativeOriginalLocationHref() {
     return rootRelativeOriginalLocationHref;
 }
 
-function handleOidcCallback(): { shouldLoadApp: boolean } {
+function handleOidcCallback(params: { isPostLoginRedirectManual?: boolean }): {
+    shouldLoadApp: boolean;
+} {
+    const { isPostLoginRedirectManual } = params;
+
     const location_urlObj = new URL(window.location.href);
 
     const locationHrefAssessment = (() => {
@@ -189,9 +208,7 @@ function handleOidcCallback(): { shouldLoadApp: boolean } {
 
     switch (stateData.context) {
         case "iframe":
-            encryptAuthResponse({
-                authResponse
-            }).then(({ encryptedMessage }) => parent.postMessage(encryptedMessage, location.origin));
+            postEncryptedAuthResponseToParent({ authResponse });
             return { shouldLoadApp: false };
         case "redirect": {
             redirectAuthResponse = authResponse;
@@ -203,7 +220,11 @@ function handleOidcCallback(): { shouldLoadApp: boolean } {
                 return stateData.rootRelativeRedirectUrl;
             })();
 
-            history.replaceState({}, "", rootRelativeRedirectUrl);
+            if (isPostLoginRedirectManual) {
+                setOidcRequiredPostHydrationReplaceNavigationUrl({ rootRelativeRedirectUrl });
+            } else {
+                history.replaceState({}, "", rootRelativeRedirectUrl);
+            }
 
             return { shouldLoadApp: true };
         }

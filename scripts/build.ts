@@ -9,18 +9,51 @@ import {
 import { assert } from "tsafe/assert";
 import { transformCodebase } from "./tools/transformCodebase";
 
+const isIncremental = process.env["INCREMENTAL"] === "true";
+
 const startTime = Date.now();
 
 const projectDirPath = pathJoin(__dirname, "..");
 const distDirPath_root = pathJoin(projectDirPath, "dist");
+const cacheDirPath = pathJoin(__dirname, "..", "node_modules", ".cache", "scripts");
+
+if (!fs.existsSync(cacheDirPath)) {
+    fs.mkdirSync(cacheDirPath, { recursive: true });
+}
+
+let preBuildDistWithOnlyVendorDirPath: string | undefined = undefined;
 
 if (fs.existsSync(distDirPath_root)) {
+    preserve_vendor: {
+        if (!isIncremental) {
+            break preserve_vendor;
+        }
+
+        preBuildDistWithOnlyVendorDirPath = pathJoin(cacheDirPath, "dist_vendor_only");
+
+        if (fs.existsSync(preBuildDistWithOnlyVendorDirPath)) {
+            fs.rmSync(preBuildDistWithOnlyVendorDirPath, { recursive: true });
+        }
+
+        transformCodebase({
+            srcDirPath: distDirPath_root,
+            destDirPath: preBuildDistWithOnlyVendorDirPath,
+            transformSourceCode: ({ fileRelativePath, sourceCode }) => {
+                if (
+                    fileRelativePath.startsWith(pathJoin("vendor")) ||
+                    fileRelativePath.startsWith(pathJoin("esm", "vendor"))
+                ) {
+                    return { modifiedSourceCode: sourceCode };
+                }
+                return undefined;
+            }
+        });
+    }
+
     fs.rmSync(distDirPath_root, { recursive: true });
 }
 
 for (const targetFormat of ["cjs", "esm"] as const) {
-    run(`npm run tsc:${targetFormat}`);
-
     const distDirPath = (() => {
         switch (targetFormat) {
             case "cjs":
@@ -30,14 +63,58 @@ for (const targetFormat of ["cjs", "esm"] as const) {
         }
     })();
 
-    fs.rmSync(pathJoin(distDirPath, "tsconfig.tsbuildinfo"));
+    {
+        const tsconfig = JSON.parse(
+            fs.readFileSync(pathJoin(projectDirPath, "tsconfig.json")).toString("utf8")
+        );
 
-    if (targetFormat === "esm") {
-        fs.rmSync(pathJoin(distDirPath, "vendor", "backend"), { recursive: true });
-        for (const ext of [".js", ".d.ts", ".js.map"] as const) {
-            fs.rmSync(pathJoin(distDirPath, `backend${ext}`));
-        }
+        const tsconfigPath_forTarget = pathJoin(cacheDirPath, "tsconfig.json");
+
+        fs.writeFileSync(
+            tsconfigPath_forTarget,
+            JSON.stringify(
+                {
+                    ...tsconfig,
+                    compilerOptions: {
+                        ...tsconfig.compilerOptions,
+                        module: (() => {
+                            switch (targetFormat) {
+                                case "cjs":
+                                    return "CommonJS";
+                                case "esm":
+                                    return "es2020";
+                            }
+                        })(),
+                        outDir: distDirPath
+                    },
+                    include: [pathJoin(projectDirPath, "src")],
+                    exclude: (() => {
+                        switch (targetFormat) {
+                            case "cjs":
+                                return [
+                                    "angular.ts",
+                                    "tanstack-start",
+                                    pathJoin("tools", "infer_import_meta_env_BASE_URL.ts"),
+                                    pathJoin("tools", "inferIsViteDev.ts")
+                                ];
+                            case "esm":
+                                return [
+                                    "vite-plugin",
+                                    pathJoin("vendor", "build-runtime"),
+                                    pathJoin("tools", "getThisCodebaseRootDirPath_cjs.ts")
+                                ];
+                        }
+                    })().map(relativePath => pathJoin(projectDirPath, "src", relativePath))
+                },
+                null,
+                2
+            )
+        );
+
+        run(`npx tsc --project ${tsconfigPath_forTarget}`);
     }
+
+    fs.rmSync(pathJoin(distDirPath, "tsconfig.tsbuildinfo"));
 
     {
         const version: string = JSON.parse(
@@ -57,33 +134,50 @@ for (const targetFormat of ["cjs", "esm"] as const) {
         fs.writeFileSync(filePath, content_modified);
     }
 
-    const extraBundleFileBasenames = new Set<string>();
+    vendor_dependencies: {
+        if (preBuildDistWithOnlyVendorDirPath !== undefined) {
+            break vendor_dependencies;
+        }
 
-    (["backend", "frontend"] as const)
-        .map(backendOrFrontend => ({
-            vendorDirPath: pathJoin(distDirPath, "vendor", backendOrFrontend),
-            backendOrFrontend
-        }))
-        .filter(({ vendorDirPath }) => fs.existsSync(vendorDirPath))
-        .forEach(({ backendOrFrontend, vendorDirPath }) =>
-            fs
-                .readdirSync(vendorDirPath)
-                .filter(fileBasename => fileBasename.endsWith(".js"))
-                .map(fileBasename => pathJoin(vendorDirPath, fileBasename))
-                .forEach(filePath => {
-                    {
-                        const mapFilePath = `${filePath}.map`;
+        const extraBundleFileBasenames = new Set<string>();
 
-                        if (fs.existsSync(mapFilePath)) {
-                            fs.unlinkSync(mapFilePath);
+        (["frontend", "backend", "build-runtime"] as const)
+            .filter(targetRuntime => {
+                switch (targetRuntime) {
+                    case "build-runtime":
+                        return targetFormat === "cjs";
+                    default:
+                        return true;
+                }
+            })
+            .map(targetRuntime => ({
+                vendorDirPath: pathJoin(distDirPath, "vendor", targetRuntime),
+                targetRuntime
+            }))
+            .forEach(({ vendorDirPath, targetRuntime }) =>
+                fs
+                    .readdirSync(vendorDirPath)
+                    .filter(fileBasename => fileBasename.endsWith(".js"))
+                    .map(fileBasename => pathJoin(vendorDirPath, fileBasename))
+                    .forEach(filePath => {
+                        {
+                            const mapFilePath = `${filePath}.map`;
+
+                            if (fs.existsSync(mapFilePath)) {
+                                fs.unlinkSync(mapFilePath);
+                            }
                         }
-                    }
 
-                    webpack_bundle: {
-                        if (
-                            backendOrFrontend === "frontend" &&
-                            pathBasename(filePath) === "oidc-client-ts.js"
-                        ) {
+                        // We have a special case for oidc-client-ts, we do it manually instead of relying
+                        // on webpack or esbuild because we want to avoid any extra byte and we know that
+                        // our version of oidc-client-ts has no dependencies so we can copy manually.
+                        vendor_oidc_client_ts: {
+                            if (pathBasename(filePath) !== "oidc-client-ts.js") {
+                                break vendor_oidc_client_ts;
+                            }
+
+                            assert(targetRuntime === "frontend");
+
                             fs.writeFileSync(
                                 filePath,
                                 Buffer.from(
@@ -112,121 +206,132 @@ for (const targetFormat of ["cjs", "esm"] as const) {
                                 )
                             );
 
-                            break webpack_bundle;
+                            return;
                         }
 
-                        const cacheDirPath = pathJoin(
-                            __dirname,
-                            "..",
-                            "node_modules",
-                            ".cache",
-                            "scripts"
-                        );
+                        esm_bundle: {
+                            if (targetFormat !== "esm") {
+                                break esm_bundle;
+                            }
 
-                        if (!fs.existsSync(cacheDirPath)) {
-                            fs.mkdirSync(cacheDirPath, { recursive: true });
+                            const bundledFilePath = pathJoin(cacheDirPath, "bundle.js");
+
+                            run(
+                                [
+                                    `npx esbuild`,
+                                    `'${filePath}'`,
+                                    "--bundle",
+                                    "--format=esm",
+                                    "--platform=browser",
+                                    "--main-fields=browser,module,main",
+                                    "--conditions=browser",
+                                    `--outfile='${bundledFilePath}'`
+                                ].join(" ")
+                            );
+
+                            fs.copyFileSync(bundledFilePath, filePath);
+
+                            return;
                         }
 
-                        const webpackConfigJsFilePath = pathJoin(cacheDirPath, "webpack.config.js");
-                        const webpackOutputDirPath = pathJoin(cacheDirPath, "webpack_output");
-                        const webpackOutputFilePath = pathJoin(webpackOutputDirPath, "index.js");
+                        cjs_bundle: {
+                            if (targetFormat !== "cjs") {
+                                break cjs_bundle;
+                            }
 
-                        fs.writeFileSync(
-                            webpackConfigJsFilePath,
-                            Buffer.from(
-                                [
-                                    `const path = require('path');`,
-                                    ``,
-                                    `module.exports = {`,
-                                    `   mode: 'production',`,
-                                    `  entry: '${filePath}',`,
-                                    `  output: {`,
-                                    `    path: '${webpackOutputDirPath}',`,
-                                    `    filename: '${pathBasename(webpackOutputFilePath)}',`,
-                                    (() => {
-                                        switch (targetFormat) {
-                                            case "esm":
-                                                return `    library: { type: 'module' },`;
-                                            case "cjs":
-                                                return `    libraryTarget: 'commonjs2',`;
-                                        }
-                                    })(),
-                                    `  },`,
-                                    targetFormat !== "esm"
-                                        ? ``
-                                        : `  experiments: { outputModule: true },`,
-                                    `  target: "${(() => {
-                                        switch (backendOrFrontend) {
-                                            case "frontend":
-                                                return "web";
-                                            case "backend":
-                                                return "node";
-                                        }
-                                    })()}",`,
-                                    `  module: {`,
-                                    `    rules: [`,
-                                    `      {`,
-                                    `        test: /\.js$/,`,
-                                    `        use: {`,
-                                    `          loader: 'babel-loader',`,
-                                    `          options: {`,
-                                    `            presets: ['@babel/preset-env'],`,
-                                    `          }`,
-                                    `        }`,
-                                    `      }`,
-                                    `    ]`,
-                                    `  }`,
-                                    `};`
-                                ].join("\n"),
-                                "utf8"
-                            )
-                        );
+                            const webpackConfigJsFilePath = pathJoin(cacheDirPath, "webpack.config.js");
+                            const webpackOutputDirPath = pathJoin(cacheDirPath, "webpack_output");
+                            const webpackOutputFilePath = pathJoin(webpackOutputDirPath, "index.js");
 
-                        run(
-                            `npx webpack --config ${pathRelative(
-                                process.cwd(),
-                                webpackConfigJsFilePath
-                            )}`
-                        );
+                            fs.writeFileSync(
+                                webpackConfigJsFilePath,
+                                Buffer.from(
+                                    [
+                                        `const path = require('path');`,
+                                        ``,
+                                        `module.exports = {`,
+                                        `   mode: 'production',`,
+                                        `  entry: '${filePath}',`,
+                                        `  output: {`,
+                                        `    path: '${webpackOutputDirPath}',`,
+                                        `    filename: '${pathBasename(webpackOutputFilePath)}',`,
+                                        `    libraryTarget: 'commonjs2',`,
+                                        `    chunkFormat: 'module'`,
+                                        `  },`,
+                                        `  target: "${(() => {
+                                            switch (targetRuntime) {
+                                                case "frontend":
+                                                    return "web";
+                                                case "backend":
+                                                case "build-runtime":
+                                                    return "node";
+                                            }
+                                        })()}",`,
+                                        `  module: {`,
+                                        `    rules: [`,
+                                        `      {`,
+                                        `        test: /\.js$/,`,
+                                        `        use: {`,
+                                        `          loader: 'babel-loader',`,
+                                        `          options: {`,
+                                        `            presets: ['@babel/preset-env'],`,
+                                        `          }`,
+                                        `        }`,
+                                        `      }`,
+                                        `    ]`,
+                                        `  }`,
+                                        `};`
+                                    ].join("\n"),
+                                    "utf8"
+                                )
+                            );
 
-                        fs.readdirSync(webpackOutputDirPath)
-                            .filter(fileBasename => !fileBasename.endsWith(".txt"))
-                            .map(fileBasename => pathJoin(webpackOutputDirPath, fileBasename))
-                            .forEach(bundleFilePath => {
-                                assert(bundleFilePath.endsWith(".js"));
+                            run(
+                                `npx webpack --config ${pathRelative(
+                                    process.cwd(),
+                                    webpackConfigJsFilePath
+                                )}`
+                            );
 
-                                if (pathBasename(bundleFilePath) === "index.js") {
-                                    fs.renameSync(webpackOutputFilePath, filePath);
-                                } else {
-                                    const bundleFileBasename = pathBasename(bundleFilePath);
+                            fs.readdirSync(webpackOutputDirPath)
+                                .filter(fileBasename => !fileBasename.endsWith(".txt"))
+                                .map(fileBasename => pathJoin(webpackOutputDirPath, fileBasename))
+                                .forEach(bundleFilePath => {
+                                    assert(bundleFilePath.endsWith(".js"));
 
-                                    assert(!extraBundleFileBasenames.has(bundleFileBasename));
-                                    extraBundleFileBasenames.add(bundleFileBasename);
+                                    if (pathBasename(bundleFilePath) === "index.js") {
+                                        fs.renameSync(webpackOutputFilePath, filePath);
+                                    } else {
+                                        const bundleFileBasename = pathBasename(bundleFilePath);
 
-                                    fs.renameSync(
-                                        bundleFilePath,
-                                        pathJoin(pathDirname(filePath), bundleFileBasename)
-                                    );
-                                }
-                            });
+                                        assert(!extraBundleFileBasenames.has(bundleFileBasename));
+                                        extraBundleFileBasenames.add(bundleFileBasename);
 
-                        fs.rmSync(webpackOutputDirPath, { recursive: true });
-                    }
+                                        fs.renameSync(
+                                            bundleFilePath,
+                                            pathJoin(pathDirname(filePath), bundleFileBasename)
+                                        );
+                                    }
+                                });
 
-                    if (targetFormat === "cjs") {
-                        fs.writeFileSync(
-                            filePath,
-                            Buffer.from(
-                                [
-                                    fs.readFileSync(filePath).toString("utf8"),
-                                    `exports.__oidcSpaBundle = true;`
-                                ].join("\n"),
-                                "utf8"
-                            )
-                        );
-                    }
-                })
-        );
+                            fs.rmSync(webpackOutputDirPath, { recursive: true });
+
+                            fs.writeFileSync(
+                                filePath,
+                                Buffer.from(
+                                    [
+                                        fs.readFileSync(filePath).toString("utf8"),
+                                        `exports.__oidcSpaBundle = true;`
+                                    ].join("\n"),
+                                    "utf8"
+                                )
+                            );
+
+                            return;
+                        }
+                    })
+            );
+    }
 }
 
 {
@@ -268,11 +373,6 @@ transformCodebase({
     destDirPath: pathJoin(distDirPath_root, "src")
 });
 
-//NOTE: Remove CJS distribution for Angular
-for (const ext of ["js", "d.ts", "js.map"]) {
-    fs.rmSync(pathJoin(distDirPath_root, `angular.${ext}`));
-}
-
 transformCodebase({
     srcDirPath: distDirPath_root,
     destDirPath: distDirPath_root,
@@ -280,7 +380,7 @@ transformCodebase({
         if (filePath.endsWith(".js.map")) {
             const sourceMapObj = JSON.parse(sourceCode.toString("utf8"));
 
-            sourceMapObj.sources = sourceMapObj.sources.map(source =>
+            sourceMapObj.sources = sourceMapObj.sources.map((source: string) =>
                 source.startsWith("../src/")
                     ? source.replace("..", ".")
                     : source.replace("../src", "src")
@@ -298,6 +398,13 @@ transformCodebase({
         };
     }
 });
+
+if (preBuildDistWithOnlyVendorDirPath !== undefined) {
+    transformCodebase({
+        srcDirPath: preBuildDistWithOnlyVendorDirPath,
+        destDirPath: distDirPath_root
+    });
+}
 
 console.log(`✓ built in ${((Date.now() - startTime) / 1000).toFixed(2)}s`);
 

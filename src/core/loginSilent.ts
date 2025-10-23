@@ -88,10 +88,16 @@ export async function loginSilent(params: {
         return Math.max(BASE_DELAY_MS, dynamicDelay);
     })();
 
-    const { decodeEncryptedAuth, getIsEncryptedAuthResponse, clearSessionStoragePublicKey } =
-        await initIframeMessageProtection({
-            stateUrlParamValue: stateUrlParamValue_instance
-        });
+    const {
+        getIsReadyToReadPublicKeyMessage,
+        startSessionStoragePublicKeyMaliciousWriteDetection,
+        setSessionStoragePublicKey,
+        decodeEncryptedAuth,
+        getIsEncryptedAuthResponse,
+        clearSessionStoragePublicKey
+    } = await initIframeMessageProtection({
+        stateUrlParamValue: stateUrlParamValue_instance
+    });
 
     let clearTimeouts: (params: { wasSuccess: boolean }) => void;
     {
@@ -132,33 +138,67 @@ export async function loginSilent(params: {
         };
     }
 
-    const listener = async (event: MessageEvent) => {
+    let listener: (event: MessageEvent) => void;
+
+    listener = async (event: MessageEvent) => {
         if (event.origin !== window.location.origin) {
             return;
         }
 
         if (
-            !getIsEncryptedAuthResponse({
+            !getIsReadyToReadPublicKeyMessage({
+                stateUrlParamValue: stateUrlParamValue_instance,
                 message: event.data
             })
         ) {
             return;
         }
 
-        const { authResponse } = await decodeEncryptedAuth({ encryptedAuthResponse: event.data });
+        window.removeEventListener("message", listener, false);
+
+        setSessionStoragePublicKey();
+
+        const dEncryptedAuthResponse = new Deferred<string>();
+
+        listener = event => {
+            if (event.origin !== window.location.origin) {
+                return;
+            }
+
+            const message = event.data;
+
+            if (
+                !getIsEncryptedAuthResponse({
+                    stateUrlParamValue: stateUrlParamValue_instance,
+                    message
+                })
+            ) {
+                return;
+            }
+
+            window.removeEventListener("message", listener);
+
+            // NOTE: Acknowledge that we're also doing it later but
+            // since there's a aggressive write protection in place
+            // it's good to clear the key ASAP.
+            clearSessionStoragePublicKey();
+
+            dEncryptedAuthResponse.resolve(message);
+        };
+
+        window.addEventListener("message", listener, false);
+
+        const encryptedAuthResponse = await dEncryptedAuthResponse.pr;
+
+        const { authResponse } = await decodeEncryptedAuth({ encryptedAuthResponse });
 
         const stateData = getStateData({ stateUrlParamValue: authResponse.state });
 
         assert(stateData !== undefined, "765645");
         assert(stateData.context === "iframe", "250711");
-
-        if (stateData.configId !== configId) {
-            return;
-        }
+        assert(stateData.configId === configId, "4922732");
 
         clearTimeouts({ wasSuccess: true });
-
-        window.removeEventListener("message", listener);
 
         dResult.resolve({
             outcome: "got auth response from iframe",
@@ -193,6 +233,8 @@ export async function loginSilent(params: {
 
         return url;
     };
+
+    startSessionStoragePublicKeyMaliciousWriteDetection();
 
     oidcClientTsUserManager
         .signinSilent({

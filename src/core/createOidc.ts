@@ -56,7 +56,7 @@ import { getIsValidRemoteJson } from "../tools/getIsValidRemoteJson";
 const VERSION = "{{OIDC_SPA_VERSION}}";
 
 export type ParamsOfCreateOidc<
-    DecodedIdToken extends Record<string, unknown> = Oidc.Tokens.DecodedIdToken_base,
+    DecodedIdToken extends Record<string, unknown> = Oidc.Tokens.DecodedIdToken_OidcCoreSpec,
     AutoLogin extends boolean = false
 > = {
     /**
@@ -67,7 +67,13 @@ export type ParamsOfCreateOidc<
      */
     homeUrl: string;
 
+    /**
+     * See: https://docs.oidc-spa.dev/v/v8/providers-configuration/provider-configuration
+     */
     issuerUri: string;
+    /**
+     * See: https://docs.oidc-spa.dev/v/v8/providers-configuration/provider-configuration
+     */
     clientId: string;
     /**
      * The scopes being requested from the OIDC/OAuth2 provider (default: `["profile"]`
@@ -122,7 +128,7 @@ export type ParamsOfCreateOidc<
     postLoginRedirectUrl?: string;
 
     decodedIdTokenSchema?: {
-        parse: (decodedIdToken_original: Oidc.Tokens.DecodedIdToken_base) => DecodedIdToken;
+        parse: (decodedIdToken_original: Oidc.Tokens.DecodedIdToken_OidcCoreSpec) => DecodedIdToken;
     };
 
     /**
@@ -132,6 +138,9 @@ export type ParamsOfCreateOidc<
      * WARNING: It should be configured on the identity server side
      * as it's the authoritative source for security policies and not the client.
      * If you don't provide this parameter it will be inferred from the refresh token expiration time.
+     * Some provider however don't issue a refresh token or do not correctly set the
+     * expiration time. This parameter enable you to hard code the value to compensate
+     * the shortcoming of your auth server.
      * */
     idleSessionLifetimeInSeconds?: number;
 
@@ -209,7 +218,7 @@ globalContext.evtRequestToPersistTokens.subscribe(() => {
 
 /** @see: https://docs.oidc-spa.dev/v/v8/usage */
 export async function createOidc<
-    DecodedIdToken extends Record<string, unknown> = Oidc.Tokens.DecodedIdToken_base,
+    DecodedIdToken extends Record<string, unknown> = Oidc.Tokens.DecodedIdToken_OidcCoreSpec,
     AutoLogin extends boolean = false
 >(
     params: ParamsOfCreateOidc<DecodedIdToken, AutoLogin>

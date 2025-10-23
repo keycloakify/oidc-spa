@@ -201,7 +201,7 @@ export function createLoginOrGoToAuthServer(params: {
             const redirectUrl_obj = new URL(redirectUrl);
             const redirectUrl_originAndPath = `${redirectUrl_obj.origin}${redirectUrl_obj.pathname}`;
 
-            if (!redirectUrl_originAndPath.startsWith(homeUrl)) {
+            if (!redirectUrl_originAndPath.replace(/\/?$/, "/").startsWith(homeUrl)) {
                 throw new Error(
                     [
                         `oidc-spa: redirect target ${redirectUrl_originAndPath} is outside of your application.`,
@@ -355,9 +355,17 @@ export function createLoginOrGoToAuthServer(params: {
                         return new Promise<never>(() => {});
                     }
 
-                    // NOTE: Here, except error on our understanding there can't be any other
-                    // error.
-                    assert(false, "30442320");
+                    if (error.message.includes("Crypto.subtle is available only in secure contexts")) {
+                        throw new Error(
+                            [
+                                `oidc-spa: ${error.message}.`,
+                                "To fix this error see:",
+                                "https://docs.oidc-spa.dev/v/v8/resources/fixing-crypto.subtle-is-available-only-in-secure-contexts-https"
+                            ].join(" ")
+                        );
+                    }
+
+                    assert(false, "224238482");
                 }
             );
     }
