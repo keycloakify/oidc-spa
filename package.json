@@ -55,7 +55,7 @@
         "rxjs": "*",
         "@angular/core": "*",
         "@angular/router": "*",
-        "@angular/common": "*"
+        "@angular/common": "*",
         "@tanstack/react-start": "*",
         "@tanstack/react-router": "*"
     },
