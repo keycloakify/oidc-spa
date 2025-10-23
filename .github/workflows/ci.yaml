@@ -24,7 +24,7 @@ jobs:
     needs: test_format
     strategy:
       matrix:
-        node: [ '20' ]
+        node: [ '22' ]
         os: [ ubuntu-latest ]
     name: Test with Node v${{ matrix.node }} on ${{ matrix.os }}
     steps:
