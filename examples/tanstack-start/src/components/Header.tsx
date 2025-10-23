@@ -3,7 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { ChevronDown, ChevronRight, Home, Menu, Server, X } from "lucide-react";
 import { createOidcComponent } from "src/oidc";
-import { createKeycloakUtils } from "oidc-spa/keycloak";
+import { isKeycloak, createKeycloakUtils } from "oidc-spa/keycloak";
 
 const AuthButtons = createOidcComponent({
     component: (props: { className?: string }) => {
@@ -22,12 +22,29 @@ const AuthButtons = createOidcComponent({
 const LoggedInAuthButton = createOidcComponent({
     assert: "user logged in",
     component: () => {
-        const { decodedIdToken, logout } = LoggedInAuthButton.useOidc();
+        const { decodedIdToken, logout, issuerUri, clientId } = LoggedInAuthButton.useOidc();
+
+        const keycloakUtils = !isKeycloak({ issuerUri })
+            ? undefined
+            : createKeycloakUtils({ issuerUri });
 
         return (
             <>
-                <span>Hello {decodedIdToken.preferred_username}</span>
-                &nbsp; &nbsp;
+                {keycloakUtils !== undefined && (
+                    <>
+                        Logged in as{" "}
+                        <a
+                            href={keycloakUtils.getAccountUrl({
+                                clientId,
+                                backToAppFromAccountUrl: location.href
+                            })}
+                            className="text-cyan-400"
+                        >
+                            {decodedIdToken.preferred_username}
+                        </a>
+                    </>
+                )}
+                &nbsp; &nbsp; &nbsp;
                 <button
                     className="px-8 py-2 bg-cyan-500 hover:bg-cyan-600 text-white font-semibold rounded-lg transition-colors shadow-lg shadow-cyan-500/50"
                     onClick={() => logout({ redirectTo: "home" })}
@@ -44,7 +61,9 @@ const NotLoggedInAuthButton = createOidcComponent({
     component: () => {
         const { login, issuerUri } = NotLoggedInAuthButton.useOidc();
 
-        const keycloakUtils = createKeycloakUtils({ issuerUri });
+        const keycloakUtils = !isKeycloak({ issuerUri })
+            ? undefined
+            : createKeycloakUtils({ issuerUri });
 
         return (
             <>
