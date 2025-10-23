@@ -1,9 +1,10 @@
-import { BehaviorSubject } from "rxjs";
+import { BehaviorSubject, from, switchMap, Subject } from "rxjs";
 import type { Oidc, OidcInitializationError, ParamsOfCreateOidc } from "./core";
 import type { OidcMetadata } from "./core/OidcMetadata";
 import { Deferred } from "./tools/Deferred";
 import { assert, type Equals, is } from "./tools/tsafe/assert";
-import { createObjectThatThrowsIfAccessed } from "./tools/createObjectThatThrowsIfAccessed";
+import { uncapitalize } from "./tools/tsafe/uncapitalize";
+import { createObjectThatThrowsIfAccessed, AccessError } from "./tools/createObjectThatThrowsIfAccessed";
 import {
     type Signal,
     inject,
@@ -11,6 +12,7 @@ import {
     makeEnvironmentProviders,
     provideAppInitializer
 } from "@angular/core";
+import type { HttpInterceptorFn, HttpRequest } from "@angular/common/http";
 import { toSignal } from "@angular/core/rxjs-interop";
 import type { ReadonlyBehaviorSubject } from "./tools/ReadonlyBehaviorSubject";
 import { Router, type CanActivateFn } from "@angular/router";
@@ -177,6 +179,8 @@ export abstract class AbstractOidcService<
 
     #autoLogoutWarningDurationSeconds = 45;
 
+    #isRunningGetParams = false;
+
     static provide(params: ValueOrAsyncGetter<ParamsOfProvide>): EnvironmentProviders {
         const paramsOrGetParams = params;
 
@@ -193,7 +197,12 @@ export abstract class AbstractOidcService<
                             await Promise.all([
                                 import("./core"),
                                 typeof paramsOrGetParams === "function"
-                                    ? paramsOrGetParams()
+                                    ? (async () => {
+                                          instance.#isRunningGetParams = true;
+                                          const params = await paramsOrGetParams();
+                                          instance.#isRunningGetParams = false;
+                                          return params;
+                                      })()
                                     : paramsOrGetParams
                             ]);
 
@@ -264,6 +273,178 @@ export abstract class AbstractOidcService<
                 await instance.prInitialized;
             })
         ]);
+    }
+
+    protected allowDecodedIdTokenAccessInShouldInjectAccessToken = false;
+
+    #deadlockDetectionTimer: ReturnType<typeof setTimeout> | undefined = undefined;
+
+    static createBearerInterceptor(params: {
+        shouldInjectAccessToken: (req: HttpRequest<unknown>) => boolean;
+    }): HttpInterceptorFn {
+        const { shouldInjectAccessToken: getShouldInjectAccessToken } = params;
+
+        return (req, next) => {
+            const instance = inject(this);
+
+            let shouldInjectAccessToken: boolean | undefined = undefined;
+            const shouldInjectAccessTokenByState: {
+                isUserLoggedIn: boolean;
+                isNewBrowserSession: boolean | undefined;
+                shouldInjectAccessTokenOrError: boolean | { error: unknown };
+            }[] = [];
+
+            let isDecodedIdTokenAccessed = false;
+
+            (instance.decodedIdTokenAccess = new Subject()).subscribe(
+                () => (isDecodedIdTokenAccessed = true)
+            );
+
+            try {
+                shouldInjectAccessToken = getShouldInjectAccessToken(req);
+            } catch (error) {
+                if (!(error instanceof OidcAccessedTooEarlyError) && !(error instanceof AccessError)) {
+                    throw error;
+                }
+            }
+
+            if (shouldInjectAccessToken === undefined) {
+                for (const isUserLoggedIn of [false, true]) {
+                    for (const isNewBrowserSession of isUserLoggedIn ? [false, true] : [undefined]) {
+                        let shouldInjectAccessTokenOrError: boolean | { error: unknown };
+
+                        instance.#isUserLoggedIn_override = isUserLoggedIn;
+                        instance.#isNewBrowserSession_override = isNewBrowserSession;
+
+                        try {
+                            shouldInjectAccessTokenOrError = getShouldInjectAccessToken(req);
+                        } catch (error) {
+                            shouldInjectAccessTokenOrError = { error };
+                        }
+
+                        instance.#isUserLoggedIn_override = undefined;
+                        instance.#isNewBrowserSession_override = undefined;
+
+                        shouldInjectAccessTokenByState.push({
+                            isUserLoggedIn,
+                            isNewBrowserSession,
+                            shouldInjectAccessTokenOrError
+                        });
+                    }
+                }
+            }
+
+            instance.decodedIdTokenAccess = undefined;
+
+            if (
+                !instance.providerAwaitsInitialization &&
+                isDecodedIdTokenAccessed &&
+                !instance.allowDecodedIdTokenAccessInShouldInjectAccessToken
+            ) {
+                throw new Error(
+                    "oidc-spa: See https://docs.oidc-spa.dev/release-notes/reading-decodedaccesstoken-within-shouldinjectaccesstoken"
+                );
+            }
+
+            if (
+                shouldInjectAccessToken === false ||
+                (shouldInjectAccessToken === undefined &&
+                    shouldInjectAccessTokenByState.every(
+                        ({ shouldInjectAccessTokenOrError }) => shouldInjectAccessTokenOrError === false
+                    ))
+            ) {
+                return next(req);
+            }
+
+            if (instance.#isRunningGetParams && instance.#deadlockDetectionTimer === undefined) {
+                instance.#deadlockDetectionTimer = setTimeout(() => {
+                    const name = this.name.replace(/^_/, "");
+
+                    switch (shouldInjectAccessToken) {
+                        case false:
+                            assert(false);
+                        case true:
+                            console.warn(
+                                [
+                                    "oidc-spa: Probable deadlock detected!",
+                                    `Request ${req.method} ${req.urlWithParams} requires an access token,`,
+                                    `but this request is probably being made inside the async callback of`,
+                                    `${name}.provide(async () => {...}).`,
+                                    "At this point the access token cannot exist yet, initialization depends on this request itself."
+                                ].join(" ")
+                            );
+                            break;
+                        case undefined:
+                            console.warn(
+                                [
+                                    "oidc-spa: Probable deadlock detected!",
+                                    `While evaluating shouldInjectAccessToken(req) for ${req.method} ${req.urlWithParams},`,
+                                    "you accessed synchronous properties of",
+                                    `\`${uncapitalize(name)} = inject(${name})\` that`,
+                                    "are only available after initialization completes.",
+                                    `Requests made inside the ${name}.provide(async () => {...}) callback`,
+                                    `(typically to fetch the params), should not trigger a read of `,
+                                    `${uncapitalize(
+                                        name
+                                    )}.isUserLoggedIn or other properties inside shouldInjectAccessToken()`,
+                                    "This creates a causality violation.",
+                                    "Reorganize your shouldInjectAccessToken implementation to exit early with `false` in those case,",
+                                    "before accessing the property."
+                                ].join(" ")
+                            );
+                            break;
+                    }
+                }, 4_000);
+            }
+
+            return from(instance.getAccessToken()).pipe(
+                switchMap(({ accessToken }) => {
+                    if (instance.#deadlockDetectionTimer !== undefined) {
+                        clearTimeout(instance.#deadlockDetectionTimer);
+                        instance.#deadlockDetectionTimer = undefined;
+                    }
+
+                    if (shouldInjectAccessToken === undefined) {
+                        const match = shouldInjectAccessTokenByState.find(
+                            ({ isUserLoggedIn, isNewBrowserSession }) =>
+                                isUserLoggedIn === instance.isUserLoggedIn &&
+                                isNewBrowserSession ===
+                                    (instance.isUserLoggedIn ? instance.isNewBrowserSession : undefined)
+                        );
+
+                        assert(match !== undefined);
+
+                        const { shouldInjectAccessTokenOrError } = match;
+
+                        if (typeof shouldInjectAccessTokenOrError !== "boolean") {
+                            const { error } = shouldInjectAccessTokenOrError;
+                            throw error;
+                        }
+
+                        shouldInjectAccessToken = shouldInjectAccessTokenOrError;
+                    }
+
+                    if (!shouldInjectAccessToken) {
+                        return next(req);
+                    }
+
+                    if (!instance.isUserLoggedIn) {
+                        throw new OidcAccessedTooEarlyError(
+                            [
+                                `oidc-spa: attempted to inject an Authorization bearer token`,
+                                `for ${req.method} ${req.urlWithParams} but the user is not logged in.`,
+                                `You shouldn't be attempting to call API endpoint that require authentication`,
+                                `when the user isn't logged in.`
+                            ].join(" ")
+                        );
+                    }
+
+                    assert(accessToken !== undefined);
+
+                    return next(req.clone({ setHeaders: { Authorization: `Bearer ${accessToken}` } }));
+                })
+            );
+        };
     }
 
     static get enforceLoginGuard() {
@@ -346,7 +527,9 @@ export abstract class AbstractOidcService<
         const { callerName } = params;
         const { hasResolved, value } = this.#dState.getState();
         if (!hasResolved) {
-            throw new Error(this.#getPrInitializedNotResolvedErrorMessage({ callerName }));
+            throw new OidcAccessedTooEarlyError(
+                this.#getPrInitializedNotResolvedErrorMessage({ callerName })
+            );
         }
         return value;
     }
@@ -386,8 +569,13 @@ export abstract class AbstractOidcService<
         return this.#getOidc({ callerName: "clientId" }).params.clientId;
     }
 
+    #isUserLoggedIn_override: boolean | undefined = undefined;
+
     get isUserLoggedIn() {
-        return this.#getOidc({ callerName: "isUserLoggedIn" }).isUserLoggedIn;
+        return (
+            this.#isUserLoggedIn_override ??
+            this.#getOidc({ callerName: "isUserLoggedIn" }).isUserLoggedIn
+        );
     }
 
     async login(params?: {
@@ -473,7 +661,14 @@ export abstract class AbstractOidcService<
         return oidc.goToAuthServer(params);
     }
 
-    readonly decodedIdToken$: ReadonlyBehaviorSubject<T_DecodedIdToken> = (() => {
+    decodedIdTokenAccess: Subject<void> | undefined = undefined;
+
+    get decodedIdToken$(): ReadonlyBehaviorSubject<T_DecodedIdToken> {
+        this.decodedIdTokenAccess?.next();
+        return this.#decodedIdToken$;
+    }
+
+    readonly #decodedIdToken$: ReadonlyBehaviorSubject<T_DecodedIdToken> = (() => {
         const decodedIdToken$ = new BehaviorSubject<T_DecodedIdToken>(
             createObjectThatThrowsIfAccessed({
                 debugMessage: this.#getPrInitializedNotResolvedErrorMessage({
@@ -529,7 +724,12 @@ export abstract class AbstractOidcService<
         return decodedIdToken$;
     })();
 
-    readonly $decodedIdToken = toSignal(this.decodedIdToken$, { requireSync: true });
+    readonly #$decodedIdToken = toSignal(this.decodedIdToken$, { requireSync: true });
+
+    get $decodedIdToken(): Signal<T_DecodedIdToken> {
+        this.decodedIdTokenAccess?.next();
+        return this.#$decodedIdToken;
+    }
 
     async getAccessToken(): Promise<
         { isUserLoggedIn: false; accessToken?: never } | { isUserLoggedIn: true; accessToken: string }
@@ -573,7 +773,13 @@ export abstract class AbstractOidcService<
         return toSignal(secondsLeftBeforeAutoLogout$, { requireSync: true });
     })();
 
+    #isNewBrowserSession_override: boolean | undefined = undefined;
+
     get isNewBrowserSession() {
+        if (this.#isNewBrowserSession_override !== undefined) {
+            return this.#isNewBrowserSession_override;
+        }
+
         const oidc = this.#getOidc({ callerName: "isNewBrowserSession" });
 
         if (!oidc.isUserLoggedIn) {
@@ -581,5 +787,12 @@ export abstract class AbstractOidcService<
         }
 
         return oidc.isNewBrowserSession;
+    }
+}
+
+export class OidcAccessedTooEarlyError extends Error {
+    constructor(message: string) {
+        super(message);
+        Object.setPrototypeOf(this, new.target.prototype);
     }
 }

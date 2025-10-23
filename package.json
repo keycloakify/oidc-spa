@@ -55,6 +55,7 @@
         "rxjs": "*",
         "@angular/core": "*",
         "@angular/router": "*",
+        "@angular/common": "*"
         "@tanstack/react-start": "*",
         "@tanstack/react-router": "*"
     },
@@ -72,6 +73,9 @@
             "optional": true
         },
         "@angular/router": {
+            "optional": true
+        },
+        "@angular/common": {
             "optional": true
         },
         "@tanstack/react-start": {
