@@ -8,7 +8,9 @@ import { oidcSpa } from "oidc-spa/vite-plugin";
 
 const config = defineConfig({
     plugins: [
-        nitroV2Plugin(),
+        nitroV2Plugin({
+            preset: "vercel"
+        }),
         // this is the plugin that enables path aliases
         viteTsConfigPaths({
             projects: ["./tsconfig.json"]
