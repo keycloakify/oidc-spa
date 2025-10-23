@@ -5,20 +5,32 @@ export type { TodoItem };
 
 let todosStore: TodosStore | undefined = undefined;
 
-export function getTodosStore() {
-    if (todosStore !== undefined) {
-        return todosStore;
+type RedisConfig = {
+    restUrl: string;
+    restToken: string;
+};
+
+const resolveRedisConfig = (): RedisConfig | undefined => {
+    const restUrl = process.env["KV_REST_API_URL"];
+    const restToken = process.env["KV_REST_API_TOKEN"];
+
+    if (!restUrl || !restToken) {
+        return undefined;
     }
 
-    const kvUrl = process.env["KV_URL"];
-    const kvToken = process.env["KV_TOKEN"];
+    return { restUrl, restToken };
+};
 
-    return kvUrl !== undefined && kvToken !== undefined
-        ? createKvStoreTodoStore({
-              kvUrl,
-              kvToken
-          })
-        : createNodeFsTodoStore({
-              dirPath: "."
-          });
+export function getTodosStore() {
+    if (!todosStore) {
+        const redisConfig = resolveRedisConfig();
+
+        todosStore = redisConfig
+            ? createKvStoreTodoStore(redisConfig)
+            : createNodeFsTodoStore({
+                  dirPath: "."
+              });
+    }
+
+    return todosStore;
 }
