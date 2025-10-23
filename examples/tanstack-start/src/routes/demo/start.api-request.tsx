@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 
 import { createFileRoute } from "@tanstack/react-router";
 import { fetchWithAuth, enforceLogin } from "src/oidc";
+import Spinner from "src/components/Spinner";
 
 function getNames() {
     return fetchWithAuth("/demo/api/names").then(res => res.json());
@@ -9,6 +10,11 @@ function getNames() {
 
 export const Route = createFileRoute("/demo/start/api-request")({
     beforeLoad: enforceLogin,
+    pendingComponent: () => (
+        <div className="flex flex-1 items-center justify-center py-16">
+            <Spinner />
+        </div>
+    ),
     component: Home
 });
 

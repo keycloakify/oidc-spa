@@ -3,6 +3,7 @@ import { useCallback, useState } from "react";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { enforceLogin, oidcFnMiddleware } from "src/oidc";
+import Spinner from "src/components/Spinner";
 
 const getUserFilePath = (params: { userId: string }) => {
     const { userId } = params;
@@ -56,7 +57,12 @@ const addTodo = createServerFn({ method: "POST" })
 export const Route = createFileRoute("/demo/start/server-funcs")({
     beforeLoad: enforceLogin,
     component: Home,
-    loader: async () => await getTodos()
+    loader: async () => await getTodos(),
+    pendingComponent: () => (
+        <div className="flex flex-1 items-center justify-center py-16">
+            <Spinner />
+        </div>
+    )
 });
 
 function Home() {
