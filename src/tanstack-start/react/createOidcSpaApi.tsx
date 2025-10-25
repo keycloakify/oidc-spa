@@ -663,7 +663,9 @@ export function createOidcSpaApi<
                                 noIframe: paramsOfBootstrap.noIframe,
                                 debugLogs: paramsOfBootstrap.debugLogs,
                                 __unsafe_clientSecret: paramsOfBootstrap.__unsafe_clientSecret,
-                                __metadata: paramsOfBootstrap.__metadata
+                                __metadata: paramsOfBootstrap.__metadata,
+                                __unsafe_useIdTokenAsAccessToken:
+                                    paramsOfBootstrap.__unsafe_useIdTokenAsAccessToken
                             });
                         } catch (error) {
                             if (!(error instanceof OidcInitializationError)) {

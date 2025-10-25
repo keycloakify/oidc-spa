@@ -338,6 +338,13 @@ export namespace ParamsOfBootstrap {
          * or non-standard deployments), and you cannot fix the server-side configuration.
          */
         __metadata?: Partial<OidcMetadata>;
+
+        /**
+         *  WARNING: Setting this to true is a workaround for provider
+         *  like Google OAuth that don't support JWT access token.
+         *  Use at your own risk, this is a hack.
+         */
+        __unsafe_useIdTokenAsAccessToken?: boolean;
     } & (AutoLogin extends true ? {} : {});
 
     export type Mock<AutoLogin, DecodedIdToken, AccessTokenClaims> = {
