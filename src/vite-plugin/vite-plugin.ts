@@ -8,7 +8,13 @@ import { transformCreateFileRoute } from "./transformCreateFileRoute";
 
 export type OidcSpaVitePluginParams = Omit<Param0<typeof oidcEarlyInit>, "isPostLoginRedirectManual">;
 
-export function oidcSpa(params: OidcSpaVitePluginParams) {
+export function oidcSpa(
+    params: OidcSpaVitePluginParams = {
+        freezeFetch: true,
+        freezeXMLHttpRequest: true,
+        freezeWebSocket: true
+    }
+) {
     let loadHandleEntrypoint: ReturnType<typeof createLoadHandleEntrypoint> | undefined = undefined;
 
     const plugin: Plugin = {

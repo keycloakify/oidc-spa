@@ -17,11 +17,7 @@ const config = defineConfig({
         }),
         tailwindcss(),
         tanstackStart(),
-        oidcSpa({
-            freezeFetch: true,
-            freezeWebSocket: true,
-            freezeXMLHttpRequest: true
-        }),
+        oidcSpa(),
         viteReact()
     ]
 });
