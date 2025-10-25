@@ -1606,11 +1606,11 @@ export async function createOidc_nonMemoized<
             if (warningLines.length > 0) {
                 warningLines.push(
                     ...[
-                        "Misconfiguration: offline_access is for native apps, not for web app like yours. ",
+                        "Misconfiguration: offline_access is for native apps, not for web apps like yours. ",
                         "You lose SSO and users must log in after every reload."
                     ]
                 );
-                console.warn(`oidc-spa: ${warningLines}`);
+                console.warn(`oidc-spa: ${warningLines.join(" ")}`);
                 return;
             }
 
@@ -1637,7 +1637,7 @@ export async function createOidc_nonMemoized<
                     )}.`,
                     `If it's the latter, the TTL is too short, it must be at least ${toHumanReadableDuration(
                         MIN_ACCEPTABLE_MS_BEFORE_EXPIRATION
-                    )} seconds for reliable operation.`,
+                    )} for reliable operation.`,
                     "Shorter lifetimes can cause unpredictable session expirations and are usually a misconfiguration.",
                     "\nIn either case, oidc-spa will not ping the auth server to keep the session alive."
                 ].join(" ")
@@ -1651,7 +1651,7 @@ export async function createOidc_nonMemoized<
                 log?.(
                     [
                         toHumanReadableDuration(msBeforeExpiration_refreshToken),
-                        `before expiration of the refresh_token token.`,
+                        `before expiration of the refresh_token.`,
                         `Scheduling renewal of the tokens ${toHumanReadableDuration(
                             RENEW_MS_BEFORE_EXPIRES
                         )} before expiration as a way to keep the session alive on the OIDC server.`
