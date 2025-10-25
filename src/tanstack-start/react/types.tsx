@@ -22,7 +22,7 @@ export type CreateOidcComponent<DecodedIdToken> = <
 export namespace CreateOidcComponent {
     export type WithAutoLogin<DecodedIdToken> = <Props>(params: {
         pendingComponent?: (params: NoInfer<Props>) => ReactNode;
-        component: (props: Props) => ReactNode;
+        component: (props: Props) => any;
     }) => ((props: Props) => ReactNode) & {
         useOidc: () => Oidc.LoggedIn<DecodedIdToken>;
     };
