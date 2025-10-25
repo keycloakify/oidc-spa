@@ -40,9 +40,8 @@ function RootDocument({ children }: { children: React.ReactNode }) {
             <body
                 className="min-h-screen text-white"
                 style={{
-                    backgroundColor: "#000000",
-                    backgroundImage:
-                        "radial-gradient(ellipse 60% 60% at 0% 100%, #444444 0%, #222222 60%, #000000 100%)"
+                    backgroundColor: "#0f172a",
+                    backgroundImage: "linear-gradient(180deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)"
                 }}
             >
                 <div className="min-h-screen flex flex-col">
