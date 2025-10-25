@@ -1062,6 +1062,27 @@ export async function createOidc_nonMemoized<
         log
     });
 
+    detect_useless_idleSessionLifetimeInSeconds: {
+        if (idleSessionLifetimeInSeconds === undefined) {
+            break detect_useless_idleSessionLifetimeInSeconds;
+        }
+
+        if (currentTokens.refreshTokenExpirationTime === undefined) {
+            break detect_useless_idleSessionLifetimeInSeconds;
+        }
+
+        console.warn(
+            [
+                "oidc-spa: You've specified idleSessionLifetimeInSeconds,",
+                "but your auth server issues a refresh_token with a known expiration time.",
+                "idleSessionLifetimeInSeconds should only be used as a fallback",
+                "for auth servers that don't specify when an inactive session expires.",
+                "The auth server, not your code, is the source of truth.",
+                "See: https://docs.oidc-spa.dev/v/v8/auto-logout"
+            ].join(" ")
+        );
+    }
+
     {
         if (getPersistedAuthState({ configId }) !== undefined) {
             persistAuthState({ configId, state: undefined });
@@ -1558,6 +1579,18 @@ export async function createOidc_nonMemoized<
             return;
         }
 
+        const msBeforeExpiration_idleSessionLifetimeInSeconds =
+            idleSessionLifetimeInSeconds === undefined ? undefined : idleSessionLifetimeInSeconds * 1000;
+
+        const msBeforeExpiration_refreshToken =
+            currentTokens.refreshTokenExpirationTime === undefined
+                ? undefined
+                : currentTokens.refreshTokenExpirationTime - currentTokens.getServerDateNow();
+        const msBeforeExpiration_accessToken =
+            currentTokens.accessTokenExpirationTime - currentTokens.getServerDateNow();
+
+        let isRefreshTokenNeverExpiring = false;
+
         if (
             currentTokens.refreshTokenExpirationTime !== undefined &&
             currentTokens.refreshTokenExpirationTime >= INFINITY_TIME
@@ -1573,74 +1606,117 @@ export async function createOidc_nonMemoized<
             if (warningLines.length > 0) {
                 warningLines.push(
                     ...[
-                        "Misconfiguration: offline_access is for native apps, not SPAs. ",
+                        "Misconfiguration: offline_access is for native apps, not for web apps like yours. ",
                         "You lose SSO and users must log in after every reload."
                     ]
                 );
+                console.warn(`oidc-spa: ${warningLines.join(" ")}`);
+                return;
             }
 
-            const logMessage = [
-                "Refresh token never expires → no need to ping server.",
-                "The backend session will not expire.",
-                ...warningLines
-            ].join(" ");
-
-            if (warningLines.length > 0) {
-                console.warn(`oidc-spa: ${logMessage}`);
-            } else {
-                log?.(logMessage);
-            }
-            return;
+            isRefreshTokenNeverExpiring = true;
         }
-
-        const msBeforeExpiration =
-            (currentTokens.refreshTokenExpirationTime ?? currentTokens.accessTokenExpirationTime) -
-            currentTokens.getServerDateNow();
-
-        const typeOfTheTokenWeGotTheTtlFrom =
-            currentTokens.refreshTokenExpirationTime !== undefined ? "refresh" : "access";
 
         const RENEW_MS_BEFORE_EXPIRES = 30_000;
+        const MIN_ACCEPTABLE_MS_BEFORE_EXPIRATION = RENEW_MS_BEFORE_EXPIRES + 15_000;
 
-        if (msBeforeExpiration <= RENEW_MS_BEFORE_EXPIRES) {
-            log?.(
+        detect_session_reached_max_life: {
+            if (msBeforeExpiration_refreshToken === undefined) {
+                break detect_session_reached_max_life;
+            }
+
+            if (msBeforeExpiration_refreshToken > MIN_ACCEPTABLE_MS_BEFORE_EXPIRATION) {
+                break detect_session_reached_max_life;
+            }
+
+            console.warn(
                 [
-                    "Session keep-alive disabled. We just got fresh tokens",
-                    (() => {
-                        switch (typeOfTheTokenWeGotTheTtlFrom) {
-                            case "refresh":
-                                return [
-                                    " and the refresh token is already about to expires.",
-                                    "This means that we have reached the max session lifespan, we can't keep",
-                                    "the session alive any longer.",
-                                    "(This can also mean that the refresh token was configured with a TTL,",
-                                    "aka the idle session lifespan, too low to make sense)"
-                                ].join(" ");
-                            case "access":
-                                return [
-                                    currentTokens.hasRefreshToken
-                                        ? ", we can't read the expiration time of the refresh token"
-                                        : ", we don't have a refresh token",
-                                    ` and the access token is already about to expire`,
-                                    "we would spam the auth server by constantly renewing the access token in the background",
-                                    "avoiding to do so."
-                                ].join(" ");
-                        }
-                    })()
+                    "oidc-spa: The session is nearing its maximum lifetime, and the user will soon need to log in again,",
+                    `or you've configured a refresh_token with a TTL of ${toHumanReadableDuration(
+                        msBeforeExpiration_refreshToken
+                    )}.`,
+                    `If it's the latter, the TTL is too short, it must be at least ${toHumanReadableDuration(
+                        MIN_ACCEPTABLE_MS_BEFORE_EXPIRATION
+                    )} for reliable operation.`,
+                    "Shorter lifetimes can cause unpredictable session expirations and are usually a misconfiguration.",
+                    "\nIn either case, oidc-spa will not ping the auth server to keep the session alive."
                 ].join(" ")
             );
+
             return;
         }
 
-        log?.(
-            [
-                toHumanReadableDuration(msBeforeExpiration),
-                `before expiration of the ${typeOfTheTokenWeGotTheTtlFrom} token.`,
-                `Scheduling renewal ${toHumanReadableDuration(
-                    RENEW_MS_BEFORE_EXPIRES
-                )} before expiration to keep the session alive on the OIDC server.`
-            ].join(" ")
-        );
+        let msBeforeExpiration = (() => {
+            if (msBeforeExpiration_refreshToken !== undefined && !isRefreshTokenNeverExpiring) {
+                log?.(
+                    [
+                        toHumanReadableDuration(msBeforeExpiration_refreshToken),
+                        `before expiration of the refresh_token.`,
+                        `Scheduling renewal of the tokens ${toHumanReadableDuration(
+                            RENEW_MS_BEFORE_EXPIRES
+                        )} before expiration as a way to keep the session alive on the OIDC server.`
+                    ].join(" ")
+                );
+
+                return msBeforeExpiration_refreshToken;
+            }
+
+            if (msBeforeExpiration_idleSessionLifetimeInSeconds !== undefined) {
+                if (
+                    msBeforeExpiration_idleSessionLifetimeInSeconds < MIN_ACCEPTABLE_MS_BEFORE_EXPIRATION
+                ) {
+                    throw new Error(
+                        [
+                            `oidc-spa: The configured idleSessionLifetimeInSeconds (${toHumanReadableDuration(
+                                msBeforeExpiration_idleSessionLifetimeInSeconds
+                            )}) is too short.`,
+                            `For reliability, it must be at least ${toHumanReadableDuration(
+                                MIN_ACCEPTABLE_MS_BEFORE_EXPIRATION
+                            )}.`,
+                            "Very short session idle lifetimes are usually a misconfiguration, even for ultra sensitive apps."
+                        ].join(" ")
+                    );
+                }
+
+                log?.(
+                    [
+                        `You've set idleSessionLifetimeInSeconds to ${toHumanReadableDuration(
+                            msBeforeExpiration_idleSessionLifetimeInSeconds
+                        )}.`,
+                        `This means the user session will expire after ${toHumanReadableDuration(
+                            msBeforeExpiration_idleSessionLifetimeInSeconds
+                        )} of inactivity (assuming you're right).`,
+                        `Scheduling token renewal ${toHumanReadableDuration(
+                            RENEW_MS_BEFORE_EXPIRES
+                        )} before expiration to keep the session active on the OIDC server.`
+                    ].join(" ")
+                );
+
+                return msBeforeExpiration_idleSessionLifetimeInSeconds;
+            }
+
+            const msBeforeExpiration =
+                msBeforeExpiration_accessToken > MIN_ACCEPTABLE_MS_BEFORE_EXPIRATION
+                    ? msBeforeExpiration_accessToken
+                    : 3_600_000;
+
+            log?.(
+                [
+                    "The auth server's idle session timeout is unknown.",
+                    isRefreshTokenNeverExpiring && "(The refresh token never expires)",
+                    `Assuming a default idle session TTL of ${toHumanReadableDuration(
+                        msBeforeExpiration
+                    )}.`,
+                    `Scheduling token renewal ${toHumanReadableDuration(
+                        RENEW_MS_BEFORE_EXPIRES
+                    )} before expiration to keep the session active on the OIDC server.`
+                ]
+                    .filter(line => typeof line === "string")
+                    .join(" ")
+            );
+
+            return msBeforeExpiration;
+        })();
 
         const timer = setTimeout(
             async () => {
@@ -1670,7 +1746,7 @@ export async function createOidc_nonMemoized<
                 }
 
                 log?.(
-                    `Renewing the tokens now as the ${typeOfTheTokenWeGotTheTtlFrom} token will expire in ${toHumanReadableDuration(
+                    `Renewing the tokens now as otherwise the session will be terminated by the auth server in ${toHumanReadableDuration(
                         RENEW_MS_BEFORE_EXPIRES
                     )}`
                 );
@@ -1695,19 +1771,22 @@ export async function createOidc_nonMemoized<
 
     auto_logout: {
         const getCurrentRefreshTokenTtlInSeconds = () => {
-            if (idleSessionLifetimeInSeconds !== undefined) {
+            if (currentTokens.refreshTokenExpirationTime === undefined) {
                 return idleSessionLifetimeInSeconds;
             }
 
-            if (currentTokens.refreshTokenExpirationTime === undefined) {
-                return undefined;
-            }
-
             if (currentTokens.refreshTokenExpirationTime >= INFINITY_TIME) {
-                return 0;
+                return idleSessionLifetimeInSeconds ?? 0;
             }
 
-            return (currentTokens.refreshTokenExpirationTime - currentTokens.issuedAtTime) / 1000;
+            const ttlInSeconds =
+                (currentTokens.refreshTokenExpirationTime - currentTokens.issuedAtTime) / 1000;
+
+            if (idleSessionLifetimeInSeconds !== undefined) {
+                return Math.min(idleSessionLifetimeInSeconds, ttlInSeconds);
+            }
+
+            return ttlInSeconds;
         };
 
         if (getCurrentRefreshTokenTtlInSeconds() === 0) {
