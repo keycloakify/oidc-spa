@@ -6,9 +6,7 @@ import Spinner from "@/components/Spinner";
 
 import { getTodosStore } from "@/data/todos";
 
-const getTodos = createServerFn({
-    method: "GET"
-})
+const getTodos = createServerFn({ method: "GET" })
     .middleware([oidcFnMiddleware({ assert: "user logged in" })])
     .handler(async ({ context: { oidc } }) => {
         const userId = oidc.accessTokenClaims.sub;
