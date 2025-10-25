@@ -41,15 +41,10 @@ export type OidcSpaApiBuilder<
                 accessTokenClaimsSchema?: ZodSchemaLike<AccessTokenClaims_RFC9068, AccessTokenClaims>;
                 accessTokenClaims_mock?: NoInfer<AccessTokenClaims>;
 
-                expectedAudience?:
-                    | string
-                    | ((params: {
-                          paramsOfBootstrap: ParamsOfBootstrap<
-                              boolean,
-                              Record<string, unknown>,
-                              AccessTokenClaims
-                          >;
-                      }) => string);
+                expectedAudience?: (params: {
+                    paramsOfBootstrap: ParamsOfBootstrap.Real<boolean>;
+                    process: { env: Record<string, string> };
+                }) => string;
             }): OidcSpaApiBuilder<
                 AutoLogin,
                 DecodedIdToken,

@@ -9,16 +9,15 @@ export function createCreateValidateAndGetAccessTokenClaims_rfc9068<
 >(params: {
     accessTokenClaimsSchema?: ZodSchemaLike<AccessTokenClaims_RFC9068, AccessTokenClaims>;
     accessTokenClaims_mock?: AccessTokenClaims;
-    expectedAudience?:
-        | string
-        | ((params: {
-              paramsOfBootstrap: ParamsOfBootstrap<boolean, Record<string, unknown>, AccessTokenClaims>;
-          }) => string);
+    expectedAudience?: (params: {
+        paramsOfBootstrap: ParamsOfBootstrap.Real<boolean>;
+        process: { env: Record<string, string> };
+    }) => string;
 }) {
     const {
         accessTokenClaimsSchema,
         accessTokenClaims_mock,
-        expectedAudience: expectedAudienceOrGetter
+        expectedAudience: expectedAudienceGetter
     } = params;
 
     const createValidateAndGetAccessTokenClaims: CreateValidateAndGetAccessTokenClaims<
@@ -66,13 +65,56 @@ export function createCreateValidateAndGetAccessTokenClaims_rfc9068<
         })();
 
         const expectedAudience = (() => {
-            if (expectedAudienceOrGetter === undefined) {
+            if (expectedAudienceGetter === undefined) {
                 return undefined;
             }
-            if (typeof expectedAudienceOrGetter === "function") {
-                return expectedAudienceOrGetter({ paramsOfBootstrap });
+
+            const missingEnvNames = new Set<string>();
+
+            const env_proxy = new Proxy<Record<string, string>>(
+                {},
+                {
+                    get: (...[, envName]) => {
+                        assert(typeof envName === "string");
+
+                        const value = process.env[envName];
+
+                        if (value === undefined) {
+                            missingEnvNames.add(envName);
+                            return "";
+                        }
+
+                        return value;
+                    },
+                    has: (...[, envName]) => {
+                        assert(typeof envName === "string");
+                        return true;
+                    }
+                }
+            );
+
+            const expectedAudience = expectedAudienceGetter?.({
+                paramsOfBootstrap,
+                process: { env: env_proxy }
+            });
+
+            if (!expectedAudience) {
+                throw new Error(
+                    [
+                        "oidc-spa: The expectedAudience() you provided returned empty.",
+                        "If you specified the expectedAudience in withAccessTokenValidation",
+                        "it's probably and error.",
+                        missingEnvNames.size !== 0 &&
+                            `Did you forget to set the env var: ${Array.from(missingEnvNames).join(
+                                ", "
+                            )} ?`
+                    ]
+                        .filter(line => typeof line === "string")
+                        .join(" ")
+                );
             }
-            return expectedAudienceOrGetter;
+
+            return expectedAudience;
         })();
 
         return {
