@@ -8,6 +8,28 @@ type OptionsOfCreateFileRoute = NonNullable<Parameters<ReturnType<typeof createF
 export function enableUnifiedClientRetryForSsrLoaders<Options extends OptionsOfCreateFileRoute>(
     options: Options
 ): Options {
+    if (options.ssr === false) {
+        return options;
+    }
+
+    common_case_exception: {
+        const { beforeLoad } = options;
+
+        if (beforeLoad === undefined) {
+            break common_case_exception;
+        }
+
+        // @ts-expect-error
+        if (!beforeLoad.__isOidcSpaEnforceLogin) {
+            break common_case_exception;
+        }
+
+        return {
+            ...options,
+            ssr: false
+        };
+    }
+
     function ErrorComponentWithUnifiedClientRetryForSsrLoader(
         props: Parameters<
             Exclude<OptionsOfCreateFileRoute["errorComponent"], null | false | undefined>

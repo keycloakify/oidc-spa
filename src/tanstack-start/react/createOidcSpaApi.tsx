@@ -730,6 +730,8 @@ export function createOidcSpaApi<
         }
     }
 
+    enforceLogin.__isOidcSpaEnforceLogin = true;
+
     function OidcInitializationGate(props: {
         renderFallback: (props: {
             initializationError: OidcInitializationError | undefined;
