@@ -40,7 +40,7 @@ const LoggedInAuthButton = createOidcComponent({
                             })}
                             className="text-cyan-400"
                         >
-                            {decodedIdToken.preferred_username}
+                            {decodedIdToken.given_name}
                         </a>
                     </>
                 )}

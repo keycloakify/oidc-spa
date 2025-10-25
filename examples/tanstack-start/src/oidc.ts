@@ -11,15 +11,15 @@ export const {
 } = oidcSpa
     .withExpectedDecodedIdTokenShape({
         decodedIdTokenSchema: z.object({
-            preferred_username: z.string()
+            given_name: z.string()
         }),
         decodedIdToken_mock: {
-            preferred_username: "John Doe"
+            given_name: "John Doe"
         }
     })
     .withAccessTokenValidation({
         type: "RFC 9068: JSON Web Token (JWT) Profile for OAuth 2.0 Access Tokens",
-        expectedAudience: "account",
+        expectedAudience: (/*{ paramsOfBootstrap, process }*/) => "account",
         accessTokenClaimsSchema: z.object({
             sub: z.string()
         }),
@@ -40,7 +40,6 @@ bootstrapOidc(({ process }) =>
               implementation: "real",
               issuerUri: process.env.OIDC_ISSUER_URI,
               clientId: process.env.OIDC_CLIENT_ID,
-              startCountdownSecondsBeforeAutoLogout: 45,
               debugLogs: true
           }
 );
