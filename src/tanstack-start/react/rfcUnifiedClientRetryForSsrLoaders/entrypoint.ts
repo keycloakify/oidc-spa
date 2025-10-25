@@ -4,8 +4,10 @@ export function preventConsoleLoggingOfUnifiedClientRetryForSsrLoadersError() {
     const originalConsoleError = console.error;
 
     console.error = function error(...args) {
-        if (args[1] instanceof Error && args[1].message.includes(ERROR_MESSAGE_SINGULAR_STRING)) {
-            return;
+        for (const arg of args) {
+            if (arg instanceof Error && arg.message.includes(ERROR_MESSAGE_SINGULAR_STRING)) {
+                return;
+            }
         }
 
         originalConsoleError.call(console, ...args);

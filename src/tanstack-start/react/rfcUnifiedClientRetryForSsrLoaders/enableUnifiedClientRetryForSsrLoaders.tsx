@@ -28,21 +28,16 @@ export function enableUnifiedClientRetryForSsrLoaders<Options extends OptionsOfC
 
                 const isDev = inferIsViteDev();
 
-                if (isDev) {
-                    console.info(
-                        [
-                            "oidc-spa: Detected a client-only operation.",
-                            "\n(e.g. an enforceLogin() in a beforeLoad, or an authenticated fetch in a loader).",
-                            "\nThis action cannot run on the server because, in oidc-spa, the client exclusively owns the authentication state.",
-                            "\nTo preserve correctness, oidc-spa gracefully retried the operation on the client.",
-                            "\nSSR was automatically skipped on this route component for this request to ensure consistent behavior.\n",
-                            "\nNote: TanStack Start does not yet provide an official mechanism for 'retry on client'.",
-                            "\noidc-spa implements this behavior transparently via its Vite plugin,",
-                            "until a standardized per-request SSR control becomes available.",
-                            "\nYou may also see a `Warning: Error in route match:` above, this is expected and can be safely ignored."
-                        ].join(" ")
-                    );
-                }
+                console.info(
+                    [
+                        `oidc-spa: The '500 (Internal Server Error)'${
+                            !isDev ? "" : " and 'Warning: Error in route match'"
+                        } above can be safely ignored.`,
+                        "\nIt's not a real error, but an expected and recoverable case.",
+                        "\nThis happens when a server action requires user authentication",
+                        "before the client has finished establishing it."
+                    ].join(" ")
+                );
 
                 router.invalidate();
             }, []);
