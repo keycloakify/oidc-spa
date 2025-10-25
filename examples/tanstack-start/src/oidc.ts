@@ -11,10 +11,11 @@ export const {
 } = oidcSpa
     .withExpectedDecodedIdTokenShape({
         decodedIdTokenSchema: z.object({
-            given_name: z.string()
+            name: z.string(),
+            picture: z.string().optional()
         }),
         decodedIdToken_mock: {
-            given_name: "John Doe"
+            name: "John Doe"
         }
     })
     .withAccessTokenValidation({
@@ -29,12 +30,13 @@ export const {
     })
     .finalize();
 
+// Can be call anywhere, even in the body of a React component.
+// All subsequent calls will be safely ignored.
 bootstrapOidc(({ process }) =>
     process.env.OIDC_USE_MOCK === "true"
         ? {
               implementation: "mock",
-              isUserInitiallyLoggedIn: true,
-              issuerUri_mock: "https://auth.my-company.com/realms/myrealm"
+              isUserInitiallyLoggedIn: true
           }
         : {
               implementation: "real",

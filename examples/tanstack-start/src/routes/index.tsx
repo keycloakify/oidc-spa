@@ -98,9 +98,7 @@ const Greeting = createOidcComponent({
 
         return (
             <span className="opacity-0 animate-[fadeIn_0.2s_ease-in_forwards]">
-                {isUserLoggedIn
-                    ? `Welcome back ${decodedIdToken.given_name}`
-                    : `Hello anonymous visitor!`}
+                {isUserLoggedIn ? `Welcome back ${decodedIdToken.name}` : `Hello anonymous visitor!`}
             </span>
         );
     }

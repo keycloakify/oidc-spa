@@ -5,6 +5,8 @@ import { ChevronDown, ChevronRight, Home, Menu, Server, X } from "lucide-react";
 import { createOidcComponent } from "@/oidc";
 import { isKeycloak, createKeycloakUtils } from "oidc-spa/keycloak";
 
+import userPictureFallback from "./userPictureFallback.svg";
+
 const AuthButtons = createOidcComponent({
     component: (props: { className?: string }) => {
         const { className } = props;
@@ -28,30 +30,33 @@ const LoggedInAuthButton = createOidcComponent({
             ? undefined
             : createKeycloakUtils({ issuerUri });
 
+        const profileImageSrc =
+            decodedIdToken.picture && decodedIdToken.picture.trim().length > 0
+                ? decodedIdToken.picture
+                : userPictureFallback;
+
         return (
-            <>
-                {keycloakUtils !== undefined && (
-                    <>
-                        Logged in as{" "}
-                        <a
-                            href={keycloakUtils.getAccountUrl({
-                                clientId,
-                                backToAppFromAccountUrl: location.href
-                            })}
-                            className="text-cyan-400"
-                        >
-                            {decodedIdToken.given_name}
-                        </a>
-                    </>
-                )}
-                &nbsp; &nbsp; &nbsp;
+            <div className="flex items-center gap-4">
+                <a
+                    href={keycloakUtils?.getAccountUrl({
+                        clientId,
+                        backToAppFromAccountUrl: location.href
+                    })}
+                    className="flex items-center gap-3 text-white font-semibold hover:text-cyan-300 transition-colors"
+                >
+                    <img
+                        src={profileImageSrc}
+                        alt={`${decodedIdToken.name}'s avatar`}
+                        className="w-10 h-10 rounded-full object-cover border border-cyan-500/60 shadow-lg shrink-0"
+                    />
+                </a>
                 <button
                     className="px-8 py-2 bg-cyan-500 hover:bg-cyan-600 text-white font-semibold rounded-lg transition-colors shadow-lg shadow-cyan-500/50"
                     onClick={() => logout({ redirectTo: "home" })}
                 >
                     Logout
                 </button>
-            </>
+            </div>
         );
     }
 });
