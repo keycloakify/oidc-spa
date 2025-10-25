@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { Zap, Server, Route as RouteIcon, Shield, Waves, Sparkles } from "lucide-react";
+import { Zap, Server, Route as RouteIcon } from "lucide-react";
 import { createOidcComponent } from "@/oidc";
 
 export const Route = createFileRoute("/")({
@@ -26,24 +26,6 @@ function App() {
             title: "API Routes",
             description:
                 "Build type-safe API endpoints alongside your application. No separate backend needed."
-        },
-        {
-            icon: <Shield className="w-12 h-12 text-cyan-400" />,
-            title: "Strongly Typed Everything",
-            description:
-                "End-to-end type safety from server to client. Catch errors before they reach production."
-        },
-        {
-            icon: <Waves className="w-12 h-12 text-cyan-400" />,
-            title: "Full Streaming Support",
-            description:
-                "Stream data from server to client progressively. Perfect for AI applications and real-time updates."
-        },
-        {
-            icon: <Sparkles className="w-12 h-12 text-cyan-400" />,
-            title: "Next Generation Ready",
-            description:
-                "Built from the ground up for modern web applications. Deploy anywhere JavaScript runs."
         }
     ];
 
