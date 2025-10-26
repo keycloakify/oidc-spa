@@ -34,27 +34,27 @@ export default function Home() {
             <div className="grid gap-4 sm:grid-cols-2">
                 <InfoCard
                     title="Sign in"
-                    body="The Auth button in the header show authentication state and the picture claim of the decoded id token."
+                    body="Header actions reflect your auth state and show the decoded ID token picture claim."
                 />
                 <InfoCard
                     title="Visit /protected"
-                    body="Click on the protected link in the header, if you're not already logged in you'll be redirected."
+                    body="Try the protected link; unauthenticated sessions are redirected to log in."
                 />
                 <InfoCard
                     title="Auto logout"
-                    body="If the server is configured to automatically terminate session after inactivity you'll get an overlay warning."
+                    body="Inactivity-triggered logouts display a gentle overlay warning first."
                 />
                 <InfoCard
                     title="Switch provider"
-                    body="The example is configured with a Keycloak but change the .env.local file and test against Auth0, EntraID or Google OAuth."
+                    body="Point .env.local at Auth0, Entra ID, Google OAuth or Keycloak (default)."
                 />
                 <InfoCard
                     title="Debug log"
-                    body="Open the dev tool to see additional info about the auth state."
+                    body="Pop open devtools to see extra auth state logs from oidc-spa."
                 />
                 <InfoCard
                     title="Early render"
-                    body="In this demo we start rendering immediately. If you don't like that, simply remove the the Suspense around the authed components."
+                    body="This demo renders immediately; drop the Suspense boundary if you prefer waiting."
                 />
             </div>
         </section>
