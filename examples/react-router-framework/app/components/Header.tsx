@@ -48,7 +48,11 @@ export function Header() {
 function AuthButtons() {
     const { isUserLoggedIn } = useOidc();
 
-    return isUserLoggedIn ? <LoggedInAuthButtons /> : <NotLoggedInAuthButtons />;
+    return (
+        <div className="animate-fade-in">
+            {isUserLoggedIn ? <LoggedInAuthButtons /> : <NotLoggedInAuthButtons />}
+        </div>
+    );
 }
 
 const primaryButtonClasses =
@@ -78,7 +82,6 @@ function LoggedInAuthButtons() {
                     alt={`${decodedIdToken.name}'s avatar`}
                     className="h-10 w-10 shrink-0 rounded-full border border-slate-700 object-cover"
                 />
-                <span className="hidden max-w-[120px] truncate sm:inline">{decodedIdToken.name}</span>
             </a>
             <button className={primaryButtonClasses} onClick={() => logout({ redirectTo: "home" })}>
                 Logout
