@@ -1,171 +1,141 @@
-import { useOidc, enforceLogin, getOidc } from "../oidc.client";
-import { useEffect, useState } from "react";
-import { decodeJwt } from "oidc-spa/tools/decodeJwt";
+import type { ReactNode } from "react";
+import { useLoaderData } from "react-router";
+import { useOidc, enforceLogin, fetchWithAuth } from "~/oidc";
 import { isKeycloak, createKeycloakUtils } from "oidc-spa/keycloak";
 import type { Route } from "./+types/protected";
 
+type DemoPost = {
+    id: number;
+    title: string;
+    body: string;
+};
+
+type LoaderData = {
+    demoPosts: DemoPost[];
+};
+
 export async function clientLoader(params: Route.ClientLoaderArgs) {
     await enforceLogin(params);
+
+    const demoPosts: DemoPost[] = await fetchWithAuth(
+        "https://jsonplaceholder.typicode.com/posts?_limit=4"
+    ).then(r => r.json());
+
+    return { demoPosts };
 }
 
 export default function Protected() {
     // Here we can safely assume that the user is logged in.
-    const {
-        decodedIdToken,
-        goToAuthServer,
-        backFromAuthServer,
-        renewTokens,
-        params: { issuerUri, clientId }
-    } = useOidc({
-        assert: "user logged in"
-    });
+    const { decodedIdToken, goToAuthServer, backFromAuthServer, renewTokens, issuerUri, clientId } =
+        useOidc({
+            assert: "user logged in"
+        });
 
     const keycloakUtils = isKeycloak({ issuerUri }) ? createKeycloakUtils({ issuerUri }) : undefined;
 
-    const { decodedAccessToken } = useDecodedAccessToken_DIAGNOSTIC_ONLY();
-
-    if (decodedAccessToken === undefined) {
-        // Loading...
-        return null;
-    }
+    const { demoPosts } = useLoaderData<LoaderData>();
 
     return (
-        <h4>
-            Hello {decodedIdToken.name}
-            <br />
-            <br />
-            {decodedAccessToken !== null ? (
-                <>
-                    <p>Decoded Access Token:</p>
-                    <pre style={{ textAlign: "left", display: "inline-block" }}>
-                        {JSON.stringify(decodedAccessToken, null, 2)}
-                    </pre>
-                </>
-            ) : (
-                <p>The Access Token issued by the IDP is opaque (Not a JWT).</p>
-            )}
-            <br />
-            <button onClick={() => renewTokens()}>Renew tokens </button>
-            <br />
-            {keycloakUtils !== undefined && (
-                <>
-                    <br />
-                    <button
-                        onClick={() =>
-                            goToAuthServer({
-                                extraQueryParams: { kc_action: "UPDATE_PASSWORD" }
-                            })
-                        }
-                    >
-                        Change password
-                    </button>
-                    {backFromAuthServer?.extraQueryParams.kc_action === "UPDATE_PASSWORD" && (
-                        <p>Result: {backFromAuthServer.result.kc_action_status}</p>
+        <section className="space-y-6">
+            <div className="space-y-1">
+                <p className="text-sm uppercase tracking-wide text-slate-400">Protected content</p>
+                <h1 className="text-2xl font-semibold text-white">Hello {decodedIdToken.name}</h1>
+                <p className="text-base text-slate-300">
+                    These actions come directly from your identity provider via oidc-spa.
+                </p>
+            </div>
+
+            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-sm shadow-slate-950/40">
+                <dl className="grid gap-2 text-sm text-slate-400">
+                    <InfoRow label="Subject">{decodedIdToken.sub}</InfoRow>
+                    {decodedIdToken.email && <InfoRow label="Email">{decodedIdToken.email}</InfoRow>}
+                    {decodedIdToken.preferred_username && (
+                        <InfoRow label="Username">{decodedIdToken.preferred_username}</InfoRow>
                     )}
-                    <br />
-                    <button
-                        onClick={() =>
-                            goToAuthServer({
-                                extraQueryParams: { kc_action: "UPDATE_PROFILE" }
-                            })
-                        }
-                    >
-                        Update profile
-                    </button>
-                    {backFromAuthServer?.extraQueryParams.kc_action === "UPDATE_PROFILE" && (
-                        <p>Result: {backFromAuthServer.result.kc_action_status}</p>
-                    )}
-                    <br />
-                    <button
-                        onClick={() =>
-                            goToAuthServer({
-                                extraQueryParams: { kc_action: "delete_account" }
-                            })
-                        }
-                    >
-                        Delete account
-                    </button>
-                    <br />
-                    <a
-                        href={keycloakUtils.getAccountUrl({
-                            clientId,
-                            backToAppFromAccountUrl: import.meta.env.BASE_URL
-                        })}
-                    >
-                        Go to Keycloak Account Management Console
-                    </a>
-                </>
-            )}
-        </h4>
+                </dl>
+
+                {keycloakUtils !== undefined && (
+                    <div className="mt-6 flex flex-wrap gap-3">
+                        <button
+                            className="inline-flex items-center rounded-full border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-200 transition-colors hover:border-slate-500"
+                            onClick={() =>
+                                goToAuthServer({
+                                    extraQueryParams: { kc_action: "UPDATE_PASSWORD" }
+                                })
+                            }
+                        >
+                            Change password
+                        </button>
+                        <button
+                            className="inline-flex items-center rounded-full border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-200 transition-colors hover:border-slate-500"
+                            onClick={() =>
+                                goToAuthServer({
+                                    extraQueryParams: { kc_action: "UPDATE_PROFILE" }
+                                })
+                            }
+                        >
+                            Update profile
+                        </button>
+                        <button
+                            className="inline-flex items-center rounded-full border border-rose-400/60 px-4 py-2 text-sm font-semibold text-rose-200 transition-colors hover:border-rose-300 hover:text-rose-100"
+                            onClick={() =>
+                                goToAuthServer({
+                                    extraQueryParams: { kc_action: "delete_account" }
+                                })
+                            }
+                        >
+                            Delete account
+                        </button>
+                    </div>
+                )}
+
+                {backFromAuthServer?.extraQueryParams.kc_action && (
+                    <p className="mt-4 text-sm text-slate-400">
+                        Result for {backFromAuthServer.extraQueryParams.kc_action}:{" "}
+                        <span className="font-medium text-white">
+                            {backFromAuthServer.result.kc_action_status}
+                        </span>
+                    </p>
+                )}
+            </div>
+
+            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-sm shadow-slate-950/40">
+                <div className="space-y-2 text-sm text-slate-300">
+                    <p>
+                        The list below was fetched during the client loader with{" "}
+                        <code className="font-mono text-xs text-slate-200">fetchWithAuth</code>, which
+                        automatically injects{" "}
+                        <code className="font-mono text-xs text-slate-200">
+                            Authorization: Bearer &lt;access_token&gt;
+                        </code>{" "}
+                        headers into every request.
+                    </p>
+                    <p className="text-slate-400">
+                        JSONPlaceholder is a public API—we treat it as a stand-in for a protected
+                        resource server.
+                    </p>
+                </div>
+                <ul className="mt-4 space-y-3">
+                    {demoPosts.map(post => (
+                        <li
+                            key={post.id}
+                            className="rounded-xl border border-slate-800/80 bg-slate-950/50 p-4 shadow-inner shadow-black/20"
+                        >
+                            <p className="text-sm font-semibold text-white">{post.title}</p>
+                            <p className="mt-1 text-sm text-slate-400">{post.body}</p>
+                        </li>
+                    ))}
+                </ul>
+            </div>
+        </section>
     );
 }
 
-/**
- * DIAGNOSTIC ONLY
- *
- * In real applications you should not read, display, or depend on any fields
- * from the access token. Treat it as an opaque string and use it only as:
- *
- *   Authorization: Bearer <token>
- *
- * If you need user information, use decodedIdToken or fetch it from your backend.
- * Please read the documentation or ask on our Discord if you are unsure.
- * Do not copy this pattern into production code.
- */
-function useDecodedAccessToken_DIAGNOSTIC_ONLY() {
-    const [decodedAccessToken, setDecodedAccessToken] = useState<
-        Record<string, unknown> | null /* Opaque, not a JWT */ | undefined /* Loading */
-    >(undefined);
-
-    useEffect(() => {
-        let cleanup: (() => void) | undefined = undefined;
-        let isActive = true;
-
-        (async () => {
-            const oidc = await getOidc();
-
-            if (!isActive) {
-                return;
-            }
-
-            if (!oidc.isUserLoggedIn) {
-                throw new Error("Assertion error");
-            }
-
-            const update = (accessToken: string) => {
-                let decodedAccessToken: Record<string, unknown> | null;
-
-                try {
-                    decodedAccessToken = decodeJwt(accessToken);
-                } catch {
-                    decodedAccessToken = null;
-                }
-
-                setDecodedAccessToken(decodedAccessToken);
-            };
-
-            const { unsubscribe } = oidc.subscribeToTokensChange(tokens => update(tokens.accessToken));
-
-            cleanup = () => {
-                unsubscribe();
-            };
-
-            {
-                const { accessToken } = await oidc.getTokens();
-
-                if (!isActive) {
-                    return;
-                }
-
-                update(accessToken);
-            }
-        })();
-
-        return () => {
-            isActive = false;
-            cleanup?.();
-        };
-    }, []);
-
-    return { decodedAccessToken };
+function InfoRow({ label, children }: { label: string; children: ReactNode }) {
+    return (
+        <div className="flex flex-wrap justify-between gap-2">
+            <dt className="text-slate-400">{label}</dt>
+            <dd className="font-medium text-white">{children}</dd>
+        </div>
+    );
 }

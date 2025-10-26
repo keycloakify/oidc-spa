@@ -1,90 +1,112 @@
+import { Suspense } from "react";
 import { NavLink } from "react-router";
-import { useOidc } from "../oidc.client";
+import { useOidc } from "~/oidc";
 import { isKeycloak, createKeycloakUtils } from "oidc-spa/keycloak";
 
+import userPictureFallback from "./userPictureFallback.svg";
+
 export function Header() {
+    return (
+        <header className="fixed inset-x-0 top-0 border-b border-slate-800 bg-slate-950/80 backdrop-blur">
+            <div className="mx-auto grid h-16 w-full max-w-4xl grid-cols-[auto_1fr_auto] items-center gap-4 px-6">
+                <div className="flex flex-col leading-tight">
+                    <span className="text-xs uppercase tracking-wide text-slate-400">Example</span>
+                    <span className="text-sm font-medium text-white">
+                        oidc-spa · React Router framework mode
+                    </span>
+                </div>
+
+                <nav className="flex items-center justify-center gap-4 text-sm font-medium text-slate-400">
+                    <NavLink
+                        to="/"
+                        className={({ isActive }) =>
+                            `transition-colors ${isActive ? "text-white" : "hover:text-white"}`
+                        }
+                    >
+                        Home
+                    </NavLink>
+                    <NavLink
+                        to="/protected"
+                        className={({ isActive }) =>
+                            `transition-colors ${isActive ? "text-white" : "hover:text-white"}`
+                        }
+                    >
+                        Protected
+                    </NavLink>
+                </nav>
+
+                <div className="flex min-w-40 justify-end sm:min-w-[220px]">
+                    <Suspense>
+                        <AuthButtons />
+                    </Suspense>
+                </div>
+            </div>
+        </header>
+    );
+}
+
+function AuthButtons() {
     const { isUserLoggedIn } = useOidc();
 
     return (
-        <div
-            style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                position: "absolute",
-                top: 0,
-                left: 0,
-                width: "100%",
-                height: 50
-            }}
-        >
-            <div>
-                <span>oidc-spa + react-router 7 framework mode</span>
-                &nbsp; &nbsp; &nbsp; &nbsp;
-                <NavLink to="/">
-                    {({ isActive }) => (
-                        <span style={{ fontWeight: isActive ? "bold" : "normal" }}>Home</span>
-                    )}
-                </NavLink>
-                &nbsp; &nbsp; &nbsp;
-                <NavLink to="/protected">
-                    {({ isActive }) => (
-                        <span style={{ fontWeight: isActive ? "bold" : "normal" }}>
-                            My protected page
-                        </span>
-                    )}
-                </NavLink>
-            </div>
-
+        <div className="animate-fade-in">
             {isUserLoggedIn ? <LoggedInAuthButtons /> : <NotLoggedInAuthButtons />}
         </div>
     );
 }
 
+const primaryButtonClasses =
+    "inline-flex items-center rounded-full bg-white/90 px-4 py-2 text-sm font-semibold text-slate-900 transition-colors hover:bg-white";
+
 function LoggedInAuthButtons() {
-    const { decodedIdToken, logout } = useOidc({ assert: "user logged in" });
+    const { decodedIdToken, logout, issuerUri, clientId } = useOidc({ assert: "user logged in" });
+
+    const keycloakUtils = !isKeycloak({ issuerUri }) ? undefined : createKeycloakUtils({ issuerUri });
+
+    const profileImageSrc =
+        decodedIdToken.picture && decodedIdToken.picture.trim().length > 0
+            ? decodedIdToken.picture
+            : userPictureFallback;
 
     return (
-        <div>
-            <span>Hello {decodedIdToken.name}</span>
-            &nbsp; &nbsp;
-            <button onClick={() => logout({ redirectTo: "home" })}>Logout</button>
+        <div className="flex items-center gap-4">
+            <a
+                href={keycloakUtils?.getAccountUrl({
+                    clientId,
+                    backToAppFromAccountUrl: location.href
+                })}
+                className="flex items-center gap-3 text-sm font-medium text-slate-200 hover:text-white"
+            >
+                <img
+                    src={profileImageSrc}
+                    alt={`${decodedIdToken.name}'s avatar`}
+                    className="h-10 w-10 shrink-0 rounded-full border border-slate-700 object-cover"
+                />
+            </a>
+            <button className={primaryButtonClasses} onClick={() => logout({ redirectTo: "home" })}>
+                Logout
+            </button>
         </div>
     );
 }
 
 function NotLoggedInAuthButtons() {
-    const {
-        login,
-        params: { issuerUri }
-    } = useOidc({ assert: "user not logged in" });
+    const { login, issuerUri } = useOidc({ assert: "user not logged in" });
 
-    const keycloakUtils = isKeycloak({ issuerUri }) ? createKeycloakUtils({ issuerUri }) : undefined;
-
-    const isAuth0 = issuerUri.includes("auth0");
+    const keycloakUtils = !isKeycloak({ issuerUri }) ? undefined : createKeycloakUtils({ issuerUri });
 
     return (
-        <div>
-            <button onClick={() => login()}>Login</button>{" "}
+        <div className="flex items-center gap-3">
+            <button className={primaryButtonClasses} onClick={() => login()}>
+                Login
+            </button>
             {keycloakUtils !== undefined && (
                 <button
+                    className="inline-flex items-center rounded-full border border-slate-700 px-4 py-2 text-sm font-semibold text-white transition-colors hover:border-slate-500"
                     onClick={() =>
                         login({
                             transformUrlBeforeRedirect:
                                 keycloakUtils.transformUrlBeforeRedirectForRegister
-                        })
-                    }
-                >
-                    Register
-                </button>
-            )}
-            {isAuth0 && (
-                <button
-                    onClick={() =>
-                        login({
-                            extraQueryParams: {
-                                screen_hint: "signup"
-                            }
                         })
                     }
                 >

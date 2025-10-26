@@ -7,6 +7,8 @@ import {
     preventSessionStorageSetItemOfPublicKeyByThirdParty
 } from "./iframeMessageProtection";
 import { setOidcRequiredPostHydrationReplaceNavigationUrl } from "./requiredPostHydrationReplaceNavigationUrl";
+import { setBASE_URL } from "./BASE_URL";
+import { resolvePrShouldLoadApp } from "./prShouldLoadApp";
 import { isBrowser } from "../tools/isBrowser";
 
 let hasEarlyInitBeenCalled = false;
@@ -18,6 +20,7 @@ export function oidcEarlyInit(params: {
     // Will be made mandatory next major.
     freezeWebSocket?: boolean;
     isPostLoginRedirectManual?: boolean;
+    BASE_URL?: string;
 }) {
     if (hasEarlyInitBeenCalled) {
         throw new Error("oidc-spa: oidcEarlyInit() Should be called only once");
@@ -35,8 +38,9 @@ export function oidcEarlyInit(params: {
         freezeFetch,
         freezeXMLHttpRequest,
         freezeWebSocket = false,
-        isPostLoginRedirectManual = false
-    } = params ?? {};
+        isPostLoginRedirectManual = false,
+        BASE_URL
+    } = params;
 
     const { shouldLoadApp } = handleOidcCallback({ isPostLoginRedirectManual });
 
@@ -83,7 +87,13 @@ export function oidcEarlyInit(params: {
         }
 
         preventSessionStorageSetItemOfPublicKeyByThirdParty();
+
+        if (BASE_URL !== undefined) {
+            setBASE_URL({ BASE_URL });
+        }
     }
+
+    resolvePrShouldLoadApp({ shouldLoadApp });
 
     return { shouldLoadApp };
 }
@@ -93,15 +103,8 @@ let redirectAuthResponse: AuthResponse | undefined = undefined;
 export function getRedirectAuthResponse():
     | { authResponse: AuthResponse; clearAuthResponse: () => void }
     | { authResponse: undefined; clearAuthResponse?: never } {
-    if (!hasEarlyInitBeenCalled) {
-        throw new Error(
-            [
-                "oidc-spa setup error.",
-                "oidcEarlyInit() wasn't called.",
-                "In newer version, using oidc-spa/entrypoint is no longer optional."
-            ].join(" ")
-        );
-    }
+    assert(hasEarlyInitBeenCalled, "34933395");
+
     return redirectAuthResponse === undefined
         ? { authResponse: undefined }
         : {

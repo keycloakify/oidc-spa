@@ -94,7 +94,6 @@ for (const targetFormat of ["cjs", "esm"] as const) {
                                 return [
                                     "angular.ts",
                                     "tanstack-start",
-                                    pathJoin("tools", "infer_import_meta_env_BASE_URL.ts"),
                                     pathJoin("tools", "inferIsViteDev.ts")
                                 ];
                             case "esm":

@@ -2,21 +2,7 @@ import { isRouteErrorResponse, Links, Meta, Outlet, Scripts, ScrollRestoration }
 import type { Route } from "./+types/root";
 import { AutoLogoutWarningOverlay } from "./components/AutoLogoutWarningOverlay";
 import { Header } from "./components/Header";
-import { OidcInitializationErrorIfAny } from "./components/OidcInitializationErrorIfAny";
-import "./app.css";
-
-export const links: Route.LinksFunction = () => [
-    { rel: "preconnect", href: "https://fonts.googleapis.com" },
-    {
-        rel: "preconnect",
-        href: "https://fonts.gstatic.com",
-        crossOrigin: "anonymous"
-    },
-    {
-        rel: "stylesheet",
-        href: "https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap"
-    }
-];
+import "./tailwind.css";
 
 export function Layout({ children }: { children: React.ReactNode }) {
     return (
@@ -27,7 +13,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 <Meta />
                 <Links />
             </head>
-            <body>
+            <body className="bg-slate-950 text-slate-100 antialiased">
                 {children}
                 <ScrollRestoration />
                 <Scripts />
@@ -41,29 +27,18 @@ export function Layout({ children }: { children: React.ReactNode }) {
  */
 export default function App() {
     return (
-        <>
+        <div className="min-h-screen">
             <Header />
-            <main style={{ width: "100%", textAlign: "center", margin: "0 auto" }}>
-                {/*You do not have to display an error here, it's just to 
-                show that if you want you can implement custom OIDC initialization 
-                error handling.*/}
-                <OidcInitializationErrorIfAny />
+            <main className="mx-auto flex w-full max-w-4xl flex-col gap-10 px-6 pb-16 pt-28">
                 <Outlet />
             </main>
             <AutoLogoutWarningOverlay />
-        </>
+        </div>
     );
 }
 
-/**
- * `<HydrateFallback />` is injected as `{children}` in `<Layout />` while oidc is initializing.
- */
 export function HydrateFallback() {
-    return (
-        <div style={{ display: "flex", width: "100%", justifyContent: "center", alignItems: "center" }}>
-            <p>Loading oidc and hydrating client...</p>
-        </div>
-    );
+    return null;
 }
 
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
@@ -83,11 +58,11 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
     }
 
     return (
-        <main>
-            <h1>{message}</h1>
-            <p>{details}</p>
+        <main className="mx-auto flex min-h-screen w-full max-w-3xl flex-col items-center justify-center gap-3 px-6 text-center">
+            <h1 className="text-4xl font-semibold tracking-tight text-white">{message}</h1>
+            <p className="text-base text-slate-300">{details}</p>
             {stack && (
-                <pre className="w-full p-4 overflow-x-auto">
+                <pre className="w-full overflow-x-auto rounded-lg bg-slate-900/90 p-4 text-left text-sm text-slate-100">
                     <code>{stack}</code>
                 </pre>
             )}
