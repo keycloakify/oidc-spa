@@ -17,16 +17,17 @@ export default function Home() {
         <section className="space-y-8">
             <div className="space-y-3">
                 <p className="text-sm uppercase tracking-wide text-slate-400">Quick start</p>
-                <h1 className="text-3xl font-semibold text-white">A calm place to try oidc-spa</h1>
+                <div className="flex flex-wrap items-center gap-3">
+                    <h1 className="text-3xl font-semibold text-white">A calm place to try oidc-spa</h1>
+                    <Suspense>
+                        <Greeting />
+                    </Suspense>
+                </div>
                 <p className="text-base text-slate-300">
                     Use the header actions to authenticate, then explore the protected page to see how
                     user information and account actions surface in the UI.
                 </p>
             </div>
-
-            <Suspense fallback={<div className="h-9 w-48 rounded-full bg-slate-800/60 animate-pulse" />}>
-                <Greeting />
-            </Suspense>
 
             <div className="grid gap-4 sm:grid-cols-2">
                 <InfoCard
@@ -54,7 +55,7 @@ function Greeting() {
     const { isUserLoggedIn, decodedIdToken } = useOidc();
 
     return (
-        <div className="inline-flex items-center rounded-full border border-slate-800 bg-slate-900 px-4 py-2 text-sm font-medium text-slate-200">
+        <div className="inline-flex items-center rounded-full border border-slate-800 bg-slate-900 px-4 py-2 text-sm font-medium text-slate-200 animate-fade-in">
             {isUserLoggedIn ? `Signed in as ${decodedIdToken.name}` : `Browsing as a guest`}
         </div>
     );
