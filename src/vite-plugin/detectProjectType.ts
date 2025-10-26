@@ -12,7 +12,10 @@ export function detectProjectType(params: { resolvedConfig: ResolvedConfigLike }
         return "tanstack-start";
     }
 
-    if (pluginNames.has("react-router")) {
+    if (
+        pluginNames.has("react-router") ||
+        Array.from(pluginNames).some(pluginName => pluginName.startsWith("react-router:"))
+    ) {
         return "react-router-framework";
     }
 

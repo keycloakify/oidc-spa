@@ -1,10 +1,11 @@
-import type { Plugin } from "vite";
+import type { Plugin, TransformResult } from "vite";
 import { assert } from "../tools/tsafe/assert";
 import type { Param0 } from "../tools/tsafe/Param0";
 import type { oidcEarlyInit } from "../entrypoint";
 import { createLoadHandleEntrypoint } from "./handleClientEntrypoint";
 import { excludeModuleExportFromOptimizedDeps } from "./excludeModuleExportFromOptimizedDeps";
-import { transformCreateFileRoute } from "./transformCreateFileRoute";
+import { transformCreateFileRoute } from "./transformTanstackRouterCreateFileRoute";
+import { detectProjectType, type ProjectType } from "./detectProjectType";
 
 export type OidcSpaVitePluginParams = Omit<
     Param0<typeof oidcEarlyInit>,
@@ -20,6 +21,8 @@ export function oidcSpa(
 ) {
     let loadHandleEntrypoint: ReturnType<typeof createLoadHandleEntrypoint> | undefined = undefined;
 
+    let projectType: ProjectType | undefined = undefined;
+
     const plugin: Plugin = {
         name: "oidc-spa",
         enforce: "pre",
@@ -28,16 +31,28 @@ export function oidcSpa(
             return userConfig;
         },
         configResolved(resolvedConfig) {
+            projectType = detectProjectType({ resolvedConfig });
+
             loadHandleEntrypoint = createLoadHandleEntrypoint({
                 oidcSpaVitePluginParams: params,
                 resolvedConfig
             });
         },
         transform(code, id) {
-            const transformed = transformCreateFileRoute({
-                code,
-                id
-            });
+            let transformed: TransformResult | null = null;
+
+            assert(projectType !== undefined);
+
+            tanstack_start_specific_transformations: {
+                if (projectType !== "tanstack-start") {
+                    break tanstack_start_specific_transformations;
+                }
+
+                transformed = transformCreateFileRoute({
+                    code,
+                    id
+                });
+            }
 
             return transformed;
         },
