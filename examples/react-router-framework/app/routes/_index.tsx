@@ -34,19 +34,27 @@ export default function Home() {
             <div className="grid gap-4 sm:grid-cols-2">
                 <InfoCard
                     title="Sign in"
-                    body="The header buttons use oidc-spa to start an authorization code flow."
+                    body="The Auth button in the header show authentication state and the picture claim of the decoded id token."
                 />
                 <InfoCard
                     title="Visit /protected"
-                    body="Once signed in, the protected route reads your tokens and shows useful actions."
+                    body="Click on the protected link in the header, if you're not already logged in you'll be redirected."
                 />
                 <InfoCard
                     title="Auto logout"
-                    body="If tokens near expiry, a soft warning prompts you before automatic logout."
+                    body="If the server is configured to automatically terminate session after inactivity you'll get an overlay warning."
                 />
                 <InfoCard
-                    title="Neutral styling"
-                    body="Tailwind utilities keep the layout tidy without hiding the example logic."
+                    title="Switch provider"
+                    body="The example is configured with a Keycloak but change the .env.local file and test against Auth0, EntraID or Google OAuth."
+                />
+                <InfoCard
+                    title="Debug log"
+                    body="Open the dev tool to see additional info about the auth state."
+                />
+                <InfoCard
+                    title="Early render"
+                    body="In this demo we start rendering immediately. If you don't like that, simply remove the the Suspense around the authed components."
                 />
             </div>
         </section>
