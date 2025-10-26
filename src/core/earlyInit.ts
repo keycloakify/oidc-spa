@@ -7,6 +7,7 @@ import {
     preventSessionStorageSetItemOfPublicKeyByThirdParty
 } from "./iframeMessageProtection";
 import { setOidcRequiredPostHydrationReplaceNavigationUrl } from "./requiredPostHydrationReplaceNavigationUrl";
+import { setBASE_URL } from "./BASE_URL";
 import { isBrowser } from "../tools/isBrowser";
 
 let hasEarlyInitBeenCalled = false;
@@ -18,6 +19,7 @@ export function oidcEarlyInit(params: {
     // Will be made mandatory next major.
     freezeWebSocket?: boolean;
     isPostLoginRedirectManual?: boolean;
+    BASE_URL?: string;
 }) {
     if (hasEarlyInitBeenCalled) {
         throw new Error("oidc-spa: oidcEarlyInit() Should be called only once");
@@ -35,7 +37,8 @@ export function oidcEarlyInit(params: {
         freezeFetch,
         freezeXMLHttpRequest,
         freezeWebSocket = false,
-        isPostLoginRedirectManual = false
+        isPostLoginRedirectManual = false,
+        BASE_URL
     } = params ?? {};
 
     const { shouldLoadApp } = handleOidcCallback({ isPostLoginRedirectManual });
@@ -83,6 +86,10 @@ export function oidcEarlyInit(params: {
         }
 
         preventSessionStorageSetItemOfPublicKeyByThirdParty();
+
+        if (BASE_URL !== undefined) {
+            setBASE_URL({ BASE_URL });
+        }
     }
 
     return { shouldLoadApp };

@@ -6,7 +6,10 @@ import { createLoadHandleEntrypoint } from "./handleClientEntrypoint";
 import { excludeModuleExportFromOptimizedDeps } from "./excludeModuleExportFromOptimizedDeps";
 import { transformCreateFileRoute } from "./transformCreateFileRoute";
 
-export type OidcSpaVitePluginParams = Omit<Param0<typeof oidcEarlyInit>, "isPostLoginRedirectManual">;
+export type OidcSpaVitePluginParams = Omit<
+    Param0<typeof oidcEarlyInit>,
+    "isPostLoginRedirectManual" | "BASE_URL"
+>;
 
 export function oidcSpa(
     params: OidcSpaVitePluginParams = {

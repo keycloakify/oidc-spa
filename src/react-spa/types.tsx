@@ -1,31 +1,17 @@
 import type { ReactNode, ComponentType } from "react";
-import type { Oidc as Oidc_core, OidcInitializationError } from "../../core";
-import type { FunctionMiddlewareAfterServer, RequestMiddlewareAfterServer } from "@tanstack/react-start";
-import type { GetterOrDirectValue } from "../../tools/GetterOrDirectValue";
-import type { OidcMetadata } from "../../core/OidcMetadata";
+import type { Oidc as Oidc_core, OidcInitializationError } from "../core";
+import type { OidcMetadata } from "../core/OidcMetadata";
 
-export type CreateOidcComponent<DecodedIdToken> = <
-    Assert extends "user logged in" | "user not logged in" | undefined,
-    Props
->(params: {
-    assert?: Assert;
-    pendingComponent?: Assert extends undefined ? (props: NoInfer<Props>) => ReactNode : undefined;
-    component: (props: Props) => any;
-}) => ((props: Props) => ReactNode) & {
-    useOidc: () => undefined extends Assert
-        ? CreateOidcComponent.Oidc<DecodedIdToken>
-        : "user logged in" extends Assert
-        ? CreateOidcComponent.Oidc.LoggedIn<DecodedIdToken>
-        : CreateOidcComponent.Oidc.NotLoggedIn;
+export type UseOidc<DecodedIdToken> = {
+    (params?: { assert?: undefined }): UseOidc.Oidc<DecodedIdToken>;
+    (params: { assert: "user logged in" }): UseOidc.Oidc.LoggedIn<DecodedIdToken>;
+    (params: { assert: "user not logged in" }): UseOidc.Oidc.NotLoggedIn;
 };
 
-export namespace CreateOidcComponent {
-    export type WithAutoLogin<DecodedIdToken> = <Props>(params: {
-        pendingComponent?: (params: NoInfer<Props>) => ReactNode;
-        component: (props: Props) => any;
-    }) => ((props: Props) => ReactNode) & {
-        useOidc: () => Oidc.LoggedIn<DecodedIdToken>;
-    };
+export namespace UseOidc {
+    export type WithAutoLogin<DecodedIdToken> = (params?: {
+        assert: "user logged in";
+    }) => Oidc.LoggedIn<DecodedIdToken>;
 
     export type Oidc<DecodedIdToken> =
         | (Oidc.NotLoggedIn & {
@@ -144,88 +130,9 @@ export namespace GetOidc {
     }
 }
 
-export type OidcFnMiddleware<AccessTokenClaims> = {
-    (params?: {
-        assert?: undefined;
-        hasRequiredClaims?: (params: { accessTokenClaims: AccessTokenClaims }) => Promise<boolean>;
-    }): OidcFnMiddleware.TanStackFnMiddleware<{
-        oidc: OidcServerContext<AccessTokenClaims>;
-    }>;
-    (params?: {
-        assert?: "user logged in";
-        hasRequiredClaims?: (params: { accessTokenClaims: AccessTokenClaims }) => Promise<boolean>;
-    }): OidcFnMiddleware.TanStackFnMiddleware<{
-        oidc: OidcServerContext.LoggedIn<AccessTokenClaims>;
-    }>;
-};
-
-export namespace OidcFnMiddleware {
-    export type WithAutoLogin<AccessTokenClaims> = (params?: {
-        assert?: "user logged in";
-        hasRequiredClaims?: (params: { accessTokenClaims: AccessTokenClaims }) => Promise<boolean>;
-    }) => TanStackFnMiddleware<{
-        oidc: OidcServerContext.LoggedIn<AccessTokenClaims>;
-    }>;
-
-    export type TanStackFnMiddleware<T> = FunctionMiddlewareAfterServer<
-        {},
-        unknown,
-        undefined,
-        T,
-        {},
-        undefined,
-        undefined
-    >;
-}
-
-export type OidcServerContext<AccessTokenClaims> =
-    | OidcServerContext.LoggedIn<AccessTokenClaims>
-    | (OidcServerContext.NotLoggedIn & {
-          accessTokenClaims?: never;
-          accessToken?: never;
-      });
-
-export namespace OidcServerContext {
-    export type NotLoggedIn = {
-        isUserLoggedIn: false;
-    };
-
-    export type LoggedIn<AccessTokenClaims> = {
-        isUserLoggedIn: true;
-        accessTokenClaims: AccessTokenClaims;
-        accessToken: string;
-    };
-}
-
-export type OidcRequestMiddleware<AccessTokenClaims> = {
-    (params?: {
-        assert?: undefined;
-        hasRequiredClaims?: (params: { accessTokenClaims: AccessTokenClaims }) => Promise<boolean>;
-    }): OidcRequestMiddleware.TanstackRequestMiddleware<{
-        oidc: OidcServerContext<AccessTokenClaims>;
-    }>;
-    (params?: {
-        assert?: "user logged in";
-        hasRequiredClaims?: (params: { accessTokenClaims: AccessTokenClaims }) => Promise<boolean>;
-    }): OidcRequestMiddleware.TanstackRequestMiddleware<{
-        oidc: OidcServerContext.LoggedIn<AccessTokenClaims>;
-    }>;
-};
-
-export namespace OidcRequestMiddleware {
-    export type WithAutoLogin<AccessTokenClaims> = (params?: {
-        assert?: "user logged in";
-        hasRequiredClaims?: (params: { accessTokenClaims: AccessTokenClaims }) => Promise<boolean>;
-    }) => TanstackRequestMiddleware<{
-        oidc: OidcServerContext.LoggedIn<AccessTokenClaims>;
-    }>;
-
-    export type TanstackRequestMiddleware<T> = RequestMiddlewareAfterServer<{}, undefined, T>;
-}
-
-export type ParamsOfBootstrap<AutoLogin, DecodedIdToken, AccessTokenClaims> =
+export type ParamsOfBootstrap<AutoLogin, DecodedIdToken> =
     | ParamsOfBootstrap.Real<AutoLogin>
-    | ParamsOfBootstrap.Mock<AutoLogin, DecodedIdToken, AccessTokenClaims>;
+    | ParamsOfBootstrap.Mock<AutoLogin, DecodedIdToken>;
 
 export namespace ParamsOfBootstrap {
     export type Real<AutoLogin> = {
@@ -345,77 +252,57 @@ export namespace ParamsOfBootstrap {
          *  Use at your own risk, this is a hack.
          */
         __unsafe_useIdTokenAsAccessToken?: boolean;
+
+        /**
+         * Let's you override the params passed to
+         * (if you weren't able to provide it)
+         */
+        BASE_URL?: string;
     } & (AutoLogin extends true ? {} : {});
 
-    export type Mock<AutoLogin, DecodedIdToken, AccessTokenClaims> = {
+    export type Mock<AutoLogin, DecodedIdToken> = {
         implementation: "mock";
         issuerUri_mock?: string;
         clientId_mock?: string;
         decodedIdToken_mock?: DecodedIdToken;
-    } & (AccessTokenClaims extends undefined
-        ? {}
+
+        /**
+         * Let's you override the params passed to
+         * (if you weren't able to provide it)
+         */
+        BASE_URL?: string;
+    } & (AutoLogin extends true
+        ? {
+              isUserInitiallyLoggedIn?: true;
+          }
         : {
-              accessTokenClaims_mock?: AccessTokenClaims;
-          }) &
-        (AutoLogin extends true
-            ? {
-                  isUserInitiallyLoggedIn?: true;
-              }
-            : {
-                  isUserInitiallyLoggedIn: boolean;
-              });
+              isUserInitiallyLoggedIn: boolean;
+          });
 }
 
-export type OidcSpaApi<AutoLogin, DecodedIdToken, AccessTokenClaims> = {
-    bootstrapOidc: (
-        params: GetterOrDirectValue<
-            { process: { env: Record<string, string> } },
-            ParamsOfBootstrap<AutoLogin, DecodedIdToken, AccessTokenClaims>
-        >
-    ) => void;
-    createOidcComponent: AutoLogin extends true
-        ? CreateOidcComponent.WithAutoLogin<DecodedIdToken>
-        : CreateOidcComponent<DecodedIdToken>;
+export type OidcSpaApi<AutoLogin, DecodedIdToken> = {
+    bootstrapOidc: (params: ParamsOfBootstrap<AutoLogin, DecodedIdToken>) => void;
+    useOidc: AutoLogin extends true ? UseOidc.WithAutoLogin<DecodedIdToken> : UseOidc<DecodedIdToken>;
     getOidc: AutoLogin extends true ? GetOidc.WithAutoLogin<DecodedIdToken> : GetOidc<DecodedIdToken>;
-} & (AccessTokenClaims extends undefined
-    ? {}
+} & (AutoLogin extends true
+    ? {
+          OidcInitializationErrorGate: (props: {
+              errorComponent: ComponentType<{
+                  oidcInitializationError: OidcInitializationError;
+              }>;
+              children: ReactNode;
+          }) => ReactNode;
+      }
     : {
-          oidcFnMiddleware: AutoLogin extends true
-              ? OidcFnMiddleware.WithAutoLogin<AccessTokenClaims>
-              : OidcFnMiddleware<AccessTokenClaims>;
-          oidcRequestMiddleware: AutoLogin extends true
-              ? OidcRequestMiddleware.WithAutoLogin<AccessTokenClaims>
-              : OidcRequestMiddleware<AccessTokenClaims>;
-      }) &
-    (AutoLogin extends true
-        ? {
-              OidcInitializationGate: (props: {
-                  errorComponent?: ComponentType<{ oidcInitializationError: OidcInitializationError }>;
-                  pendingComponent?: ComponentType<{}>;
-                  children: ReactNode;
-              }) => ReactNode;
-          }
-        : {
-              enforceLogin: (loaderContext: {
-                  cause: "preload" | string;
-                  location: {
-                      href: string;
-                  };
-              }) => Promise<void | never>;
-          });
+          enforceLogin: (loaderContext: {
+              request?: { url?: string };
+              cause?: "preload" | string;
+              location?: {
+                  href?: string;
+              };
+          }) => Promise<void | never>;
 
-export type CreateValidateAndGetAccessTokenClaims<AccessTokenClaims> = (params: {
-    paramsOfBootstrap: ParamsOfBootstrap<boolean, Record<string, unknown>, AccessTokenClaims>;
-}) => {
-    validateAndGetAccessTokenClaims: (params: { accessToken: string }) => Promise<
-        | {
-              isValid: true;
-              accessTokenClaims: AccessTokenClaims;
-          }
-        | {
-              isValid: false;
-              errorMessage: string;
-              wwwAuthenticateHeaderErrorDescription: string;
-          }
-    >;
-};
+          withLoginEnforced: <Props extends Record<string, unknown>>(
+              component: ComponentType<Props>
+          ) => (props: Props) => ReactNode;
+      });

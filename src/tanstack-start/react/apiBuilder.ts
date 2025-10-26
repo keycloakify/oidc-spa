@@ -61,7 +61,6 @@ export type OidcSpaApiBuilder<
                 ExcludedMethod | "withAccessTokenValidation"
             >;
         };
-
         finalize: () => OidcSpaApi<AutoLogin, DecodedIdToken, AccessTokenClaims>;
     },
     ExcludedMethod

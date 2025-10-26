@@ -1,4 +1,11 @@
-import { useState, useEffect, type ReactNode, createContext, useContext } from "react";
+import {
+    useState,
+    useEffect,
+    type ReactNode,
+    createContext,
+    useContext,
+    type ComponentType
+} from "react";
 import type {
     CreateValidateAndGetAccessTokenClaims,
     OidcSpaApi,
@@ -13,7 +20,7 @@ import { OidcInitializationError } from "../../core/OidcInitializationError";
 import { Deferred } from "../../tools/Deferred";
 import { isBrowser } from "../../tools/isBrowser";
 import { assert, type Equals, is } from "../../tools/tsafe/assert";
-import { infer_import_meta_env_BASE_URL } from "../../tools/infer_import_meta_env_BASE_URL";
+import { getBASE_URL } from "../../core/BASE_URL";
 import { createObjectThatThrowsIfAccessed } from "../../tools/createObjectThatThrowsIfAccessed";
 import { createStatefulEvt } from "../../tools/StatefulEvt";
 import { id } from "../../tools/tsafe/id";
@@ -604,13 +611,25 @@ export function createOidcSpaApi<
 
             dParamsOfBootstrap.resolve(paramsOfBootstrap);
 
+            const { BASE_URL } = getBASE_URL();
+
+            if (BASE_URL === undefined) {
+                throw new Error(
+                    [
+                        "oidc-spa: If you do not use the oidc-spa Vite plugin",
+                        "you must provide the BASE_URL to the earlyInit():",
+                        "\noidcSpaEarlyInit({ BASE_URL: import.meta.env.BASE_URL })"
+                    ].join(" ")
+                );
+            }
+
             switch (paramsOfBootstrap.implementation) {
                 case "mock":
                     {
                         const { createMockOidc } = await import("../../mock/oidc");
 
                         const oidcCore = await createMockOidc({
-                            homeUrl: infer_import_meta_env_BASE_URL(),
+                            homeUrl: BASE_URL,
                             // NOTE: The `as false` is lying here, it's just to preserve some level of type-safety.
                             autoLogin: autoLogin as false,
                             // NOTE: Same here, the nullish coalescing is lying.
@@ -641,15 +660,13 @@ export function createOidcSpaApi<
                     {
                         const { createOidc } = await prModuleCore;
 
-                        const homeUrl = infer_import_meta_env_BASE_URL();
-
                         let oidcCoreOrInitializationError:
                             | Oidc_core<DecodedIdToken>
                             | OidcInitializationError;
 
                         try {
                             oidcCoreOrInitializationError = await createOidc({
-                                homeUrl,
+                                homeUrl: BASE_URL,
                                 autoLogin,
                                 decodedIdTokenSchema,
                                 issuerUri: paramsOfBootstrap.issuerUri,
@@ -735,12 +752,11 @@ export function createOidcSpaApi<
     enforceLogin.__isOidcSpaEnforceLogin = true;
 
     function OidcInitializationGate(props: {
-        renderFallback: (props: {
-            initializationError: OidcInitializationError | undefined;
-        }) => ReactNode;
+        errorComponent?: ComponentType<{ oidcInitializationError: OidcInitializationError }>;
+        pendingComponent?: ComponentType<{}>;
         children: ReactNode;
     }): ReactNode {
-        const { renderFallback, children } = props;
+        const { errorComponent: ErrorComponent, pendingComponent: PendingComponent, children } = props;
 
         const [oidcCoreOrInitializationError, setOidcCoreOrInitializationError] = useState<
             Oidc_core<DecodedIdToken> | OidcInitializationError | undefined
@@ -761,18 +777,21 @@ export function createOidcSpaApi<
             };
         }, []);
 
-        if (
-            oidcCoreOrInitializationError === undefined ||
-            oidcCoreOrInitializationError instanceof OidcInitializationError
-        ) {
-            return renderFallback({ initializationError: oidcCoreOrInitializationError });
+        if (oidcCoreOrInitializationError === undefined) {
+            if (PendingComponent === undefined) {
+                return null;
+            }
+            return <PendingComponent />;
         }
 
-        return (
-            <context_isFreeOfSsrHydrationConcern.Provider value={true}>
-                {children}
-            </context_isFreeOfSsrHydrationConcern.Provider>
-        );
+        if (oidcCoreOrInitializationError instanceof OidcInitializationError) {
+            if (ErrorComponent === undefined) {
+                throw oidcCoreOrInitializationError;
+            }
+            return <ErrorComponent oidcInitializationError={oidcCoreOrInitializationError} />;
+        }
+
+        return children;
     }
 
     const prValidateAndGetAccessTokenClaims =

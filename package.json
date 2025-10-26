@@ -154,6 +154,10 @@
             "types": "./dist/vite-plugin/index.d.ts",
             "default": "./dist/vite-plugin/index.js"
         },
+        "./react-spa": {
+            "module": "./dist/esm/react-spa/index.js",
+            "default": "./dist/react-spa/index.js"
+        },
         "./react-tanstack-start": {
             "module": "./dist/esm/tanstack-start/react/index.js",
             "types": "./dist/esm/tanstack-start/react/index.d.ts",
