@@ -35,7 +35,7 @@ export function Header() {
                     </NavLink>
                 </nav>
 
-                <div className="flex min-w-[160px] justify-end sm:min-w-[220px]">
+                <div className="flex min-w-40 justify-end sm:min-w-[220px]">
                     <Suspense>
                         <AuthButtons />
                     </Suspense>
