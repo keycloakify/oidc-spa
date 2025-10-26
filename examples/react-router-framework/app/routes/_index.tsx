@@ -18,7 +18,9 @@ export default function Home() {
             <div className="space-y-3">
                 <p className="text-sm uppercase tracking-wide text-slate-400">Quick start</p>
                 <div className="flex flex-wrap items-center gap-3">
-                    <h1 className="text-3xl font-semibold text-white">A calm place to try oidc-spa</h1>
+                    <h1 className="text-3xl font-semibold text-white pt-1 pb-1">
+                        A calm place to try oidc-spa
+                    </h1>
                     <Suspense>
                         <Greeting />
                     </Suspense>
