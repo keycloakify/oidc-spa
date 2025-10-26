@@ -23,7 +23,7 @@ import { type StatefulEvt, createStatefulEvt } from "../../tools/StatefulEvt";
 import { readExpirationTimeInJwt } from "../../tools/readExpirationTimeInJwt";
 
 type ConstructorParams = KeycloakServerConfig & {
-    homeUrl: string;
+    BASE_URL?: string;
 };
 
 /**
@@ -99,7 +99,7 @@ export class Keycloak {
         let hasCreateResolved = false;
 
         const oidcOrError = await createOidc({
-            homeUrl: constructorParams.homeUrl,
+            homeUrl: constructorParams.BASE_URL,
             issuerUri,
             clientId: this.#state.constructorParams.clientId,
             autoLogin,

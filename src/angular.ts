@@ -150,7 +150,7 @@ export type ParamsOfProvide = {
 assert<
     Equals<
         Omit<ParamsOfProvide, "autoLogoutWarningDurationSeconds">,
-        Omit<ParamsOfCreateOidc<any, boolean>, "homeUrl" | "decodedIdTokenSchema">
+        Omit<ParamsOfCreateOidc<any, boolean>, "homeUrl" | "BASE_URL" | "decodedIdTokenSchema">
     >
 >;
 

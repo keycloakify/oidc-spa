@@ -5,6 +5,7 @@ import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";
 import { getSearchParam, addOrUpdateSearchParam } from "../tools/urlSearchParams";
 import { getRootRelativeOriginalLocationHref } from "../core/earlyInit";
 import { INFINITY_TIME } from "../tools/INFINITY_TIME";
+import { getBASE_URL } from "../core/BASE_URL";
 
 export type ParamsOfCreateMockOidc<
     DecodedIdToken extends Record<string, unknown> = Record<string, unknown>,
@@ -18,7 +19,11 @@ export type ParamsOfCreateMockOidc<
      * In the majority of cases it should be `homeUrl: "/"` but it could aso be something like `homeUrl: "/dashboard"`
      * if your web app isn't hosted at the root of the domain.
      */
-    homeUrl: string;
+    BASE_URL?: string;
+
+    /** @deprecated: Use BASE_URL (same thing, just renamed). */
+    homeUrl?: string;
+
     autoLogin?: AutoLogin;
     postLoginRedirectUrl?: string;
 } & (AutoLogin extends true
@@ -41,10 +46,11 @@ export async function createMockOidc<
         isUserInitiallyLoggedIn = true,
         mockedParams = {},
         mockedTokens = {},
-        homeUrl: homeUrl_params,
         autoLogin = false,
         postLoginRedirectUrl
     } = params;
+
+    const BASE_URL_params = params.BASE_URL ?? params.homeUrl;
 
     const isUserLoggedIn = (() => {
         const { wasPresent, value } = getSearchParam({
@@ -82,7 +88,7 @@ export async function createMockOidc<
     })();
 
     const homeUrl = toFullyQualifiedUrl({
-        urlish: homeUrl_params,
+        urlish: BASE_URL_params ?? getBASE_URL() ?? "/",
         doAssertNoQueryParams: true,
         doOutputWithTrailingSlash: true
     });

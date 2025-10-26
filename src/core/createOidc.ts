@@ -51,6 +51,8 @@ import { isKeycloak } from "../keycloak/isKeycloak";
 import { INFINITY_TIME } from "../tools/INFINITY_TIME";
 import type { WELL_KNOWN_PATH } from "./diagnostic";
 import { getIsValidRemoteJson } from "../tools/getIsValidRemoteJson";
+import { prEarlyInitCalledAndShouldLoadApp } from "./prEarlyInitCalledAndShouldLoadApp";
+import { getBASE_URL } from "./BASE_URL";
 
 // NOTE: Replaced at build time
 const VERSION = "{{OIDC_SPA_VERSION}}";
@@ -59,14 +61,6 @@ export type ParamsOfCreateOidc<
     DecodedIdToken extends Record<string, unknown> = Oidc.Tokens.DecodedIdToken_OidcCoreSpec,
     AutoLogin extends boolean = false
 > = {
-    /**
-     * What should you put in this parameter?
-     *   - Vite project:             `BASE_URL: import.meta.env.BASE_URL`
-     *   - Create React App project: `BASE_URL: process.env.PUBLIC_URL`
-     *   - Other:                    `BASE_URL: "/"` (Usually, or `/dashboard` if your app is not at the root of the domain)
-     */
-    homeUrl: string;
-
     /**
      * See: https://docs.oidc-spa.dev/v/v8/providers-configuration/provider-configuration
      */
@@ -194,6 +188,22 @@ export type ParamsOfCreateOidc<
      * or non-standard deployments), and you cannot fix the server-side configuration.
      */
     __metadata?: Partial<OidcMetadata>;
+
+    /**
+     * NOTE: This parameter is optional if you use the Vite plugin.
+     *
+     * This parameter let's you overwrite the value provided in
+     * oidcEarlyInit({ BASE_URL: xxx });
+     *
+     * What should you put in this parameter?
+     *   - Vite project:             `BASE_URL: import.meta.env.BASE_URL`
+     *   - Create React App project: `BASE_URL: process.env.PUBLIC_URL`
+     *   - Other:                    `BASE_URL: "/"` (Usually, or `/dashboard` if your app is not at the root of the domain)
+     */
+    BASE_URL?: string;
+
+    /** @deprecated: Use BASE_URL (same thing, just renamed). */
+    homeUrl?: string;
 };
 
 const globalContext = {
@@ -314,11 +324,27 @@ export async function createOidc_nonMemoized<
         log: typeof console.log | undefined;
     }
 ): Promise<AutoLogin extends true ? Oidc.LoggedIn<DecodedIdToken> : Oidc<DecodedIdToken>> {
+    {
+        const timer = window.setTimeout(() => {
+            console.warn(
+                [
+                    "oidc-spa: Setup error.",
+                    "oidcEarlyInit() wasn't called.",
+                    "This is supposed to be handled by the oidc-spa Vite plugin",
+                    "or manually in other environments."
+                ].join(" ")
+            );
+        }, 3_000);
+
+        await prEarlyInitCalledAndShouldLoadApp;
+
+        window.clearTimeout(timer);
+    }
+
     const {
         transformUrlBeforeRedirect,
         extraQueryParams: extraQueryParamsOrGetter,
         extraTokenParams: extraTokenParamsOrGetter,
-        homeUrl: homeUrl_params,
         decodedIdTokenSchema,
         idleSessionLifetimeInSeconds,
         autoLogoutParams = { redirectTo: "current page" },
@@ -329,6 +355,8 @@ export async function createOidc_nonMemoized<
         __metadata,
         noIframe = false
     } = params;
+
+    const BASE_URL_params = params.BASE_URL ?? params.homeUrl;
 
     const { issuerUri, clientId, scopes, configId, log } = preProcessedParams;
 
@@ -357,7 +385,29 @@ export async function createOidc_nonMemoized<
     })();
 
     const homeUrlAndRedirectUri = toFullyQualifiedUrl({
-        urlish: homeUrl_params,
+        urlish: (() => {
+            if (BASE_URL_params !== undefined) {
+                return BASE_URL_params;
+            }
+
+            const BASE_URL = getBASE_URL();
+
+            if (BASE_URL === undefined) {
+                throw new Error(
+                    [
+                        "oidc-spa: If you do not use the oidc-spa Vite plugin",
+                        "you must provide the BASE_URL to the earlyInit() examples:",
+                        "oidcSpaEarlyInit({ BASE_URL: import.meta.env.BASE_URL })",
+                        "oidcSpaEarlyInit({ BASE_URL: '/' })",
+                        "",
+                        "You can also pass this parameter to createOidc({ BASE_URL: '...' })",
+                        "or bootstrapOidc({ BASE_URL: '...' })"
+                    ].join("\n")
+                );
+            }
+
+            return BASE_URL;
+        })(),
         doAssertNoQueryParams: true,
         doOutputWithTrailingSlash: true
     });

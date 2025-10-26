@@ -8,6 +8,7 @@ import {
 } from "./iframeMessageProtection";
 import { setOidcRequiredPostHydrationReplaceNavigationUrl } from "./requiredPostHydrationReplaceNavigationUrl";
 import { setBASE_URL } from "./BASE_URL";
+import { resolvePrEarlyInitCalledAndShouldLoadApp } from "./prEarlyInitCalledAndShouldLoadApp";
 import { isBrowser } from "../tools/isBrowser";
 
 let hasEarlyInitBeenCalled = false;
@@ -39,7 +40,7 @@ export function oidcEarlyInit(params: {
         freezeWebSocket = false,
         isPostLoginRedirectManual = false,
         BASE_URL
-    } = params ?? {};
+    } = params;
 
     const { shouldLoadApp } = handleOidcCallback({ isPostLoginRedirectManual });
 
@@ -92,6 +93,8 @@ export function oidcEarlyInit(params: {
         }
     }
 
+    resolvePrEarlyInitCalledAndShouldLoadApp();
+
     return { shouldLoadApp };
 }
 
@@ -100,15 +103,8 @@ let redirectAuthResponse: AuthResponse | undefined = undefined;
 export function getRedirectAuthResponse():
     | { authResponse: AuthResponse; clearAuthResponse: () => void }
     | { authResponse: undefined; clearAuthResponse?: never } {
-    if (!hasEarlyInitBeenCalled) {
-        throw new Error(
-            [
-                "oidc-spa setup error.",
-                "oidcEarlyInit() wasn't called.",
-                "In newer version, using oidc-spa/entrypoint is no longer optional."
-            ].join(" ")
-        );
-    }
+    assert(hasEarlyInitBeenCalled, "34933395");
+
     return redirectAuthResponse === undefined
         ? { authResponse: undefined }
         : {

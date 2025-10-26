@@ -20,7 +20,6 @@ import { OidcInitializationError } from "../../core/OidcInitializationError";
 import { Deferred } from "../../tools/Deferred";
 import { isBrowser } from "../../tools/isBrowser";
 import { assert, type Equals, is } from "../../tools/tsafe/assert";
-import { getBASE_URL } from "../../core/BASE_URL";
 import { createObjectThatThrowsIfAccessed } from "../../tools/createObjectThatThrowsIfAccessed";
 import { createStatefulEvt } from "../../tools/StatefulEvt";
 import { id } from "../../tools/tsafe/id";
@@ -611,25 +610,12 @@ export function createOidcSpaApi<
 
             dParamsOfBootstrap.resolve(paramsOfBootstrap);
 
-            const { BASE_URL } = getBASE_URL();
-
-            if (BASE_URL === undefined) {
-                throw new Error(
-                    [
-                        "oidc-spa: If you do not use the oidc-spa Vite plugin",
-                        "you must provide the BASE_URL to the earlyInit():",
-                        "\noidcSpaEarlyInit({ BASE_URL: import.meta.env.BASE_URL })"
-                    ].join(" ")
-                );
-            }
-
             switch (paramsOfBootstrap.implementation) {
                 case "mock":
                     {
                         const { createMockOidc } = await import("../../mock/oidc");
 
                         const oidcCore = await createMockOidc({
-                            homeUrl: BASE_URL,
                             // NOTE: The `as false` is lying here, it's just to preserve some level of type-safety.
                             autoLogin: autoLogin as false,
                             // NOTE: Same here, the nullish coalescing is lying.
@@ -666,7 +652,6 @@ export function createOidcSpaApi<
 
                         try {
                             oidcCoreOrInitializationError = await createOidc({
-                                homeUrl: BASE_URL,
                                 autoLogin,
                                 decodedIdTokenSchema,
                                 issuerUri: paramsOfBootstrap.issuerUri,

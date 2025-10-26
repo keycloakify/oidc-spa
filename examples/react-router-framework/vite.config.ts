@@ -4,5 +4,8 @@ import tsconfigPaths from "vite-tsconfig-paths";
 import { oidcSpa } from "oidc-spa/vite-plugin";
 
 export default defineConfig({
-    plugins: [reactRouter(), oidcSpa(), tsconfigPaths()]
+    plugins: [reactRouter(), oidcSpa(), tsconfigPaths()],
+    optimizeDeps: {
+        include: ["oidc-spa/react-spa", "oidc-spa/entrypoint", "oidc-spa/keycloak", "zod"]
+    }
 });

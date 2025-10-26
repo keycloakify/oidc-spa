@@ -6,7 +6,6 @@ import { OidcInitializationError } from "../core/OidcInitializationError";
 import { Deferred } from "../tools/Deferred";
 import { isBrowser } from "../tools/isBrowser";
 import { assert, type Equals } from "../tools/tsafe/assert";
-import { getBASE_URL } from "../core/BASE_URL";
 import { createObjectThatThrowsIfAccessed } from "../tools/createObjectThatThrowsIfAccessed";
 import { createStatefulEvt } from "../tools/StatefulEvt";
 import { id } from "../tools/tsafe/id";
@@ -337,26 +336,13 @@ export function createOidcSpaApi<
 
             dParamsOfBootstrap.resolve(paramsOfBootstrap);
 
-            const BASE_URL = getBASE_URL().BASE_URL ?? paramsOfBootstrap.BASE_URL;
-
-            if (BASE_URL === undefined) {
-                throw new Error(
-                    [
-                        "oidc-spa: You should provide BASE_URL, either as a param",
-                        "to oidcEarlyInit() or to bootstrapOidc().",
-                        "It's usually '/', process.env.PUBLIC_URL or import.meta.env.BASE_URL.",
-                        "It's not an option, there is only one good answer."
-                    ].join(" ")
-                );
-            }
-
             switch (paramsOfBootstrap.implementation) {
                 case "mock":
                     {
                         const { createMockOidc } = await import("../mock/oidc");
 
                         const oidcCore = await createMockOidc({
-                            homeUrl: BASE_URL,
+                            BASE_URL: paramsOfBootstrap.BASE_URL,
                             // NOTE: The `as false` is lying here, it's just to preserve some level of type-safety.
                             autoLogin: autoLogin as false,
                             // NOTE: Same here, the nullish coalescing is lying.
@@ -393,7 +379,7 @@ export function createOidcSpaApi<
 
                         try {
                             oidcCoreOrInitializationError = await createOidc({
-                                homeUrl: BASE_URL,
+                                BASE_URL: paramsOfBootstrap.BASE_URL,
                                 autoLogin,
                                 decodedIdTokenSchema,
                                 issuerUri: paramsOfBootstrap.issuerUri,

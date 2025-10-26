@@ -2,7 +2,6 @@ import { isRouteErrorResponse, Links, Meta, Outlet, Scripts, ScrollRestoration }
 import type { Route } from "./+types/root";
 import { AutoLogoutWarningOverlay } from "./components/AutoLogoutWarningOverlay";
 import { Header } from "./components/Header";
-import { OidcInitializationErrorIfAny } from "./components/OidcInitializationErrorIfAny";
 import "./app.css";
 
 export const links: Route.LinksFunction = () => [
@@ -44,25 +43,10 @@ export default function App() {
         <>
             <Header />
             <main style={{ width: "100%", textAlign: "center", margin: "0 auto" }}>
-                {/*You do not have to display an error here, it's just to 
-                show that if you want you can implement custom OIDC initialization 
-                error handling.*/}
-                <OidcInitializationErrorIfAny />
                 <Outlet />
             </main>
             <AutoLogoutWarningOverlay />
         </>
-    );
-}
-
-/**
- * `<HydrateFallback />` is injected as `{children}` in `<Layout />` while oidc is initializing.
- */
-export function HydrateFallback() {
-    return (
-        <div style={{ display: "flex", width: "100%", justifyContent: "center", alignItems: "center" }}>
-            <p>Loading oidc and hydrating client...</p>
-        </div>
     );
 }
 

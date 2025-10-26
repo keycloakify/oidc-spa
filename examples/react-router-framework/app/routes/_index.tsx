@@ -1,6 +1,8 @@
+import { Suspense } from "react";
 import type { Route } from "./+types/_index";
 import reactLogo from "../assets/react.svg";
 import viteLogo from "../assets/vite.svg";
+import { useOidc } from "~/oidc";
 
 export function meta({}: Route.MetaArgs) {
     return [
@@ -20,7 +22,19 @@ export default function Home() {
                     <img src={reactLogo} className="logo react" alt="React logo" />
                 </a>
             </div>
-            <h4>This is a page that do not requires the user to be authenticated</h4>
+            <Suspense fallback={<>&nbsp;</>}>
+                <Greeting />
+            </Suspense>
         </>
+    );
+}
+
+function Greeting() {
+    const { isUserLoggedIn, decodedIdToken } = useOidc();
+
+    return (
+        <span className="opacity-0 animate-[fadeIn_0.2s_ease-in_forwards]">
+            {isUserLoggedIn ? `Welcome back ${decodedIdToken.name}` : `Hello anonymous visitor!`}
+        </span>
     );
 }

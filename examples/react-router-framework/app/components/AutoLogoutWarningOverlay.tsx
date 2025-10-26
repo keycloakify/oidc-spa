@@ -1,10 +1,19 @@
-import { useOidc } from "../oidc.client";
+import { Suspense } from "react";
+import { useOidc } from "~/oidc";
 
+/** See: https://docs.oidc-spa.dev/auto-logout */
 export function AutoLogoutWarningOverlay() {
-    const { useAutoLogoutWarningCountdown } = useOidc();
-    const { secondsLeft } = useAutoLogoutWarningCountdown({ warningDurationSeconds: 45 });
+    return (
+        <Suspense>
+            <AutoLogoutWarningOverlay_actual />
+        </Suspense>
+    );
+}
 
-    if (secondsLeft === undefined) {
+function AutoLogoutWarningOverlay_actual() {
+    const { autoLogoutState } = useOidc();
+
+    if (!autoLogoutState.shouldDisplayWarning) {
         return null;
     }
 
@@ -22,12 +31,17 @@ export function AutoLogoutWarningOverlay() {
                 display: "flex",
                 justifyContent: "center",
                 alignItems: "center",
-                zIndex: 1000
+                zIndex: 1000,
+                color: "white"
             }}
         >
             <div>
                 <p>Are you still there?</p>
-                <p>You will be logged out in {secondsLeft}</p>
+                <p>You will be logged out in {autoLogoutState.secondsLeftBeforeAutoLogout}</p>
+                {/* NOTE: You can configure how long before autoLogout we start displaying
+                        this warning by providing `startCountdownSecondsBeforeAutoLogout` 
+                        to bootstrapOidc()
+                    */}
             </div>
         </div>
     );
