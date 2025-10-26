@@ -41,7 +41,19 @@ export function manageOptimizedDeps(params: {
                     assert(moduleNames.includes(moduleName));
                 }
 
-                moduleNames_include.push("zod");
+                const isZodInstalled = (() => {
+                    try {
+                        require.resolve(`zod/package.json`);
+                    } catch {
+                        return false;
+                    }
+
+                    return true;
+                })();
+
+                if (isZodInstalled) {
+                    moduleNames_include.push("zod");
+                }
 
                 ((userConfig.optimizeDeps ??= {}).include ??= []).push(...moduleNames_include);
             }
