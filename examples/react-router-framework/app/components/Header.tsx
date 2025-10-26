@@ -8,7 +8,7 @@ import userPictureFallback from "./userPictureFallback.svg";
 export function Header() {
     return (
         <header className="fixed inset-x-0 top-0 border-b border-slate-800 bg-slate-950/80 backdrop-blur">
-            <div className="mx-auto flex h-16 w-full max-w-4xl items-center justify-between gap-4 px-6">
+            <div className="mx-auto grid h-16 w-full max-w-4xl grid-cols-[auto_1fr_auto] items-center gap-4 px-6">
                 <div className="flex flex-col leading-tight">
                     <span className="text-xs uppercase tracking-wide text-slate-400">Example</span>
                     <span className="text-sm font-medium text-white">
@@ -16,7 +16,7 @@ export function Header() {
                     </span>
                 </div>
 
-                <nav className="flex items-center gap-4 text-sm font-medium text-slate-400">
+                <nav className="flex items-center justify-center gap-4 text-sm font-medium text-slate-400">
                     <NavLink
                         to="/"
                         className={({ isActive }) =>
@@ -35,9 +35,11 @@ export function Header() {
                     </NavLink>
                 </nav>
 
-                <Suspense>
-                    <AuthButtons />
-                </Suspense>
+                <div className="flex min-w-[160px] justify-end sm:min-w-[220px]">
+                    <Suspense>
+                        <AuthButtons />
+                    </Suspense>
+                </div>
             </div>
         </header>
     );
