@@ -1,12 +1,7 @@
 export type ProjectType = "tanstack-start" | "react-router-framework" | "other";
 
-type ResolvedConfigLike = {
-    plugins: readonly { name: string }[];
-};
-
-export function detectProjectType(params: { resolvedConfig: ResolvedConfigLike }): ProjectType {
-    const { resolvedConfig } = params;
-    const pluginNames = new Set(resolvedConfig.plugins.map(plugin => plugin.name));
+export function getProjectType(params: { pluginNames: string[] }) {
+    const pluginNames = new Set(params.pluginNames);
 
     if (pluginNames.has("tanstack-react-start:config")) {
         return "tanstack-start";

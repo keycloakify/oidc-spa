@@ -1,7 +1,6 @@
 import type { OidcSpaVitePluginParams } from "./vite-plugin";
 import type { ResolvedConfig } from "vite";
 import type { PluginContext } from "rollup";
-import { detectProjectType, ProjectType } from "./detectProjectType";
 import { existsSync } from "node:fs";
 import { promises as fs } from "node:fs";
 import * as path from "node:path";
@@ -9,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { normalizePath } from "vite";
 import { assert } from "../tools/tsafe/assert";
 import type { Equals } from "../tools/tsafe/Equals";
+import type { ProjectType } from "./projectType";
 
 type EntryResolution = {
     absolutePath: string;
@@ -32,10 +32,9 @@ const TANSTACK_ENTRY_CANDIDATES = ["client.tsx", "client.ts", "client.jsx", "cli
 export function createLoadHandleEntrypoint(params: {
     oidcSpaVitePluginParams: OidcSpaVitePluginParams;
     resolvedConfig: ResolvedConfig;
+    projectType: ProjectType;
 }) {
-    const { oidcSpaVitePluginParams, resolvedConfig } = params;
-
-    const projectType = detectProjectType({ resolvedConfig });
+    const { oidcSpaVitePluginParams, resolvedConfig, projectType } = params;
 
     const entryResolution = resolveEntryForProject({
         config: resolvedConfig,
