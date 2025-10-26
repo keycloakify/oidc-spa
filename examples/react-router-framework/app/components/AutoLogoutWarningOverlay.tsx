@@ -18,30 +18,17 @@ function AutoLogoutWarningOverlay_actual() {
     }
 
     return (
-        <div
-            // Full screen overlay, blurred background
-            style={{
-                position: "fixed",
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                backgroundColor: "rgba(0,0,0,0.5)",
-                backdropFilter: "blur(10px)",
-                display: "flex",
-                justifyContent: "center",
-                alignItems: "center",
-                zIndex: 1000,
-                color: "white"
-            }}
-        >
-            <div>
-                <p>Are you still there?</p>
-                <p>You will be logged out in {autoLogoutState.secondsLeftBeforeAutoLogout}</p>
-                {/* NOTE: You can configure how long before autoLogout we start displaying
-                        this warning by providing `startCountdownSecondsBeforeAutoLogout` 
-                        to bootstrapOidc()
-                    */}
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 backdrop-blur">
+            <div
+                role="alertdialog"
+                aria-live="assertive"
+                aria-modal="true"
+                className="w-full max-w-sm rounded-2xl border border-slate-800 bg-slate-900 p-6 text-center shadow-xl shadow-black/30"
+            >
+                <p className="text-sm font-medium text-slate-400">Are you still there?</p>
+                <p className="mt-2 text-lg font-semibold text-white">
+                    You will be logged out in {autoLogoutState.secondsLeftBeforeAutoLogout}s
+                </p>
             </div>
         </div>
     );

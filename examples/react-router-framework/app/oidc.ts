@@ -4,11 +4,16 @@ import { z } from "zod";
 export const { bootstrapOidc, useOidc, getOidc, enforceLogin } = oidcSpa
     .withExpectedDecodedIdTokenShape({
         decodedIdTokenSchema: z.object({
+            sub: z.string(),
             name: z.string(),
-            picture: z.string().optional()
+            picture: z.string().optional(),
+            email: z.string().email().optional(),
+            preferred_username: z.string().optional()
         }),
         decodedIdToken_mock: {
-            name: "John Doe"
+            sub: "mock-user",
+            name: "John Doe",
+            preferred_username: "john.doe"
         }
     })
     .finalize();

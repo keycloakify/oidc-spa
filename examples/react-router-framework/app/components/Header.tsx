@@ -7,40 +7,39 @@ import userPictureFallback from "./userPictureFallback.svg";
 
 export function Header() {
     return (
-        <div
-            style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                position: "absolute",
-                top: 0,
-                left: 0,
-                width: "100%",
-                height: 50
-            }}
-        >
-            <div>
-                <span>oidc-spa + react-router 7 framework mode</span>
-                &nbsp; &nbsp; &nbsp; &nbsp;
-                <NavLink to="/">
-                    {({ isActive }) => (
-                        <span style={{ fontWeight: isActive ? "bold" : "normal" }}>Home</span>
-                    )}
-                </NavLink>
-                &nbsp; &nbsp; &nbsp;
-                <NavLink to="/protected">
-                    {({ isActive }) => (
-                        <span style={{ fontWeight: isActive ? "bold" : "normal" }}>
-                            My protected page
-                        </span>
-                    )}
-                </NavLink>
-            </div>
+        <header className="fixed inset-x-0 top-0 border-b border-slate-800 bg-slate-950/80 backdrop-blur">
+            <div className="mx-auto flex h-16 w-full max-w-4xl items-center justify-between gap-4 px-6">
+                <div className="flex flex-col leading-tight">
+                    <span className="text-xs uppercase tracking-wide text-slate-400">Example</span>
+                    <span className="text-sm font-medium text-white">
+                        oidc-spa · React Router framework mode
+                    </span>
+                </div>
 
-            <Suspense>
-                <AuthButtons />
-            </Suspense>
-        </div>
+                <nav className="flex items-center gap-4 text-sm font-medium text-slate-400">
+                    <NavLink
+                        to="/"
+                        className={({ isActive }) =>
+                            `transition-colors ${isActive ? "text-white" : "hover:text-white"}`
+                        }
+                    >
+                        Home
+                    </NavLink>
+                    <NavLink
+                        to="/protected"
+                        className={({ isActive }) =>
+                            `transition-colors ${isActive ? "text-white" : "hover:text-white"}`
+                        }
+                    >
+                        Protected
+                    </NavLink>
+                </nav>
+
+                <Suspense>
+                    <AuthButtons />
+                </Suspense>
+            </div>
+        </header>
     );
 }
 
@@ -49,6 +48,9 @@ function AuthButtons() {
 
     return isUserLoggedIn ? <LoggedInAuthButtons /> : <NotLoggedInAuthButtons />;
 }
+
+const primaryButtonClasses =
+    "inline-flex items-center rounded-full bg-white/90 px-4 py-2 text-sm font-semibold text-slate-900 transition-colors hover:bg-white";
 
 function LoggedInAuthButtons() {
     const { decodedIdToken, logout, issuerUri, clientId } = useOidc({ assert: "user logged in" });
@@ -67,18 +69,16 @@ function LoggedInAuthButtons() {
                     clientId,
                     backToAppFromAccountUrl: location.href
                 })}
-                className="flex items-center gap-3 text-white font-semibold hover:text-cyan-300 transition-colors"
+                className="flex items-center gap-3 text-sm font-medium text-slate-200 hover:text-white"
             >
                 <img
                     src={profileImageSrc}
                     alt={`${decodedIdToken.name}'s avatar`}
-                    className="w-10 h-10 rounded-full object-cover border border-cyan-500/60 shadow-lg shrink-0"
+                    className="h-10 w-10 shrink-0 rounded-full border border-slate-700 object-cover"
                 />
+                <span className="hidden max-w-[120px] truncate sm:inline">{decodedIdToken.name}</span>
             </a>
-            <button
-                className="px-8 py-2 bg-cyan-500 hover:bg-cyan-600 text-white font-semibold rounded-lg transition-colors shadow-lg shadow-cyan-500/50"
-                onClick={() => logout({ redirectTo: "home" })}
-            >
+            <button className={primaryButtonClasses} onClick={() => logout({ redirectTo: "home" })}>
                 Logout
             </button>
         </div>
@@ -91,17 +91,13 @@ function NotLoggedInAuthButtons() {
     const keycloakUtils = !isKeycloak({ issuerUri }) ? undefined : createKeycloakUtils({ issuerUri });
 
     return (
-        <>
-            <button
-                className="px-8 py-2 bg-cyan-500 hover:bg-cyan-600 text-white font-semibold rounded-lg transition-colors shadow-lg shadow-cyan-500/50"
-                onClick={() => login()}
-            >
+        <div className="flex items-center gap-3">
+            <button className={primaryButtonClasses} onClick={() => login()}>
                 Login
             </button>
-            &nbsp;
             {keycloakUtils !== undefined && (
                 <button
-                    className="px-8 py-2 bg-cyan-500 hover:bg-cyan-600 text-white font-semibold rounded-lg transition-colors shadow-lg shadow-cyan-500/50"
+                    className="inline-flex items-center rounded-full border border-slate-700 px-4 py-2 text-sm font-semibold text-white transition-colors hover:border-slate-500"
                     onClick={() =>
                         login({
                             transformUrlBeforeRedirect:
@@ -112,6 +108,6 @@ function NotLoggedInAuthButtons() {
                     Register
                 </button>
             )}
-        </>
+        </div>
     );
 }
