@@ -1,10 +1,27 @@
 import type { ReactNode } from "react";
-import { useOidc, enforceLogin } from "~/oidc";
+import { useLoaderData } from "react-router";
+import { useOidc, enforceLogin, fetchWithAuth } from "~/oidc";
 import { isKeycloak, createKeycloakUtils } from "oidc-spa/keycloak";
 import type { Route } from "./+types/protected";
 
+type DemoPost = {
+    id: number;
+    title: string;
+    body: string;
+};
+
+type LoaderData = {
+    demoPosts: DemoPost[];
+};
+
 export async function clientLoader(params: Route.ClientLoaderArgs) {
     await enforceLogin(params);
+
+    const demoPosts: DemoPost[] = await fetchWithAuth(
+        "https://jsonplaceholder.typicode.com/posts?_limit=4"
+    ).then(r => r.json());
+
+    return { demoPosts };
 }
 
 export default function Protected() {
@@ -15,6 +32,8 @@ export default function Protected() {
         });
 
     const keycloakUtils = isKeycloak({ issuerUri }) ? createKeycloakUtils({ issuerUri }) : undefined;
+
+    const { demoPosts } = useLoaderData<LoaderData>();
 
     return (
         <section className="space-y-6">
@@ -35,49 +54,40 @@ export default function Protected() {
                     )}
                 </dl>
 
-                <div className="mt-6 flex flex-wrap gap-3">
-                    <button
-                        className="inline-flex items-center rounded-full border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-200 transition-colors hover:border-slate-500"
-                        onClick={() => renewTokens()}
-                    >
-                        Renew tokens
-                    </button>
-
-                    {keycloakUtils !== undefined && (
-                        <>
-                            <button
-                                className="inline-flex items-center rounded-full border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-200 transition-colors hover:border-slate-500"
-                                onClick={() =>
-                                    goToAuthServer({
-                                        extraQueryParams: { kc_action: "UPDATE_PASSWORD" }
-                                    })
-                                }
-                            >
-                                Change password
-                            </button>
-                            <button
-                                className="inline-flex items-center rounded-full border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-200 transition-colors hover:border-slate-500"
-                                onClick={() =>
-                                    goToAuthServer({
-                                        extraQueryParams: { kc_action: "UPDATE_PROFILE" }
-                                    })
-                                }
-                            >
-                                Update profile
-                            </button>
-                            <button
-                                className="inline-flex items-center rounded-full border border-rose-400/60 px-4 py-2 text-sm font-semibold text-rose-200 transition-colors hover:border-rose-300 hover:text-rose-100"
-                                onClick={() =>
-                                    goToAuthServer({
-                                        extraQueryParams: { kc_action: "delete_account" }
-                                    })
-                                }
-                            >
-                                Delete account
-                            </button>
-                        </>
-                    )}
-                </div>
+                {keycloakUtils !== undefined && (
+                    <div className="mt-6 flex flex-wrap gap-3">
+                        <button
+                            className="inline-flex items-center rounded-full border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-200 transition-colors hover:border-slate-500"
+                            onClick={() =>
+                                goToAuthServer({
+                                    extraQueryParams: { kc_action: "UPDATE_PASSWORD" }
+                                })
+                            }
+                        >
+                            Change password
+                        </button>
+                        <button
+                            className="inline-flex items-center rounded-full border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-200 transition-colors hover:border-slate-500"
+                            onClick={() =>
+                                goToAuthServer({
+                                    extraQueryParams: { kc_action: "UPDATE_PROFILE" }
+                                })
+                            }
+                        >
+                            Update profile
+                        </button>
+                        <button
+                            className="inline-flex items-center rounded-full border border-rose-400/60 px-4 py-2 text-sm font-semibold text-rose-200 transition-colors hover:border-rose-300 hover:text-rose-100"
+                            onClick={() =>
+                                goToAuthServer({
+                                    extraQueryParams: { kc_action: "delete_account" }
+                                })
+                            }
+                        >
+                            Delete account
+                        </button>
+                    </div>
+                )}
 
                 {backFromAuthServer?.extraQueryParams.kc_action && (
                     <p className="mt-4 text-sm text-slate-400">
@@ -87,6 +97,35 @@ export default function Protected() {
                         </span>
                     </p>
                 )}
+            </div>
+
+            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-sm shadow-slate-950/40">
+                <div className="space-y-2 text-sm text-slate-300">
+                    <p>
+                        The list below was fetched during the client loader with{" "}
+                        <code className="font-mono text-xs text-slate-200">fetchWithAuth</code>, which
+                        automatically injects{" "}
+                        <code className="font-mono text-xs text-slate-200">
+                            Authorization: Bearer &lt;access_token&gt;
+                        </code>{" "}
+                        headers into every request.
+                    </p>
+                    <p className="text-slate-400">
+                        JSONPlaceholder is a public API—we treat it as a stand-in for a protected
+                        resource server.
+                    </p>
+                </div>
+                <ul className="mt-4 space-y-3">
+                    {demoPosts.map(post => (
+                        <li
+                            key={post.id}
+                            className="rounded-xl border border-slate-800/80 bg-slate-950/50 p-4 shadow-inner shadow-black/20"
+                        >
+                            <p className="text-sm font-semibold text-white">{post.title}</p>
+                            <p className="mt-1 text-sm text-slate-400">{post.body}</p>
+                        </li>
+                    ))}
+                </ul>
             </div>
         </section>
     );
