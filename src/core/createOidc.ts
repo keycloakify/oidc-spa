@@ -51,7 +51,7 @@ import { isKeycloak } from "../keycloak/isKeycloak";
 import { INFINITY_TIME } from "../tools/INFINITY_TIME";
 import type { WELL_KNOWN_PATH } from "./diagnostic";
 import { getIsValidRemoteJson } from "../tools/getIsValidRemoteJson";
-import { prEarlyInitCalledAndShouldLoadApp } from "./prEarlyInitCalledAndShouldLoadApp";
+import { prShouldLoadApp } from "./prShouldLoadApp";
 import { getBASE_URL } from "./BASE_URL";
 
 // NOTE: Replaced at build time
@@ -336,9 +336,13 @@ export async function createOidc_nonMemoized<
             );
         }, 3_000);
 
-        await prEarlyInitCalledAndShouldLoadApp;
+        const shouldLoadApp = await prShouldLoadApp;
 
         window.clearTimeout(timer);
+
+        if (!shouldLoadApp) {
+            return new Promise<never>(() => {});
+        }
     }
 
     const {

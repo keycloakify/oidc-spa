@@ -8,7 +8,7 @@ import {
 } from "./iframeMessageProtection";
 import { setOidcRequiredPostHydrationReplaceNavigationUrl } from "./requiredPostHydrationReplaceNavigationUrl";
 import { setBASE_URL } from "./BASE_URL";
-import { resolvePrEarlyInitCalledAndShouldLoadApp } from "./prEarlyInitCalledAndShouldLoadApp";
+import { resolvePrShouldLoadApp } from "./prShouldLoadApp";
 import { isBrowser } from "../tools/isBrowser";
 
 let hasEarlyInitBeenCalled = false;
@@ -93,7 +93,7 @@ export function oidcEarlyInit(params: {
         }
     }
 
-    resolvePrEarlyInitCalledAndShouldLoadApp();
+    resolvePrShouldLoadApp({ shouldLoadApp });
 
     return { shouldLoadApp };
 }
