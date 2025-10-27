@@ -438,40 +438,56 @@ export async function createOidc_nonMemoized<
         }
 
         third_party_cookies: {
-            const isOidcServerThirdPartyRelativeToApp =
-                getHaveSharedParentDomain({
-                    url1: window.location.origin,
-                    url2: issuerUri
-                }) === false;
+            const isOidcServerThirdPartyRelativeToApp = !getHaveSharedParentDomain({
+                url1: window.location.origin,
+                // TODO: No, here we should test against the authorization endpoint!
+                url2: issuerUri
+            });
 
             if (!isOidcServerThirdPartyRelativeToApp) {
                 break third_party_cookies;
             }
 
-            const isGoogleChrome = (() => {
-                const ua = navigator.userAgent;
-                const vendor = navigator.vendor;
+            const isLikelyDevServer: boolean = (() => {
+                const origin = window.location.origin;
 
-                return (
-                    /Chrome/.test(ua) && /Google Inc/.test(vendor) && !/Edg/.test(ua) && !/OPR/.test(ua)
-                );
+                if (/^https?:\/\/localhost/.test(origin)) {
+                    return true;
+                }
+
+                if (/^https?:\/\/\[::\]/.test(origin)) {
+                    return true;
+                }
+
+                if (/^https?:\/\/127.0.0.1/.test(origin)) {
+                    return true;
+                }
+
+                return false;
             })();
 
-            if (window.location.origin.startsWith("http://localhost") && isGoogleChrome) {
-                break third_party_cookies;
+            if (isLikelyDevServer) {
+                log?.(
+                    [
+                        "iframe silent signin disabled in localhost because the browser",
+                        "will consider the auth server as third party and bock it's cookie",
+                        "you will get a better login experience in production if you deploy under",
+                        "the same root domain as your auth server.",
+                        "See: https://docs.oidc-spa.dev/v/v8/resources/end-of-third-party-cookies#when-are-cookies-considered-third-party"
+                    ].join(" ")
+                );
+            } else {
+                log?.(
+                    [
+                        "Can't use iframe because your auth server is on a third party domain relative",
+                        "to the domain of your app and third party cookies are blocked by navigators."
+                    ].join(" ")
+                );
             }
-
-            log?.(
-                [
-                    "Can't use iframe because your auth server is on a third party domain relative",
-                    "to the domain of your app and third party cookies are blocked by navigators."
-                ].join(" ")
-            );
 
             return false;
         }
 
-        // NOTE: Maybe not, it depend if the app can iframe itself.
         return true;
     })();
 
