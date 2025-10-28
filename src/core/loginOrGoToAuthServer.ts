@@ -20,7 +20,6 @@ namespace Params {
         redirectUrl: string;
         extraQueryParams_local: Record<string, string | undefined> | undefined;
         transformUrlBeforeRedirect_local: ((url: string) => string) | undefined;
-        onCantFetchWellKnownEndpointError: () => void;
     };
 
     export type Login = Common & {
@@ -90,10 +89,8 @@ export function createLoginOrGoToAuthServer(params: {
             redirectUrl: redirectUrl_params,
             extraQueryParams_local,
             transformUrlBeforeRedirect_local,
-            onCantFetchWellKnownEndpointError: onCantFetchWellKnownEndpointError_params,
             ...rest
         } = params;
-        let onCantFetchWellKnownEndpointError = onCantFetchWellKnownEndpointError_params;
 
         log?.(`Calling loginOrGoToAuthServer ${JSON.stringify(params, null, 2)}`);
 
@@ -147,12 +144,6 @@ export function createLoginOrGoToAuthServer(params: {
                     };
 
                     window.addEventListener("pageshow", callback);
-
-                    onCantFetchWellKnownEndpointError = () => {
-                        window.removeEventListener("pageshow", callback);
-                        onCantFetchWellKnownEndpointError_params();
-                    };
-
                     break bf_cache_handling;
                 }
 
@@ -183,12 +174,6 @@ export function createLoginOrGoToAuthServer(params: {
                 };
 
                 window.addEventListener("pageshow", callback);
-
-                onCantFetchWellKnownEndpointError = () => {
-                    window.removeEventListener("pageshow", callback);
-                    globalContext.evtHasLoginBeenCalled.current = false;
-                    onCantFetchWellKnownEndpointError_params();
-                };
             }
         }
 
@@ -348,13 +333,6 @@ export function createLoginOrGoToAuthServer(params: {
             .then(
                 () => new Promise<never>(() => {}),
                 (error: Error) => {
-                    if (error.message === "Failed to fetch") {
-                        // NOTE: See ./loginSilent for explanation.
-                        onCantFetchWellKnownEndpointError();
-
-                        return new Promise<never>(() => {});
-                    }
-
                     if (error.message.includes("Crypto.subtle is available only in secure contexts")) {
                         throw new Error(
                             [

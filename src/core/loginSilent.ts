@@ -20,8 +20,7 @@ type ResultOfLoginSilent =
           authResponse: AuthResponse;
       }
     | {
-          outcome: "failure";
-          cause: "timeout" | "can't reach well-known oidc endpoint";
+          outcome: "timeout";
       }
     | {
           outcome: "token refreshed using refresh token";
@@ -106,8 +105,7 @@ export async function loginSilent(params: {
         const timeouts = [
             setTimeout(() => {
                 dResult.resolve({
-                    outcome: "failure",
-                    cause: "timeout"
+                    outcome: "timeout"
                 });
             }, timeoutDelayMs),
             setTimeout(() => {
@@ -259,28 +257,7 @@ export async function loginSilent(params: {
                     oidcClientTsUser
                 });
             },
-            (error: Error) => {
-                if (error.message === "Failed to fetch") {
-                    // NOTE: If we got an error here it means that the fetch to the
-                    // well-known oidc endpoint failed.
-                    // This usually means that the server is down or that the issuerUri
-                    // is not pointing to a valid oidc server.
-                    // It could be a CORS error on the well-known endpoint but it's unlikely.
-
-                    // NOTE: This error should happen well before we displayed
-                    // the warning notifying that something is probably misconfigured.
-                    // wasSuccess shouldn't really be a required parameter but we do it
-                    // for peace of mind.
-                    clearTimeouts({ wasSuccess: false });
-
-                    dResult.resolve({
-                        outcome: "failure",
-                        cause: "can't reach well-known oidc endpoint"
-                    });
-
-                    return;
-                }
-
+            () => {
                 // NOTE: Here, except error on our understanding there can't be any other
                 // error than timeout so we fail silently and let the timeout expire.
             }
@@ -289,7 +266,7 @@ export async function loginSilent(params: {
     dResult.pr.then(result => {
         clearSessionStoragePublicKey();
 
-        if (result.outcome === "failure") {
+        if (result.outcome === "timeout") {
             clearStateStore({ stateUrlParamValue: stateUrlParamValue_instance });
         }
     });

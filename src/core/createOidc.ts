@@ -52,6 +52,7 @@ import { INFINITY_TIME } from "../tools/INFINITY_TIME";
 import { prShouldLoadApp } from "./prShouldLoadApp";
 import { getBASE_URL } from "./BASE_URL";
 import { getIsLikelyDevServer } from "../tools/isLikelyDevServer";
+import { createObjectThatThrowsIfAccessed } from "../tools/createObjectThatThrowsIfAccessed";
 
 // NOTE: Replaced at build time
 const VERSION = "{{OIDC_SPA_VERSION}}";
@@ -523,58 +524,68 @@ export async function createOidc_nonMemoized<
         return true;
     })();
 
-    let isUserStoreInMemoryOnly: boolean;
+    let isUserStoreInMemoryOnly: boolean | undefined = undefined;
 
-    const oidcClientTsUserManager = new OidcClientTsUserManager({
-        stateUrlParamValue: stateUrlParamValue_instance,
-        authority: issuerUri,
-        client_id: clientId,
-        redirect_uri: homeUrlAndRedirectUri,
-        silent_redirect_uri: homeUrlAndRedirectUri,
-        post_logout_redirect_uri: homeUrlAndRedirectUri,
-        response_mode: isKeycloak({ issuerUri }) ? "fragment" : "query",
-        response_type: "code",
-        scope: Array.from(new Set(["openid", ...scopes])).join(" "),
-        automaticSilentRenew: false,
-        userStore: new WebStorageStateStore({
-            store: (() => {
-                if (canUseIframe) {
-                    isUserStoreInMemoryOnly = true;
-                    return new InMemoryWebStorage();
-                }
+    const oidcClientTsUserManager =
+        oidcMetadata === undefined
+            ? createObjectThatThrowsIfAccessed<OidcClientTsUserManager>({
+                  debugMessage: "oidc-spa: Wrong assertion 43943"
+              })
+            : new OidcClientTsUserManager({
+                  stateUrlParamValue: stateUrlParamValue_instance,
+                  authority: issuerUri,
+                  client_id: clientId,
+                  redirect_uri: homeUrlAndRedirectUri,
+                  silent_redirect_uri: homeUrlAndRedirectUri,
+                  post_logout_redirect_uri: homeUrlAndRedirectUri,
+                  response_mode: isKeycloak({ issuerUri }) ? "fragment" : "query",
+                  response_type: "code",
+                  scope: Array.from(new Set(["openid", ...scopes])).join(" "),
+                  automaticSilentRenew: false,
+                  userStore: new WebStorageStateStore({
+                      store: (() => {
+                          if (canUseIframe) {
+                              isUserStoreInMemoryOnly = true;
+                              return new InMemoryWebStorage();
+                          }
 
-                isUserStoreInMemoryOnly = false;
+                          isUserStoreInMemoryOnly = false;
 
-                const storage = createEphemeralSessionStorage({
-                    sessionStorageTtlMs: 3 * 60_000
-                });
+                          const storage = createEphemeralSessionStorage({
+                              sessionStorageTtlMs: 3 * 60_000
+                          });
 
-                const { evtRequestToPersistTokens } = globalContext;
+                          const { evtRequestToPersistTokens } = globalContext;
 
-                evtRequestToPersistTokens.subscribe(({ configIdOfInstancePostingTheRequest }) => {
-                    if (configIdOfInstancePostingTheRequest === configId) {
-                        return;
-                    }
+                          evtRequestToPersistTokens.subscribe(
+                              ({ configIdOfInstancePostingTheRequest }) => {
+                                  if (configIdOfInstancePostingTheRequest === configId) {
+                                      return;
+                                  }
 
-                    storage.persistCurrentStateAndSubsequentChanges();
-                });
+                                  storage.persistCurrentStateAndSubsequentChanges();
+                              }
+                          );
 
-                return storage;
-            })()
-        }),
-        stateStore: new WebStorageStateStore({ store: localStorage, prefix: STATE_STORE_KEY_PREFIX }),
-        client_secret: __unsafe_clientSecret,
-        metadata: (() => {
-            if (oidcMetadata === undefined) {
-                return __metadata;
-            }
+                          return storage;
+                      })()
+                  }),
+                  stateStore: new WebStorageStateStore({
+                      store: localStorage,
+                      prefix: STATE_STORE_KEY_PREFIX
+                  }),
+                  client_secret: __unsafe_clientSecret,
+                  metadata: (() => {
+                      if (oidcMetadata === undefined) {
+                          return __metadata;
+                      }
 
-            return {
-                ...oidcMetadata,
-                __metadata
-            };
-        })()
-    });
+                      return {
+                          ...oidcMetadata,
+                          __metadata
+                      };
+                  })()
+              });
 
     const evtInitializationOutcomeUserNotLoggedIn = createEvt<void>();
 
@@ -604,6 +615,14 @@ export async function createOidc_nonMemoized<
               backFromAuthServer: Oidc.LoggedIn["backFromAuthServer"]; // Undefined is silent signin
           }
     > => {
+        if (oidcMetadata === undefined) {
+            return (
+                await import("./diagnostic")
+            ).createWellKnownOidcConfigurationEndpointUnreachableInitializationError({
+                issuerUri
+            });
+        }
+
         handle_redirect_auth_response: {
             let stateDataAndAuthResponse:
                 | { stateData: StateData.Redirect; authResponse: AuthResponse }
@@ -788,6 +807,8 @@ export async function createOidc_nonMemoized<
         // NOTE: We almost never persist tokens, we have to only to support edge case
         // of multiple oidc instance in a single App with no iframe support.
         restore_from_session_storage: {
+            assert(isUserStoreInMemoryOnly !== undefined, "3392204");
+
             if (isUserStoreInMemoryOnly) {
                 break restore_from_session_storage;
             }
@@ -858,14 +879,6 @@ export async function createOidc_nonMemoized<
                 }
 
                 if (!canUseIframe) {
-                    if (oidcMetadata === undefined) {
-                        return (
-                            await import("./diagnostic")
-                        ).createWellKnownOidcConfigurationEndpointUnreachableInitializationError({
-                            issuerUri
-                        });
-                    }
-
                     break actual_silent_signin;
                 }
 
@@ -886,26 +899,13 @@ export async function createOidc_nonMemoized<
 
                 assert(result_loginSilent.outcome !== "token refreshed using refresh token", "876995");
 
-                if (result_loginSilent.outcome === "failure") {
-                    switch (result_loginSilent.cause) {
-                        case "can't reach well-known oidc endpoint":
-                            return (
-                                await import("./diagnostic")
-                            ).createWellKnownOidcConfigurationEndpointUnreachableInitializationError({
-                                issuerUri
-                            });
-                        case "timeout":
-                            return (await import("./diagnostic")).createIframeTimeoutInitializationError(
-                                {
-                                    redirectUri: homeUrlAndRedirectUri,
-                                    clientId,
-                                    issuerUri,
-                                    noIframe
-                                }
-                            );
-                    }
-
-                    assert<Equals<typeof result_loginSilent.cause, never>>(false);
+                if (result_loginSilent.outcome === "timeout") {
+                    return (await import("./diagnostic")).createIframeTimeoutInitializationError({
+                        redirectUri: homeUrlAndRedirectUri,
+                        clientId,
+                        issuerUri,
+                        noIframe
+                    });
                 }
 
                 assert<Equals<typeof result_loginSilent.outcome, "got auth response from iframe">>();
@@ -969,9 +969,7 @@ export async function createOidc_nonMemoized<
                         });
                     }
 
-                    const dCantFetchWellKnownEndpointOrNever = new Deferred<void | never>();
-
-                    loginOrGoToAuthServer({
+                    await loginOrGoToAuthServer({
                         action: "login",
                         doForceReloadOnBfCache: true,
                         redirectUrl: getRootRelativeOriginalLocationHref(),
@@ -990,19 +988,7 @@ export async function createOidc_nonMemoized<
                             }
 
                             return "ensure no interaction";
-                        })(),
-                        onCantFetchWellKnownEndpointError: () => {
-                            dCantFetchWellKnownEndpointOrNever.resolve();
-                        }
-                    });
-
-                    await dCantFetchWellKnownEndpointOrNever.pr;
-
-                    return (
-                        await import("./diagnostic")
-                    ).createFailedToFetchTokenEndpointInitializationError({
-                        clientId,
-                        issuerUri
+                        })()
                     });
                 }
 
@@ -1123,11 +1109,7 @@ export async function createOidc_nonMemoized<
                             interaction:
                                 getPersistedAuthState({ configId }) === "explicitly logged out"
                                     ? "ensure interaction"
-                                    : "directly redirect if active session show login otherwise",
-                            onCantFetchWellKnownEndpointError: () => {
-                                log?.("Login called but the auth server seems to be down..");
-                                alert("Authentication unavailable please try again later.");
-                            }
+                                    : "directly redirect if active session show login otherwise"
                         });
                     },
                     initializationError: undefined
@@ -1359,16 +1341,7 @@ export async function createOidc_nonMemoized<
                         extraQueryParams_local: undefined,
                         transformUrlBeforeRedirect_local: undefined,
                         doNavigateBackToLastPublicUrlIfTheTheUserNavigateBack: false,
-                        interaction: "directly redirect if active session show login otherwise",
-                        onCantFetchWellKnownEndpointError: () => {
-                            log?.(
-                                [
-                                    "The auth server seems to be down while we needed to refresh the token",
-                                    "with a full page redirect. Reloading the page"
-                                ].join(" ")
-                            );
-                            window.location.reload();
-                        }
+                        interaction: "directly redirect if active session show login otherwise"
                     });
                     assert(false, "136134");
                 };
@@ -1403,10 +1376,10 @@ export async function createOidc_nonMemoized<
                     log
                 });
 
-                if (result_loginSilent.outcome === "failure") {
+                if (result_loginSilent.outcome === "timeout") {
                     log?.(
                         [
-                            `Silent refresh of the token failed with ${result_loginSilent.cause}.`,
+                            `Silent refresh of the token failed the iframe didn't post a response (timeout).`,
                             `This isn't recoverable, reloading the page.`
                         ].join(" ")
                     );
@@ -1596,11 +1569,7 @@ export async function createOidc_nonMemoized<
                 action: "go to auth server",
                 redirectUrl: redirectUrl ?? window.location.href,
                 extraQueryParams_local: extraQueryParams,
-                transformUrlBeforeRedirect_local: transformUrlBeforeRedirect,
-                onCantFetchWellKnownEndpointError: () => {
-                    log?.("goToAuthServer called but the auth server seems to be down..");
-                    alert("Authentication unavailable please try again later.");
-                }
+                transformUrlBeforeRedirect_local: transformUrlBeforeRedirect
             }),
         backFromAuthServer: resultOfLoginProcess.backFromAuthServer,
         isNewBrowserSession: (() => {

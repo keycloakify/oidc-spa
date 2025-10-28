@@ -313,8 +313,6 @@ export async function fetchOidcMetadata(params: { issuerUri: string }) {
     let oidcMetadata: Partial<OidcMetadata>;
 
     try {
-        console.log("actually fetching");
-
         const response = await fetch(`${issuerUri}${WELL_KNOWN_PATH}`, {
             headers: {
                 Accept: "application/jwk-set+json, application/json"

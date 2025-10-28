@@ -94,6 +94,16 @@ export async function createIframeTimeoutInitializationError(params: {
 }): Promise<OidcInitializationError> {
     const { redirectUri, issuerUri, clientId, noIframe } = params;
 
+    check_if_well_known_endpoint_is_reachable: {
+        const isValid = await getIsValidRemoteJson(`${issuerUri}${WELL_KNOWN_PATH}`);
+
+        if (isValid) {
+            break check_if_well_known_endpoint_is_reachable;
+        }
+
+        return createWellKnownOidcConfigurationEndpointUnreachableInitializationError({ issuerUri });
+    }
+
     iframe_blocked: {
         if (noIframe) {
             break iframe_blocked;
@@ -231,6 +241,16 @@ export async function createFailedToFetchTokenEndpointInitializationError(params
     clientId: string;
 }) {
     const { issuerUri, clientId } = params;
+
+    check_if_well_known_endpoint_is_reachable: {
+        const isValid = await getIsValidRemoteJson(`${issuerUri}${WELL_KNOWN_PATH}`);
+
+        if (isValid) {
+            break check_if_well_known_endpoint_is_reachable;
+        }
+
+        return createWellKnownOidcConfigurationEndpointUnreachableInitializationError({ issuerUri });
+    }
 
     return new OidcInitializationError({
         isAuthServerLikelyDown: false,
