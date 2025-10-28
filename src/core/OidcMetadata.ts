@@ -1,5 +1,6 @@
 import { type OidcMetadata as OidcClientTsOidcMetadata } from "../vendor/frontend/oidc-client-ts";
 import { assert, type Equals } from "../tools/tsafe/assert";
+import { getIsLikelyDevServer } from "../tools/isLikelyDevServer";
 
 /**
  * OpenID Providers have metadata describing their configuration.
@@ -339,7 +340,9 @@ export async function fetchOidcMetadata(params: { issuerUri: string }) {
         return undefined;
     }
 
-    setSessionStorage({ issuerUri, oidcMetadata });
+    if (!getIsLikelyDevServer()) {
+        setSessionStorage({ issuerUri, oidcMetadata });
+    }
 
     return oidcMetadata;
 }

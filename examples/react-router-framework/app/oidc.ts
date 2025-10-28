@@ -29,8 +29,8 @@ bootstrapOidc(
         : {
               implementation: "real",
               issuerUri: import.meta.env.VITE_OIDC_ISSUER_URI,
-              clientId: import.meta.env.VITE_OIDC_CLIENT_ID
-              //debugLogs: true
+              clientId: import.meta.env.VITE_OIDC_CLIENT_ID,
+              debugLogs: true
           }
 );
 

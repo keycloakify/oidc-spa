@@ -51,6 +51,7 @@ import { isKeycloak } from "../keycloak/isKeycloak";
 import { INFINITY_TIME } from "../tools/INFINITY_TIME";
 import { prShouldLoadApp } from "./prShouldLoadApp";
 import { getBASE_URL } from "./BASE_URL";
+import { getIsLikelyDevServer } from "../tools/isLikelyDevServer";
 
 // NOTE: Replaced at build time
 const VERSION = "{{OIDC_SPA_VERSION}}";
@@ -456,23 +457,7 @@ export async function createOidc_nonMemoized<
                 break third_party_cookies;
             }
 
-            const isLikelyDevServer: boolean = (() => {
-                const origin = window.location.origin;
-
-                if (/^https?:\/\/localhost/.test(origin)) {
-                    return true;
-                }
-
-                if (/^https?:\/\/\[::\]/.test(origin)) {
-                    return true;
-                }
-
-                if (/^https?:\/\/127.0.0.1/.test(origin)) {
-                    return true;
-                }
-
-                return false;
-            })();
+            const isLikelyDevServer = getIsLikelyDevServer();
 
             const domain_auth = new URL(authorization_endpoint).origin.split("//")[1];
 
