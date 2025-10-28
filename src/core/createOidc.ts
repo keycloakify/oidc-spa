@@ -432,7 +432,7 @@ export async function createOidc_nonMemoized<
 
     const stateUrlParamValue_instance = generateStateUrlParamValue();
 
-    const oidcMetadata = await fetchOidcMetadata({ issuerUri });
+    const oidcMetadata = __metadata ?? (await fetchOidcMetadata({ issuerUri }));
 
     const canUseIframe = (() => {
         if (noIframe) {
@@ -446,7 +446,10 @@ export async function createOidc_nonMemoized<
 
             const { authorization_endpoint } = oidcMetadata;
 
-            assert(authorization_endpoint !== undefined, "30332944");
+            assert(
+                authorization_endpoint !== undefined,
+                "Missing authorization_endpoint on the provided __metadata"
+            );
 
             const isOidcServerThirdPartyRelativeToApp = !getHaveSharedParentDomain({
                 url1: window.location.origin,
@@ -575,16 +578,7 @@ export async function createOidc_nonMemoized<
                       prefix: STATE_STORE_KEY_PREFIX
                   }),
                   client_secret: __unsafe_clientSecret,
-                  metadata: (() => {
-                      if (oidcMetadata === undefined) {
-                          return __metadata;
-                      }
-
-                      return {
-                          ...oidcMetadata,
-                          __metadata
-                      };
-                  })()
+                  metadata: oidcMetadata
               });
 
     const evtInitializationOutcomeUserNotLoggedIn = createEvt<void>();
