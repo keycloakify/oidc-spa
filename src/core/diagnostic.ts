@@ -1,8 +1,7 @@
 import { OidcInitializationError } from "./OidcInitializationError";
 import { isKeycloak, createKeycloakUtils } from "../keycloak";
 import { getIsValidRemoteJson } from "../tools/getIsValidRemoteJson";
-
-export const WELL_KNOWN_PATH = "/.well-known/openid-configuration";
+import { WELL_KNOWN_PATH } from "./OidcMetadata";
 
 export async function createWellKnownOidcConfigurationEndpointUnreachableInitializationError(params: {
     issuerUri: string;

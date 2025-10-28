@@ -4,7 +4,7 @@ import {
     type User as OidcClientTsUser,
     InMemoryWebStorage
 } from "../vendor/frontend/oidc-client-ts";
-import type { OidcMetadata } from "./OidcMetadata";
+import { type OidcMetadata, fetchOidcMetadata } from "./OidcMetadata";
 import { assert, is, type Equals } from "../tools/tsafe/assert";
 import { id } from "../tools/tsafe/id";
 import { setTimeout, clearTimeout } from "../tools/workerTimers";
@@ -49,8 +49,6 @@ import { createGetIsNewBrowserSession } from "./isNewBrowserSession";
 import { getIsOnline } from "../tools/getIsOnline";
 import { isKeycloak } from "../keycloak/isKeycloak";
 import { INFINITY_TIME } from "../tools/INFINITY_TIME";
-import type { WELL_KNOWN_PATH } from "./diagnostic";
-import { getIsValidRemoteJson } from "../tools/getIsValidRemoteJson";
 import { prShouldLoadApp } from "./prShouldLoadApp";
 import { getBASE_URL } from "./BASE_URL";
 
@@ -432,16 +430,26 @@ export async function createOidc_nonMemoized<
 
     const stateUrlParamValue_instance = generateStateUrlParamValue();
 
+    const oidcMetadata = await fetchOidcMetadata({ issuerUri });
+
     const canUseIframe = (() => {
         if (noIframe) {
             return false;
         }
 
         third_party_cookies: {
+            if (oidcMetadata === undefined) {
+                return false;
+            }
+
+            const { authorization_endpoint } = oidcMetadata;
+
+            assert(authorization_endpoint !== undefined, "30332944");
+
             const isOidcServerThirdPartyRelativeToApp = !getHaveSharedParentDomain({
                 url1: window.location.origin,
                 // TODO: No, here we should test against the authorization endpoint!
-                url2: issuerUri
+                url2: authorization_endpoint
             });
 
             if (!isOidcServerThirdPartyRelativeToApp) {
@@ -466,21 +474,60 @@ export async function createOidc_nonMemoized<
                 return false;
             })();
 
+            const domain_auth = new URL(authorization_endpoint).origin.split("//")[1];
+
+            assert(domain_auth !== undefined, "33921384");
+
+            const domain_here = window.location.origin.split("//")[1];
+
             if (isLikelyDevServer) {
+                /*
+                const sugestedDeployment = (()=>{
+
+                    const baseUrl = new URL(homeUrlAndRedirectUri).pathname;
+
+                    const segments= domain_auth.split(".");
+
+
+                    if( segments.length >= 3 ){
+
+                        segments.shift();
+
+                        return [
+                            ["myapp", segments].join("."),
+                            segments.join("."),
+                        ]
+
+                    }
+
+                    if( segments.length === 2 ){
+                        return `${domain_auth}/${baseUrl==="/" ? "dashboard" : baseUrl}`
+                    }
+
+                    if( baseUrl === "/" ){
+                    }else{
+
+                    }
+
+                })();
+                */
+
                 log?.(
                     [
-                        "iframe silent signin disabled in localhost because the browser",
-                        "will consider the auth server as third party and bock it's cookie",
-                        "you will get a better login experience in production if you deploy under",
-                        "the same root domain as your auth server.",
+                        "iframe session restoration disabled in localhost because the browser",
+                        `will consider the authorization endpoint of your auth server (${domain_auth})`,
+                        `as a third party and hence block it's cookies.`,
+                        "You will get a better login experience in production if you deploy under",
+                        "the same root domain as your auth server. ",
                         "See: https://docs.oidc-spa.dev/v/v8/resources/end-of-third-party-cookies#when-are-cookies-considered-third-party"
                     ].join(" ")
                 );
             } else {
                 log?.(
                     [
-                        "Can't use iframe because your auth server is on a third party domain relative",
-                        "to the domain of your app and third party cookies are blocked by navigators."
+                        "Can't use iframe for silent signin because the authorization endpoint of your auth server:",
+                        `${domain_auth} do not share a common root domain with ${domain_here}.`,
+                        "\nIt does not really matter, we fallback to full page reload to restore the session."
                     ].join(" ")
                 );
             }
@@ -532,7 +579,16 @@ export async function createOidc_nonMemoized<
         }),
         stateStore: new WebStorageStateStore({ store: localStorage, prefix: STATE_STORE_KEY_PREFIX }),
         client_secret: __unsafe_clientSecret,
-        metadata: __metadata
+        metadata: (() => {
+            if (oidcMetadata === undefined) {
+                return __metadata;
+            }
+
+            return {
+                ...oidcMetadata,
+                __metadata
+            };
+        })()
     });
 
     const evtInitializationOutcomeUserNotLoggedIn = createEvt<void>();
@@ -817,13 +873,7 @@ export async function createOidc_nonMemoized<
                 }
 
                 if (!canUseIframe) {
-                    if (
-                        !(await getIsValidRemoteJson(
-                            `${issuerUri}${id<typeof WELL_KNOWN_PATH>(
-                                "/.well-known/openid-configuration"
-                            )}`
-                        ))
-                    ) {
+                    if (oidcMetadata === undefined) {
                         return (
                             await import("./diagnostic")
                         ).createWellKnownOidcConfigurationEndpointUnreachableInitializationError({

@@ -269,3 +269,77 @@ export type OidcMetadata = {
 };
 
 assert<Equals<OidcMetadata, OidcClientTsOidcMetadata>>;
+
+export const WELL_KNOWN_PATH = "/.well-known/openid-configuration";
+
+function getSessionStorageKey(params: { issuerUri: string }) {
+    const { issuerUri } = params;
+
+    return `oidc-spa:openid-configuration:${issuerUri}`;
+}
+
+function readSessionStorage(params: { issuerUri: string }) {
+    const { issuerUri } = params;
+
+    const value = sessionStorage.getItem(getSessionStorageKey({ issuerUri }));
+
+    if (value === null) {
+        return undefined;
+    }
+
+    return JSON.parse(value) as Partial<OidcClientTsOidcMetadata>;
+}
+
+function setSessionStorage(params: { issuerUri: string; oidcMetadata: Partial<OidcMetadata> }): void {
+    const { issuerUri, oidcMetadata } = params;
+
+    sessionStorage.setItem(getSessionStorageKey({ issuerUri }), JSON.stringify(oidcMetadata));
+}
+
+export async function fetchOidcMetadata(params: { issuerUri: string }) {
+    const { issuerUri } = params;
+
+    from_cache: {
+        const oidcMetadata = readSessionStorage({ issuerUri });
+
+        if (oidcMetadata === undefined) {
+            break from_cache;
+        }
+
+        return oidcMetadata;
+    }
+
+    let oidcMetadata: Partial<OidcMetadata>;
+
+    try {
+        console.log("actually fetching");
+
+        const response = await fetch(`${issuerUri}${WELL_KNOWN_PATH}`, {
+            headers: {
+                Accept: "application/jwk-set+json, application/json"
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error();
+        }
+
+        const obj = await response.json();
+
+        {
+            const { authorization_endpoint } = obj;
+
+            if (typeof authorization_endpoint !== "string") {
+                throw new Error();
+            }
+        }
+
+        oidcMetadata = obj;
+    } catch {
+        return undefined;
+    }
+
+    setSessionStorage({ issuerUri, oidcMetadata });
+
+    return oidcMetadata;
+}
