@@ -469,54 +469,112 @@ export async function createOidc_nonMemoized<
 
             const domain_here = window.location.origin.split("//")[1];
 
-            if (isLikelyDevServer) {
-                /*
-                const sugestedDeployment = (()=>{
+            let isWellKnownProviderDomain = false;
+            let isIp = false;
 
-                    const baseUrl = new URL(homeUrlAndRedirectUri).pathname;
+            const suggestedDeployments = (() => {
+                if (/^(?:\d{1,3}\.){3}\d{1,3}$|^\[?[A-Fa-f0-9:]+\]?$/.test(domain_auth)) {
+                    isIp = true;
+                    return [];
+                }
 
-                    const segments= domain_auth.split(".");
+                const baseDomain = (() => {
+                    const segments = domain_auth.split(".");
 
-
-                    if( segments.length >= 3 ){
-
+                    if (segments.length >= 3) {
                         segments.shift();
-
-                        return [
-                            ["myapp", segments].join("."),
-                            segments.join("."),
-                        ]
-
                     }
-
-                    if( segments.length === 2 ){
-                        return `${domain_auth}/${baseUrl==="/" ? "dashboard" : baseUrl}`
-                    }
-
-                    if( baseUrl === "/" ){
-                    }else{
-
-                    }
-
+                    return segments.join(".");
                 })();
-                */
 
+                {
+                    const baseDomain_low = baseDomain.toLowerCase();
+
+                    if (
+                        baseDomain_low.includes("auth0") ||
+                        baseDomain_low.includes("clerk") ||
+                        baseDomain_low.includes("microsoft") ||
+                        baseDomain_low.includes("okta") ||
+                        baseDomain_low.includes("aws")
+                    ) {
+                        isWellKnownProviderDomain = true;
+                        return [];
+                    }
+                }
+
+                const baseUrl = new URL(homeUrlAndRedirectUri).pathname;
+
+                return [
+                    `myapp.${baseDomain}`,
+                    baseDomain === domain_auth ? undefined : baseDomain,
+                    `${baseDomain}/${baseUrl === "/" ? "dashboard" : baseUrl}`
+                ].filter(x => x !== undefined);
+            })();
+
+            if (isLikelyDevServer) {
                 log?.(
                     [
-                        "iframe session restoration disabled in localhost because the browser",
-                        `will consider the authorization endpoint of your auth server (${domain_auth})`,
-                        `as a third party and hence block it's cookies.`,
-                        "You will get a better login experience in production if you deploy under",
-                        "the same root domain as your auth server. ",
-                        "See: https://docs.oidc-spa.dev/v/v8/resources/end-of-third-party-cookies#when-are-cookies-considered-third-party"
+                        "Detected localhost environment.",
+                        "\nWhen reloading while logged in, you may briefly see",
+                        "some URL params appear in the address bar.",
+                        "\nThis happens because session restore via iframe is disabled,",
+                        "the browser treats your auth server as a third party.",
+                        `\nAuth server: ${domain_auth}`,
+                        `\nApp domain:  ${domain_here}`,
+                        ...(() => {
+                            if (isIp) {
+                                return [];
+                            }
+
+                            if (isWellKnownProviderDomain) {
+                                return [
+                                    "\nYou seem to be using a well-known auth provider.",
+                                    "Check your provider's docs, some allow configuring",
+                                    `a your custom domain at least for the authorization endpoint.`,
+                                    "\nIf configured, oidc-spa will restore sessions silently",
+                                    "and improve the user experience."
+                                ];
+                            }
+
+                            return [
+                                "\nOnce deployed under the same root domain as your auth server,",
+                                "oidc-spa will use iframes to restore sessions silently.",
+                                "\nSuggested deployments:",
+                                ...suggestedDeployments.map(d => `\n  • ${d}`)
+                            ];
+                        })(),
+                        "\n\nMore info:",
+                        "https://docs.oidc-spa.dev/v/v8/resources/end-of-third-party-cookies#when-are-cookies-considered-third-party"
                     ].join(" ")
                 );
             } else {
                 log?.(
                     [
-                        "Can't use iframe for silent signin because the authorization endpoint of your auth server:",
-                        `${domain_auth} do not share a common root domain with ${domain_here}.`,
-                        "\nIt does not really matter, we fallback to full page reload to restore the session."
+                        "Silent session restore via iframe is disabled.",
+                        `\nAuth server: ${domain_auth}`,
+                        `App domain:  ${domain_here}`,
+                        "\nThey do not share a common root domain.",
+                        ...(() => {
+                            if (isIp) {
+                                return [];
+                            }
+
+                            if (isWellKnownProviderDomain) {
+                                return [
+                                    "\nYou seem to be using a well-known auth provider.",
+                                    "Check if you can configure a custom auth domain.",
+                                    "\nIf so, oidc-spa can restore sessions silently",
+                                    "and improve the user experience."
+                                ];
+                            }
+
+                            return [
+                                "\nTo improve the experience, here are some examples of deployment for your app:",
+                                ...suggestedDeployments.map(d => `\n  • ${d}`)
+                            ];
+                        })(),
+                        "\nMore info:",
+                        "https://docs.oidc-spa.dev/v/v8/resources/end-of-third-party-cookies#when-are-cookies-considered-third-party"
                     ].join(" ")
                 );
             }
