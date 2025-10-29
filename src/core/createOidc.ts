@@ -959,7 +959,13 @@ export async function createOidc_nonMemoized<
                     await loginOrGoToAuthServer({
                         action: "login",
                         doForceReloadOnBfCache: true,
-                        redirectUrl: getRootRelativeOriginalLocationHref(),
+                        redirectUrl: (() => {
+                            if (evtIsThereMoreThanOneInstanceThatCantUserIframes.current) {
+                                return window.location.href;
+                            }
+
+                            return getRootRelativeOriginalLocationHref();
+                        })(),
                         // NOTE: Wether or not it's the preferred behavior, pushing to history
                         // only works on user interaction so it have to be false
                         doNavigateBackToLastPublicUrlIfTheTheUserNavigateBack: false,
