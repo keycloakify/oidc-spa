@@ -406,8 +406,7 @@ export async function createOidc_nonMemoized<
                 issuerUri,
                 clientId,
                 scopes,
-                configId,
-                homeUrlAndRedirectUri
+                oidcRedirectUri: homeUrlAndRedirectUri
             },
             null,
             2
