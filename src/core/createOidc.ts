@@ -942,8 +942,6 @@ export async function createOidc_nonMemoized<
                 ) {
                     log?.("Performing auto login with redirect");
 
-                    persistAuthState({ configId, state: undefined });
-
                     completeLoginOrRefreshProcess();
 
                     if (autoLogin && persistedAuthState !== "logged in") {
@@ -980,7 +978,10 @@ export async function createOidc_nonMemoized<
                             }
 
                             return "ensure no interaction";
-                        })()
+                        })(),
+                        preRedirectHook: () => {
+                            persistAuthState({ configId, state: undefined });
+                        }
                     });
                 }
 
@@ -1101,7 +1102,8 @@ export async function createOidc_nonMemoized<
                             interaction:
                                 getPersistedAuthState({ configId }) === "explicitly logged out"
                                     ? "ensure interaction"
-                                    : "directly redirect if active session show login otherwise"
+                                    : "directly redirect if active session show login otherwise",
+                            preRedirectHook: undefined
                         });
                     },
                     initializationError: undefined
@@ -1330,7 +1332,8 @@ export async function createOidc_nonMemoized<
                         extraQueryParams_local: undefined,
                         transformUrlBeforeRedirect_local: undefined,
                         doNavigateBackToLastPublicUrlIfTheTheUserNavigateBack: false,
-                        interaction: "directly redirect if active session show login otherwise"
+                        interaction: "directly redirect if active session show login otherwise",
+                        preRedirectHook: undefined
                     });
                     assert(false, "136134");
                 };

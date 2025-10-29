@@ -30,6 +30,7 @@ namespace Params {
             | "ensure no interaction"
             | "ensure interaction"
             | "directly redirect if active session show login otherwise";
+        preRedirectHook: (() => void) | undefined;
     };
 
     export type GoToAuthServer = Common & {
@@ -304,6 +305,10 @@ export function createLoginOrGoToAuthServer(params: {
         })();
 
         log?.(`redirectMethod: ${redirectMethod}`);
+
+        if (rest.action === "login") {
+            rest.preRedirectHook?.();
+        }
 
         return oidcClientTsUserManager
             .signinRedirect({
