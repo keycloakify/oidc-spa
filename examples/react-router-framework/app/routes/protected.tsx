@@ -4,36 +4,27 @@ import { useOidc, enforceLogin, fetchWithAuth } from "~/oidc";
 import { isKeycloak, createKeycloakUtils } from "oidc-spa/keycloak";
 import type { Route } from "./+types/protected";
 
-type DemoPost = {
-    id: number;
-    title: string;
-    body: string;
-};
-
-type LoaderData = {
-    demoPosts: DemoPost[];
-};
-
 export async function clientLoader(params: Route.ClientLoaderArgs) {
     await enforceLogin(params);
 
-    const demoPosts: DemoPost[] = await fetchWithAuth(
-        "https://jsonplaceholder.typicode.com/posts?_limit=4"
-    ).then(r => r.json());
+    const demoPosts: {
+        id: number;
+        title: string;
+        body: string;
+    }[] = await fetchWithAuth("https://jsonplaceholder.typicode.com/posts?_limit=4").then(r => r.json());
 
     return { demoPosts };
 }
 
 export default function Protected() {
     // Here we can safely assume that the user is logged in.
-    const { decodedIdToken, goToAuthServer, backFromAuthServer, renewTokens, issuerUri, clientId } =
-        useOidc({
-            assert: "user logged in"
-        });
+    const { decodedIdToken, goToAuthServer, backFromAuthServer, issuerUri } = useOidc({
+        assert: "user logged in"
+    });
 
     const keycloakUtils = isKeycloak({ issuerUri }) ? createKeycloakUtils({ issuerUri }) : undefined;
 
-    const { demoPosts } = useLoaderData<LoaderData>();
+    const { demoPosts } = useLoaderData<typeof clientLoader>();
 
     return (
         <section className="space-y-6">
