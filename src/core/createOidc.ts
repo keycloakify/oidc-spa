@@ -228,7 +228,7 @@ export async function createOidc<
         }
     }
 
-    const { issuerUri: issuerUri_params, clientId, scopes = ["profile"], debugLogs, ...rest } = params;
+    const { issuerUri: issuerUri_params, clientId, debugLogs, ...rest } = params;
 
     const issuerUri = toFullyQualifiedUrl({
         urlish: issuerUri_params,
@@ -284,7 +284,6 @@ export async function createOidc<
     const oidc = await createOidc_nonMemoized(rest, {
         issuerUri,
         clientId,
-        scopes,
         configId,
         log
     });
@@ -298,14 +297,10 @@ export async function createOidc_nonMemoized<
     DecodedIdToken extends Record<string, unknown>,
     AutoLogin extends boolean
 >(
-    params: Omit<
-        ParamsOfCreateOidc<DecodedIdToken, AutoLogin>,
-        "issuerUri" | "clientId" | "scopes" | "debugLogs"
-    >,
+    params: Omit<ParamsOfCreateOidc<DecodedIdToken, AutoLogin>, "issuerUri" | "clientId" | "debugLogs">,
     preProcessedParams: {
         issuerUri: string;
         clientId: string;
-        scopes: string[];
         configId: string;
         log: typeof console.log | undefined;
     }
@@ -343,12 +338,13 @@ export async function createOidc_nonMemoized<
         __unsafe_clientSecret,
         __unsafe_useIdTokenAsAccessToken = false,
         __metadata,
-        noIframe = false
+        noIframe = false,
+        scopes = ["openid", "profile"]
     } = params;
 
     const BASE_URL_params = params.BASE_URL ?? params.homeUrl;
 
-    const { issuerUri, clientId, scopes, configId, log } = preProcessedParams;
+    const { issuerUri, clientId, configId, log } = preProcessedParams;
 
     const getExtraQueryParams = (() => {
         if (extraQueryParamsOrGetter === undefined) {
@@ -500,7 +496,7 @@ export async function createOidc_nonMemoized<
                 log?.(
                     [
                         "Detected localhost environment.",
-                        "\nWhen reloading while logged in, you may briefly see",
+                        "\nWhen reloading while logged in, you will briefly see",
                         "some URL params appear in the address bar.",
                         "\nThis happens because session restore via iframe is disabled,",
                         "the browser treats your auth server as a third party.",
@@ -573,10 +569,12 @@ export async function createOidc_nonMemoized<
     notifyNewInstanceThatCantUseIframes();
 
     if (evtIsThereMoreThanOneInstanceThatCantUserIframes.current) {
-        log?.([
-            "More than one oidc instance can't use iframe",
-            "falling back to persisting tokens in session storage"
-        ]);
+        log?.(
+            [
+                "More than one oidc instance can't use iframe",
+                "falling back to persisting tokens in session storage"
+            ].join(" ")
+        );
     }
 
     const oidcClientTsUserManager =
@@ -683,7 +681,7 @@ export async function createOidc_nonMemoized<
                 break restore_from_session_storage;
             }
 
-            log?.("Restored the auth from ephemeral session storage");
+            log?.("Session was restored from session storage");
 
             return {
                 oidcClientTsUser,
