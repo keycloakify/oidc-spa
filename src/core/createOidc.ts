@@ -106,21 +106,6 @@ export type ParamsOfCreateOidc<
      *          extraTokenParams: { selectedCustomer: "xxx" }
      */
     extraTokenParams?: Record<string, string | undefined> | (() => Record<string, string | undefined>);
-    /**
-     * @deprecated: Use login({ redirectUrl: "..." }) instead.
-     *
-     * Usage discouraged, it's here because we don't want to assume too much on your
-     * usecase but I can't think of a scenario where you would want anything
-     * other than the current page.
-     *
-     * Where to redirect after successful login.
-     * Default: window.location.href (here)
-     *
-     * It does not need to include the origin, eg: "/dashboard"
-     *
-     * This parameter can also be passed to login() directly as `redirectUrl`.
-     */
-    postLoginRedirectUrl?: string;
 
     decodedIdTokenSchema?: {
         parse: (decodedIdToken_original: Oidc.Tokens.DecodedIdToken_OidcCoreSpec) => DecodedIdToken;
@@ -205,6 +190,21 @@ export type ParamsOfCreateOidc<
 
     /** @deprecated: Use BASE_URL (same thing, just renamed). */
     homeUrl?: string;
+
+    /**
+     * This parameter is irrelevant in most usecases.
+     * It tells where to redirect after a successful login or autoLogin.
+     *
+     * If you are not in autoLogin mode there is absolutely no reason to use
+     * this parameter since you can pass `login({ redirectUrl: "..." })`.
+     *
+     * It can only be useful in some edge case with `autoLogin: true`
+     * When you want to precisely redirect somewhere after login.
+     *
+     * This can make sense if you have multiple clients to talk with different
+     * API and no iframe capabilities.
+     */
+    postLoginRedirectUrl?: string;
 };
 
 const globalContext = {
@@ -957,6 +957,10 @@ export async function createOidc_nonMemoized<
                         action: "login",
                         doForceReloadOnBfCache: true,
                         redirectUrl: (() => {
+                            if (postLoginRedirectUrl_default) {
+                                return postLoginRedirectUrl_default;
+                            }
+
                             if (evtIsThereMoreThanOneInstanceThatCantUserIframes.current) {
                                 return window.location.href;
                             }
