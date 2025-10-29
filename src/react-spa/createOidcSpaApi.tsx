@@ -10,6 +10,7 @@ import { createObjectThatThrowsIfAccessed } from "../tools/createObjectThatThrow
 import { createStatefulEvt } from "../tools/StatefulEvt";
 import { id } from "../tools/tsafe/id";
 import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";
+import { setDesiredPostLoginRedirectUrl } from "../core/desiredPostLoginRedirectUrl";
 
 export function createOidcSpaApi<
     AutoLogin extends boolean,
@@ -440,10 +441,13 @@ export function createOidcSpaApi<
                 });
             }
 
-            return location.href;
+            return window.location.href;
         })();
 
         const oidc = await getOidc();
+
+        const isUrlAlreadyReplaced =
+            window.location.href.replace(/\/$/, "") === redirectUrl.replace(/\/$/, "");
 
         if (!oidc.isUserLoggedIn) {
             if (cause === "preload") {
@@ -451,13 +455,38 @@ export function createOidcSpaApi<
                     "oidc-spa: User is not yet logged in. This is an expected error, nothing to be addressed."
                 );
             }
-            const doesCurrentHrefRequiresAuth =
-                location.href.replace(/\/$/, "") === redirectUrl.replace(/\/$/, "");
 
             await oidc.login({
                 redirectUrl,
-                doesCurrentHrefRequiresAuth
+                doesCurrentHrefRequiresAuth: isUrlAlreadyReplaced
             });
+        }
+
+        define_temporary_postLoginRedirectUrl: {
+            if (isUrlAlreadyReplaced) {
+                break define_temporary_postLoginRedirectUrl;
+            }
+
+            setDesiredPostLoginRedirectUrl({ postLoginRedirectUrl: redirectUrl });
+
+            const history_pushState = history.pushState;
+            const history_replaceState = history.replaceState;
+
+            const onNavigated = () => {
+                history.pushState = history_pushState;
+                history.replaceState = history_replaceState;
+                setDesiredPostLoginRedirectUrl({ postLoginRedirectUrl: undefined });
+            };
+
+            history.pushState = function pushState(...args) {
+                onNavigated();
+                return history_pushState.call(history, ...args);
+            };
+
+            history.replaceState = function replaceState(...args) {
+                onNavigated();
+                return history_replaceState.call(history, ...args);
+            };
         }
     }
 

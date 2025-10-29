@@ -52,6 +52,7 @@ import {
     evtIsThereMoreThanOneInstanceThatCantUserIframes,
     notifyNewInstanceThatCantUseIframes
 } from "./instancesThatCantUseIframes";
+import { getDesiredPostLoginRedirectUrl } from "./desiredPostLoginRedirectUrl";
 
 // NOTE: Replaced at build time
 const VERSION = "{{OIDC_SPA_VERSION}}";
@@ -961,11 +962,11 @@ export async function createOidc_nonMemoized<
                                 return postLoginRedirectUrl_default;
                             }
 
-                            if (evtIsThereMoreThanOneInstanceThatCantUserIframes.current) {
-                                return window.location.href;
+                            if (!evtIsThereMoreThanOneInstanceThatCantUserIframes.current) {
+                                return getRootRelativeOriginalLocationHref();
                             }
 
-                            return getRootRelativeOriginalLocationHref();
+                            return getDesiredPostLoginRedirectUrl() ?? window.location.href;
                         })(),
                         // NOTE: Wether or not it's the preferred behavior, pushing to history
                         // only works on user interaction so it have to be false

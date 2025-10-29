@@ -19,6 +19,7 @@ import { Router, type CanActivateFn } from "@angular/router";
 import type { ValueOrAsyncGetter } from "./tools/ValueOrAsyncGetter";
 import { getBaseHref } from "./tools/getBaseHref";
 import type { ConcreteClass } from "./tools/ConcreteClass";
+import { setDesiredPostLoginRedirectUrl } from "./core/desiredPostLoginRedirectUrl";
 
 export type ParamsOfProvide = {
     issuerUri: string;
@@ -454,26 +455,53 @@ export abstract class AbstractOidcService<
 
             await instance.prInitialized;
 
+            const redirectUrl = router.serializeUrl(
+                router.createUrlTree(
+                    route.url.map(u => u.path),
+                    {
+                        queryParams: route.queryParams,
+                        fragment: route.fragment ?? undefined
+                    }
+                )
+            );
+
             const oidc = instance.#getOidc({ callerName: "enforceLoginGuard" });
 
+            const isUrlAlreadyReplaced =
+                window.location.href.replace(/\/$/, "") === redirectUrl.replace(/\/$/, "");
+
             if (!oidc.isUserLoggedIn) {
-                const redirectUrl = router.serializeUrl(
-                    router.createUrlTree(
-                        route.url.map(u => u.path),
-                        {
-                            queryParams: route.queryParams,
-                            fragment: route.fragment ?? undefined
-                        }
-                    )
-                );
-
-                const doesCurrentHrefRequiresAuth =
-                    location.href.replace(/\/$/, "") === redirectUrl.replace(/\/$/, "");
-
                 await oidc.login({
-                    doesCurrentHrefRequiresAuth,
+                    doesCurrentHrefRequiresAuth: isUrlAlreadyReplaced,
                     redirectUrl
                 });
+            }
+
+            define_temporary_postLoginRedirectUrl: {
+                if (isUrlAlreadyReplaced) {
+                    break define_temporary_postLoginRedirectUrl;
+                }
+
+                setDesiredPostLoginRedirectUrl({ postLoginRedirectUrl: redirectUrl });
+
+                const history_pushState = history.pushState;
+                const history_replaceState = history.replaceState;
+
+                const onNavigated = () => {
+                    history.pushState = history_pushState;
+                    history.replaceState = history_replaceState;
+                    setDesiredPostLoginRedirectUrl({ postLoginRedirectUrl: undefined });
+                };
+
+                history.pushState = function pushState(...args) {
+                    onNavigated();
+                    return history_pushState.call(history, ...args);
+                };
+
+                history.replaceState = function replaceState(...args) {
+                    onNavigated();
+                    return history_replaceState.call(history, ...args);
+                };
             }
 
             return true;
