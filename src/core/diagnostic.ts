@@ -189,7 +189,7 @@ export async function createIframeTimeoutInitializationError(params: {
             messageOrCause: [
                 `${redirectUri} is currently served by your web server with the HTTP header \`${key_problem}: ${headers[key_problem]}\`.\n`,
                 "This header prevents the silent sign-in process from working.\n",
-                "Refer to this documentation page to fix this issue: https://docs.oidc-spa.dev/v/v8/resources/iframe-related-issues"
+                "Refer to this documentation page to fix this issue: https://docs.oidc-spa.dev/v/v8/resources/third-party-cookies-and-session-restoration"
             ].join(" ")
         });
     }

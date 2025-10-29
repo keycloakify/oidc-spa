@@ -162,6 +162,8 @@ export type ParamsOfCreateOidc<
      *   In development, if you go in your browser setting and allow your auth server’s domain
      *   to set third-party cookies this value will let you test your app
      *   with the local dev server as it will behave in production.
+     *
+     *  See: https://docs.oidc-spa.dev/v/v8/resources/third-party-cookies-and-session-restoration
      */
     sessionRestorationMethod?: "iframe" | "full page redirect" | "auto";
 
@@ -170,7 +172,7 @@ export type ParamsOfCreateOidc<
      *
      * Default: false
      *
-     * See: https://docs.oidc-spa.dev/v/v8/resources/iframe-related-issues
+     * See: https://docs.oidc-spa.dev/v/v8/resources/third-party-cookies-and-session-restoration
      */
     noIframe?: boolean;
 
@@ -565,7 +567,7 @@ export async function createOidc_nonMemoized<
                             ];
                         })(),
                         "\n\nMore info:",
-                        "https://docs.oidc-spa.dev/v/v8/resources/end-of-third-party-cookies#when-are-cookies-considered-third-party"
+                        "https://docs.oidc-spa.dev/v/v8/resources/third-party-cookies-and-session-restoration"
                     ].join(" ")
                 );
             } else {
@@ -595,7 +597,7 @@ export async function createOidc_nonMemoized<
                             ];
                         })(),
                         "\nMore info:",
-                        "https://docs.oidc-spa.dev/v/v8/resources/end-of-third-party-cookies#when-are-cookies-considered-third-party"
+                        "https://docs.oidc-spa.dev/v/v8/resources/third-party-cookies-and-session-restoration"
                     ].join(" ")
                 );
             }
