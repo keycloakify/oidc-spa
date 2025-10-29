@@ -1175,6 +1175,7 @@ export async function createOidc_nonMemoized<
                 state: {
                     stateDescription: "logged in",
                     refreshTokenExpirationTime: currentTokens.refreshTokenExpirationTime,
+                    serverDateNow: currentTokens.getServerDateNow(),
                     idleSessionLifetimeInSeconds
                 }
             });
@@ -1452,6 +1453,7 @@ export async function createOidc_nonMemoized<
                         state: {
                             stateDescription: "logged in",
                             refreshTokenExpirationTime: currentTokens.refreshTokenExpirationTime,
+                            serverDateNow: currentTokens.getServerDateNow(),
                             idleSessionLifetimeInSeconds
                         }
                     });
