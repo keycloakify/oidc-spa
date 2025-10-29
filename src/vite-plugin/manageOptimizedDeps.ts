@@ -34,7 +34,8 @@ export function manageOptimizedDeps(params: {
                 const moduleNames_include = [
                     "oidc-spa/react-spa",
                     "oidc-spa/entrypoint",
-                    "oidc-spa/keycloak"
+                    "oidc-spa/keycloak",
+                    "oidc-spa/core"
                 ];
 
                 for (const moduleName of moduleNames_include) {
