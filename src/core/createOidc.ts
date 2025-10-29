@@ -107,6 +107,8 @@ export type ParamsOfCreateOidc<
      */
     extraTokenParams?: Record<string, string | undefined> | (() => Record<string, string | undefined>);
     /**
+     * @deprecated: Use login({ redirectUrl: "..." }) instead.
+     *
      * Usage discouraged, it's here because we don't want to assume too much on your
      * usecase but I can't think of a scenario where you would want anything
      * other than the current page.
