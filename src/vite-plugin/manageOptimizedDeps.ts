@@ -55,6 +55,8 @@ export function manageOptimizedDeps(params: {
                     moduleNames_include.push("zod");
                 }
 
+                moduleNames_include.push("oidc-spa");
+
                 ((userConfig.optimizeDeps ??= {}).include ??= []).push(...moduleNames_include);
             }
             break;

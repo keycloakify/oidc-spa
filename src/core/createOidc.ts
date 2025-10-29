@@ -25,12 +25,7 @@ import { notifyOtherTabsOfLogin, getPrOtherTabLogin } from "./loginPropagationTo
 import { getConfigId } from "./configId";
 import { oidcClientTsUserToTokens } from "./oidcClientTsUserToTokens";
 import { loginSilent } from "./loginSilent";
-import {
-    authResponseToUrl,
-    getPersistedRedirectAuthResponses,
-    setPersistedRedirectAuthResponses,
-    type AuthResponse
-} from "./AuthResponse";
+import { authResponseToUrl, type AuthResponse } from "./AuthResponse";
 import { getRootRelativeOriginalLocationHref, getRedirectAuthResponse } from "./earlyInit";
 import { getPersistedAuthState, persistAuthState } from "./persistedAuthState";
 import type { Oidc } from "./Oidc";
@@ -40,7 +35,7 @@ import {
     createLoginOrGoToAuthServer,
     getPrSafelyRestoredFromBfCacheAfterLoginBackNavigationOrInitializationError
 } from "./loginOrGoToAuthServer";
-import { createEphemeralSessionStorage } from "../tools/EphemeralSessionStorage";
+import { createLazySessionStorage } from "../tools/lazySessionStorage";
 import {
     startLoginOrRefreshProcess,
     waitForAllOtherOngoingLoginOrRefreshProcessesToComplete
@@ -53,6 +48,10 @@ import { prShouldLoadApp } from "./prShouldLoadApp";
 import { getBASE_URL } from "./BASE_URL";
 import { getIsLikelyDevServer } from "../tools/isLikelyDevServer";
 import { createObjectThatThrowsIfAccessed } from "../tools/createObjectThatThrowsIfAccessed";
+import {
+    evtIsThereMoreThanOneInstanceThatCantUserIframes,
+    notifyNewInstanceThatCantUseIframes
+} from "./instancesThatCantUseIframes";
 
 // NOTE: Replaced at build time
 const VERSION = "{{OIDC_SPA_VERSION}}";
@@ -208,23 +207,8 @@ export type ParamsOfCreateOidc<
 
 const globalContext = {
     prOidcByConfigId: new Map<string, Promise<Oidc<any>>>(),
-    hasLogoutBeenCalled: id<boolean>(false),
-    evtRequestToPersistTokens: createEvt<{ configIdOfInstancePostingTheRequest: string }>()
+    hasLogoutBeenCalled: id<boolean>(false)
 };
-
-globalContext.evtRequestToPersistTokens.subscribe(() => {
-    const { authResponse } = getRedirectAuthResponse();
-
-    if (authResponse === undefined) {
-        return;
-    }
-
-    const { authResponses } = getPersistedRedirectAuthResponses();
-
-    setPersistedRedirectAuthResponses({
-        authResponses: [...authResponses, authResponse]
-    });
-});
 
 /** @see: https://docs.oidc-spa.dev/v/v8/usage */
 export async function createOidc<
@@ -585,7 +569,14 @@ export async function createOidc_nonMemoized<
         return true;
     })();
 
-    let isUserStoreInMemoryOnly: boolean | undefined = undefined;
+    notifyNewInstanceThatCantUseIframes();
+
+    if (evtIsThereMoreThanOneInstanceThatCantUserIframes.current) {
+        log?.([
+            "More than one oidc instance can't use iframe",
+            "falling back to persisting tokens in session storage"
+        ]);
+    }
 
     const oidcClientTsUserManager =
         oidcMetadata === undefined
@@ -606,27 +597,18 @@ export async function createOidc_nonMemoized<
                   userStore: new WebStorageStateStore({
                       store: (() => {
                           if (canUseIframe) {
-                              isUserStoreInMemoryOnly = true;
                               return new InMemoryWebStorage();
                           }
 
-                          isUserStoreInMemoryOnly = false;
+                          const storage = createLazySessionStorage();
 
-                          const storage = createEphemeralSessionStorage({
-                              sessionStorageTtlMs: 3 * 60_000
-                          });
-
-                          const { evtRequestToPersistTokens } = globalContext;
-
-                          evtRequestToPersistTokens.subscribe(
-                              ({ configIdOfInstancePostingTheRequest }) => {
-                                  if (configIdOfInstancePostingTheRequest === configId) {
-                                      return;
-                                  }
-
+                          if (evtIsThereMoreThanOneInstanceThatCantUserIframes.current) {
+                              storage.persistCurrentStateAndSubsequentChanges();
+                          } else {
+                              evtIsThereMoreThanOneInstanceThatCantUserIframes.subscribe(() => {
                                   storage.persistCurrentStateAndSubsequentChanges();
-                              }
-                          );
+                              });
+                          }
 
                           return storage;
                       })()
@@ -675,75 +657,67 @@ export async function createOidc_nonMemoized<
             });
         }
 
+        restore_from_session_storage: {
+            if (canUseIframe) {
+                break restore_from_session_storage;
+            }
+
+            if (!evtIsThereMoreThanOneInstanceThatCantUserIframes.current) {
+                break restore_from_session_storage;
+            }
+
+            let oidcClientTsUser: OidcClientTsUser | null;
+
+            try {
+                oidcClientTsUser = await oidcClientTsUserManager.getUser();
+            } catch {
+                // NOTE: Not sure if it can throw, but let's be safe.
+                oidcClientTsUser = null;
+                try {
+                    await oidcClientTsUserManager.removeUser();
+                } catch {}
+            }
+
+            if (oidcClientTsUser === null) {
+                break restore_from_session_storage;
+            }
+
+            log?.("Restored the auth from ephemeral session storage");
+
+            return {
+                oidcClientTsUser,
+                backFromAuthServer: undefined
+            };
+        }
+
         handle_redirect_auth_response: {
             let stateDataAndAuthResponse:
                 | { stateData: StateData.Redirect; authResponse: AuthResponse }
                 | undefined = undefined;
 
-            get_stateData_and_authResponse: {
-                from_memory: {
-                    const { authResponse, clearAuthResponse } = getRedirectAuthResponse();
+            {
+                const { authResponse, clearAuthResponse } = getRedirectAuthResponse();
 
-                    if (authResponse === undefined) {
-                        break from_memory;
-                    }
+                if (authResponse === undefined) {
+                    break handle_redirect_auth_response;
+                }
 
-                    const stateData = getStateData({ stateUrlParamValue: authResponse.state });
+                const stateData = getStateData({ stateUrlParamValue: authResponse.state });
 
-                    if (stateData === undefined) {
-                        clearAuthResponse();
-                        break from_memory;
-                    }
-
-                    if (stateData.configId !== configId) {
-                        break from_memory;
-                    }
-
-                    assert(stateData.context === "redirect", "3229492");
-
+                if (stateData === undefined) {
                     clearAuthResponse();
-
-                    stateDataAndAuthResponse = { stateData, authResponse };
-
-                    break get_stateData_and_authResponse;
+                    break handle_redirect_auth_response;
                 }
 
-                // from storage, this is for race condition in multiple instance
-                // setup where one instance would need to redirect before
-                // the authResponse in memory had the chance to be processed.
-                // This can only happen if:
-                // 1) There are multiple oidc instances in the App.
-                // 2) They are instantiated in a non deterministic order.
-                // 3) We can't use iframe
-                // We practically never persist the auth response and do it only in session
-                // an ephemeral session storage, when we know it's gonna be required.
-                {
-                    const { authResponses } = getPersistedRedirectAuthResponses();
-
-                    for (const authResponse of authResponses) {
-                        const stateData = getStateData({ stateUrlParamValue: authResponse.state });
-
-                        if (stateData === undefined) {
-                            continue;
-                        }
-
-                        if (stateData.configId !== configId) {
-                            continue;
-                        }
-
-                        assert(stateData.context === "redirect", "35935591");
-
-                        setPersistedRedirectAuthResponses({
-                            authResponses: authResponses.filter(
-                                authResponse_i => authResponse_i !== authResponse
-                            )
-                        });
-
-                        stateDataAndAuthResponse = { stateData, authResponse };
-
-                        break get_stateData_and_authResponse;
-                    }
+                if (stateData.configId !== configId) {
+                    break handle_redirect_auth_response;
                 }
+
+                assert(stateData.context === "redirect", "3229492");
+
+                clearAuthResponse();
+
+                stateDataAndAuthResponse = { stateData, authResponse };
             }
 
             if (stateDataAndAuthResponse === undefined) {
@@ -854,39 +828,6 @@ export async function createOidc_nonMemoized<
                 default:
                     assert<Equals<typeof stateData, never>>(false);
             }
-        }
-
-        // NOTE: We almost never persist tokens, we have to only to support edge case
-        // of multiple oidc instance in a single App with no iframe support.
-        restore_from_session_storage: {
-            assert(isUserStoreInMemoryOnly !== undefined, "3392204");
-
-            if (isUserStoreInMemoryOnly) {
-                break restore_from_session_storage;
-            }
-
-            let oidcClientTsUser: OidcClientTsUser | null;
-
-            try {
-                oidcClientTsUser = await oidcClientTsUserManager.getUser();
-            } catch {
-                // NOTE: Not sure if it can throw, but let's be safe.
-                oidcClientTsUser = null;
-                try {
-                    await oidcClientTsUserManager.removeUser();
-                } catch {}
-            }
-
-            if (oidcClientTsUser === null) {
-                break restore_from_session_storage;
-            }
-
-            log?.("Restored the auth from ephemeral session storage");
-
-            return {
-                oidcClientTsUser,
-                backFromAuthServer: undefined
-            };
         }
 
         silent_login_if_possible_and_auto_login: {
@@ -1014,12 +955,6 @@ export async function createOidc_nonMemoized<
                         prUnlock:
                             getPrSafelyRestoredFromBfCacheAfterLoginBackNavigationOrInitializationError()
                     });
-
-                    if (persistedAuthState === "logged in") {
-                        globalContext.evtRequestToPersistTokens.post({
-                            configIdOfInstancePostingTheRequest: configId
-                        });
-                    }
 
                     await loginOrGoToAuthServer({
                         action: "login",
@@ -1380,10 +1315,6 @@ export async function createOidc_nonMemoized<
 
                     await waitForAllOtherOngoingLoginOrRefreshProcessesToComplete({
                         prUnlock: new Promise<never>(() => {})
-                    });
-
-                    globalContext.evtRequestToPersistTokens.post({
-                        configIdOfInstancePostingTheRequest: configId
                     });
 
                     await loginOrGoToAuthServer({
