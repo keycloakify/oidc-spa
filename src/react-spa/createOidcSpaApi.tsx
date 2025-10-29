@@ -391,7 +391,7 @@ export function createOidcSpaApi<
                                 transformUrlBeforeRedirect: paramsOfBootstrap.transformUrlBeforeRedirect,
                                 extraQueryParams: paramsOfBootstrap.extraQueryParams,
                                 extraTokenParams: paramsOfBootstrap.extraTokenParams,
-                                noIframe: paramsOfBootstrap.noIframe,
+                                sessionRestorationMethod: paramsOfBootstrap.sessionRestorationMethod,
                                 debugLogs: paramsOfBootstrap.debugLogs,
                                 __unsafe_clientSecret: paramsOfBootstrap.__unsafe_clientSecret,
                                 __metadata: paramsOfBootstrap.__metadata,

@@ -136,6 +136,38 @@ export type ParamsOfCreateOidc<
     autoLogin?: AutoLogin;
 
     /**
+     * Determines how session restoration is handled.
+     * Session restoration allows users to stay logged in between visits
+     * without needing to explicitly sign in each time.
+     *
+     * Options:
+     *
+     * - **"auto" (default)**:
+     *   Automatically selects the best method.
+     *   If the app’s domain shares a common parent domain with the authorization endpoint,
+     *   an iframe is used for silent session restoration.
+     *   Otherwise, a full-page redirect is used.
+     *
+     * - **"full page redirect"**:
+     *   Forces full-page reloads for session restoration.
+     *   Use this if your application is served with a restrictive CSP
+     *   (e.g., `Content-Security-Policy: frame-ancestors "none"`)
+     *   or `X-Frame-Options: DENY`, and you cannot modify those headers.
+     *   This mode provides a slightly less seamless UX and will lead oidc-spa to
+     *   store tokens in `localStorage` if multiple OIDC clients are used
+     *   (e.g., your app communicates with several APIs).
+     *
+     * - **"iframe"**:
+     *   Forces iframe-based session restoration.
+     *   In development, if you go in your browser setting and allow your auth server’s domain
+     *   to set third-party cookies this value will let you test your app
+     *   with the local dev server as it will behave in production.
+     */
+    sessionRestorationMethod?: "iframe" | "full page redirect" | "auto";
+
+    /**
+     * @deprecated Use `sessionRestorationMethod: "full page redirect"` instead.
+     *
      * Default: false
      *
      * See: https://docs.oidc-spa.dev/v/v8/resources/iframe-related-issues
@@ -339,8 +371,8 @@ export async function createOidc_nonMemoized<
         __unsafe_clientSecret,
         __unsafe_useIdTokenAsAccessToken = false,
         __metadata,
-        noIframe = false,
-        scopes = ["openid", "profile"]
+        scopes = ["openid", "profile"],
+        sessionRestorationMethod = params.autoLogin === true ? "full page redirect" : "auto"
     } = params;
 
     const BASE_URL_params = params.BASE_URL ?? params.homeUrl;
@@ -417,8 +449,15 @@ export async function createOidc_nonMemoized<
     const oidcMetadata = __metadata ?? (await fetchOidcMetadata({ issuerUri }));
 
     const canUseIframe = (() => {
-        if (noIframe) {
-            return false;
+        switch (sessionRestorationMethod) {
+            case "auto":
+                break;
+            case "full page redirect":
+                return false;
+            case "iframe":
+                return true;
+            default:
+                assert<Equals<typeof sessionRestorationMethod, never>>;
         }
 
         third_party_cookies: {
@@ -897,7 +936,7 @@ export async function createOidc_nonMemoized<
                         redirectUri: homeUrlAndRedirectUri,
                         clientId,
                         issuerUri,
-                        noIframe
+                        canUseIframe
                     });
                 }
 

@@ -90,9 +90,9 @@ export async function createIframeTimeoutInitializationError(params: {
     redirectUri: string;
     issuerUri: string;
     clientId: string;
-    noIframe: boolean;
+    canUseIframe: boolean;
 }): Promise<OidcInitializationError> {
-    const { redirectUri, issuerUri, clientId, noIframe } = params;
+    const { redirectUri, issuerUri, clientId, canUseIframe } = params;
 
     check_if_well_known_endpoint_is_reachable: {
         const isValid = await getIsValidRemoteJson(`${issuerUri}${WELL_KNOWN_PATH}`);
@@ -105,7 +105,7 @@ export async function createIframeTimeoutInitializationError(params: {
     }
 
     iframe_blocked: {
-        if (noIframe) {
+        if (!canUseIframe) {
             break iframe_blocked;
         }
 
