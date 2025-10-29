@@ -599,7 +599,7 @@ export async function createOidc_nonMemoized<
                               return new InMemoryWebStorage();
                           }
 
-                          const storage = createLazySessionStorage();
+                          const storage = createLazySessionStorage({ storageId: configId });
 
                           if (evtIsThereMoreThanOneInstanceThatCantUserIframes.current) {
                               storage.persistCurrentStateAndSubsequentChanges();

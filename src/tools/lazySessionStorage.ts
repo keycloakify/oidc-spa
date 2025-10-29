@@ -1,7 +1,5 @@
 import { assert } from "../tools/tsafe/assert";
 
-const SESSION_STORAGE_PREFIX = "lazy-session-storage:";
-
 export type LazySessionStorage = {
     // `Storage` methods, we don't use the type directly because it has [name: string]: any;
     readonly length: number;
@@ -15,14 +13,20 @@ export type LazySessionStorage = {
     persistCurrentStateAndSubsequentChanges: () => void;
 };
 
-export function createLazySessionStorage(): LazySessionStorage {
+export function createLazySessionStorage(params: { storageId: string }): LazySessionStorage {
+    const { storageId } = params;
+
+    const sessionStoragePrefix = `lazy-session-storage:${storageId}:`;
+
+    const getSessionStorageKey = (key: string) => `${sessionStoragePrefix}${key}`;
+
     const entries: { key: string; value: string }[] = [];
 
     for (let i = 0; i < sessionStorage.length; i++) {
         const key = sessionStorage.key(i);
         assert(key !== null, "470498");
 
-        if (!key.startsWith(SESSION_STORAGE_PREFIX)) {
+        if (!key.startsWith(sessionStoragePrefix)) {
             continue;
         }
 
@@ -33,7 +37,7 @@ export function createLazySessionStorage(): LazySessionStorage {
         sessionStorage.removeItem(key);
 
         entries.push({
-            key: key.slice(SESSION_STORAGE_PREFIX.length),
+            key: key.slice(sessionStoragePrefix.length),
             value
         });
     }
@@ -74,7 +78,7 @@ export function createLazySessionStorage(): LazySessionStorage {
                 return;
             }
 
-            sessionStorage.removeItem(`${SESSION_STORAGE_PREFIX}${entry.key}`);
+            sessionStorage.removeItem(getSessionStorageKey(entry.key));
 
             const index = entries.indexOf(entry);
 
@@ -96,7 +100,7 @@ export function createLazySessionStorage(): LazySessionStorage {
         },
         setItem: (key, value) => {
             if (isPersistenceEnabled) {
-                sessionStorage.setItem(`${SESSION_STORAGE_PREFIX}${key}`, value);
+                sessionStorage.setItem(getSessionStorageKey(key), value);
             }
 
             update: {
