@@ -52,80 +52,82 @@ export default function Protected() {
                     )}
                 </dl>
 
-                {keycloakUtils !== undefined && (
-                    <div className="mt-6 flex flex-wrap gap-3">
-                        <button
-                            className="inline-flex items-center rounded-full border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-200 transition-colors hover:border-slate-500"
-                            onClick={() =>
-                                goToAuthServer({
-                                    extraQueryParams: { kc_action: "UPDATE_PASSWORD" }
-                                })
-                            }
-                        >
-                            Change password
-                        </button>
-                        <button
-                            className="inline-flex items-center rounded-full border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-200 transition-colors hover:border-slate-500"
-                            onClick={() =>
-                                goToAuthServer({
-                                    extraQueryParams: { kc_action: "UPDATE_PROFILE" }
-                                })
-                            }
-                        >
-                            Update profile
-                        </button>
-                        <button
-                            className="inline-flex items-center rounded-full border border-rose-400/60 px-4 py-2 text-sm font-semibold text-rose-200 transition-colors hover:border-rose-300 hover:text-rose-100"
-                            onClick={() =>
-                                goToAuthServer({
-                                    extraQueryParams: { kc_action: "delete_account" }
-                                })
-                            }
-                        >
-                            Delete account
-                        </button>
-                        <a
-                            className="group inline-flex items-center gap-2 rounded-full border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-200 transition-colors hover:border-slate-500 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-200/40 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
-                            href={keycloakUtils.getAccountUrl({
-                                clientId,
-                                validRedirectUri
-                            })}
-                        >
-                            My Account
-                            <svg
-                                aria-hidden="true"
-                                className="h-3 w-3 text-slate-400 transition-colors group-hover:text-slate-200"
-                                viewBox="0 0 12 12"
-                                xmlns="http://www.w3.org/2000/svg"
+                {keycloakUtils && (
+                    <>
+                        <div className="mt-6 flex flex-wrap gap-3">
+                            <button
+                                className="inline-flex items-center rounded-full border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-200 transition-colors hover:border-slate-500"
+                                onClick={() =>
+                                    goToAuthServer({
+                                        extraQueryParams: { kc_action: "UPDATE_PASSWORD" }
+                                    })
+                                }
                             >
-                                <path
-                                    d="M4 2.5h5.5V8"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth="1.5"
-                                />
-                                <path
-                                    d="M2.5 9.5 9.5 2.5"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth="1.5"
-                                />
-                            </svg>
-                        </a>
-                    </div>
-                )}
+                                Change password
+                            </button>
+                            <button
+                                className="inline-flex items-center rounded-full border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-200 transition-colors hover:border-slate-500"
+                                onClick={() =>
+                                    goToAuthServer({
+                                        extraQueryParams: { kc_action: "UPDATE_PROFILE" }
+                                    })
+                                }
+                            >
+                                Update profile
+                            </button>
+                            <button
+                                className="inline-flex items-center rounded-full border border-rose-400/60 px-4 py-2 text-sm font-semibold text-rose-200 transition-colors hover:border-rose-300 hover:text-rose-100"
+                                onClick={() =>
+                                    goToAuthServer({
+                                        extraQueryParams: { kc_action: "delete_account" }
+                                    })
+                                }
+                            >
+                                Delete account
+                            </button>
+                            <a
+                                className="group inline-flex items-center gap-2 rounded-full border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-200 transition-colors hover:border-slate-500 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-200/40 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+                                href={keycloakUtils.getAccountUrl({
+                                    clientId,
+                                    validRedirectUri
+                                })}
+                            >
+                                My Account
+                                <svg
+                                    aria-hidden="true"
+                                    className="h-3 w-3 text-slate-400 transition-colors group-hover:text-slate-200"
+                                    viewBox="0 0 12 12"
+                                    xmlns="http://www.w3.org/2000/svg"
+                                >
+                                    <path
+                                        d="M4 2.5h5.5V8"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        strokeWidth="1.5"
+                                    />
+                                    <path
+                                        d="M2.5 9.5 9.5 2.5"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        strokeWidth="1.5"
+                                    />
+                                </svg>
+                            </a>
+                        </div>
 
-                {backFromAuthServer?.extraQueryParams.kc_action && (
-                    <p className="mt-4 text-sm text-slate-400">
-                        Result for {backFromAuthServer.extraQueryParams.kc_action}:{" "}
-                        <span className="font-medium text-white">
-                            {backFromAuthServer.result.kc_action_status}
-                        </span>
-                    </p>
+                        {backFromAuthServer?.extraQueryParams.kc_action && (
+                            <p className="mt-4 text-sm text-slate-400">
+                                Result for {backFromAuthServer.extraQueryParams.kc_action}:{" "}
+                                <span className="font-medium text-white">
+                                    {backFromAuthServer.result.kc_action_status}
+                                </span>
+                            </p>
+                        )}
+                    </>
                 )}
             </div>
 
