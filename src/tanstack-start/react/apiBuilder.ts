@@ -14,7 +14,7 @@ export type OidcSpaApiBuilder<
         | "withAutoLogin"
         | "withExpectedDecodedIdTokenShape"
         | "withAccessTokenValidation"
-        | "finalize" = never
+        | "createApi" = never
 > = Omit<
     {
         withAutoLogin: () => OidcSpaApiBuilder<
@@ -61,7 +61,7 @@ export type OidcSpaApiBuilder<
                 ExcludedMethod | "withAccessTokenValidation"
             >;
         };
-        finalize: () => OidcSpaApi<AutoLogin, DecodedIdToken, AccessTokenClaims>;
+        createApi: () => OidcSpaApi<AutoLogin, DecodedIdToken, AccessTokenClaims>;
     },
     ExcludedMethod
 >;
@@ -127,7 +127,7 @@ function createOidcSpaApiBuilder<
                     }
                 })()
             }),
-        finalize: () =>
+        createApi: () =>
             createOidcSpaApi<AutoLogin, DecodedIdToken, AccessTokenClaims>({
                 autoLogin: params.autoLogin,
                 decodedIdTokenSchema: params.decodedIdTokenSchema,

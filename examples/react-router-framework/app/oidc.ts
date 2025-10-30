@@ -20,7 +20,7 @@ export const { bootstrapOidc, useOidc, getOidc, enforceLogin } = oidcSpa
             }
         }
     })
-    .finalize();
+    .createApi();
 
 // Can be call anywhere, even in the body of a React component.
 // All subsequent calls will be safely ignored.
