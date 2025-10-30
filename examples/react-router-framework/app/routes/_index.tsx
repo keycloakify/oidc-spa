@@ -4,7 +4,7 @@ import { useOidc } from "~/oidc";
 
 export function meta({}: Route.MetaArgs) {
     return [
-        { title: "oidc-spa React Router example" },
+        { title: "oidc-spa + React Router Framework mode" },
         {
             name: "description",
             content: "A minimal React Router + oidc-spa demonstration with Tailwind CSS."

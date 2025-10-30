@@ -130,3 +130,7 @@ function InfoRow({ label, children }: { label: string; children: ReactNode }) {
         </div>
     );
 }
+
+export function meta({}: Route.MetaArgs) {
+    return [{ title: "Protected" }];
+}
