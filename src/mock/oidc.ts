@@ -96,7 +96,8 @@ export async function createMockOidc<
     const common: Oidc.Common = {
         params: {
             clientId: mockedParams.clientId ?? "mymockclient",
-            issuerUri: mockedParams.issuerUri ?? "https://my-mock-oidc-server.net/realms/mymockrealm"
+            issuerUri: mockedParams.issuerUri ?? "https://my-mock-oidc-server.net/realms/mymockrealm",
+            validRedirectUri: homeUrl
         }
     };
 

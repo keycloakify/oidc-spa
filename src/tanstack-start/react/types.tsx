@@ -45,6 +45,7 @@ export namespace CreateOidcComponent {
         type Common = {
             issuerUri: string;
             clientId: string;
+            validRedirectUri: string;
         };
 
         export type NotLoggedIn = Common & {

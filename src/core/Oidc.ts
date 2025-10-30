@@ -9,6 +9,7 @@ export declare namespace Oidc {
         params: {
             issuerUri: string;
             clientId: string;
+            validRedirectUri: string;
         };
     };
 

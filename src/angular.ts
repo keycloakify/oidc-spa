@@ -623,6 +623,10 @@ export abstract class AbstractOidcService<
         return this.#getOidc({ callerName: "clientId" }).params.clientId;
     }
 
+    get validRedirectUri() {
+        return this.#getOidc({ callerName: "validRedirectUri" }).params.validRedirectUri;
+    }
+
     #isUserLoggedIn_override: boolean | undefined = undefined;
 
     get isUserLoggedIn() {

@@ -21,6 +21,7 @@ import { type KeycloakUtils, createKeycloakUtils } from "../keycloakUtils";
 import { workerTimers } from "../../vendor/frontend/worker-timers";
 import { type StatefulEvt, createStatefulEvt } from "../../tools/StatefulEvt";
 import { readExpirationTimeInJwt } from "../../tools/readExpirationTimeInJwt";
+import { getHomeAndRedirectUri } from "../../core/homeAndRedirectUri";
 
 type ConstructorParams = KeycloakServerConfig & {
     /**
@@ -934,11 +935,21 @@ export class Keycloak {
     createAccountUrl(options?: KeycloakAccountOptions & { locale?: string }): string {
         const { locale, redirectUri } = options ?? {};
 
-        const { keycloakUtils } = this.#state;
+        const { keycloakUtils, constructorParams } = this.#state;
 
         return keycloakUtils.getAccountUrl({
             clientId: this.clientId,
-            backToAppFromAccountUrl: redirectUri ?? location.href,
+            validRedirectUri: (() => {
+                if (redirectUri !== undefined) {
+                    return redirectUri;
+                }
+
+                const { homeUrlAndRedirectUri } = getHomeAndRedirectUri({
+                    BASE_URL_params: constructorParams.BASE_URL
+                });
+
+                return homeUrlAndRedirectUri;
+            })(),
             locale
         });
     }

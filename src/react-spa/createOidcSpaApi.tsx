@@ -226,6 +226,7 @@ export function createOidcSpaApi<
                 initializationError: oidcCore.initializationError,
                 issuerUri: oidcCore.params.issuerUri,
                 clientId: oidcCore.params.clientId,
+                validRedirectUri: oidcCore.params.validRedirectUri,
                 autoLogoutState: { shouldDisplayWarning: false },
                 login: params =>
                     oidcCore.login({
@@ -251,7 +252,8 @@ export function createOidcSpaApi<
                 return evtAutoLogoutState.current;
             },
             issuerUri: oidcCore.params.issuerUri,
-            clientId: oidcCore.params.clientId
+            clientId: oidcCore.params.clientId,
+            validRedirectUri: oidcCore.params.validRedirectUri
         });
     }
 

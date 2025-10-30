@@ -31,6 +31,7 @@ export namespace UseOidc {
         type Common = {
             issuerUri: string;
             clientId: string;
+            validRedirectUri: string;
         };
 
         export type NotLoggedIn = Common & {

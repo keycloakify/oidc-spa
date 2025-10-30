@@ -59,7 +59,9 @@ const primaryButtonClasses =
     "inline-flex items-center rounded-full bg-white/90 px-4 py-2 text-sm font-semibold text-slate-900 transition-colors hover:bg-white";
 
 function LoggedInAuthButtons() {
-    const { decodedIdToken, logout, issuerUri, clientId } = useOidc({ assert: "user logged in" });
+    const { decodedIdToken, logout, issuerUri, clientId, validRedirectUri } = useOidc({
+        assert: "user logged in"
+    });
 
     const keycloakUtils = !isKeycloak({ issuerUri }) ? undefined : createKeycloakUtils({ issuerUri });
 
@@ -73,7 +75,7 @@ function LoggedInAuthButtons() {
             <a
                 href={keycloakUtils?.getAccountUrl({
                     clientId,
-                    backToAppFromAccountUrl: location.href
+                    validRedirectUri
                 })}
                 className="flex items-center gap-3 text-sm font-medium text-slate-200 hover:text-white"
             >

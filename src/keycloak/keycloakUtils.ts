@@ -1,5 +1,6 @@
 import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";
 import { type KeycloakIssuerUriParsed, parseKeycloakIssuerUri } from "./keycloakIssuerUriParsed";
+import { assert } from "../tools/tsafe/assert";
 
 export type KeycloakUtils = {
     issuerUriParsed: KeycloakIssuerUriParsed;
@@ -7,7 +8,9 @@ export type KeycloakUtils = {
     adminConsoleUrl_master: string;
     getAccountUrl: (params: {
         clientId: string;
-        backToAppFromAccountUrl: string;
+        validRedirectUri?: string;
+        /** @deprecated: Use validRedirectUri */
+        backToAppFromAccountUrl?: string;
         locale?: string;
     }) => string;
     fetchUserProfile: (params: { accessToken: string }) => Promise<KeycloakProfile>;
@@ -49,17 +52,46 @@ export function createKeycloakUtils(params: { issuerUri: string }): KeycloakUtil
         issuerUriParsed,
         adminConsoleUrl: getAdminConsoleUrl(issuerUriParsed.realm),
         adminConsoleUrl_master: getAdminConsoleUrl("master"),
-        getAccountUrl: ({ clientId, backToAppFromAccountUrl, locale }) => {
+        getAccountUrl: ({ clientId, locale, ...rest }) => {
+            const validRedirectUri = (() => {
+                const { validRedirectUri, backToAppFromAccountUrl } = rest;
+
+                if (validRedirectUri !== undefined) {
+                    assert(
+                        backToAppFromAccountUrl === undefined,
+                        "getAccountUrl: backToAppFromAccountUrl is deprecated"
+                    );
+                    return validRedirectUri;
+                }
+
+                assert(
+                    backToAppFromAccountUrl !== undefined,
+                    "getAccountUrl: Must provide validRedirectUri"
+                );
+
+                return backToAppFromAccountUrl;
+            })();
+
             const accountUrlObj = new URL(
                 `${keycloakServerUrl}/realms/${issuerUriParsed.realm}/account`
             );
             accountUrlObj.searchParams.set("referrer", clientId);
             accountUrlObj.searchParams.set(
                 "referrer_uri",
-                toFullyQualifiedUrl({
-                    urlish: backToAppFromAccountUrl,
-                    doAssertNoQueryParams: false
-                })
+                (() => {
+                    try {
+                        return toFullyQualifiedUrl({
+                            urlish: validRedirectUri,
+                            doAssertNoQueryParams: true,
+                            doOutputWithTrailingSlash: true
+                        });
+                    } catch {
+                        return toFullyQualifiedUrl({
+                            urlish: validRedirectUri,
+                            doAssertNoQueryParams: false
+                        });
+                    }
+                })()
             );
             if (locale !== undefined) {
                 accountUrlObj.searchParams.set("kc_locale", locale);

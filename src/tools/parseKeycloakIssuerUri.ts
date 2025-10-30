@@ -44,6 +44,11 @@ export function parseKeycloakIssuerUri(issuerUri: string):
         kcHttpRelativePath: keycloakUtils.issuerUriParsed.kcHttpRelativePath,
         adminConsoleUrl: keycloakUtils.adminConsoleUrl,
         adminConsoleUrl_master: keycloakUtils.adminConsoleUrl_master,
-        getAccountUrl: keycloakUtils.getAccountUrl
+        getAccountUrl: ({ clientId, backToAppFromAccountUrl, locale }) =>
+            keycloakUtils.getAccountUrl({
+                clientId,
+                validRedirectUri: backToAppFromAccountUrl,
+                locale
+            })
     };
 }

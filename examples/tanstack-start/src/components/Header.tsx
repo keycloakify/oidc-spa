@@ -24,7 +24,8 @@ const AuthButtons = createOidcComponent({
 const LoggedInAuthButton = createOidcComponent({
     assert: "user logged in",
     component: () => {
-        const { decodedIdToken, logout, issuerUri, clientId } = LoggedInAuthButton.useOidc();
+        const { decodedIdToken, logout, issuerUri, clientId, validRedirectUri } =
+            LoggedInAuthButton.useOidc();
 
         const keycloakUtils = !isKeycloak({ issuerUri })
             ? undefined
@@ -40,7 +41,7 @@ const LoggedInAuthButton = createOidcComponent({
                 <a
                     href={keycloakUtils?.getAccountUrl({
                         clientId,
-                        backToAppFromAccountUrl: location.href
+                        validRedirectUri
                     })}
                     className="flex items-center gap-3 text-white font-semibold hover:text-cyan-300 transition-colors"
                 >
