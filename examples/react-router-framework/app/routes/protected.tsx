@@ -18,9 +18,10 @@ export async function clientLoader(params: Route.ClientLoaderArgs) {
 
 export default function Protected() {
     // Here we can safely assume that the user is logged in.
-    const { decodedIdToken, goToAuthServer, backFromAuthServer, issuerUri } = useOidc({
-        assert: "user logged in"
-    });
+    const { decodedIdToken, goToAuthServer, backFromAuthServer, issuerUri, clientId, validRedirectUri } =
+        useOidc({
+            assert: "user logged in"
+        });
 
     const keycloakUtils = isKeycloak({ issuerUri }) ? createKeycloakUtils({ issuerUri }) : undefined;
 
@@ -77,6 +78,38 @@ export default function Protected() {
                         >
                             Delete account
                         </button>
+                        <a
+                            className="group inline-flex items-center gap-2 rounded-full border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-200 transition-colors hover:border-slate-500 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-200/40 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+                            href={keycloakUtils.getAccountUrl({
+                                clientId,
+                                validRedirectUri
+                            })}
+                        >
+                            My Account
+                            <svg
+                                aria-hidden="true"
+                                className="h-3 w-3 text-slate-400 transition-colors group-hover:text-slate-200"
+                                viewBox="0 0 12 12"
+                                xmlns="http://www.w3.org/2000/svg"
+                            >
+                                <path
+                                    d="M4 2.5h5.5V8"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth="1.5"
+                                />
+                                <path
+                                    d="M2.5 9.5 9.5 2.5"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth="1.5"
+                                />
+                            </svg>
+                        </a>
                     </div>
                 )}
 
