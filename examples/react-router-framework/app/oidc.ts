@@ -27,7 +27,7 @@ export const { bootstrapOidc, useOidc, getOidc, enforceLogin } = oidcSpa
     })
     // If you want to fully shield
     //.withAutoLogin()
-    .createApi();
+    .createUtils();
 
 /**
  * Initializes OIDC once.

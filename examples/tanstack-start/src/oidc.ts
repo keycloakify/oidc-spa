@@ -28,7 +28,7 @@ export const {
             sub: "123"
         }
     })
-    .createApi();
+    .createUtils();
 
 // Can be call anywhere, even in the body of a React component.
 // All subsequent calls will be safely ignored.
