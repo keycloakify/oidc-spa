@@ -102,7 +102,7 @@ export default function Protected() {
                         headers into every request.
                     </p>
                     <p className="text-slate-400">
-                        JSONPlaceholder is a public API—we treat it as a stand-in for a protected
+                        JSONPlaceholder is a public API, we treat it as a stand-in for a protected
                         resource server.
                     </p>
                 </div>
