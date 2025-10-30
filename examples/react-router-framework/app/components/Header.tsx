@@ -33,6 +33,9 @@ export function Header() {
                     >
                         Protected
                     </NavLink>
+                    <Suspense>
+                        <AdminOnlyNavLink />
+                    </Suspense>
                 </nav>
 
                 <div className="flex min-w-40 justify-end sm:min-w-[220px]">
@@ -116,5 +119,28 @@ function NotLoggedInAuthButtons() {
                 </button>
             )}
         </div>
+    );
+}
+
+function AdminOnlyNavLink() {
+    const { isUserLoggedIn, decodedIdToken } = useOidc();
+
+    if (!isUserLoggedIn) {
+        return null;
+    }
+
+    if (!decodedIdToken.realm_access?.roles.includes("realm-admin")) {
+        return null;
+    }
+
+    return (
+        <NavLink
+            to="/admin-only"
+            className={({ isActive }) =>
+                `transition-colors ${isActive ? "text-white" : "hover:text-white"}`
+            }
+        >
+            Admin
+        </NavLink>
     );
 }
