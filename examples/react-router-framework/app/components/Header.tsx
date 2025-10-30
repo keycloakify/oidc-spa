@@ -48,6 +48,25 @@ export function Header() {
     );
 }
 
+/**
+ * You’ll notice that every component using `useOidc()` is wrapped in a `<Suspense />` boundary.
+ * This is **optional**, but it helps control how your app loads.
+ *
+ * `useOidc()` will trigger suspense if it’s called before the OIDC initialization
+ * process has completed.
+ *
+ * In this example, we place Suspense boundaries close to components that call `useOidc()`.
+ * This allows the rest of the app to render immediately instead of waiting for OIDC initialization.
+ *
+ * What happens if you forget a Suspense?
+ * React will fall back to the nearest Suspense boundary. If none exists, react-router will render the
+ * `HydrateFallback` component defined in `app/root.tsx`.
+ * This can be desirable if you prefer to avoid having to worry about layout shifts and display the
+ * page app only when it’s fully ready.
+ *
+ * Note: `useOidc()` calls inside routes protected by `enforceLogin()` will **never suspend**,
+ * since those routes are only reached after the initialization process completes.
+ */
 function AuthButtons() {
     const { isUserLoggedIn } = useOidc();
 

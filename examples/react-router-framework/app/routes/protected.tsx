@@ -5,6 +5,9 @@ import { isKeycloak, createKeycloakUtils } from "oidc-spa/keycloak";
 import type { Route } from "./+types/protected";
 
 export async function clientLoader(params: Route.ClientLoaderArgs) {
+    // This is the way to make sure that only logged in users can access
+    // this page. if the user is not logged in it will be redirected to your
+    // IdP login pages.
     await enforceLogin(params);
 
     const demoPosts: {
@@ -23,6 +26,9 @@ export default function Protected() {
             assert: "user logged in"
         });
 
+    // Since oidc-spa is a generic adapter, all Keycloak specific features are provided via a standalone
+    // util. And since this example should run as well with other provider we first test if we are integrating
+    // against a Keycloak server or not.
     const keycloakUtils = isKeycloak({ issuerUri }) ? createKeycloakUtils({ issuerUri }) : undefined;
 
     const { demoPosts } = useLoaderData<typeof clientLoader>();
