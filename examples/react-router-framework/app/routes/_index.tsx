@@ -21,9 +21,7 @@ export default function Home() {
                     <h1 className="text-3xl font-semibold text-white pt-1 pb-1">
                         A calm place to try oidc-spa
                     </h1>
-                    <Suspense>
-                        <Greeting />
-                    </Suspense>
+                    <Greeting />
                 </div>
                 <p className="text-base text-slate-300">
                     Use the header actions to authenticate, then explore the protected page to see how
@@ -65,7 +63,7 @@ function Greeting() {
     const { isUserLoggedIn, decodedIdToken } = useOidc();
 
     return (
-        <div className="inline-flex items-center rounded-full border border-slate-800 bg-slate-900 px-4 py-2 text-sm font-medium text-slate-200 animate-fade-in">
+        <div className="inline-flex items-center rounded-full border border-slate-800 bg-slate-900 px-4 py-2 text-sm font-medium text-slate-200">
             {isUserLoggedIn ? `Signed in as ${decodedIdToken.name}` : `Browsing as a guest`}
         </div>
     );

@@ -2,6 +2,7 @@ import { isRouteErrorResponse, Links, Meta, Outlet, Scripts, ScrollRestoration }
 import type { Route } from "./+types/root";
 import { AutoLogoutWarningOverlay } from "./components/AutoLogoutWarningOverlay";
 import { Header } from "./components/Header";
+import { OidcInitializationGate } from "~/oidc";
 import "./tailwind.css";
 
 export function Layout({ children }: { children: React.ReactNode }) {
@@ -27,13 +28,15 @@ export function Layout({ children }: { children: React.ReactNode }) {
  */
 export default function App() {
     return (
-        <div className="min-h-screen">
-            <Header />
-            <main className="mx-auto flex w-full max-w-4xl flex-col gap-10 px-6 pb-16 pt-28">
-                <Outlet />
-            </main>
+        <OidcInitializationGate>
+            <div className="min-h-screen">
+                <Header />
+                <main className="mx-auto flex w-full max-w-4xl flex-col gap-10 px-6 pb-16 pt-28">
+                    <Outlet />
+                </main>
+            </div>
             <AutoLogoutWarningOverlay />
-        </div>
+        </OidcInitializationGate>
     );
 }
 

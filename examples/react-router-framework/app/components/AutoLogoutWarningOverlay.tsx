@@ -1,16 +1,7 @@
-import { Suspense } from "react";
 import { useOidc } from "~/oidc";
 
 /** See: https://docs.oidc-spa.dev/auto-logout */
 export function AutoLogoutWarningOverlay() {
-    return (
-        <Suspense>
-            <AutoLogoutWarningOverlay_actual />
-        </Suspense>
-    );
-}
-
-function AutoLogoutWarningOverlay_actual() {
     const { autoLogoutState } = useOidc();
 
     if (!autoLogoutState.shouldDisplayWarning) {

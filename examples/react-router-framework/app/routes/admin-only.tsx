@@ -55,3 +55,7 @@ export default function AdminOnly() {
         </section>
     );
 }
+
+export function meta({}: Route.MetaArgs) {
+    return [{ title: "Admin" }];
+}

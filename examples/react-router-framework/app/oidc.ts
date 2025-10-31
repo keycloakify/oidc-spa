@@ -1,7 +1,15 @@
 import { oidcSpa } from "oidc-spa/react-spa";
 import { z } from "zod";
 
-export const { bootstrapOidc, useOidc, getOidc, enforceLogin } = oidcSpa
+export const {
+    bootstrapOidc,
+    useOidc,
+    getOidc,
+    enforceLogin,
+    // Wrap your all application within this component in src/main.tsx
+    // Non blocking rendering is possible, see: https://docs.oidc-spa.dev/v/v8/features/non-blocking-rendering-in-react-spas
+    OidcInitializationGate
+} = oidcSpa
     .withExpectedDecodedIdTokenShape({
         // Describe the expected shape of the ID Token.
         // Think of `decodedIdToken` as your “user” object.
@@ -25,13 +33,13 @@ export const { bootstrapOidc, useOidc, getOidc, enforceLogin } = oidcSpa
             }
         }
     })
-    // If you want to fully shield
+    // See: https://docs.oidc-spa.dev/features/auto-login
     //.withAutoLogin()
     .createUtils();
 
 /**
- * Initializes OIDC once.
- * Can be called anywhere (even inside a React component); subsequent calls are ignored.
+ * This can be called immediately of after you've fetched some remote params.
+ * If you call this more than once the subsequent calls will be ignored.
  */
 bootstrapOidc(
     import.meta.env.VITE_OIDC_USE_MOCK === "true"
