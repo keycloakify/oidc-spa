@@ -95,7 +95,13 @@ export function createOidcSpaApi<
         const { assert: assert_params } = params ?? {};
 
         if (!isBrowser) {
-            throw new Error("oidc-spa useOidc() can't be used on the server");
+            throw new Error(
+                [
+                    "oidc-spa: useOidc() can't be used on the server.",
+                    "You can prevent this component from rendering on the server",
+                    "by wrapping it into <OidcInitializationGate />"
+                ].join(" ")
+            );
         }
 
         const { hasResolved, value: oidcCore } = dOidcCoreOrInitializationError.getState();
