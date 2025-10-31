@@ -305,7 +305,7 @@ export namespace ParamsOfBootstrap {
 }
 
 export type OidcSpaApi<AutoLogin, DecodedIdToken> = {
-    bootstrapOidc: (params: ParamsOfBootstrap<AutoLogin, DecodedIdToken>) => void;
+    bootstrapOidc: (params: ParamsOfBootstrap<AutoLogin, DecodedIdToken>) => Promise<void>;
     useOidc: AutoLogin extends true ? UseOidc.WithAutoLogin<DecodedIdToken> : UseOidc<DecodedIdToken>;
     getOidc: AutoLogin extends true ? GetOidc.WithAutoLogin<DecodedIdToken> : GetOidc<DecodedIdToken>;
     OidcInitializationGate: (props: { fallback?: ReactNode; children: ReactNode }) => ReactNode;

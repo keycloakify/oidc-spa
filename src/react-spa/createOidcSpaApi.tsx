@@ -325,16 +325,18 @@ export function createOidcSpaApi<
               });
     }
 
-    let hasBootstrapBeenCalled = false;
-
     const prModuleCore = !isBrowser ? undefined : import("../core");
 
-    const bootstrapOidc = (paramsOfBootstrap: ParamsOfBootstrap<AutoLogin, DecodedIdToken>) => {
-        if (hasBootstrapBeenCalled) {
-            return;
+    let bootstrapOidc_prResolved: Promise<void> | undefined = undefined;
+
+    const bootstrapOidc = (
+        paramsOfBootstrap: ParamsOfBootstrap<AutoLogin, DecodedIdToken>
+    ): Promise<void> => {
+        if (bootstrapOidc_prResolved !== undefined) {
+            return bootstrapOidc_prResolved;
         }
 
-        hasBootstrapBeenCalled = true;
+        bootstrapOidc_prResolved = dOidcCoreOrInitializationError.pr.then(() => {});
 
         (async () => {
             if (!isBrowser) {
@@ -419,6 +421,8 @@ export function createOidcSpaApi<
                     break;
             }
         })();
+
+        return bootstrapOidc_prResolved;
     };
 
     async function enforceLogin(loaderContext: {
