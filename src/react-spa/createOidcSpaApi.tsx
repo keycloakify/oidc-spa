@@ -1,4 +1,4 @@
-import { useState, useEffect, type ReactNode, type ComponentType } from "react";
+import { useState, useEffect, useReducer, type ReactNode, type ComponentType } from "react";
 import type { UseOidc, OidcSpaApi, GetOidc, ParamsOfBootstrap } from "./types";
 import type { ZodSchemaLike } from "../tools/ZodSchemaLike";
 import type { Oidc as Oidc_core } from "../core";
@@ -516,6 +516,39 @@ export function createOidcSpaApi<
         return children;
     }
 
+    function OidcInitializationGate(props: { fallback?: ReactNode; children: ReactNode }) {
+        const { fallback, children } = props;
+
+        const { hasResolved } = dOidcCoreOrInitializationError.getState();
+
+        const [, reRender] = useReducer(n => n + 1, 0);
+
+        useEffect(() => {
+            if (hasResolved) {
+                return;
+            }
+
+            let isActive = true;
+
+            dOidcCoreOrInitializationError.pr.then(() => {
+                if (!isActive) {
+                    return;
+                }
+                reRender();
+            });
+
+            return () => {
+                isActive = false;
+            };
+        }, []);
+
+        if (!hasResolved) {
+            return fallback !== undefined ? fallback : null;
+        }
+
+        return children;
+    }
+
     function withLoginEnforced<Props extends Record<string, unknown>>(
         component: ComponentType<Props>
     ): (props: Props) => ReactNode {
@@ -551,6 +584,7 @@ export function createOidcSpaApi<
         bootstrapOidc,
         useOidc,
         getOidc,
+        OidcInitializationGate,
         OidcInitializationErrorGate,
         enforceLogin,
         withLoginEnforced
