@@ -46,7 +46,7 @@ export function createOidcSpaApi<
         }
         assert<Equals<typeof paramsOfBootstrap.implementation, "real">>;
 
-        const { startCountdownSecondsBeforeAutoLogout = 45 } = paramsOfBootstrap;
+        const { warnUserSecondsBeforeAutoLogout = 45 } = paramsOfBootstrap;
 
         if (
             oidcCoreOrInitializationError === undefined ||
@@ -69,7 +69,7 @@ export function createOidcSpaApi<
                     };
                 }
 
-                if (secondsLeft > startCountdownSecondsBeforeAutoLogout) {
+                if (secondsLeft > warnUserSecondsBeforeAutoLogout) {
                     return {
                         shouldDisplayWarning: false
                     };

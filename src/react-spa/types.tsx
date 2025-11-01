@@ -158,7 +158,7 @@ export namespace ParamsOfBootstrap {
          * This is a server policy (that can be overwrote by idleSessionLifetimeInSeconds)
          * See: https://docs.oidc-spa.dev/v/v8/auto-logout
          */
-        startCountdownSecondsBeforeAutoLogout?: number;
+        warnUserSecondsBeforeAutoLogout?: number;
         /**
          * This parameter defines after how many seconds of inactivity the user should be
          * logged out automatically.

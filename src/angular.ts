@@ -168,12 +168,12 @@ export type ParamsOfProvide = {
      * start showing.
      * Default is 45 seconds.
      */
-    autoLogoutWarningDurationSeconds?: number;
+    warnUserSecondsBeforeAutoLogout?: number;
 };
 
 assert<
     Equals<
-        Omit<ParamsOfProvide, "autoLogoutWarningDurationSeconds">,
+        Omit<ParamsOfProvide, "warnUserSecondsBeforeAutoLogout">,
         Omit<
             ParamsOfCreateOidc<any, boolean>,
             "homeUrl" | "BASE_URL" | "noIframe" | "decodedIdTokenSchema"
@@ -204,7 +204,7 @@ export abstract class AbstractOidcService<
     protected mockDecodedIdToken: (() => Promise<T_DecodedIdToken>) | T_DecodedIdToken | undefined =
         undefined;
 
-    #autoLogoutWarningDurationSeconds = 45;
+    #warnUserSecondsBeforeAutoLogout = 45;
 
     #isRunningGetParams = false;
 
@@ -220,7 +220,7 @@ export abstract class AbstractOidcService<
 
                 instance.#initialize({
                     prOidcOrInitializationError: (async () => {
-                        const [{ createOidc }, { autoLogoutWarningDurationSeconds, ...params }] =
+                        const [{ createOidc }, { warnUserSecondsBeforeAutoLogout, ...params }] =
                             await Promise.all([
                                 import("./core"),
                                 typeof paramsOrGetParams === "function"
@@ -233,9 +233,8 @@ export abstract class AbstractOidcService<
                                     : paramsOrGetParams
                             ]);
 
-                        if (autoLogoutWarningDurationSeconds !== undefined) {
-                            instance.#autoLogoutWarningDurationSeconds =
-                                autoLogoutWarningDurationSeconds;
+                        if (warnUserSecondsBeforeAutoLogout !== undefined) {
+                            instance.#warnUserSecondsBeforeAutoLogout = warnUserSecondsBeforeAutoLogout;
                         }
 
                         try {
@@ -818,7 +817,7 @@ export abstract class AbstractOidcService<
             }
 
             oidc.subscribeToAutoLogoutCountdown(({ secondsLeft }) => {
-                if (secondsLeft === undefined || secondsLeft > this.#autoLogoutWarningDurationSeconds) {
+                if (secondsLeft === undefined || secondsLeft > this.#warnUserSecondsBeforeAutoLogout) {
                     if (secondsLeftBeforeAutoLogout$.getValue() !== null) {
                         secondsLeftBeforeAutoLogout$.next(null);
                     }
