@@ -278,6 +278,15 @@ export namespace ParamsOfBootstrap {
         __unsafe_useIdTokenAsAccessToken?: boolean;
 
         /**
+         * Usage discouraged, this parameter exists because we don't want to assume
+         * too much about your usecase but I can't think of a scenario where you would
+         * want anything other than the current page.
+         *
+         * Default: { redirectTo: "current page" }
+         */
+        autoLogoutParams?: Parameters<Oidc_core.LoggedIn<any>["logout"]>[0];
+
+        /**
          * Let's you override the params passed to
          * (if you weren't able to provide it)
          */

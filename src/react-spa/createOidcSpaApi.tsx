@@ -406,7 +406,8 @@ export function createOidcSpaApi<
                                 __unsafe_clientSecret: paramsOfBootstrap.__unsafe_clientSecret,
                                 __metadata: paramsOfBootstrap.__metadata,
                                 __unsafe_useIdTokenAsAccessToken:
-                                    paramsOfBootstrap.__unsafe_useIdTokenAsAccessToken
+                                    paramsOfBootstrap.__unsafe_useIdTokenAsAccessToken,
+                                autoLogoutParams: paramsOfBootstrap.autoLogoutParams
                             });
                         } catch (error) {
                             if (!(error instanceof OidcInitializationError)) {

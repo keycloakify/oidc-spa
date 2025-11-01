@@ -369,6 +369,15 @@ export namespace ParamsOfBootstrap {
          *  Use at your own risk, this is a hack.
          */
         __unsafe_useIdTokenAsAccessToken?: boolean;
+
+        /**
+         * Usage discouraged, this parameter exists because we don't want to assume
+         * too much about your usecase but I can't think of a scenario where you would
+         * want anything other than the current page.
+         *
+         * Default: { redirectTo: "current page" }
+         */
+        autoLogoutParams?: Parameters<Oidc_core.LoggedIn<any>["logout"]>[0];
     } & (AutoLogin extends true ? {} : {});
 
     export type Mock<AutoLogin, DecodedIdToken, AccessTokenClaims> = {
