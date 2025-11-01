@@ -5,7 +5,7 @@ import {
     InMemoryWebStorage
 } from "../vendor/frontend/oidc-client-ts";
 import { type OidcMetadata, fetchOidcMetadata } from "./OidcMetadata";
-import { assert, is, type Equals } from "../tools/tsafe/assert";
+import { assert, type Equals } from "../tools/tsafe/assert";
 import { id } from "../tools/tsafe/id";
 import { setTimeout, clearTimeout } from "../tools/workerTimers";
 import { Deferred } from "../tools/Deferred";
@@ -913,8 +913,7 @@ export async function createOidc_nonMemoized<
                     return (await import("./diagnostic")).createIframeTimeoutInitializationError({
                         redirectUri: homeUrlAndRedirectUri,
                         clientId,
-                        issuerUri,
-                        canUseIframe
+                        issuerUri
                     });
                 }
 
@@ -1113,6 +1112,18 @@ export async function createOidc_nonMemoized<
                                 getPrSafelyRestoredFromBfCacheAfterLoginBackNavigationOrInitializationError()
                         });
 
+                        if (!canUseIframe) {
+                            log?.(
+                                [
+                                    "⚠️ IMPORTANT DEBUG INFO:",
+                                    "\nWe are about to redirect to your Identity Provider (IdP).",
+                                    "\nIf you see an 'Invalid Redirect URI' error on the IdP page, make sure you've added:",
+                                    `\n${homeUrlAndRedirectUri}`,
+                                    "\nto the list of valid redirect URIs in your IdP configuration."
+                                ].join(" ")
+                            );
+                        }
+
                         return loginOrGoToAuthServer({
                             action: "login",
                             doNavigateBackToLastPublicUrlIfTheTheUserNavigateBack:
@@ -1157,6 +1168,8 @@ export async function createOidc_nonMemoized<
     }
 
     log?.("User is logged in");
+
+    assert(oidcMetadata !== undefined, "30483403");
 
     let currentTokens = oidcClientTsUserToTokens({
         oidcClientTsUser: resultOfLoginProcess.oidcClientTsUser,
@@ -1289,6 +1302,37 @@ export async function createOidc_nonMemoized<
                 prUnlock: new Promise<never>(() => {})
             });
 
+            if (!oidcMetadata.end_session_endpoint) {
+                log?.("No end session endpoint, managing logging state locally");
+
+                persistAuthState({ configId, state: { stateDescription: "explicitly logged out" } });
+
+                try {
+                    await oidcClientTsUserManager.removeUser();
+                } catch {
+                    // NOTE: Not sure if it can throw
+                }
+
+                notifyOtherTabsOfLogout({
+                    configId,
+                    sessionId
+                });
+
+                window.location.href = rootRelativePostLogoutRedirectUrl;
+
+                return new Promise<never>(() => {});
+            }
+
+            log?.(
+                [
+                    "⚠️ IMPORTANT DEBUG INFO:",
+                    "\nWe are about to redirect to your Identity Provider (IdP).",
+                    "\nIf you see an 'Invalid Redirect URI' error on the IdP page, make sure you've added:",
+                    `\n${homeUrlAndRedirectUri}`,
+                    "\nto the list of valid post logout redirect URIs in your IdP configuration."
+                ].join(" ")
+            );
+
             window.addEventListener("pageshow", event => {
                 if (!event.persisted) {
                     return;
@@ -1308,28 +1352,7 @@ export async function createOidc_nonMemoized<
                     redirectMethod: "assign"
                 });
             } catch (error) {
-                assert(is<Error>(error));
-
-                if (error.message === "No end session endpoint") {
-                    log?.("No end session endpoint, managing logging state locally");
-
-                    persistAuthState({ configId, state: { stateDescription: "explicitly logged out" } });
-
-                    try {
-                        await oidcClientTsUserManager.removeUser();
-                    } catch {
-                        // NOTE: Not sure if it can throw
-                    }
-
-                    notifyOtherTabsOfLogout({
-                        configId,
-                        sessionId
-                    });
-
-                    window.location.href = rootRelativePostLogoutRedirectUrl;
-                } else {
-                    throw error;
-                }
+                assert(false, `signoutRedirect() is not expected to throw but it did: ${String(error)}`);
             }
 
             return new Promise<never>(() => {});
