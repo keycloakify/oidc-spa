@@ -27,10 +27,9 @@ const mockDecodedIdToken: DecodedIdToken = {
 export class Oidc extends AbstractOidcService<DecodedIdToken> {
   override decodedIdTokenSchema = decodedIdTokenSchema;
   override mockDecodedIdToken = async () => mockDecodedIdToken;
+  // See: https://docs.oidc-spa.dev/v/v8/features/auto-login#angular
   override autoLogin = false;
-  // NOTE: In this mode we are responsible for
-  // @defer (when oidc.prInitialized | async) { } @placeholder { Loading... }
-  // on public pages and app template.
+  // See: https://docs.oidc-spa.dev/v/v8/features/non-blocking-rendering#react-spas
   override providerAwaitsInitialization = false;
 }
 

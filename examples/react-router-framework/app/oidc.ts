@@ -7,7 +7,7 @@ export const {
     getOidc,
     enforceLogin,
     // Wrap your all application within this component in src/main.tsx
-    // Non blocking rendering is possible, see: https://docs.oidc-spa.dev/v/v8/features/non-blocking-rendering-in-react-spas
+    // Non blocking rendering is possible, see: https://docs.oidc-spa.dev/v/v8/features/non-blocking-rendering#react-spas
     OidcInitializationGate
 } = oidcSpa
     .withExpectedDecodedIdTokenShape({
@@ -33,7 +33,7 @@ export const {
             }
         }
     })
-    // See: https://docs.oidc-spa.dev/features/auto-login
+    // See: https://docs.oidc-spa.dev/v/v8/features/auto-login#react-spa
     //.withAutoLogin()
     .createUtils();
 

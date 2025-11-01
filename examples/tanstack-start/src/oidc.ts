@@ -28,6 +28,8 @@ export const {
             sub: "123"
         }
     })
+    // See: https://docs.oidc-spa.dev/features/auto-login#tanstack-start
+    //.withAutoLogin()
     .createUtils();
 
 // Can be call anywhere, even in the body of a React component.
