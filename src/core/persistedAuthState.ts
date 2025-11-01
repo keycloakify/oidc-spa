@@ -1,5 +1,6 @@
 import { typeGuard } from "../tools/tsafe/typeGuard";
 import { id } from "../tools/tsafe/id";
+import { INFINITY_TIME } from "../tools/INFINITY_TIME";
 
 function getKey(params: { configId: string }) {
     const { configId } = params;
@@ -82,10 +83,16 @@ export function persistAuthState(params: {
                                         return Date.now() + idleSessionLifetimeInSeconds * 1000;
                                     })();
 
-                                    return Math.min(
-                                        untilTime_real ?? Number.POSITIVE_INFINITY,
-                                        unitTime_userOverwrite ?? Number.POSITIVE_INFINITY
+                                    const untilTime = Math.min(
+                                        untilTime_real ?? INFINITY_TIME,
+                                        unitTime_userOverwrite ?? INFINITY_TIME
                                     );
+
+                                    if (untilTime === INFINITY_TIME) {
+                                        return undefined;
+                                    }
+
+                                    return untilTime;
                                 })()
                             });
                         case "explicitly logged out":
