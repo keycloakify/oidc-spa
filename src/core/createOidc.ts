@@ -582,15 +582,17 @@ export async function createOidc_nonMemoized<
         return true;
     })();
 
-    notifyNewInstanceThatCantUseIframes();
+    if (!canUseIframe) {
+        notifyNewInstanceThatCantUseIframes();
 
-    if (evtIsThereMoreThanOneInstanceThatCantUserIframes.current) {
-        log?.(
-            [
-                "More than one oidc instance can't use iframe",
-                "falling back to persisting tokens in session storage"
-            ].join(" ")
-        );
+        if (evtIsThereMoreThanOneInstanceThatCantUserIframes.current) {
+            log?.(
+                [
+                    "More than one oidc instance can't use iframe",
+                    "falling back to persisting tokens in session storage"
+                ].join(" ")
+            );
+        }
     }
 
     const oidcClientTsUserManager =
