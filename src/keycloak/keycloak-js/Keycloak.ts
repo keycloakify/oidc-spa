@@ -119,7 +119,8 @@ export class Keycloak {
      * @param initOptions Initialization options.
      * @returns A promise to set functions to be invoked on success or error.
      */
-    async init(initOptions: KeycloakInitOptions = {}): Promise<boolean> {
+    init = this.#init.bind(this);
+    async #init(initOptions: KeycloakInitOptions = {}): Promise<boolean> {
         const { onLoad = "check-sso", redirectUri, enableLogging, scope, locale } = initOptions;
 
         if (this.#state.initOptions !== undefined) {
@@ -780,7 +781,8 @@ export class Keycloak {
      * Redirects to login form.
      * @param options Login options.
      */
-    async login(
+    login = this.#login.bind(this);
+    async #login(
         options?: KeycloakLoginOptions & { doesCurrentHrefRequiresAuth?: boolean }
     ): Promise<never> {
         const {
@@ -852,7 +854,8 @@ export class Keycloak {
      * Redirects to logout.
      * @param options Logout options.
      */
-    async logout(options?: KeycloakLogoutOptions): Promise<never> {
+    logout = this.#logout.bind(this);
+    async #logout(options?: KeycloakLogoutOptions): Promise<never> {
         if (!this.didInitialize) {
             await this.#state.dInitialized.pr;
         }
@@ -878,7 +881,8 @@ export class Keycloak {
      * Redirects to registration form.
      * @param options The options used for the registration.
      */
-    async register(options?: KeycloakRegisterOptions): Promise<never> {
+    register = this.#register.bind(this);
+    async #register(options?: KeycloakRegisterOptions): Promise<never> {
         return this.login({
             ...options,
             action: "register"
@@ -888,7 +892,8 @@ export class Keycloak {
     /**
      * Redirects to the Account Management Console.
      */
-    async accountManagement(options?: {
+    accountManagement = this.#accountManagement.bind(this);
+    async #accountManagement(options?: {
         /**
          * Specifies the uri to redirect to when redirecting back to the application.
          */
@@ -932,7 +937,8 @@ export class Keycloak {
      * Returns the URL to the Account Management Console.
      * @param options The options used for creating the account URL.
      */
-    createAccountUrl(options?: KeycloakAccountOptions & { locale?: string }): string {
+    createAccountUrl = this.#createAccountUrl.bind(this);
+    #createAccountUrl(options?: KeycloakAccountOptions & { locale?: string }): string {
         const { locale, redirectUri } = options ?? {};
 
         const { keycloakUtils, constructorParams } = this.#state;
@@ -959,7 +965,8 @@ export class Keycloak {
      * it expires.
      * @param minValidity If not specified, `0` is used.
      */
-    isTokenExpired(minValidity: number = 0): boolean {
+    isTokenExpired = this.#isTokenExpired.bind(this);
+    #isTokenExpired(minValidity: number = 0): boolean {
         let accessTokenExpirationTime: number;
 
         if (!this.didInitialize) {
@@ -1006,7 +1013,8 @@ export class Keycloak {
      *   alert('Failed to refresh the token, or the session has expired');
      * });
      */
-    async updateToken(minValidity: number = 5): Promise<boolean> {
+    updateToken = this.#updateToken.bind(this);
+    async #updateToken(minValidity: number = 5): Promise<boolean> {
         if (!this.didInitialize) {
             await this.#state.dInitialized.pr;
         }
@@ -1043,7 +1051,8 @@ export class Keycloak {
      * Returns true if the token has the given realm role.
      * @param role A realm role name.
      */
-    hasRealmRole(role: string): boolean {
+    hasRealmRole = this.#hasRealmRole.bind(this);
+    #hasRealmRole(role: string): boolean {
         const access = this.realmAccess;
         return access !== undefined && access.roles.indexOf(role) >= 0;
     }
@@ -1053,7 +1062,8 @@ export class Keycloak {
      * @param role A role name.
      * @param resource If not specified, `clientId` is used.
      */
-    hasResourceRole(role: string, resource?: string): boolean {
+    hasResourceRole = this.#hasResourceRole.bind(this);
+    #hasResourceRole(role: string, resource?: string): boolean {
         if (this.resourceAccess === undefined) {
             return false;
         }
@@ -1066,7 +1076,8 @@ export class Keycloak {
      * Loads the user's profile.
      * @returns A promise to set functions to be invoked on success or error.
      */
-    async loadUserProfile(): Promise<KeycloakProfile> {
+    loadUserProfile = this.#loadUserProfile.bind(this);
+    async #loadUserProfile(): Promise<KeycloakProfile> {
         if (!this.didInitialize) {
             await this.#state.dInitialized.pr;
         }
@@ -1085,7 +1096,8 @@ export class Keycloak {
     /**
      * @private Undocumented.
      */
-    async loadUserInfo(): Promise<KeycloakUserInfo> {
+    loadUserInfo = this.#loadUserInfo.bind(this);
+    async #loadUserInfo(): Promise<KeycloakUserInfo> {
         if (!this.didInitialize) {
             await this.#state.dInitialized.pr;
         }
