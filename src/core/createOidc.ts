@@ -1119,7 +1119,9 @@ export async function createOidc_nonMemoized<
                                     "\nWe are about to redirect to your Identity Provider (IdP).",
                                     "\nIf you see an 'Invalid Redirect URI' error on the IdP page, make sure you've added:",
                                     `\n${homeUrlAndRedirectUri}`,
-                                    "\nto the list of valid redirect URIs in your IdP configuration."
+                                    "\nto the list of valid redirect URIs in your IdP configuration.",
+                                    "\nIf you see a message like 'Client not found' make sure you've created the flowing OIDC client:",
+                                    `\n${clientId}`
                                 ].join(" ")
                             );
                         }
