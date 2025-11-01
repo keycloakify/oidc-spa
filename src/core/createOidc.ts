@@ -1903,7 +1903,7 @@ export async function createOidc_nonMemoized<
         };
 
         if (getCurrentRefreshTokenTtlInSeconds() === 0) {
-            log?.("The refresh_token never expires, disabling auto logout mechanism");
+            log?.("The refresh_token never expires, disabling auto logout mechanism.");
             break auto_logout;
         }
 
@@ -1913,7 +1913,7 @@ export async function createOidc_nonMemoized<
                     currentTokens.hasRefreshToken
                         ? "The refresh token is opaque, we can't read it's expiration time"
                         : "No refresh token"
-                }, and idleSessionLifetimeInSeconds was not set, can't implement auto logout mechanism`
+                }, and idleSessionLifetimeInSeconds was not set, can't implement auto logout mechanism.`
             );
             break auto_logout;
         }
