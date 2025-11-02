@@ -28,13 +28,6 @@
 
 oidc-spa is an OpenID Connect client for browser-centric web applications implementing the [Authorization Code Flow with PKCE](resources/why-no-client-secret.md).
 
-It's at its core [a framework-agnostic solution](https://docs.oidc-spa.dev/integration-guides/usage). But, in an effort to minimize the amount of glue code you have to write, it also exposes specific adapters for popular environments alongside implementation examples:
-
--   Full Stack: [TanStack Start](https://docs.oidc-spa.dev/integration-guides/tanstack-start)
--   React SPAs: With [React Router](https://docs.oidc-spa.dev/integration-guides/react-router) and TanStack Router integration.
--   [Angular](https://docs.oidc-spa.dev/integration-guides/angular)
--   ...more are coming
-
 oidc-spa replaces provider-specific SDKs like [keycloak-js](https://www.npmjs.com/package/keycloak-js), [auth0-spa-js](https://www.npmjs.com/package/@auth0/auth0-spa-js), or [@azure/msal-browser](https://www.npmjs.com/package/@azure/msal-browser) with one unified API that works with Keycloak, Auth0, Entra ID, and any other spec-compliant OIDC provider.
 
 oidc-spa provides strong guarantees regarding the [protection of your tokens **even in case of successful XSS or supply chain attacks**](resources/why-no-client-secret.md#how-oidc-spa-mitigates-the-risks-of-token-exposure). No other solution does that.
@@ -50,6 +43,15 @@ That means no database, no session store, and **enterprise-grade UX** out of the
 oidc-spa exposes real OIDC primitives, ID tokens, access tokens, and claims—instead of hiding them behind a “user” object, helping you understand and control your security posture.
 
 It’s infra-light, open-standard, transparent, and ready to work in minutes.
+
+## Integration
+
+It's at its core [a framework-agnostic solution](https://docs.oidc-spa.dev/integration-guides/usage). But, in an effort to minimize the amount of glue code you have to write, it also exposes specific adapters for popular environments alongside implementation examples:
+
+-   Full Stack: [TanStack Start](https://docs.oidc-spa.dev/integration-guides/tanstack-start)
+-   React SPAs: With [React Router](https://docs.oidc-spa.dev/integration-guides/react-router) and TanStack Router integration.
+-   [Angular](https://docs.oidc-spa.dev/integration-guides/angular)
+-   ...more are coming
 
 ## Comparison with Existing Libraries
 
