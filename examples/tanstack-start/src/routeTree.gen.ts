@@ -12,7 +12,9 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as DemoStartServerFuncsRouteImport } from './routes/demo/start.server-funcs'
 import { Route as DemoStartApiRequestRouteImport } from './routes/demo/start.api-request'
-import { Route as DemoApiTodosRouteImport } from './routes/demo/api.todos'
+import { Route as DemoStartAdminOnlyRouteImport } from './routes/demo/start.admin-only'
+import { Route as DemoApiTodosRouteImport } from './routes/demo/api/todos'
+import { Route as DemoApiAdminDataRouteImport } from './routes/demo/api/admin-data'
 import { Route as DemoStartSsrIndexRouteImport } from './routes/demo/start.ssr.index'
 import { Route as DemoStartSsrSpaModeRouteImport } from './routes/demo/start.ssr.spa-mode'
 import { Route as DemoStartSsrFullSsrRouteImport } from './routes/demo/start.ssr.full-ssr'
@@ -33,9 +35,19 @@ const DemoStartApiRequestRoute = DemoStartApiRequestRouteImport.update({
   path: '/demo/start/api-request',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DemoStartAdminOnlyRoute = DemoStartAdminOnlyRouteImport.update({
+  id: '/demo/start/admin-only',
+  path: '/demo/start/admin-only',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DemoApiTodosRoute = DemoApiTodosRouteImport.update({
   id: '/demo/api/todos',
   path: '/demo/api/todos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DemoApiAdminDataRoute = DemoApiAdminDataRouteImport.update({
+  id: '/demo/api/admin-data',
+  path: '/demo/api/admin-data',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DemoStartSsrIndexRoute = DemoStartSsrIndexRouteImport.update({
@@ -61,7 +73,9 @@ const DemoStartSsrDataOnlyRoute = DemoStartSsrDataOnlyRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/demo/api/admin-data': typeof DemoApiAdminDataRoute
   '/demo/api/todos': typeof DemoApiTodosRoute
+  '/demo/start/admin-only': typeof DemoStartAdminOnlyRoute
   '/demo/start/api-request': typeof DemoStartApiRequestRoute
   '/demo/start/server-funcs': typeof DemoStartServerFuncsRoute
   '/demo/start/ssr/data-only': typeof DemoStartSsrDataOnlyRoute
@@ -71,7 +85,9 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/demo/api/admin-data': typeof DemoApiAdminDataRoute
   '/demo/api/todos': typeof DemoApiTodosRoute
+  '/demo/start/admin-only': typeof DemoStartAdminOnlyRoute
   '/demo/start/api-request': typeof DemoStartApiRequestRoute
   '/demo/start/server-funcs': typeof DemoStartServerFuncsRoute
   '/demo/start/ssr/data-only': typeof DemoStartSsrDataOnlyRoute
@@ -82,7 +98,9 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/demo/api/admin-data': typeof DemoApiAdminDataRoute
   '/demo/api/todos': typeof DemoApiTodosRoute
+  '/demo/start/admin-only': typeof DemoStartAdminOnlyRoute
   '/demo/start/api-request': typeof DemoStartApiRequestRoute
   '/demo/start/server-funcs': typeof DemoStartServerFuncsRoute
   '/demo/start/ssr/data-only': typeof DemoStartSsrDataOnlyRoute
@@ -94,7 +112,9 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/demo/api/admin-data'
     | '/demo/api/todos'
+    | '/demo/start/admin-only'
     | '/demo/start/api-request'
     | '/demo/start/server-funcs'
     | '/demo/start/ssr/data-only'
@@ -104,7 +124,9 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/demo/api/admin-data'
     | '/demo/api/todos'
+    | '/demo/start/admin-only'
     | '/demo/start/api-request'
     | '/demo/start/server-funcs'
     | '/demo/start/ssr/data-only'
@@ -114,7 +136,9 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/demo/api/admin-data'
     | '/demo/api/todos'
+    | '/demo/start/admin-only'
     | '/demo/start/api-request'
     | '/demo/start/server-funcs'
     | '/demo/start/ssr/data-only'
@@ -125,7 +149,9 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  DemoApiAdminDataRoute: typeof DemoApiAdminDataRoute
   DemoApiTodosRoute: typeof DemoApiTodosRoute
+  DemoStartAdminOnlyRoute: typeof DemoStartAdminOnlyRoute
   DemoStartApiRequestRoute: typeof DemoStartApiRequestRoute
   DemoStartServerFuncsRoute: typeof DemoStartServerFuncsRoute
   DemoStartSsrDataOnlyRoute: typeof DemoStartSsrDataOnlyRoute
@@ -157,11 +183,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DemoStartApiRequestRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/demo/start/admin-only': {
+      id: '/demo/start/admin-only'
+      path: '/demo/start/admin-only'
+      fullPath: '/demo/start/admin-only'
+      preLoaderRoute: typeof DemoStartAdminOnlyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/demo/api/todos': {
       id: '/demo/api/todos'
       path: '/demo/api/todos'
       fullPath: '/demo/api/todos'
       preLoaderRoute: typeof DemoApiTodosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/demo/api/admin-data': {
+      id: '/demo/api/admin-data'
+      path: '/demo/api/admin-data'
+      fullPath: '/demo/api/admin-data'
+      preLoaderRoute: typeof DemoApiAdminDataRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/demo/start/ssr/': {
@@ -197,7 +237,9 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  DemoApiAdminDataRoute: DemoApiAdminDataRoute,
   DemoApiTodosRoute: DemoApiTodosRoute,
+  DemoStartAdminOnlyRoute: DemoStartAdminOnlyRoute,
   DemoStartApiRequestRoute: DemoStartApiRequestRoute,
   DemoStartServerFuncsRoute: DemoStartServerFuncsRoute,
   DemoStartSsrDataOnlyRoute: DemoStartSsrDataOnlyRoute,

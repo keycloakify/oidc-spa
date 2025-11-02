@@ -12,20 +12,28 @@ export const {
     .withExpectedDecodedIdTokenShape({
         decodedIdTokenSchema: z.object({
             name: z.string(),
-            picture: z.string().optional()
+            picture: z.string().optional(),
+            realm_access: z.object({ roles: z.array(z.string()) }).optional()
         }),
         decodedIdToken_mock: {
-            name: "John Doe"
+            name: "John Doe",
+            realm_access: {
+                roles: ["realm-admin"]
+            }
         }
     })
     .withAccessTokenValidation({
         type: "RFC 9068: JSON Web Token (JWT) Profile for OAuth 2.0 Access Tokens",
         expectedAudience: (/*{ paramsOfBootstrap, process }*/) => "account",
         accessTokenClaimsSchema: z.object({
-            sub: z.string()
+            sub: z.string(),
+            realm_access: z.object({ roles: z.array(z.string()) }).optional()
         }),
         accessTokenClaims_mock: {
-            sub: "123"
+            sub: "123",
+            realm_access: {
+                roles: ["realm-admin"]
+            }
         }
     })
     // See: https://docs.oidc-spa.dev/features/auto-login#tanstack-start

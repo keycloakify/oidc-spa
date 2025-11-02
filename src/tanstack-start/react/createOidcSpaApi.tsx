@@ -31,6 +31,7 @@ import { getRequest, setResponseHeader, setResponseStatus } from "@tanstack/reac
 import { toFullyQualifiedUrl } from "../../tools/toFullyQualifiedUrl";
 import { UnifiedClientRetryForSsrLoadersError } from "./rfcUnifiedClientRetryForSsrLoaders/UnifiedClientRetryForSsrLoadersError";
 import { setDesiredPostLoginRedirectUrl } from "../../core/desiredPostLoginRedirectUrl";
+import type { MaybeAsync } from "../../tools/MaybeAsync";
 
 export function createOidcSpaApi<
     AutoLogin extends boolean,
@@ -823,7 +824,9 @@ export function createOidcSpaApi<
 
     function createFunctionMiddlewareServerFn(params?: {
         assert?: "user logged in";
-        hasRequiredClaims?: (params: { accessTokenClaims: AccessTokenClaims }) => Promise<boolean>;
+        hasRequiredClaims?: (params: {
+            accessTokenClaims: AccessTokenClaims;
+        }) => MaybeAsync<boolean | undefined>;
     }) {
         return async (options: {
             next: (options: { context: { oidc: OidcServerContext<AccessTokenClaims> } }) => any;
@@ -972,7 +975,9 @@ export function createOidcSpaApi<
 
     function oidcRequestMiddleware(params?: {
         assert?: "user logged in";
-        hasRequiredClaims?: (params: { accessTokenClaims: AccessTokenClaims }) => Promise<boolean>;
+        hasRequiredClaims?: (params: {
+            accessTokenClaims: AccessTokenClaims;
+        }) => MaybeAsync<boolean | undefined>;
     }) {
         return createMiddleware({ type: "request" }).server<{
             oidc: OidcServerContext<AccessTokenClaims>;
@@ -981,7 +986,9 @@ export function createOidcSpaApi<
 
     function oidcFnMiddleware(params?: {
         assert?: "user logged in";
-        hasRequiredClaims?: (params: { accessTokenClaims: AccessTokenClaims }) => Promise<boolean>;
+        hasRequiredClaims?: (params: {
+            accessTokenClaims: AccessTokenClaims;
+        }) => MaybeAsync<boolean | undefined>;
     }) {
         return createMiddleware({ type: "function" })
             .client(async ({ next }) => {

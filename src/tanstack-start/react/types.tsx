@@ -3,6 +3,7 @@ import type { Oidc as Oidc_core, OidcInitializationError } from "../../core";
 import type { FunctionMiddlewareAfterServer, RequestMiddlewareAfterServer } from "@tanstack/react-start";
 import type { GetterOrDirectValue } from "../../tools/GetterOrDirectValue";
 import type { OidcMetadata } from "../../core/OidcMetadata";
+import type { MaybeAsync } from "../../tools/MaybeAsync";
 
 export type CreateOidcComponent<DecodedIdToken> = <
     Assert extends "user logged in" | "user not logged in" | undefined,
@@ -148,13 +149,17 @@ export namespace GetOidc {
 export type OidcFnMiddleware<AccessTokenClaims> = {
     (params?: {
         assert?: undefined;
-        hasRequiredClaims?: (params: { accessTokenClaims: AccessTokenClaims }) => Promise<boolean>;
+        hasRequiredClaims?: (params: {
+            accessTokenClaims: AccessTokenClaims;
+        }) => MaybeAsync<boolean | undefined>;
     }): OidcFnMiddleware.TanStackFnMiddleware<{
         oidc: OidcServerContext<AccessTokenClaims>;
     }>;
     (params?: {
         assert?: "user logged in";
-        hasRequiredClaims?: (params: { accessTokenClaims: AccessTokenClaims }) => Promise<boolean>;
+        hasRequiredClaims?: (params: {
+            accessTokenClaims: AccessTokenClaims;
+        }) => MaybeAsync<boolean | undefined>;
     }): OidcFnMiddleware.TanStackFnMiddleware<{
         oidc: OidcServerContext.LoggedIn<AccessTokenClaims>;
     }>;
@@ -163,7 +168,9 @@ export type OidcFnMiddleware<AccessTokenClaims> = {
 export namespace OidcFnMiddleware {
     export type WithAutoLogin<AccessTokenClaims> = (params?: {
         assert?: "user logged in";
-        hasRequiredClaims?: (params: { accessTokenClaims: AccessTokenClaims }) => Promise<boolean>;
+        hasRequiredClaims?: (params: {
+            accessTokenClaims: AccessTokenClaims;
+        }) => MaybeAsync<boolean | undefined>;
     }) => TanStackFnMiddleware<{
         oidc: OidcServerContext.LoggedIn<AccessTokenClaims>;
     }>;
@@ -201,13 +208,17 @@ export namespace OidcServerContext {
 export type OidcRequestMiddleware<AccessTokenClaims> = {
     (params?: {
         assert?: undefined;
-        hasRequiredClaims?: (params: { accessTokenClaims: AccessTokenClaims }) => Promise<boolean>;
+        hasRequiredClaims?: (params: {
+            accessTokenClaims: AccessTokenClaims;
+        }) => MaybeAsync<boolean | undefined>;
     }): OidcRequestMiddleware.TanstackRequestMiddleware<{
         oidc: OidcServerContext<AccessTokenClaims>;
     }>;
     (params?: {
         assert?: "user logged in";
-        hasRequiredClaims?: (params: { accessTokenClaims: AccessTokenClaims }) => Promise<boolean>;
+        hasRequiredClaims?: (params: {
+            accessTokenClaims: AccessTokenClaims;
+        }) => MaybeAsync<boolean | undefined>;
     }): OidcRequestMiddleware.TanstackRequestMiddleware<{
         oidc: OidcServerContext.LoggedIn<AccessTokenClaims>;
     }>;
@@ -216,7 +227,9 @@ export type OidcRequestMiddleware<AccessTokenClaims> = {
 export namespace OidcRequestMiddleware {
     export type WithAutoLogin<AccessTokenClaims> = (params?: {
         assert?: "user logged in";
-        hasRequiredClaims?: (params: { accessTokenClaims: AccessTokenClaims }) => Promise<boolean>;
+        hasRequiredClaims?: (params: {
+            accessTokenClaims: AccessTokenClaims;
+        }) => MaybeAsync<boolean | undefined>;
     }) => TanstackRequestMiddleware<{
         oidc: OidcServerContext.LoggedIn<AccessTokenClaims>;
     }>;
