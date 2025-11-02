@@ -24,94 +24,140 @@
   <a href="https://docs.oidc-spa.dev">Documentation</a>
 </p>
 
-> 🗣️ oidc-spa has been introduced at KeyConf 2025, [see replay](https://youtu.be/Z8zIjZx6DK4?si=W1cQN-AOt0pmolql).
+## What this is
 
-A full-featured OpenID Connect / OAuth2 client for single-page applications (SPAs).
+oidc-spa is an OpenID Connect client for browser-centric web applications implementing the [Authorization Code Flow with PKCE](resources/why-no-client-secret.md).
 
-With `oidc-spa`, you can seamlessly integrate authentication providers like [Keycloak](https://www.keycloak.org/), [Auth0](https://auth0.com/), or [Microsoft Entra ID](https://www.microsoft.com/en-us/security/business/identity-access/microsoft-entra-id) into your application, purely on the client side,
-[without involving your backend in the token exchange](https://docs.oidc-spa.dev/resources/why-no-client-secret).
+It's at its core [a framework-agnostic solution](https://docs.oidc-spa.dev/integration-guides/usage). But, in an effort to minimize the amount of glue code you have to write, it also exposes specific adapters for popular environments alongside implementation examples:
 
-In **simple terms**, `oidc-spa` is a library that makes it easy to **add authentication** to your Vite or Angular project.  
-There are many authentication and user management platforms out there: Okta, Auth0, Entra ID...  
-There are also plenty of self-hosted options like Keycloak, Ory Hydra, and Dex.  
-What all of these have in common is that they implement the OpenID Connect/OAuth2 standard.
+-   Full Stack: [TanStack Start](https://docs.oidc-spa.dev/integration-guides/tanstack-start)
+-   React SPAs: With [React Router](https://docs.oidc-spa.dev/integration-guides/react-router) and TanStack Router integration.
+-   [Angular](https://docs.oidc-spa.dev/integration-guides/angular)
+-   ...more are coming
 
-This library provides a **unified way** to connect with these different providers instead of having to use
-their specific SDKs.
+oidc-spa replaces provider-specific SDKs like [keycloak-js](https://www.npmjs.com/package/keycloak-js), [auth0-spa-js](https://www.npmjs.com/package/@auth0/auth0-spa-js), or [@azure/msal-browser](https://www.npmjs.com/package/@azure/msal-browser) with one unified API that works with Keycloak, Auth0, Entra ID, and any other spec-compliant OIDC provider.
 
-`oidc-spa` implement the [**Authorization Code Flow with PKCE**](https://docs.oidc-spa.dev/resources/why-no-client-secret), this means that **you do not need a backend and a database** to handle the authentication process.  
-The authentication process is handled entirely in the browser. And no need for `/login` or `/logout` routes.
+oidc-spa provides strong guarantees regarding the [protection of your tokens **even in case of successful XSS or supply chain attacks**](resources/why-no-client-secret.md#how-oidc-spa-mitigates-the-risks-of-token-exposure). No other solution does that.
 
-## Why `oidc-spa`?
+oidc-spa is uncompromising in terms of performance, security, DX, and UX. You get a state-of-the-art authentication and authorization system out of the box with zero glue code to write and no knobs to adjust.
 
-Most OIDC providers push their own client libraries:
+Unlike server-centric solutions such as [NextAuth](https://next-auth.js.org/), oidc-spa makes the frontend the OIDC client.
 
--   **Auth0** → `auth0-spa-js`
--   **Microsoft Entra ID** → `MSAL.js`
--   **Keycloak** → `keycloak-js` (no longer actively promoted)
--   **... and so on.**
+Your backend becomes a simple OAuth2 resource server, and tokens can be validated offline. oidc-spa [also provides the tools for token validation on the server side](integration-guides/tanstack-router-+-node-rest-api.md).
 
-These libraries are **tied to a specific provider**. But what if you need to:
+That means no database, no session store, and **enterprise-grade UX** out of the box, while scaling naturally to edge runtimes.
 
-✅ Switch OIDC providers without modifying your authentication logic?  
-✅ Build a self-hostable solution that works with any provider (e.g., you're developing a dashboard app that you sell to enterprises and need to integrate with their existing IAM system)?  
-✅ Stop re-learning authentication implementation every time you change providers?
+oidc-spa exposes real OIDC primitives, ID tokens, access tokens, and claims—instead of hiding them behind a “user” object, helping you understand and control your security posture.
 
-And besides, not all SDKs are equal in terms of setup simplicity, performance, and API quality.
-
-We wanted a **universal solution**, one that is as good or better than all existing SDKs in every aspect.
-
-## Features
-
--   🎓 **No OIDC/OAuth2 expertise required**: Easy to setup and use. We're here to help [on Discord](https://discord.gg/mJdYJSdcm4)!
--   🛠️ **Simple setup**: No need to define `/login` or `/logout` routes, token refreshing is automatic, it just works.
--   ✨ **React and Angular integration**: Expose a framework agnostic API but also a React adapter `oidc-spa/react` and an Angular adapter `oidc-spa/angular`.
--   🔥 **No limitation**- For example, everything you could do with `keycloak-js`, you can do with `oidc-spa`.
--   💬 **Detailed debug messages**: If your OIDC server is not properly configured, it tells you precisely what’s wrong and what you need to do to fix it.
--   🕣 **Auto logout with countdown**: "You will be logged out in 10... 9... 8...", users see exactly when their session expires.
--   🚪 **Logout propagation**: Logging out in one tab logs out all others.
--   📖 **Comprehensive documentation**: Guides and examples for common scenarios.
--   ✅ **Type safety**: Strong TypeScript support with optional [Zod](https://zod.dev/) integration validating the expected shape of the ID token.
--   🔒 **Security-first**: Uses [**Authorization Code Flow + PKCE**](https://docs.oidc-spa.dev/resources/why-no-client-secret#id-2.-authorization-code-flow--pkce-used-by-oidc-spa), No token persistence in `localStorage` or `sessionStorage`.
--   🖥️ **Optional backend utilities**: Provides tools for token validation in JavaScript backends (Node.js, Deno, Web Workers).
--   🍪 **No third-party cookie issues**: Third-party cookies blocked? No problem, `oidc-spa` works around it automatically with no special measures needed on your side.
--   🔗 **Multi-instance support**: Run multiple `oidc-spa` instances in the same app without conflict.
+It’s infra-light, open-standard, transparent, and ready to work in minutes.
 
 ## Comparison with Existing Libraries
 
 ### [oidc-client-ts](https://github.com/authts/oidc-client-ts)
 
-While `oidc-client-ts` is a comprehensive toolkit designed for various applications that oidc-spa uses under the hood, `oidc-spa` is specifically built for SPAs with an easy-to-set-up API.  
-But **ease of use** isn't the only difference, `oidc-spa` also provides **out-of-the-box** solutions for features that `oidc-client-ts` leaves up to you to implement, such as:
+It is a great low-level implementation of the OIDC primitives.  
+But it is only that, a low-level implementation. If you want to use it in your application,
+you’ll have to write a ton of glue code to achieve a state-of-the-art UX,  
+code that has no business living in application-level logic.
+
+Example of what you get out of the box with oidc-spa:
 
 -   **Login/logout propagation** across tabs
--   **Graceful fallback when third-party cookies are blocked**
+-   **Automatic silent sign-in when possible**, with full-page redirect fallback
 -   **Seamless browser back/forward cache (bfcache) management**
--   **Auto logout countdown** so users can be automatically logged out after a set period of inactivity.
--   **Ensuring you never get an expired access token error**, even after the computer wakes up from sleep.
--   **Gracefully handles scenarios where the provider does not issue a refresh token or lacks a logout endpoint** (e.g., Google OAuth)
+-   **Auto logout countdown** so users are warned before inactivity logout
+-   **Never getting an expired access token error**, even after waking from sleep
+-   **Graceful handling when the provider lacks refresh tokens or a logout endpoint** (e.g. Google OAuth)
+-   **Mock support**, run with a mock identity without contacting a server
+
+oidc-spa just works. You provide the few parameters required to talk to your IdP, and that’s it.
+
+On top of that, oidc-spa provides much stronger security guarantees than `oidc-client-ts` does out of the box,  
+and yields a level of performance that isn’t realistically achievable with the tools `oidc-client-ts` alone provides.
 
 ### [react-oidc-context](https://github.com/authts/react-oidc-context)
 
-`react-oidc-context` is a React wrapper around `oidc-client-ts`.  
-`oidc-spa` also feature a carefully crafted React API that comes with [working examples that you can test locally](https://docs.oidc-spa.dev/example-setups/example-setups).
+react-oidc-context is a thin React wrapper around oidc-client-ts.  
+`oidc-client-ts` compares to `oidc-spa/core`,  
+and `react-oidc-context` compares to `oidc-spa/react-spa`.
+
+oidc-spa provides much better security, DX, and UX out of the box.
 
 ### [keycloak-js](https://www.npmjs.com/package/keycloak-js)
 
-The official OIDC Client for Keycloak. It only works with Keycloak and [will eventually be deprecated](https://www.keycloak.org/2023/03/adapter-deprecation-update).  
-Beyond that, achieving the same seamless user experience as `oidc-spa` with `keycloak-js` requires writing a lot of custom code, code that really **shouldn’t** be handled at the application level.
+> NOTE: You can use `oidc-spa/keycloak-js` as [a **literal** drop-in replacement for `keycloak-js`](https://docs.oidc-spa.dev/resources/migrating-from-keycloak-js)  
+> your app will instantly perform better, be much more secure, and implement session expiration correctly.
 
-### [NextAuth.js](https://next-auth.js.org/)
+The official OIDC client for Keycloak has several issues:
 
-Since oidc-spa is built for true SPAs, Next.js applications should use NextAuth.js instead.
+-   Does not respect the OIDC spec, hence only works with Keycloak, requiring a wildcard in valid redirect URIs, which [is problematic](https://securityblog.omegapoint.se/en/writeup-keycloak-cve-2023-6927/).
+-   Its API encourages incorrect usage, e.g., by [directly exposing the access token via a synchronous API.](https://docs.oidc-spa.dev/features/tokens-renewal).
+-   Does not expose high-level adapters for React or Angular, requiring you to write your own wrappers.
+-   Does not handle redirects correctly: once on the login page, you can’t go back.
+-   Makes no attempt to protect tokens against XSS attacks.
+-   You can't [talk to more than one resource server](https://docs.oidc-spa.dev/features/talking-to-multiple-apis-with-different-access-tokens).
+-   Does not handle session expiration; users aren’t automatically logged out or warned before expiration.
+-   Lacks mock implementations for testing against mock identities.
+
+oidc-spa exports `oidc-spa/keycloak` providing all the keycloak specific feature that keycloak-js offers.
+
+oidc-spa even comes with a polyfill implementation of the keycloak-js API.
+
+### [keycloak-angular](https://github.com/mauriciovigolo/keycloak-angular)
+
+It’s an Angular wrapper for keycloak-js, with the same limitations as above.  
+oidc-spa exposes an Angular adapter: [oidc-spa/angular](https://docs.oidc-spa.dev/integration-guides/angular).
+
+### [angular-oauth2-oidc](https://github.com/manfredsteyer/angular-oauth2-oidc)
+
+This is a solid generic OIDC adapter.  
+However, `oidc-spa/angular` still has several advantages:
+
+-   [Better security guarantees](https://docs.oidc-spa.dev/resources/why-no-client-secret#how-oidc-spa-mitigates-the-risks-of-token-exposure) (angular-oauth2-oidc does not protect tokens from XSS or supply-chain attacks)
+-   Better performance due to early initialization
+-   Auto logout overlay (“Are you still there?” countdown)
+-   Stronger type safety with propagated user profile types
+-   Ability to start rendering before session restoration settles
+-   Support for multiple resource servers
+-   Clearer and more actionable error messages for misconfiguration
+
+### [BetterAuth](https://www.better-auth.com/) / [NextAuth.js](https://next-auth.js.org/)
+
+These are great for what they are—but they’re “roll your own auth” solutions.  
+With oidc-spa, you delegate authentication to a specialized identity provider such as Keycloak, Auth0, Okta, or Clerk.
+
+With BetterAuth, your backend _is_ the authorization server.  
+That’s very battery-included, but also far heavier infrastructure-wise.  
+Today, very few companies still roll their own auth—including OpenAI and Vercel.
+
+Another big difference: oidc-spa is **browser-centric**. The token exchange happens on the client,  
+and the backend server is merely an OAuth2 resource server in the OIDC model.
+
+If you use BetterAuth to provide login via Keycloak, your backend becomes the OIDC client application—  
+which has some security benefits over browser token exchange, but at the cost of centralization and requiring backend infrastructure.
+
+One clear advantage BetterAuth has over oidc-spa is SSR support.
+In the oidc-spa model, the server doesn’t handle authentication directly, which makes it difficult to integrate with traditional full-stack frameworks that rely on server-side rendering.
+
+The only SSR-capable framework we currently support is TanStack Start, because it provides the low-level primitives needed to render as much as possible on the server while deferring authentication logic to the client.
+
+This approach achieves a similar UX and performance to server-centric frameworks, but it’s inherently less flexible than streaming fully authenticated server components to the client.
+
+oidc-spa is extremely lightweight, it’s just a library, with no infrastructure or backend requirements. It scales beautifully, delivers great performance at the edge, and keeps your deployment simple. The tradeoff is that SSR becomes harder, though not impossible, as [demonstrated with TanStack Start](https://example-tanstack-start.oidc-spa.dev/).
+
+## Acknowledgment
+
+oidc-spa vendors [oidc-client-ts](https://github.com/authts/oidc-client-ts) for its frontend logic and [jose](https://github.com/panva/jose) for token validation on the backend.  
+The idea was to build on top of battle-tested primitives.  
+We appreciate what we owe to those projects.
 
 ## 🚀 Quick start
 
-Head over to [the documentation website](https://docs.oidc-spa.dev) 📘!
+Head over to the [documentation website](https://docs.oidc-spa.dev) 📘!
 
 ## Sponsors
 
-Project backers, we trust and recommend their services.
+Project backers — we trust and recommend their services.
 
 <br/>
 
@@ -130,7 +176,7 @@ Project backers, we trust and recommend their services.
 <br/>
 
 <p align="center">
-    <i><a href="https://phasetwo.io/?utm_source=keycloakify"><strong>Keycloak as a Service</strong></a> - Keycloak community contributors of popular <a href="https://github.com/p2-inc#our-extensions-?utm_source=keycloakify">extensions</a> providing free and dedicated <a href="https://phasetwo.io/hosting/?utm_source=keycloakify">Keycloak hosting</a> and enterprise <a href="https://phasetwo.io/support/?utm_source=keycloakify">Keycloak support</a> to businesses of all sizes.</i>
+    <i><a href="https://phasetwo.io/?utm_source=keycloakify"><strong>Keycloak as a Service</strong></a> — Keycloak community contributors of popular <a href="https://github.com/p2-inc#our-extensions-?utm_source=keycloakify">extensions</a> providing free and dedicated <a href="https://phasetwo.io/hosting/?utm_source=keycloakify">Keycloak hosting</a> and enterprise <a href="https://phasetwo.io/support/?utm_source=keycloakify">Keycloak support</a> to businesses of all sizes.</i>
 </p>
 
 <br/>
@@ -153,31 +199,6 @@ Project backers, we trust and recommend their services.
 
 <p align="center">
   <a href="https://www.zone2.tech/services/keycloak-consulting">
-    <i><strong>Keycloak Consulting Services</strong> - Your partner in Keycloak deployment, configuration, and extension development for optimized identity management solutions.</i>
+    <i><strong>Keycloak Consulting Services</strong> — Your partner in Keycloak deployment, configuration, and extension development for optimized identity management solutions.</i>
   </a>
 </p>
-
-## We built it because we needed it.
-
-This library isn't a theoretical exercise or a tool for hobby projects.  
-We developed it to solve real-world problems we faced ourselves.  
-Today, it powers authentication for [Onyxia](https://onyxia.sh),  
-a data science platform deployed across multiple large organizations.
-
-### Onyxia
-
--   [Source code](https://github.com/InseeFrLab/onyxia)
--   [Public instance](https://datalab.sspcloud.fr)
-
-<a href="https://youtu.be/FvpNfVrxBFM">
-  <img width="1712" alt="image" src="https://user-images.githubusercontent.com/6702424/231314534-2eeb1ab5-5460-4caa-b78d-55afd400c9fc.png">
-</a>
-
-### The French Interministerial Base of Free Software
-
--   [Source code](https://github.com/codegouvfr/sill-web/)
--   [Deployment of the website](https://sill-preprod.lab.sspcloud.fr/)
-
-<a href="https://youtu.be/AT3CvmY_Y7M?si=Edkf0vRNjosGLA3R">
-  <img width="1712" alt="image" src="https://github.com/garronej/i18nifty/assets/6702424/aa06cc30-b2bd-4c8b-b435-2f875f53175b">
-</a>
