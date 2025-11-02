@@ -9,6 +9,12 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Keep vertical scrollbar space reserved to avoid layout shift */
+html {
+  overflow-y: scroll;
+  scrollbar-gutter: stable;
+}
+
 code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, "Courier New",
     monospace;
