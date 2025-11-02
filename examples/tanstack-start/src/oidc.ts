@@ -5,6 +5,9 @@ export const {
     bootstrapOidc,
     createOidcComponent,
     getOidc,
+    // NOTE: Each time you enforceLogin on a route the oidc-spa vite plugin
+    // will automatically switch this route to `ssr: false`.
+    // This ensures that everything that can be SSR'd is and the rest is delayed to the client.
     enforceLogin,
     oidcFnMiddleware,
     oidcRequestMiddleware
