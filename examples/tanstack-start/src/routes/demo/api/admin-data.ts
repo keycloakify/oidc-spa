@@ -11,7 +11,7 @@ export const Route = createFileRoute("/demo/api/admin-data")({
             })
         ],
         handlers: {
-            POST: async ({ context: { oidc } }) => {
+            GET: async ({ context: { oidc } }) => {
                 const userId = oidc.accessTokenClaims.sub;
 
                 // Here you can perform information and retrieve data only admins

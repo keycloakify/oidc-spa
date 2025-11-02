@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { createFileRoute } from "@tanstack/react-router";
 import { enforceLogin, getOidc, oidcFnMiddleware, createOidcComponent, fetchWithAuth } from "@/oidc";
 import Spinner from "@/components/Spinner";
+import { ShieldCheck, ShieldAlert, ExternalLink } from "lucide-react";
 import { isKeycloak, createKeycloakUtils } from "oidc-spa/keycloak";
 
 const getAdminOnlyData = createServerFn({ method: "GET" })
@@ -37,9 +38,9 @@ export const Route = createFileRoute("/demo/start/admin-only")({
 
         const adminData_fromServerFn = await getAdminOnlyData();
 
-        const adminData_fromRestApi: string = await fetchWithAuth("/demo/api/admin-data", {
-            method: "POST"
-        }).then(res => res.json());
+        const adminData_fromRestApi: string = await fetchWithAuth("/demo/api/admin-data").then(res =>
+            res.json()
+        );
 
         return { adminData_fromServerFn, adminData_fromRestApi };
     },
@@ -49,11 +50,21 @@ export const Route = createFileRoute("/demo/start/admin-only")({
         }
 
         return (
-            <section className="rounded-xl border border-rose-500/40 bg-rose-950/30 p-4 text-sm text-rose-100">
-                <p>
-                    You need the <code>realm-admin</code> role to view this page.
-                </p>
-            </section>
+            <div className="flex flex-1 items-center justify-center min-h-full p-4 text-white">
+                <div className="w-full max-w-2xl p-8 rounded-xl backdrop-blur-md bg-black/50 shadow-xl border-8 border-black/10 opacity-0 animate-[fadeIn_0.2s_ease-in_forwards]">
+                    <div className="flex items-center gap-3 mb-4 text-red-300">
+                        <ShieldAlert className="h-6 w-6" />
+                        <h2 className="text-2xl font-semibold">Access denied</h2>
+                    </div>
+                    <p className="text-white/90">
+                        You need the{" "}
+                        <code className="px-2 py-0.5 rounded bg-white/10 border border-white/20">
+                            realm-admin
+                        </code>{" "}
+                        role to view this page.
+                    </p>
+                </div>
+            </div>
         );
     },
     pendingComponent: () => (
@@ -67,23 +78,41 @@ function AdminOnly() {
     const { adminData_fromServerFn, adminData_fromRestApi } = Route.useLoaderData();
 
     return (
-        <section className="space-y-6">
-            <div className="space-y-1">
-                <h1 className="text-xl font-semibold text-white">Administration Page</h1>
-                <p className="text-sm text-slate-300">
-                    Access is granted because your ID token includes the <code>realm-admin</code> role.
+        <div className="flex flex-1 items-center justify-center min-h-full p-4 text-white">
+            <div className="w-full max-w-2xl p-8 rounded-xl backdrop-blur-md bg-black/50 shadow-xl border-8 border-black/10 opacity-0 animate-[fadeIn_0.2s_ease-in_forwards]">
+                <header className="flex items-center gap-3 mb-4">
+                    <ShieldCheck className="h-7 w-7 text-emerald-300" />
+                    <h1 className="text-2xl font-semibold">Administration Page</h1>
+                </header>
+                <p className="mb-6 text-white/90">
+                    Access granted. Your ID token includes the
+                    <span className="mx-2 px-2 py-0.5 rounded bg-white/10 border border-white/20 text-white">
+                        realm-admin
+                    </span>
+                    role.
                 </p>
-            </div>
 
-            <div>
-                Data that only admins can access retrieved via server function {adminData_fromServerFn}
-            </div>
-            <div>
-                Data that only admins can access retrieved via REST API function {adminData_fromRestApi}
-            </div>
+                <div className="space-y-4">
+                    <section className="p-4 rounded-lg bg-white/10 border border-white/20 backdrop-blur-sm shadow-md">
+                        <h2 className="text-lg font-semibold mb-2">Server Function</h2>
+                        <div className="rounded-md bg-black/40 border border-white/10 p-3 font-mono text-sm text-emerald-200">
+                            {adminData_fromServerFn}
+                        </div>
+                    </section>
 
-            <KeycloakAdminConsoleLink />
-        </section>
+                    <section className="p-4 rounded-lg bg-white/10 border border-white/20 backdrop-blur-sm shadow-md">
+                        <h2 className="text-lg font-semibold mb-2">REST API</h2>
+                        <div className="rounded-md bg-black/40 border border-white/10 p-3 font-mono text-sm text-cyan-200">
+                            {adminData_fromRestApi}
+                        </div>
+                    </section>
+                </div>
+
+                <div className="mt-6">
+                    <KeycloakAdminConsoleLink />
+                </div>
+            </div>
+        </div>
     );
 }
 
@@ -91,20 +120,19 @@ const KeycloakAdminConsoleLink = createOidcComponent({
     component: () => {
         const { issuerUri } = KeycloakAdminConsoleLink.useOidc();
 
-        const keycloakUtils = isKeycloak({ issuerUri }) ? createKeycloakUtils({ issuerUri }) : undefined;
-
-        if (keycloakUtils === undefined) {
+        if (!isKeycloak({ issuerUri })) {
             return null;
         }
 
         return (
-            <div className="rounded-xl border border-slate-800 bg-slate-900 p-4 text-sm text-slate-300">
+            <div>
                 <a
-                    className="inline-flex items-center text-slate-200 underline underline-offset-4 decoration-slate-700 transition-colors hover:decoration-slate-400"
-                    href={keycloakUtils.adminConsoleUrl}
+                    href={createKeycloakUtils({ issuerUri }).adminConsoleUrl}
                     target="_blank"
                     rel="noreferrer"
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-700 text-white font-semibold transition-colors shadow-lg shadow-cyan-500/30 border border-cyan-400/40"
                 >
+                    <ExternalLink className="h-4 w-4" />
                     Open the Keycloak administration console
                 </a>
             </div>
