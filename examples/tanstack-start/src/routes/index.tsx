@@ -84,67 +84,79 @@ function App() {
                 </div>
             </section>
 
-            {/* Explore the demos */}
-            <section className="px-6 py-6">
-                <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    <Link
-                        to="/demo/start/server-funcs"
-                        className="block bg-slate-800/50 backdrop-blur-sm border border-slate-700 rounded-xl p-6 hover:border-cyan-500/50 transition-all duration-300 hover:shadow-lg hover:shadow-cyan-500/10"
-                    >
-                        <div className="flex items-center gap-3 mb-2">
-                            <Server className="w-6 h-6 text-cyan-400" />
-                            <h3 className="text-xl font-semibold text-white">Authed Server Functions</h3>
-                        </div>
-                        <p className="text-gray-300">
-                            A todo list powered by server functions. Items are per-user, not public.
-                        </p>
-                    </Link>
-
-                    <Link
-                        to="/demo/start/api-request"
-                        className="block bg-slate-800/50 backdrop-blur-sm border border-slate-700 rounded-xl p-6 hover:border-cyan-500/50 transition-all duration-300 hover:shadow-lg hover:shadow-cyan-500/10"
-                    >
-                        <div className="flex items-center gap-3 mb-2">
-                            <ListTodo className="w-6 h-6 text-cyan-400" />
-                            <h3 className="text-xl font-semibold text-white">Authed API Request</h3>
-                        </div>
-                        <p className="text-gray-300">
-                            Same todo concept, fetched from a protected REST endpoint.
-                        </p>
-                    </Link>
-
-                    <Link
-                        to="/demo/start/admin-only"
-                        className="block bg-slate-800/50 backdrop-blur-sm border border-slate-700 rounded-xl p-6 hover:border-cyan-500/50 transition-all duration-300 hover:shadow-lg hover:shadow-cyan-500/10"
-                    >
-                        <div className="flex items-center gap-3 mb-2">
-                            <ShieldCheck className="w-6 h-6 text-emerald-300" />
-                            <h3 className="text-xl font-semibold text-white">
-                                Admin-Only Authorization
-                            </h3>
-                        </div>
-                        <p className="text-gray-300">
-                            Demonstrates claim-based authorization. Server functions and API routes both
-                            enforce the
-                            <code className="mx-1 px-1.5 py-0.5 bg-white/10 border border-white/20 rounded">
-                                realm-admin
-                            </code>{" "}
-                            role.
-                        </p>
-                        <p className="text-sm text-white/70 mt-2">
-                            You won’t be able to access this page unless you’re an admin of our auth
-                            server. To try it locally without admin access, set
-                            <code className="mx-1 px-1.5 py-0.5 bg-white/10 border border-white/20 rounded">
-                                OIDC_USE_MOCK=true
-                            </code>
-                            to mock an admin identity.
-                        </p>
-                    </Link>
-                </div>
-            </section>
-
             {/* For streaming */}
             <Suspense>
+                {/* Explore the demos */}
+                <section className="px-6 py-6">
+                    <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <Link
+                            to="/demo/start/server-funcs"
+                            className="block bg-slate-800/50 backdrop-blur-sm border border-slate-700 rounded-xl p-6 hover:border-cyan-500/50 transition-all duration-300 hover:shadow-lg hover:shadow-cyan-500/10"
+                        >
+                            <div className="flex items-center gap-3 mb-2">
+                                <Server className="w-6 h-6 text-cyan-400" />
+                                <h3 className="text-xl font-semibold text-white">
+                                    Authed Server Functions
+                                </h3>
+                            </div>
+                            <p className="text-gray-300">
+                                A todo list powered by server functions. Items are per-user, not public.
+                            </p>
+                            <p className="text-sm text-white/70 mt-2">
+                                oidc-spa provides server-function middleware to validate access tokens
+                                and claims on the server, giving you full‑stack authorization with
+                                minimal client code.
+                            </p>
+                        </Link>
+
+                        <Link
+                            to="/demo/start/api-request"
+                            className="block bg-slate-800/50 backdrop-blur-sm border border-slate-700 rounded-xl p-6 hover:border-cyan-500/50 transition-all duration-300 hover:shadow-lg hover:shadow-cyan-500/10"
+                        >
+                            <div className="flex items-center gap-3 mb-2">
+                                <ListTodo className="w-6 h-6 text-cyan-400" />
+                                <h3 className="text-xl font-semibold text-white">Authed API Request</h3>
+                            </div>
+                            <p className="text-gray-300">
+                                Same todo concept, fetched from a protected REST endpoint.
+                            </p>
+                            <p className="text-sm text-white/70 mt-2">
+                                Client calls use fetchWithAuth to attach the access token automatically,
+                                while server routes validate it with middleware, end‑to‑end
+                                authorization.
+                            </p>
+                        </Link>
+
+                        <Link
+                            to="/demo/start/admin-only"
+                            className="block bg-slate-800/50 backdrop-blur-sm border border-slate-700 rounded-xl p-6 hover:border-cyan-500/50 transition-all duration-300 hover:shadow-lg hover:shadow-cyan-500/10"
+                        >
+                            <div className="flex items-center gap-3 mb-2">
+                                <ShieldCheck className="w-6 h-6 text-emerald-300" />
+                                <h3 className="text-xl font-semibold text-white">
+                                    Admin-Only Authorization
+                                </h3>
+                            </div>
+                            <p className="text-gray-300">
+                                Demonstrates claim-based authorization. Server functions and API routes
+                                both enforce the
+                                <code className="mx-1 px-1.5 py-0.5 bg-white/10 border border-white/20 rounded">
+                                    realm-admin
+                                </code>{" "}
+                                role.
+                            </p>
+                            <p className="text-sm text-white/70 mt-2">
+                                You won’t be able to access this page unless you’re an admin of our auth
+                                server. To try it locally without admin access, set
+                                <code className="mx-1 px-1.5 py-0.5 bg-white/10 border border-white/20 rounded">
+                                    OIDC_USE_MOCK=true
+                                </code>
+                                to mock an admin identity.
+                            </p>
+                        </Link>
+                    </div>
+                </section>
+
                 {/* Auto-logout & SSR story */}
                 <section className="px-6 pb-10">
                     <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -177,18 +189,44 @@ function App() {
                             </div>
                             <p className="text-white/90">
                                 In oidc-spa, the client owns auth. Your server doesn’t need to know about
-                                it. You can still use SSR broadly, auth, aware pieces are delayed to the
-                                client and show their
+                                it. You can still use SSR broadly, this page is fully SSR'd for example.{" "}
+                                <br />
+                                Auth-aware pieces are delayed to the client and show their
                                 <code className="mx-1 px-1.5 py-0.5 bg-white/10 border border-white/20 rounded">
                                     pendingComponent
                                 </code>
-                                until ready. You don't have to set
+                                until ready.
+                                <br />
+                                You don't have to set
                                 <code className="mx-1 px-1.5 py-0.5 bg-white/10 border border-white/20 rounded">
                                     ssr: false
                                 </code>
                                 explicitly anywhere, the oidc-spa's Vite plugin infers from usage.
                             </p>
                         </div>
+                    </div>
+                </section>
+
+                {/* Try it yourself */}
+                <section className="px-6 pb-6">
+                    <div className="max-w-5xl mx-auto p-6 rounded-xl backdrop-blur-md bg-black/50 shadow-xl border-8 border-black/10">
+                        <div className="flex items-center gap-3 mb-2">
+                            <Sparkles className="w-6 h-6 text-cyan-300" />
+                            <h3 className="text-xl font-semibold text-white">Try this setup yourself</h3>
+                        </div>
+                        <p className="text-white/90 mb-3">Spin up this exact example in minutes:</p>
+                        <pre className="rounded-md bg-black/40 border border-white/10 p-4 text-sm text-white overflow-x-auto">
+                            <code>
+                                npx gitpick keycloakify/oidc-spa/tree/main/examples/tanstack-start
+                                start-oidc
+                                <br />
+                                cd start-oidc
+                                <br />
+                                npm install
+                                <br />
+                                npm run dev
+                            </code>
+                        </pre>
                     </div>
                 </section>
 
