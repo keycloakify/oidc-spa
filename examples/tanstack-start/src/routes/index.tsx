@@ -29,11 +29,15 @@ function App() {
                         <Greeting />
                     </p>
                     <p className="text-base md:text-lg text-gray-400 max-w-3xl mx-auto">
-                        A lightly modified TanStack Start starter showcasing authentication and
-                        authorization with
-                        <span className="ml-2 px-2 py-0.5 rounded bg-white/10 border border-white/20 text-white">
+                        AuthN/AuthZ with{" "}
+                        <a
+                            href="https://www.oidc-spa.dev"
+                            target="_blank"
+                            rel="noreferrer"
+                            className="ml-1 px-2 py-0.5 rounded bg-white/10 border border-white/20 text-white hover:text-cyan-200"
+                        >
                             oidc-spa
-                        </span>
+                        </a>
                         .
                     </p>
                 </div>
@@ -64,11 +68,10 @@ function App() {
                             <code className="px-1.5 py-0.5 bg-white/10 border border-white/20 rounded">
                                 .env
                             </code>
-                            . A ready-to-edit example lives in{" "}
-                            <code className="px-1.5 py-0.5 bg-white/10 border border-white/20 rounded">
-                                .env.sample
-                            </code>
-                            . We include Auth0, Microsoft Entra ID, and Google OAuth guidance.
+                            .
+                            <br />
+                            We provide testable account credentials to test this example against Auth0,
+                            Microsoft Entra ID, and Google OAuth.
                         </li>
                         <li>
                             Want to test completely offline? Set{" "}
@@ -128,6 +131,14 @@ function App() {
                             </code>{" "}
                             role.
                         </p>
+                        <p className="text-sm text-white/70 mt-2">
+                            You won’t be able to access this page unless you’re an admin of our auth
+                            server. To try it locally without admin access, set
+                            <code className="mx-1 px-1.5 py-0.5 bg-white/10 border border-white/20 rounded">
+                                OIDC_USE_MOCK=true
+                            </code>
+                            to mock an admin identity.
+                        </p>
                     </Link>
                 </div>
             </section>
@@ -166,12 +177,16 @@ function App() {
                             </div>
                             <p className="text-white/90">
                                 In oidc-spa, the client owns auth. Your server doesn’t need to know about
-                                it. You can still use SSR broadly—auth‑aware pieces are delayed to the
+                                it. You can still use SSR broadly, auth, aware pieces are delayed to the
                                 client and show their
                                 <code className="mx-1 px-1.5 py-0.5 bg-white/10 border border-white/20 rounded">
                                     pendingComponent
                                 </code>
-                                until ready. The build tooling takes care of this automatically.
+                                until ready. You don't have to set
+                                <code className="mx-1 px-1.5 py-0.5 bg-white/10 border border-white/20 rounded">
+                                    ssr: false
+                                </code>
+                                explicitly anywhere, the oidc-spa's Vite plugin infers from usage.
                             </p>
                         </div>
                     </div>
