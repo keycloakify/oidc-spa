@@ -37,6 +37,7 @@ const Account = createOidcComponent({
 
                 {keycloakUtils && (
                     <>
+                        {/* See: https://docs.oidc-spa.dev/features/user-account-management */}
                         <div className="mt-6 flex flex-wrap gap-3">
                             <button
                                 className="inline-flex items-center rounded-full border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-200 transition-colors hover:border-slate-500"
