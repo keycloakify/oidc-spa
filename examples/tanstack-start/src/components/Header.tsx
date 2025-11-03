@@ -169,6 +169,7 @@ export default function Header() {
 }
 
 const AuthButtons = createOidcComponent({
+    pendingComponent: () => null,
     component: (props: { className?: string }) => {
         const { className } = props;
 
@@ -185,33 +186,20 @@ const AuthButtons = createOidcComponent({
 const LoggedInAuthButton = createOidcComponent({
     assert: "user logged in",
     component: () => {
-        const { decodedIdToken, logout, issuerUri, clientId, validRedirectUri } =
-            LoggedInAuthButton.useOidc();
-
-        const keycloakUtils = !isKeycloak({ issuerUri })
-            ? undefined
-            : createKeycloakUtils({ issuerUri });
-
-        const profileImageSrc =
-            decodedIdToken.picture && decodedIdToken.picture.trim().length > 0
-                ? decodedIdToken.picture
-                : userPictureFallback;
+        const { decodedIdToken, logout } = LoggedInAuthButton.useOidc();
 
         return (
             <div className="flex items-center gap-4">
-                <a
-                    href={keycloakUtils?.getAccountUrl({
-                        clientId,
-                        validRedirectUri
-                    })}
+                <Link
+                    to="/account"
                     className="flex items-center gap-3 text-white font-semibold hover:text-cyan-300 transition-colors"
                 >
                     <img
-                        src={profileImageSrc}
+                        src={decodedIdToken.picture || userPictureFallback}
                         alt={`${decodedIdToken.name}'s avatar`}
                         className="w-10 h-10 rounded-full object-cover border border-cyan-500/60 shadow-lg shrink-0"
                     />
-                </a>
+                </Link>
                 <button
                     className="px-8 py-2 bg-cyan-500 hover:bg-cyan-600 text-white font-semibold rounded-lg transition-colors shadow-lg shadow-cyan-500/50"
                     onClick={() => logout({ redirectTo: "home" })}

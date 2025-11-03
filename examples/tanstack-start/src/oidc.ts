@@ -16,10 +16,13 @@ export const {
         decodedIdTokenSchema: z.object({
             name: z.string(),
             picture: z.string().optional(),
+            email: z.string().email().optional(),
+            preferred_username: z.string().optional(),
             realm_access: z.object({ roles: z.array(z.string()) }).optional()
         }),
         decodedIdToken_mock: {
             name: "John Doe",
+            preferred_username: "john.doe",
             realm_access: {
                 roles: ["realm-admin"]
             }
@@ -33,7 +36,7 @@ export const {
             realm_access: z.object({ roles: z.array(z.string()) }).optional()
         }),
         accessTokenClaims_mock: {
-            sub: "123",
+            sub: "u123",
             realm_access: {
                 roles: ["realm-admin"]
             }
