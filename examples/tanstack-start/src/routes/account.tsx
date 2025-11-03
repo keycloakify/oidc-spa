@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { enforceLogin, createOidcComponent } from "@/oidc";
 import { isKeycloak, createKeycloakUtils } from "oidc-spa/keycloak";
+import { ExternalLink } from "lucide-react";
 
 export const Route = createFileRoute("/account")({
     beforeLoad: enforceLogin,
@@ -26,94 +27,76 @@ const Account = createOidcComponent({
         const keycloakUtils = isKeycloak({ issuerUri }) ? createKeycloakUtils({ issuerUri }) : undefined;
 
         return (
-            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-sm shadow-slate-950/40">
-                <dl className="grid gap-2 text-sm text-slate-400">
-                    <InfoRow label="name">{decodedIdToken.name}</InfoRow>
-                    {decodedIdToken.email && <InfoRow label="Email">{decodedIdToken.email}</InfoRow>}
-                    {decodedIdToken.preferred_username && (
-                        <InfoRow label="Username">{decodedIdToken.preferred_username}</InfoRow>
-                    )}
-                </dl>
+            <div className="flex flex-1 items-center justify-center min-h-full p-4 text-white">
+                <div className="w-full max-w-2xl p-8 rounded-xl backdrop-blur-md bg-black/50 shadow-xl border-8 border-black/10">
+                    <h1 className="text-2xl font-semibold mb-4">Your Account</h1>
 
-                {keycloakUtils && (
-                    <>
-                        {/* See: https://docs.oidc-spa.dev/features/user-account-management */}
-                        <div className="mt-6 flex flex-wrap gap-3">
-                            <button
-                                className="inline-flex items-center rounded-full border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-200 transition-colors hover:border-slate-500"
-                                onClick={() =>
-                                    goToAuthServer({
-                                        extraQueryParams: { kc_action: "UPDATE_PASSWORD" }
-                                    })
-                                }
-                            >
-                                Change password
-                            </button>
-                            <button
-                                className="inline-flex items-center rounded-full border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-200 transition-colors hover:border-slate-500"
-                                onClick={() =>
-                                    goToAuthServer({
-                                        extraQueryParams: { kc_action: "UPDATE_PROFILE" }
-                                    })
-                                }
-                            >
-                                Update profile
-                            </button>
-                            <button
-                                className="inline-flex items-center rounded-full border border-rose-400/60 px-4 py-2 text-sm font-semibold text-rose-200 transition-colors hover:border-rose-300 hover:text-rose-100"
-                                onClick={() =>
-                                    goToAuthServer({
-                                        extraQueryParams: { kc_action: "delete_account" }
-                                    })
-                                }
-                            >
-                                Delete account
-                            </button>
-                        </div>
-
-                        {backFromAuthServer?.extraQueryParams.kc_action && (
-                            <p className="mt-4 text-sm text-slate-400">
-                                Result for {backFromAuthServer.extraQueryParams.kc_action}:{" "}
-                                <span className="font-medium text-white">
-                                    {backFromAuthServer.result.kc_action_status}
-                                </span>
-                            </p>
+                    <dl className="space-y-2 text-white/90">
+                        <InfoRow label="Name">{decodedIdToken.name}</InfoRow>
+                        {decodedIdToken.email && <InfoRow label="Email">{decodedIdToken.email}</InfoRow>}
+                        {decodedIdToken.preferred_username && (
+                            <InfoRow label="Username">{decodedIdToken.preferred_username}</InfoRow>
                         )}
+                    </dl>
 
-                        <a
-                            className="group inline-flex items-center gap-2 rounded-full border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-200 transition-colors hover:border-slate-500 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-200/40 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
-                            href={keycloakUtils.getAccountUrl({
-                                clientId,
-                                validRedirectUri
-                            })}
-                        >
-                            My Account (Keycloak Account Console)
-                            <svg
-                                aria-hidden="true"
-                                className="h-3 w-3 text-slate-400 transition-colors group-hover:text-slate-200"
-                                viewBox="0 0 12 12"
-                                xmlns="http://www.w3.org/2000/svg"
-                            >
-                                <path
-                                    d="M4 2.5h5.5V8"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth="1.5"
-                                />
-                                <path
-                                    d="M2.5 9.5 9.5 2.5"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth="1.5"
-                                />
-                            </svg>
-                        </a>
-                    </>
-                )}
+                    {keycloakUtils && (
+                        <>
+                            {/* See: https://docs.oidc-spa.dev/features/user-account-management */}
+                            <div className="mt-6 flex flex-wrap gap-2">
+                                <button
+                                    className="px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 transition-colors"
+                                    onClick={() =>
+                                        goToAuthServer({
+                                            extraQueryParams: { kc_action: "UPDATE_PASSWORD" }
+                                        })
+                                    }
+                                >
+                                    Change password
+                                </button>
+                                <button
+                                    className="px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 transition-colors"
+                                    onClick={() =>
+                                        goToAuthServer({
+                                            extraQueryParams: { kc_action: "UPDATE_PROFILE" }
+                                        })
+                                    }
+                                >
+                                    Update profile
+                                </button>
+                                <button
+                                    className="px-4 py-2 rounded-lg bg-rose-600/80 hover:bg-rose-600 transition-colors"
+                                    onClick={() =>
+                                        goToAuthServer({
+                                            extraQueryParams: { kc_action: "delete_account" }
+                                        })
+                                    }
+                                >
+                                    Delete account
+                                </button>
+                            </div>
+
+                            {backFromAuthServer?.extraQueryParams.kc_action && (
+                                <p className="mt-4 text-sm text-white/80">
+                                    Result for {backFromAuthServer.extraQueryParams.kc_action}:{" "}
+                                    <span className="font-semibold text-white">
+                                        {backFromAuthServer.result.kc_action_status}
+                                    </span>
+                                </p>
+                            )}
+
+                            <div className="mt-6">
+                                <a
+                                    href={keycloakUtils.getAccountUrl({ clientId, validRedirectUri })}
+                                    rel="noreferrer"
+                                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-700 text-white font-semibold transition-colors shadow-lg shadow-cyan-500/30 border border-cyan-400/40"
+                                >
+                                    <ExternalLink className="h-4 w-4" />
+                                    Open Keycloak account console
+                                </a>
+                            </div>
+                        </>
+                    )}
+                </div>
             </div>
         );
     }
@@ -121,8 +104,8 @@ const Account = createOidcComponent({
 
 function InfoRow({ label, children }: { label: string; children: React.ReactNode }) {
     return (
-        <div className="flex flex-wrap justify-between gap-2">
-            <dt className="text-slate-400">{label}</dt>
+        <div className="flex items-center justify-between gap-2 border border-white/10 bg-white/5 rounded-lg px-3 py-2">
+            <dt className="text-white/70">{label}</dt>
             <dd className="font-medium text-white">{children}</dd>
         </div>
     );
