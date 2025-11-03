@@ -17,8 +17,6 @@
         "size": "bash ./scripts/compute-payload.sh",
         "start-angular-example": "bash ./scripts/start-example.sh angular start",
         "start-angular-kitchensink-example": "bash ./scripts/start-example.sh angular-kitchensink start",
-        "start-multi-providers-example": "bash ./scripts/start-example.sh multi-providers dev",
-        "start-react-router-example": "bash ./scripts/start-example.sh react-router dev",
         "start-react-router-framework-example": "bash ./scripts/start-example.sh react-router-framework dev",
         "start-react-router-declarative-example": "bash ./scripts/start-example.sh react-router-declarative dev",
         "start-tanstack-router-example": "bash ./scripts/start-example.sh tanstack-router dev",
