@@ -18,6 +18,7 @@
         "start-angular-example": "bash ./scripts/start-example.sh angular start",
         "start-angular-kitchensink-example": "bash ./scripts/start-example.sh angular-kitchensink start",
         "start-react-router-framework-example": "bash ./scripts/start-example.sh react-router-framework dev",
+        "start-react-router-data-example": "bash ./scripts/start-example.sh react-router-data dev",
         "start-react-router-declarative-example": "bash ./scripts/start-example.sh react-router-declarative dev",
         "start-tanstack-router-example": "bash ./scripts/start-example.sh tanstack-router dev",
         "start-tanstack-router-file-based-example": "bash ./scripts/start-example.sh tanstack-router-file-based dev",
