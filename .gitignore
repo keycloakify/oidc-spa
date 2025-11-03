@@ -47,3 +47,6 @@ jspm_packages
 
 .vercel
 /.tmp
+
+/www.oidc-spa.dev
+/docs.oidc-spa.dev

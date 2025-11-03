@@ -123,19 +123,19 @@ However, `oidc-spa/angular` still has several advantages:
 -   Support for multiple resource servers
 -   Clearer and more actionable error messages for misconfiguration
 
-### [BetterAuth](https://www.better-auth.com/) / [NextAuth.js](https://next-auth.js.org/)
+### [BetterAuth](https://www.better-auth.com/) / [Auth.js](https://authjs.dev/)
 
-These are great for what they are—but they’re “roll your own auth” solutions.  
+These are great for what they are, but they’re “roll your own auth” solutions.  
 With oidc-spa, you delegate authentication to a specialized identity provider such as Keycloak, Auth0, Okta, or Clerk.
 
-With BetterAuth, your backend _is_ the authorization server.  
+With BetterAuth, your backend _is_ the authorization server. (even if you can integrate third party provider).  
 That’s very battery-included, but also far heavier infrastructure-wise.  
 Today, very few companies still roll their own auth—including OpenAI and Vercel.
 
 Another big difference: oidc-spa is **browser-centric**. The token exchange happens on the client,  
 and the backend server is merely an OAuth2 resource server in the OIDC model.
 
-If you use BetterAuth to provide login via Keycloak, your backend becomes the OIDC client application—  
+If you use BetterAuth to provide login via Keycloak, your backend becomes the OIDC client application,  
 which has some security benefits over browser token exchange, but at the cost of centralization and requiring backend infrastructure.
 
 One clear advantage BetterAuth has over oidc-spa is SSR support.
