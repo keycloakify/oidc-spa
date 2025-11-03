@@ -205,7 +205,7 @@ const LoggedInAuthButton = createOidcComponent({
                     />
                 </Link>
                 <button
-                    className="px-8 py-2 bg-cyan-500 hover:bg-cyan-600 text-white font-semibold rounded-lg transition-colors shadow-lg shadow-cyan-500/50"
+                    className="px-4 py-2 rounded-md border border-white/20 text-white/90 hover:bg-white/10 transition-colors"
                     onClick={() => logout({ redirectTo: "home" })}
                 >
                     Logout
@@ -225,17 +225,16 @@ const NotLoggedInAuthButton = createOidcComponent({
             : createKeycloakUtils({ issuerUri });
 
         return (
-            <>
+            <div className="flex items-center gap-2">
                 <button
-                    className="px-8 py-2 bg-cyan-500 hover:bg-cyan-600 text-white font-semibold rounded-lg transition-colors shadow-lg shadow-cyan-500/50"
+                    className="px-4 py-2 rounded-md border border-white/20 text-white/90 hover:bg-white/10 transition-colors"
                     onClick={() => login()}
                 >
                     Login
                 </button>
-                &nbsp;
                 {keycloakUtils !== undefined && (
                     <button
-                        className="px-8 py-2 bg-cyan-500 hover:bg-cyan-600 text-white font-semibold rounded-lg transition-colors shadow-lg shadow-cyan-500/50"
+                        className="px-4 py-2 rounded-md bg-cyan-600 hover:bg-cyan-700 text-white transition-colors"
                         onClick={() =>
                             login({
                                 transformUrlBeforeRedirect:
@@ -246,7 +245,7 @@ const NotLoggedInAuthButton = createOidcComponent({
                         Register
                     </button>
                 )}
-            </>
+            </div>
         );
     }
 });
