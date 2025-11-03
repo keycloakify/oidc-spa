@@ -26,7 +26,7 @@ export default function Header() {
                         <img
                             src={`${import.meta.env.BASE_URL}tanstack-word-logo-white.svg`}
                             alt="TanStack Logo"
-                            className="h-10"
+                            className="h-11"
                         />
                     </Link>
                 </h1>
