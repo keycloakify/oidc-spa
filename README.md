@@ -26,12 +26,12 @@
 
 ## What this is
 
-oidc-spa is a framework-agnostic OpenID Connect client for browser-centric web applications implementing the [Authorization Code Flow with PKCE](resources/why-no-client-secret.md).
+oidc-spa is a framework-agnostic OpenID Connect client for browser-centric web applications implementing the [Authorization Code Flow with PKCE](https://docs.oidc-spa.dev/resources/why-no-client-secret).
 
 It work with any spec compliant OIDC provider like [Keycloak](https://www.keycloak.org/), [Auth0](https://auth0.com/) or [Microsoft EntraID](https://www.microsoft.com/fr-fr/security/business/identity-access/microsoft-entra-id) and replace provider-specific SDKs like [keycloak-js](https://www.npmjs.com/package/keycloak-js), [auth0-spa-js](https://www.npmjs.com/package/@auth0/auth0-spa-js), or [@azure/msal-browser](https://www.npmjs.com/package/@azure/msal-browser) with one unified API, freeing your app from vendor lock-in and making it deployable in any IT system.  
 Concretely this mean that it let you build an app and sell it to different companies ensuring they will be able to deploy it in their environment regardless of what auth platform they use internally. &#x20;
 
-oidc-spa provides strong guarantees regarding the [protection of your tokens **even in case of successful XSS or supply chain attacks**](resources/why-no-client-secret.md#how-oidc-spa-mitigates-the-risks-of-token-exposure). No other implementation can currently claim that. &#x20;
+oidc-spa provides strong guarantees regarding the protection of your tokens [**even in case of successful XSS or supply chain attacks**](https://docs.oidc-spa.dev/v/v8/resources/xss-and-supply-chain-attack-protection). No other implementation can currently claim that. &#x20;
 
 It is uncompromising in terms of performance, security, DX, and UX. You get a state-of-the-art authentication and authorization system out of the box with zero glue code to write and no knobs to adjust.
 
@@ -184,7 +184,7 @@ oidc-spa exposes an Angular adapter: [oidc-spa/angular](https://docs.oidc-spa.de
 This is a solid generic OIDC adapter.  
 However, `oidc-spa/angular` still has several advantages:
 
--   [Better security guarantees](https://docs.oidc-spa.dev/resources/why-no-client-secret#how-oidc-spa-mitigates-the-risks-of-token-exposure) (angular-oauth2-oidc does not protect tokens from XSS or supply-chain attacks)
+-   [Better security guarantees](https://docs.oidc-spa.dev/resources/xss-and-supply-chain-attack-protection) (angular-oauth2-oidc does not protect tokens from XSS or supply-chain attacks)
 -   Better performance due to early initialization
 -   Auto logout overlay (“Are you still there?” countdown)
 -   Stronger type safety with propagated user profile types
