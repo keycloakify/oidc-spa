@@ -24,6 +24,54 @@
   <a href="https://docs.oidc-spa.dev">Documentation</a>
 </p>
 
+## At a glance
+
+The Framework Agnostic Adapter:
+
+```ts
+import { createOidc } from "oidc-spa/core";
+import { z } from "zod";
+
+const oidc = await createOidc({
+    issuerUri: "https://auth.my-domain.net/realms/myrealm",
+    //issuerUri: "https://login.microsoftonline.com/...",
+    //issuerUri: "https://xxx.us.auth0.com/..."
+    //issuerUri: "https://accounts.google.com/o/oauth2/v2/auth"
+    clientId: "myclient",
+    decodedIdTokenSchema: z.object({
+        name: z.string(),
+        picture: z.string().optional(),
+        email: z.string(),
+        realm_access: z.object({ roles: z.array(z.string()) })
+    })
+});
+
+if (!oidc.isUserLoggedIn) {
+    oidc.login();
+    return;
+}
+
+const { name, realm_access } = oidc.getDecodedIdToken();
+
+console.log(`Hello ${name}`);
+
+const { accessToken } = await oidc.getTokens();
+
+await fetch("https://my-domain.net/api/todos", {
+    headers: {
+        Authorization: `Bearer ${accessToken}`
+    }
+});
+
+if (realm_access.roles.includes("realm-admin")) {
+    // User is an admin
+}
+```
+
+Higher level adapters, example with React + TanStack Router:
+
+<img width="1835" height="942" alt="Image" src="https://github.com/user-attachments/assets/a7a18bbc-998a-459c-8cfa-93b599a45524" />
+
 ## What this is
 
 oidc-spa is a framework-agnostic OpenID Connect client for browser-centric web applications implementing the [Authorization Code Flow with PKCE](https://docs.oidc-spa.dev/resources/why-no-client-secret).
@@ -122,22 +170,23 @@ If that all sounds good to you…\
     -   ...More to come...
 -   Backend: [Express, Hono, tRPC, Nest.js ...](https://docs.oidc-spa.dev/integration-guides/tanstack-router-+-node-rest-api)
 
-## Comparison with Existing Libraries  
+## Comparison with Existing Libraries
 
 With other OIDC clients, you'll get something that works in the happy path.  
-But then you will face issues like:  
-- The user cannot navigate back from the login page to your app.
-- User get hit with "your session has expired please login again" after spending an hours filling your form.
-- User logged out or logged in on one tabe but the state is not propagated to the other tabs.
-- Random 401 from your API with "token expired"
-- You can't run E2E test without having to actually connect to a real server.
+But then you will face issues like:
+
+-   The user cannot navigate back from the login page to your app.
+-   User get hit with "your session has expired please login again" after spending an hours filling your form.
+-   User logged out or logged in on one tabe but the state is not propagated to the other tabs.
+-   Random 401 from your API with "token expired"
+-   You can't run E2E test without having to actually connect to a real server.
 
 Plus you'll realize that your configuration works with one provider in one devloppement configuration,
 try to switch IdP and the all thing fall appart, you'll be met with criptic errors and have to spend
-days tweeking knobs again.  
+days tweeking knobs again.
 
 With oidc-spa, there's no knobs to adjust, things just work out of the box.  
-And you get XSS and suply chain attack protection, unlike with any other client side solution.  
+And you get XSS and suply chain attack protection, unlike with any other client side solution.
 
 ### [oidc-client-ts](https://github.com/authts/oidc-client-ts)
 
@@ -151,7 +200,7 @@ Example of what you get out of the box with oidc-spa:
 -   **Login/logout propagation** across tabs
 -   **SSO that just works**, regardless of the deployment configuration.
 -   **Seamless browser back/forward cache (bfcache) management**
--   **Auto logout**: avoid "your session has expired please login again" after the used just spend an hour filling your form.  
+-   **Auto logout**: avoid "your session has expired please login again" after the used just spend an hour filling your form.
 -   **Never getting an expired access token error**, even after waking from sleep
 -   **Graceful handling when the provider lacks refresh tokens or a logout endpoint** (e.g. Google OAuth)
 -   **Mock support**, run with a mock identity without contacting a server
@@ -201,7 +250,7 @@ This is a solid generic OIDC adapter.
 However, `oidc-spa/angular` still has several advantages:
 
 -   [Better security guarantees](https://docs.oidc-spa.dev/resources/xss-and-supply-chain-attack-protection) (angular-oauth2-oidc does not protect tokens from XSS or supply-chain attacks)
--   DX more aligned with modern Angular.  
+-   DX more aligned with modern Angular.
 -   Auto logout overlay (“Are you still there?” countdown)
 -   Stronger type safety with propagated user profile types
 -   Ability to start rendering before session restoration settles
