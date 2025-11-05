@@ -121,7 +121,7 @@ export function createOidcSpaApi<
 
             const getMessage = (v: string) =>
                 [
-                    "There is a logic error in the application.",
+                    "oidc-spa: There is a logic error in the application.",
                     `If this component is mounted the user is supposed ${v}.`,
                     "An explicit assertion was made in this sense."
                 ].join(" ");

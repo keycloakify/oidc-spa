@@ -5,30 +5,34 @@ import type { GetterOrDirectValue } from "../../tools/GetterOrDirectValue";
 import type { OidcMetadata } from "../../core/OidcMetadata";
 import type { MaybeAsync } from "../../tools/MaybeAsync";
 
-export type CreateOidcComponent<DecodedIdToken> = <
-    Assert extends "user logged in" | "user not logged in" | undefined,
-    Props
->(params: {
-    assert?: Assert;
-    pendingComponent?: Assert extends undefined ? (props: NoInfer<Props>) => ReactNode : undefined;
-    component: (props: Props) => any;
-}) => ((props: Props) => ReactNode) & {
-    useOidc: () => undefined extends Assert
-        ? CreateOidcComponent.Oidc<DecodedIdToken>
-        : "user logged in" extends Assert
-        ? CreateOidcComponent.Oidc.LoggedIn<DecodedIdToken>
-        : CreateOidcComponent.Oidc.NotLoggedIn;
+export type UseOidc<DecodedIdToken> = {
+    (params?: { assert?: undefined }): UseOidc.Oidc<DecodedIdToken>;
+    (params: { assert: "user logged in" }): UseOidc.Oidc.LoggedIn<DecodedIdToken>;
+    (params: { assert: "user not logged in" }): UseOidc.Oidc.NotLoggedIn;
 };
 
-export namespace CreateOidcComponent {
-    export type WithAutoLogin<DecodedIdToken> = <Props>(params: {
-        pendingComponent?: (params: NoInfer<Props>) => ReactNode;
-        component: (props: Props) => any;
-    }) => ((props: Props) => ReactNode) & {
-        useOidc: () => Oidc.LoggedIn<DecodedIdToken>;
-    };
+export namespace UseOidc {
+    export type WithAutoLogin<DecodedIdToken> = (params?: {
+        assert: "init completed";
+    }) => Oidc.LoggedIn<DecodedIdToken>;
 
     export type Oidc<DecodedIdToken> =
+        | (Oidc.InitNotCompleted & {
+              isUserLoggedIn?: never;
+              issuerUri?: never;
+              clientId?: never;
+              validRedirectUri?: never;
+
+              decodedIdToken?: never;
+              logout?: never;
+              renewTokens?: never;
+              goToAuthServer?: never;
+              backFromAuthServer?: never;
+              isNewBrowserSession?: never;
+
+              login?: never;
+              initializationError?: never;
+          })
         | (Oidc.NotLoggedIn & {
               decodedIdToken?: never;
               logout?: never;
@@ -43,13 +47,19 @@ export namespace CreateOidcComponent {
           });
 
     export namespace Oidc {
-        type Common = {
+        export type InitNotCompleted = {
+            hasInitCompleted: false;
+            autoLogoutState: {
+                shouldDisplayWarning: false;
+            };
+        };
+
+        export type NotLoggedIn = {
+            hasInitCompleted: true;
+            isUserLoggedIn: false;
             issuerUri: string;
             clientId: string;
             validRedirectUri: string;
-        };
-
-        export type NotLoggedIn = Common & {
             login: (params?: {
                 extraQueryParams?: Record<string, string | undefined>;
                 redirectUrl?: string;
@@ -58,12 +68,15 @@ export namespace CreateOidcComponent {
             autoLogoutState: {
                 shouldDisplayWarning: false;
             };
-            isUserLoggedIn: false;
             initializationError: OidcInitializationError | undefined;
         };
 
-        export type LoggedIn<DecodedIdToken> = Common & {
+        export type LoggedIn<DecodedIdToken> = {
+            hasInitCompleted: true;
             isUserLoggedIn: true;
+            issuerUri: string;
+            clientId: string;
+            validRedirectUri: string;
             decodedIdToken: DecodedIdToken;
             logout: Oidc_core.LoggedIn["logout"];
             renewTokens: Oidc_core.LoggedIn["renewTokens"];
@@ -419,9 +432,7 @@ export type OidcSpaApi<AutoLogin, DecodedIdToken, AccessTokenClaims> = {
             ParamsOfBootstrap<AutoLogin, DecodedIdToken, AccessTokenClaims>
         >
     ) => void;
-    createOidcComponent: AutoLogin extends true
-        ? CreateOidcComponent.WithAutoLogin<DecodedIdToken>
-        : CreateOidcComponent<DecodedIdToken>;
+    useOidc: AutoLogin extends true ? UseOidc.WithAutoLogin<DecodedIdToken> : UseOidc<DecodedIdToken>;
     getOidc: AutoLogin extends true ? GetOidc.WithAutoLogin<DecodedIdToken> : GetOidc<DecodedIdToken>;
 } & (AccessTokenClaims extends undefined
     ? {}

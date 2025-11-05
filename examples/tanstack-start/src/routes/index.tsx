@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Lock, ShieldCheck, ExternalLink, ListTodo, Server, Sparkles } from "lucide-react";
-import { createOidcComponent } from "@/oidc";
+import { useOidc } from "@/oidc";
 
 export const Route = createFileRoute("/")({ component: App });
 
@@ -266,15 +266,16 @@ function App() {
     );
 }
 
-const Greeting = createOidcComponent({
-    pendingComponent: () => <>&nbsp;</>,
-    component: () => {
-        const { isUserLoggedIn, decodedIdToken } = Greeting.useOidc();
+function Greeting() {
+    const { hasInitCompleted, isUserLoggedIn, decodedIdToken } = useOidc();
 
-        return (
-            <span className="opacity-0 animate-[fadeIn_0.2s_ease-in_forwards]">
-                {isUserLoggedIn ? `Welcome back ${decodedIdToken.name}` : `Hello anonymous visitor!`}
-            </span>
-        );
+    if (!hasInitCompleted) {
+        return <>&nbsp;</>;
     }
-});
+
+    return (
+        <span className="opacity-0 animate-[fadeIn_0.2s_ease-in_forwards]">
+            {isUserLoggedIn ? `Welcome back ${decodedIdToken.name}` : `Hello anonymous visitor!`}
+        </span>
+    );
+}

@@ -28,13 +28,10 @@ export namespace UseOidc {
           });
 
     export namespace Oidc {
-        type Common = {
+        export type NotLoggedIn = {
             issuerUri: string;
             clientId: string;
             validRedirectUri: string;
-        };
-
-        export type NotLoggedIn = Common & {
             login: (params?: {
                 extraQueryParams?: Record<string, string | undefined>;
                 redirectUrl?: string;
@@ -47,7 +44,10 @@ export namespace UseOidc {
             initializationError: OidcInitializationError | undefined;
         };
 
-        export type LoggedIn<DecodedIdToken> = Common & {
+        export type LoggedIn<DecodedIdToken> = {
+            issuerUri: string;
+            clientId: string;
+            validRedirectUri: string;
             isUserLoggedIn: true;
             decodedIdToken: DecodedIdToken;
             logout: Oidc_core.LoggedIn["logout"];

@@ -2,7 +2,7 @@ import { Link } from "@tanstack/react-router";
 
 import { useState } from "react";
 import { ChevronDown, ChevronRight, Home, Menu, Server, X } from "lucide-react";
-import { createOidcComponent } from "@/oidc";
+import { useOidc } from "@/oidc";
 import { isKeycloak, createKeycloakUtils } from "oidc-spa/keycloak";
 
 import userPictureFallback from "./userPictureFallback.svg";
@@ -172,111 +172,102 @@ export default function Header() {
     );
 }
 
-const AuthButtons = createOidcComponent({
-    pendingComponent: () => null,
-    component: (props: { className?: string }) => {
-        const { className } = props;
+function AuthButtons(props: { className?: string }) {
+    const { className } = props;
 
-        const { isUserLoggedIn } = AuthButtons.useOidc();
+    const { hasInitCompleted, isUserLoggedIn } = useOidc();
 
-        return (
-            <div className={["opacity-0 animate-[fadeIn_0.2s_ease-in_forwards]", className].join(" ")}>
-                {isUserLoggedIn ? <LoggedInAuthButton /> : <NotLoggedInAuthButton />}
-            </div>
-        );
+    if (!hasInitCompleted) {
+        return null;
     }
-});
 
-const LoggedInAuthButton = createOidcComponent({
-    assert: "user logged in",
-    component: () => {
-        const { decodedIdToken, logout } = LoggedInAuthButton.useOidc();
+    return (
+        <div className={["opacity-0 animate-[fadeIn_0.2s_ease-in_forwards]", className].join(" ")}>
+            {isUserLoggedIn ? <LoggedInAuthButton /> : <NotLoggedInAuthButton />}
+        </div>
+    );
+}
 
-        return (
-            <div className="flex items-center gap-4">
-                <Link
-                    to="/account"
-                    className="flex items-center gap-3 text-white font-semibold hover:text-cyan-300 transition-colors"
-                >
-                    <img
-                        src={decodedIdToken.picture || userPictureFallback}
-                        alt={`${decodedIdToken.name}'s avatar`}
-                        className="w-10 h-10 rounded-full object-cover border border-cyan-500/60 shadow-lg shrink-0"
-                    />
-                </Link>
-                <button
-                    className="px-4 py-2 rounded-md border border-white/20 text-white/90 hover:bg-white/10 transition-colors"
-                    onClick={() => logout({ redirectTo: "home" })}
-                >
-                    Logout
-                </button>
-            </div>
-        );
-    }
-});
+function LoggedInAuthButton() {
+    const { decodedIdToken, logout } = useOidc({ assert: "user logged in" });
 
-const NotLoggedInAuthButton = createOidcComponent({
-    assert: "user not logged in",
-    component: () => {
-        const { login, issuerUri } = NotLoggedInAuthButton.useOidc();
-
-        const keycloakUtils = !isKeycloak({ issuerUri })
-            ? undefined
-            : createKeycloakUtils({ issuerUri });
-
-        return (
-            <div className="flex items-center gap-2">
-                <button
-                    className="px-4 py-2 rounded-md border border-white/20 text-white/90 hover:bg-white/10 transition-colors"
-                    onClick={() => login()}
-                >
-                    Login
-                </button>
-                {keycloakUtils !== undefined && (
-                    <button
-                        className="px-4 py-2 rounded-md bg-cyan-600 hover:bg-cyan-700 text-white transition-colors"
-                        onClick={() =>
-                            login({
-                                transformUrlBeforeRedirect:
-                                    keycloakUtils.transformUrlBeforeRedirectForRegister
-                            })
-                        }
-                    >
-                        Register
-                    </button>
-                )}
-            </div>
-        );
-    }
-});
-
-const AdminOnlyNavLink = createOidcComponent({
-    component: (props: { onClick: () => void }) => {
-        const { onClick } = props;
-
-        const { isUserLoggedIn, decodedIdToken } = AdminOnlyNavLink.useOidc();
-
-        if (!isUserLoggedIn) {
-            return null;
-        }
-
-        if (!decodedIdToken.realm_access?.roles.includes("realm-admin")) {
-            return null;
-        }
-
-        return (
+    return (
+        <div className="flex items-center gap-4">
             <Link
-                to="/demo/start/admin-only"
-                onClick={onClick}
-                className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-800 transition-colors mb-2"
-                activeProps={{
-                    className:
-                        "flex items-center gap-3 p-3 rounded-lg bg-cyan-600 hover:bg-cyan-700 transition-colors mb-2"
-                }}
+                to="/account"
+                className="flex items-center gap-3 text-white font-semibold hover:text-cyan-300 transition-colors"
             >
-                <Server size={20} />
-                <span className="font-medium">Admin (Claim based Authorization Demo)</span>
+                <img
+                    src={decodedIdToken.picture || userPictureFallback}
+                    alt={`${decodedIdToken.name}'s avatar`}
+                    className="w-10 h-10 rounded-full object-cover border border-cyan-500/60 shadow-lg shrink-0"
+                />
             </Link>
-        );
+            <button
+                className="px-4 py-2 rounded-md border border-white/20 text-white/90 hover:bg-white/10 transition-colors"
+                onClick={() => logout({ redirectTo: "home" })}
+            >
+                Logout
+            </button>
+        </div>
+    );
+}
+
+function NotLoggedInAuthButton() {
+    const { login, issuerUri } = useOidc({ assert: "user not logged in" });
+
+    const keycloakUtils = !isKeycloak({ issuerUri }) ? undefined : createKeycloakUtils({ issuerUri });
+
+    return (
+        <div className="flex items-center gap-2">
+            <button
+                className="px-4 py-2 rounded-md border border-white/20 text-white/90 hover:bg-white/10 transition-colors"
+                onClick={() => login()}
+            >
+                Login
+            </button>
+            {keycloakUtils !== undefined && (
+                <button
+                    className="px-4 py-2 rounded-md bg-cyan-600 hover:bg-cyan-700 text-white transition-colors"
+                    onClick={() =>
+                        login({
+                            transformUrlBeforeRedirect:
+                                keycloakUtils.transformUrlBeforeRedirectForRegister
+                        })
+                    }
+                >
+                    Register
+                </button>
+            )}
+        </div>
+    );
+}
+
+function AdminOnlyNavLink(props: { onClick: () => void }) {
+    const { onClick } = props;
+
+    const { isUserLoggedIn, decodedIdToken } = useOidc();
+
+    if (!isUserLoggedIn) {
+        return null;
     }
-});
+
+    if (!decodedIdToken.realm_access?.roles.includes("realm-admin")) {
+        return null;
+    }
+
+    return (
+        <Link
+            to="/demo/start/admin-only"
+            onClick={onClick}
+            className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-800 transition-colors mb-2"
+            activeProps={{
+                className:
+                    "flex items-center gap-3 p-3 rounded-lg bg-cyan-600 hover:bg-cyan-700 transition-colors mb-2"
+            }}
+        >
+            <Server size={20} />
+            <span className="font-medium">Admin (Claim based Authorization Demo)</span>
+        </Link>
+    );
+}

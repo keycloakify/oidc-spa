@@ -1,9 +1,9 @@
 import { createServerFn } from "@tanstack/react-start";
 import { createFileRoute } from "@tanstack/react-router";
-import { enforceLogin, getOidc, oidcFnMiddleware, createOidcComponent, fetchWithAuth } from "@/oidc";
+import { enforceLogin, getOidc, oidcFnMiddleware, useOidc, fetchWithAuth } from "@/oidc";
 import Spinner from "@/components/Spinner";
 import { ShieldCheck, ShieldAlert, ExternalLink } from "lucide-react";
-import { isKeycloak, createKeycloakUtils } from "oidc-spa/keycloak";
+import { createKeycloakUtils } from "oidc-spa/keycloak";
 
 const getAdminOnlyData = createServerFn({ method: "GET" })
     .middleware([
@@ -77,6 +77,8 @@ export const Route = createFileRoute("/demo/start/admin-only")({
 function AdminOnly() {
     const { adminData_fromServerFn, adminData_fromRestApi } = Route.useLoaderData();
 
+    const { issuerUri } = useOidc({ assert: "user logged in" });
+
     return (
         <div className="flex flex-1 items-center justify-center min-h-full p-4 text-white">
             <div className="w-full max-w-2xl p-8 rounded-xl backdrop-blur-md bg-black/50 shadow-xl border-8 border-black/10 opacity-0 animate-[fadeIn_0.2s_ease-in_forwards]">
@@ -109,33 +111,17 @@ function AdminOnly() {
                 </div>
 
                 <div className="mt-6">
-                    <KeycloakAdminConsoleLink />
+                    <a
+                        href={createKeycloakUtils({ issuerUri }).adminConsoleUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-700 text-white font-semibold transition-colors shadow-lg shadow-cyan-500/30 border border-cyan-400/40"
+                    >
+                        <ExternalLink className="h-4 w-4" />
+                        Open the Keycloak administration console
+                    </a>
                 </div>
             </div>
         </div>
     );
 }
-
-const KeycloakAdminConsoleLink = createOidcComponent({
-    component: () => {
-        const { issuerUri } = KeycloakAdminConsoleLink.useOidc();
-
-        if (!isKeycloak({ issuerUri })) {
-            return null;
-        }
-
-        return (
-            <div>
-                <a
-                    href={createKeycloakUtils({ issuerUri }).adminConsoleUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-700 text-white font-semibold transition-colors shadow-lg shadow-cyan-500/30 border border-cyan-400/40"
-                >
-                    <ExternalLink className="h-4 w-4" />
-                    Open the Keycloak administration console
-                </a>
-            </div>
-        );
-    }
-});

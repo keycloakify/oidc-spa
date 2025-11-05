@@ -3,7 +3,7 @@ import { z } from "zod";
 
 export const {
     bootstrapOidc,
-    createOidcComponent,
+    useOidc,
     getOidc,
     // NOTE: Each time you enforceLogin on a route the oidc-spa vite plugin
     // will automatically switch this route to `ssr: false`.

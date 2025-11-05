@@ -1,15 +1,8 @@
-import {
-    useState,
-    useEffect,
-    type ReactNode,
-    createContext,
-    useContext,
-    type ComponentType
-} from "react";
+import { useState, useEffect, type ReactNode, useReducer, type ComponentType } from "react";
 import type {
     CreateValidateAndGetAccessTokenClaims,
     OidcSpaApi,
-    CreateOidcComponent,
+    UseOidc,
     GetOidc,
     ParamsOfBootstrap,
     OidcServerContext
@@ -62,11 +55,11 @@ export function createOidcSpaApi<
         Oidc_core<DecodedIdToken> | OidcInitializationError
     >();
 
-    const evtAutoLogoutState = createStatefulEvt<
-        CreateOidcComponent.Oidc.LoggedIn<unknown>["autoLogoutState"]
-    >(() => ({
-        shouldDisplayWarning: false
-    }));
+    const evtAutoLogoutState = createStatefulEvt<UseOidc.Oidc.LoggedIn<unknown>["autoLogoutState"]>(
+        () => ({
+            shouldDisplayWarning: false
+        })
+    );
 
     dOidcCoreOrInitializationError.pr.then(oidcCoreOrInitializationError => {
         const { hasResolved, value: paramsOfBootstrap } = dParamsOfBootstrap.getState();
@@ -94,7 +87,7 @@ export function createOidcSpaApi<
         }
 
         oidcCore.subscribeToAutoLogoutCountdown(({ secondsLeft }) => {
-            const newState: CreateOidcComponent.Oidc.LoggedIn<unknown>["autoLogoutState"] = (() => {
+            const newState: UseOidc.Oidc.LoggedIn<unknown>["autoLogoutState"] = (() => {
                 if (secondsLeft === undefined) {
                     return {
                         shouldDisplayWarning: false
@@ -121,13 +114,116 @@ export function createOidcSpaApi<
         });
     });
 
-    function useOidc(): CreateOidcComponent.Oidc<DecodedIdToken> {
+    function useOidc(params?: {
+        assert?: "user logged in" | "user not logged in" | "init completed";
+    }): UseOidc.Oidc<DecodedIdToken> {
+        const { assert: assert_params } = params ?? {};
+
+        /*
+        if (!isBrowser) {
+            throw new Error(
+                [
+                    "oidc-spa: useOidc() can't be used on the server.",
+                    "You can prevent this component from rendering on the server",
+                    "by wrapping it into <OidcInitializationGate />"
+                ].join(" ")
+            );
+        }
+        */
+
         const { hasResolved, value: oidcCore } = dOidcCoreOrInitializationError.getState();
 
-        assert(hasResolved);
-        assert(!(oidcCore instanceof OidcInitializationError));
+        if (oidcCore instanceof OidcInitializationError) {
+            throw oidcCore;
+        }
+
+        check_assertion: {
+            if (assert_params === undefined) {
+                break check_assertion;
+            }
+
+            if (assert_params === "init completed") {
+                if (!hasResolved) {
+                    throw new Error(
+                        [
+                            "oidc-spa: There is a logic error in the application.",
+                            "you called useOidc({ assert: 'init completed' }) but",
+                            ...(isBrowser
+                                ? [
+                                      "the component making this call was rendered before",
+                                      "the oidc initialization has completed."
+                                  ]
+                                : ["we are on the server, this assertion will always be wrong."]),
+                            "\nTo avoid this error make sure you call this within",
+                            "<OidcInitializationGate /> or remove the assertion and check",
+                            "the hasInitCompleted property."
+                        ].join(" ")
+                    );
+                }
+
+                break check_assertion;
+            }
+
+            if (!hasResolved) {
+                throw new Error(
+                    [
+                        "oidc-spa: There is a logic error in the application.",
+                        `you called useOidc({ assert: "${assert_params}" }) but`,
+                        "initialization hasn't completed yet, we don't know yet if the",
+                        "user is logged in or not."
+                    ].join(" ")
+                );
+            }
+
+            const getMessage = (v: string) =>
+                [
+                    "oidc-spa: There is a logic error in the application.",
+                    `If this component is mounted the user is supposed ${v}.`,
+                    "An explicit assertion was made in this sense."
+                ].join(" ");
+
+            switch (assert_params) {
+                case "user logged in":
+                    if (!oidcCore.isUserLoggedIn) {
+                        throw new Error(getMessage("to be logged in but currently they arn't"));
+                    }
+                    break;
+                case "user not logged in":
+                    if (oidcCore.isUserLoggedIn) {
+                        throw new Error(getMessage("not to be logged in but currently they are"));
+                    }
+                    break;
+                default:
+                    assert<Equals<typeof assert_params, never>>(false);
+            }
+        }
+
+        const [, reRender] = useReducer(n => n + 1, 0);
+
+        useEffect(() => {
+            if (hasResolved) {
+                return;
+            }
+
+            let isActive = true;
+
+            dOidcCoreOrInitializationError.pr.then(() => {
+                if (!isActive) {
+                    return;
+                }
+                reRender();
+            });
+
+            return () => {
+                isActive = false;
+            };
+        }, []);
 
         const [, reRenderIfDecodedIdTokenChanged] = useState<DecodedIdToken | undefined>(() => {
+            if (oidcCore === undefined) {
+                return undefined;
+            }
+
             if (!oidcCore.isUserLoggedIn) {
                 return undefined;
             }
@@ -137,6 +233,10 @@ export function createOidcSpaApi<
         const [evtIsDecodedIdTokenUsed] = useState(() => createStatefulEvt<boolean>(() => false));
 
         useEffect(() => {
+            if (oidcCore === undefined) {
+                return undefined;
+            }
+
             if (!oidcCore.isUserLoggedIn) {
                 return;
             }
@@ -211,8 +311,30 @@ export function createOidcSpaApi<
             };
         }, []);
 
+        const [hasHydrated, setHasHydratedToTrue] = useReducer(
+            () => true,
+            assert_params !== undefined ? undefined : false
+        );
+
+        useEffect(() => {
+            if (hasHydrated === undefined) {
+                return;
+            }
+            setHasHydratedToTrue();
+        }, []);
+
+        if (!hasResolved || hasHydrated === false) {
+            return id<UseOidc.Oidc.InitNotCompleted>({
+                hasInitCompleted: false,
+                autoLogoutState: {
+                    shouldDisplayWarning: false
+                }
+            });
+        }
+
         if (!oidcCore.isUserLoggedIn) {
-            return id<CreateOidcComponent.Oidc.NotLoggedIn>({
+            return id<UseOidc.Oidc.NotLoggedIn>({
+                hasInitCompleted: true,
                 isUserLoggedIn: false,
                 initializationError: oidcCore.initializationError,
                 issuerUri: oidcCore.params.issuerUri,
@@ -227,7 +349,8 @@ export function createOidcSpaApi<
             });
         }
 
-        return id<CreateOidcComponent.Oidc.LoggedIn<DecodedIdToken>>({
+        return id<UseOidc.Oidc.LoggedIn<DecodedIdToken>>({
+            hasInitCompleted: true,
             isUserLoggedIn: true,
             get decodedIdToken() {
                 evtIsDecodedIdTokenUsed.current = true;
@@ -248,139 +371,8 @@ export function createOidcSpaApi<
         });
     }
 
-    const context_isFreeOfSsrHydrationConcern = createContext<boolean>(false);
-
-    function createOidcComponent<Props extends Record<string, unknown>>(params: {
-        assert?: "user logged in" | "user not logged in";
-        pendingComponent?: (props: NoInfer<Props>) => ReactNode;
-        component: (props: Props) => ReactNode;
-    }): ((props: Props) => ReactNode) & {
-        useOidc: () => CreateOidcComponent.Oidc<DecodedIdToken>;
-    } {
-        const {
-            assert: assert_params,
-            pendingComponent: PendingComponent,
-            component: Component
-        } = params;
-
-        const checkAssertion =
-            assert_params === undefined
-                ? undefined
-                : (params: { isUserLoggedIn: boolean }): void => {
-                      const { isUserLoggedIn } = params;
-
-                      switch (assert_params) {
-                          case "user not logged in":
-                              if (isUserLoggedIn) {
-                                  throw new Error(
-                                      [
-                                          "oidc-spa: Asserted the user should not be logged in",
-                                          "but they are. Check your control flow."
-                                      ].join(" ")
-                                  );
-                              }
-                              break;
-                          case "user logged in":
-                              if (!isUserLoggedIn) {
-                                  throw new Error(
-                                      [
-                                          "oidc-spa: Asserted the user should be logged in",
-                                          "but they arn't. Check your control flow."
-                                      ].join(" ")
-                                  );
-                              }
-                              break;
-                          default:
-                              assert<Equals<typeof assert_params, never>>;
-                      }
-                  };
-
-        function ComponentWithOidc(props: Props) {
-            const renderFallback = () =>
-                PendingComponent === undefined ? null : <PendingComponent {...props} />;
-
-            if (!isBrowser) {
-                return renderFallback();
-            }
-
-            // NOTE: When the user assert that the user is logged in or not, they know.
-            // if they knows it means that they learned it somewhere so we are post SSR.
-            // Additionally, in autoLogin mode, the typedef don't allow this param to be provided.
-            const isFreeOfSsrHydrationConcern =
-                useContext(context_isFreeOfSsrHydrationConcern) || assert_params !== undefined;
-
-            const [oidcCore, setOidcCore] = useState<Oidc_core<DecodedIdToken> | undefined>(() => {
-                if (!isFreeOfSsrHydrationConcern) {
-                    return undefined;
-                }
-
-                const { hasResolved, value: oidcCore } = dOidcCoreOrInitializationError.getState();
-
-                if (!hasResolved) {
-                    return undefined;
-                }
-
-                if (oidcCore instanceof OidcInitializationError) {
-                    return undefined;
-                }
-
-                checkAssertion?.({
-                    isUserLoggedIn: oidcCore.isUserLoggedIn
-                });
-
-                return oidcCore;
-            });
-
-            useEffect(() => {
-                if (oidcCore !== undefined) {
-                    return;
-                }
-
-                let isActive = true;
-
-                dOidcCoreOrInitializationError.pr.then(oidcCore => {
-                    if (!isActive) {
-                        return;
-                    }
-
-                    if (oidcCore instanceof OidcInitializationError) {
-                        return;
-                    }
-
-                    checkAssertion?.({
-                        isUserLoggedIn: oidcCore.isUserLoggedIn
-                    });
-
-                    setOidcCore(oidcCore);
-                });
-
-                return () => {
-                    isActive = false;
-                };
-            }, []);
-
-            if (oidcCore === undefined) {
-                return PendingComponent === undefined ? null : <PendingComponent {...props} />;
-            }
-
-            return (
-                <context_isFreeOfSsrHydrationConcern.Provider value={true}>
-                    <Component {...props} />
-                </context_isFreeOfSsrHydrationConcern.Provider>
-            );
-        }
-
-        ComponentWithOidc.displayName = `${
-            (Component as any).displayName ?? Component.name ?? "Component"
-        }WithOidc`;
-
-        ComponentWithOidc.useOidc = useOidc;
-
-        return ComponentWithOidc;
-    }
-
     async function getOidc(params?: {
-        assert?: "user logged in" | "user not logged in";
+        assert?: "user logged in" | "user not logged in" | "init completed";
     }): Promise<GetOidc.Oidc<DecodedIdToken>> {
         if (!isBrowser) {
             throw new UnifiedClientRetryForSsrLoadersError(
@@ -1021,7 +1013,7 @@ export function createOidcSpaApi<
 
     // @ts-expect-error
     return {
-        createOidcComponent,
+        useOidc,
         getOidc,
         bootstrapOidc,
         enforceLogin,
