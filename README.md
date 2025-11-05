@@ -68,9 +68,47 @@ if (realm_access.roles.includes("realm-admin")) {
 }
 ```
 
-Higher level adapters, example with React + TanStack Router:
+Higher level adapters, example with React but we also feature similar Angular adapter:
 
 <img width="1835" height="942" alt="Image" src="https://github.com/user-attachments/assets/a7a18bbc-998a-459c-8cfa-93b599a45524" />
+
+Full Stack Auth solution with [TanStack Start]():
+
+```tsx
+import { createServerFn } from "@tanstack/react-start";
+import { enforceLogin, oidcFnMiddleware } from "@/oidc";
+import fs from "node:fs/promises";
+
+const getTodos = createServerFn({ method: "GET" })
+    .middleware([oidcFnMiddleware({ assert: "user logged in" })])
+    .handler(async ({ context: { oidc } }) => {
+        const userId = oidc.accessTokenClaims.sub;
+
+        const json = await fs.readFile(`todos_${userId}`, "utf8");
+
+        return JSON.parse(json);
+    });
+
+export const Route = createFileRoute("/todos")({
+    beforeLoad: enforceLogin,
+    loader: () => getTodos(),
+    component: RouteComponent
+});
+
+function RouteComponent() {
+    const todos = Route.useLoaderData();
+
+    return (
+        <ul>
+            {todos.map(todo => (
+                <li key={todo.id}>
+                    {todo.isDone && "✅"} {todo.text}
+                </li>
+            ))}
+        </ul>
+    );
+}
+```
 
 ## What this is
 
