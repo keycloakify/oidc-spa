@@ -7,45 +7,71 @@ let capturedApis:
           setItem: typeof localStorage.setItem;
           sessionStorage: typeof window.sessionStorage;
           setTimeout: typeof window.setTimeout;
+          clearTimeout: typeof window.clearTimeout;
           alert: typeof window.alert;
       }
     | undefined = undefined;
 
-export function captureApisForIframeProtection() {
+const SESSION_STORAGE_PREFIX = "oidc-spa_iframe_authResponse_publicKey_";
+
+const getProtectedTimer_set = new Set<() => number | undefined>();
+
+/**
+ * To call while still in the safe window where no other code
+ * has been evaluated and only before we're about to actually start the App.
+ */
+export function iframeMessageProtection_captureAndLockBuiltins() {
     capturedApis = {
         setItem: Storage.prototype.setItem,
         sessionStorage: window.sessionStorage,
         setTimeout: window.setTimeout,
+        clearTimeout: window.clearTimeout,
         alert: window.alert
     };
-}
 
-const SESSION_STORAGE_PREFIX = "oidc-spa_iframe_authResponse_publicKey_";
+    // Ensure, at least from main window we cannot simply write on the public key.
+    {
+        const setItem_protected = function setItem(this: any, key: string, value: string): void {
+            if (key.startsWith(SESSION_STORAGE_PREFIX)) {
+                throw new Error(
+                    "Attack prevented by oidc-spa. You have malicious code running in your system"
+                );
+            }
 
-export function preventSessionStorageSetItemOfPublicKeyByThirdParty() {
-    const setItem_protected = function setItem(this: any, key: string, value: string): void {
-        if (key.startsWith(SESSION_STORAGE_PREFIX)) {
-            throw new Error(
-                "Attack prevented by oidc-spa. You have malicious code running in your system"
-            );
+            assert(capturedApis !== undefined);
+
+            return capturedApis.setItem.call(this, key, value);
+        };
+
+        {
+            const pd = Object.getOwnPropertyDescriptor(Storage.prototype, "setItem");
+
+            assert(pd !== undefined);
+
+            Object.defineProperty(Storage.prototype, "setItem", {
+                enumerable: pd.enumerable,
+                writable: pd.writable,
+                value: setItem_protected
+            });
+        }
+    }
+
+    window.clearTimeout = function clearTimeout(timer) {
+        for (const getProtectedTimer of getProtectedTimer_set) {
+            const timer_protected = getProtectedTimer();
+            if (timer_protected === undefined) {
+                continue;
+            }
+            if (timer_protected === timer) {
+                // Probably an attack but potentially not so avoiding hard crash
+                return;
+            }
         }
 
         assert(capturedApis !== undefined);
 
-        return capturedApis.setItem.call(this, key, value);
+        capturedApis.clearTimeout.call(window, timer);
     };
-
-    {
-        const pd = Object.getOwnPropertyDescriptor(Storage.prototype, "setItem");
-
-        assert(pd !== undefined);
-
-        Object.defineProperty(Storage.prototype, "setItem", {
-            enumerable: pd.enumerable,
-            writable: pd.writable,
-            value: setItem_protected
-        });
-    }
 }
 
 function getSessionStorageKey(params: { stateUrlParamValue: string }) {
@@ -83,6 +109,10 @@ export async function initIframeMessageProtection(params: { stateUrlParamValue: 
     const sessionStorageKey = getSessionStorageKey({ stateUrlParamValue });
 
     let timer: number | undefined = undefined;
+
+    const getProtectedTimer = () => timer;
+
+    getProtectedTimer_set.add(getProtectedTimer);
 
     function setSessionStoragePublicKey() {
         assert(capturedApis !== undefined);
@@ -142,8 +172,11 @@ export async function initIframeMessageProtection(params: { stateUrlParamValue: 
     }
 
     function clearSessionStoragePublicKey() {
+        assert(capturedApis !== undefined);
+        const { clearTimeout } = capturedApis;
         sessionStorage.removeItem(sessionStorageKey);
         clearTimeout(timer);
+        getProtectedTimer_set.delete(getProtectedTimer);
     }
 
     return {

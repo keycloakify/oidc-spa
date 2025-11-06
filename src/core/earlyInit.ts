@@ -2,9 +2,8 @@ import { getStateData, getIsStatQueryParamValue } from "./StateData";
 import { assert, type Equals } from "../tools/tsafe/assert";
 import type { AuthResponse } from "./AuthResponse";
 import {
-    captureApisForIframeProtection,
-    postEncryptedAuthResponseToParent,
-    preventSessionStorageSetItemOfPublicKeyByThirdParty
+    iframeMessageProtection_captureAndLockBuiltins,
+    postEncryptedAuthResponseToParent
 } from "./iframeMessageProtection";
 import { setOidcRequiredPostHydrationReplaceNavigationUrl } from "./requiredPostHydrationReplaceNavigationUrl";
 import { setBASE_URL } from "./BASE_URL";
@@ -31,8 +30,6 @@ export function oidcEarlyInit(params: {
     if (!isBrowser) {
         return { shouldLoadApp: true };
     }
-
-    captureApisForIframeProtection();
 
     const {
         freezeFetch,
@@ -86,11 +83,11 @@ export function oidcEarlyInit(params: {
             });
         }
 
-        preventSessionStorageSetItemOfPublicKeyByThirdParty();
-
         if (BASE_URL !== undefined) {
             setBASE_URL({ BASE_URL });
         }
+
+        iframeMessageProtection_captureAndLockBuiltins();
     }
 
     resolvePrShouldLoadApp({ shouldLoadApp });
