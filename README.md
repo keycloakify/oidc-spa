@@ -84,7 +84,7 @@ const getTodos = createServerFn({ method: "GET" })
     .handler(async ({ context: { oidc } }) => {
         const userId = oidc.accessTokenClaims.sub;
 
-        const json = await fs.readFile(`todos_${userId}`, "utf8");
+        const json = await fs.readFile(`todos_${userId}.json`, "utf8");
 
         return JSON.parse(json);
     });
