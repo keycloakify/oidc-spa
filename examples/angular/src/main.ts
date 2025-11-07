@@ -1,9 +1,9 @@
 import { oidcEarlyInit } from 'oidc-spa/entrypoint';
 
 const { shouldLoadApp } = oidcEarlyInit({
-  freezeFetch: true,
-  freezeXMLHttpRequest: true,
-  freezeWebSocket: true,
+  safeMode: true,
+  // This project is Zoneless, if you want to enable Zone.js:
+  //freezePromise: false
 });
 
 if (shouldLoadApp) {

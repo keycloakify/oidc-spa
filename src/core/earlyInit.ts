@@ -1,23 +1,22 @@
 import { getStateData, getIsStatQueryParamValue } from "./StateData";
 import { assert, type Equals } from "../tools/tsafe/assert";
 import type { AuthResponse } from "./AuthResponse";
-import {
-    iframeMessageProtection_captureAndLockBuiltins,
-    postEncryptedAuthResponseToParent
-} from "./iframeMessageProtection";
 import { setOidcRequiredPostHydrationReplaceNavigationUrl } from "./requiredPostHydrationReplaceNavigationUrl";
 import { setBASE_URL } from "./BASE_URL";
 import { resolvePrShouldLoadApp } from "./prShouldLoadApp";
 import { isBrowser } from "../tools/isBrowser";
+import { createEvt, type Evt } from "../tools/Evt";
 
 let hasEarlyInitBeenCalled = false;
 
+const IFRAME_MESSAGE_PREFIX = "oidc-spa:cross-window-messaging:";
+
 export function oidcEarlyInit(params: {
-    freezeFetch: boolean;
-    freezeXMLHttpRequest: boolean;
-    // NOTE: Made optional just to avoid breaking change.
-    // Will be made mandatory next major.
+    freezeFetch?: boolean;
+    freezeXMLHttpRequest?: boolean;
     freezeWebSocket?: boolean;
+    freezePromise?: boolean;
+    safeMode?: boolean;
     isPostLoginRedirectManual?: boolean;
     BASE_URL?: string;
 }) {
@@ -34,7 +33,9 @@ export function oidcEarlyInit(params: {
     const {
         freezeFetch,
         freezeXMLHttpRequest,
-        freezeWebSocket = false,
+        freezeWebSocket,
+        freezePromise,
+        safeMode = false,
         isPostLoginRedirectManual = false,
         BASE_URL
     } = params;
@@ -42,57 +43,207 @@ export function oidcEarlyInit(params: {
     const { shouldLoadApp } = handleOidcCallback({ isPostLoginRedirectManual });
 
     if (shouldLoadApp) {
-        if (freezeXMLHttpRequest) {
-            const XMLHttpRequest_trusted = globalThis.XMLHttpRequest;
+        const createWriteError = (target: string) =>
+            new Error(
+                [
+                    `oidc-spa: ${target} has been freezed for security reason.`,
+                    "set `safeMode: false` in the Vite plugin configuration to get rid",
+                    "of this error at the cost of security.",
+                    "If you think this restriction is overzealous please open an issue at",
+                    "https://github.com/keycloakify/oidc-spa"
+                ].join(" ")
+            );
 
-            Object.freeze(XMLHttpRequest_trusted.prototype);
-            Object.freeze(XMLHttpRequest_trusted);
+        for (const name of [
+            "fetch",
+            "XMLHttpRequest",
+            "WebSocket",
+            "String",
+            "Object",
+            "Promise",
+            "Array",
+            "RegExp",
+            "TextEncoder",
+            "Uint8Array",
+            "Uint32Array",
+            "Response",
+            "Reflect",
+            "JSON",
+            "encodeURIComponent",
+            "decodeURIComponent",
+            "atob",
+            "btoa"
+        ] as const) {
+            const doSkip = (() => {
+                switch (name) {
+                    case "XMLHttpRequest":
+                        if (freezeXMLHttpRequest !== undefined) {
+                            return !freezeXMLHttpRequest;
+                        }
+                        break;
+                    case "fetch":
+                        if (freezeFetch !== undefined) {
+                            return !freezeFetch;
+                        }
+                        break;
+                    case "WebSocket":
+                        if (freezeWebSocket !== undefined) {
+                            return !freezeWebSocket;
+                        }
+                        break;
+                    case "Promise":
+                        if (freezePromise !== undefined) {
+                            return !freezePromise;
+                        }
+                        break;
+                }
 
-            Object.defineProperty(globalThis, "XMLHttpRequest", {
+                return !safeMode;
+            })();
+
+            if (doSkip) {
+                continue;
+            }
+
+            const original = window[name];
+
+            if ("prototype" in original) {
+                for (const propertyName of Object.getOwnPropertyNames(original.prototype)) {
+                    if (name === "Object" && propertyName === "toString") {
+                        continue;
+                    }
+
+                    const pd = Object.getOwnPropertyDescriptor(original.prototype, propertyName);
+
+                    assert(pd !== undefined);
+
+                    if (!pd.configurable) {
+                        continue;
+                    }
+
+                    Object.defineProperty(original.prototype, propertyName, {
+                        enumerable: pd.enumerable,
+                        configurable: false,
+                        ...("value" in pd
+                            ? {
+                                  get: () => pd.value,
+                                  set: () => {
+                                      throw createWriteError(`window.${name}.prototype.${propertyName}`);
+                                  }
+                              }
+                            : {
+                                  get: pd.get,
+                                  set:
+                                      pd.set ??
+                                      (() => {
+                                          throw createWriteError(
+                                              `window.${name}.prototype.${propertyName}`
+                                          );
+                                      })
+                              })
+                    });
+                }
+            }
+
+            Object.freeze(original);
+
+            Object.defineProperty(window, name, {
                 configurable: false,
-                writable: false,
                 enumerable: true,
-                value: XMLHttpRequest_trusted
+                get: () => original,
+                set: () => {
+                    throw createWriteError(`window.${name}`);
+                }
             });
         }
 
-        if (freezeFetch) {
-            const fetch_trusted = globalThis.fetch;
+        if (safeMode) {
+            const original = Function.prototype.call;
 
-            Object.freeze(fetch_trusted);
-
-            Object.defineProperty(globalThis, "fetch", {
+            Object.defineProperty(Function.prototype, "call", {
                 configurable: false,
-                writable: false,
                 enumerable: true,
-                value: fetch_trusted
+                get: () => original,
+                set: () => {
+                    throw createWriteError("window.Promise.prototype.call);");
+                }
             });
         }
 
-        if (freezeWebSocket) {
-            const WebSocket_trusted = globalThis.WebSocket;
+        const _MessageEvent_prototype_data_get = (() => {
+            const pd = Object.getOwnPropertyDescriptor(MessageEvent.prototype, "data");
 
-            Object.freeze(WebSocket_trusted.prototype);
-            Object.freeze(WebSocket_trusted);
+            assert(pd !== undefined);
 
-            Object.defineProperty(globalThis, "WebSocket", {
-                configurable: false,
-                writable: false,
-                enumerable: true,
-                value: WebSocket_trusted
-            });
-        }
+            const { get } = pd;
+
+            assert(get !== undefined);
+
+            return get;
+        })();
+
+        const _MessageEvent_prototype_origin_get = (() => {
+            const pd = Object.getOwnPropertyDescriptor(MessageEvent.prototype, "origin");
+
+            assert(pd !== undefined);
+
+            const { get } = pd;
+
+            assert(get !== undefined);
+
+            return get;
+        })();
+
+        const _Event_prototype_stopImmediatePropagation_value = Event.prototype.stopPropagation;
+
+        const origin = window.location.origin;
+
+        window.addEventListener(
+            "message",
+            event => {
+                if (_MessageEvent_prototype_origin_get.call(event) !== origin) {
+                    return;
+                }
+
+                const eventData: unknown = _MessageEvent_prototype_data_get.call(event);
+
+                if (typeof eventData !== "string") {
+                    return;
+                }
+
+                if (!eventData.startsWith(IFRAME_MESSAGE_PREFIX)) {
+                    return;
+                }
+
+                _Event_prototype_stopImmediatePropagation_value.call(event);
+
+                const authResponse: AuthResponse = JSON.parse(
+                    eventData.slice(IFRAME_MESSAGE_PREFIX.length)
+                );
+
+                (evtIframeAuthResponse ??= createEvt()).post(authResponse);
+            },
+            {
+                capture: true,
+                once: false,
+                passive: false
+            }
+        );
 
         if (BASE_URL !== undefined) {
             setBASE_URL({ BASE_URL });
         }
-
-        iframeMessageProtection_captureAndLockBuiltins();
     }
 
     resolvePrShouldLoadApp({ shouldLoadApp });
 
     return { shouldLoadApp };
+}
+
+let evtIframeAuthResponse: Evt<AuthResponse> | undefined = undefined;
+
+export function getEvtIframeAuthResponse() {
+    return (evtIframeAuthResponse ??= createEvt());
 }
 
 let redirectAuthResponse: AuthResponse | undefined = undefined;
@@ -208,7 +359,20 @@ function handleOidcCallback(params: { isPostLoginRedirectManual?: boolean }): {
 
     switch (stateData.context) {
         case "iframe":
-            postEncryptedAuthResponseToParent({ authResponse });
+            if (parent !== top) {
+                while (true) {
+                    alert(
+                        [
+                            "oidc-spa: For security reasons, refusing to post the auth response.",
+                            "If you want your app to be framable use sessionRestorationMethod: 'full page redirect'."
+                        ].join(" ")
+                    );
+                }
+            }
+            parent.postMessage(
+                `${IFRAME_MESSAGE_PREFIX}${JSON.stringify(authResponse)}`,
+                location.origin
+            );
             return { shouldLoadApp: false };
         case "redirect": {
             redirectAuthResponse = authResponse;

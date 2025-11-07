@@ -8,9 +8,7 @@ export default defineConfig({
     plugins: [
         tanstackRouter(),
         oidcSpa({
-            freezeFetch: true,
-            freezeXMLHttpRequest: true,
-            freezeWebSocket: true
+            safeMode: true
         }),
         tsconfigPaths(),
         react()
