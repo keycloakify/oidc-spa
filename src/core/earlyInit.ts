@@ -88,6 +88,13 @@ export function oidcEarlyInit(params: {
         }
 
         iframeMessageProtection_captureAndLockBuiltins();
+
+        const value = sessionStorage.getItem("authResponse");
+
+        if (value !== null) {
+            redirectAuthResponse = JSON.parse(value);
+            sessionStorage.removeItem("authResponse");
+        }
     }
 
     resolvePrShouldLoadApp({ shouldLoadApp });
@@ -222,6 +229,11 @@ function handleOidcCallback(params: { isPostLoginRedirectManual?: boolean }): {
 
             if (isPostLoginRedirectManual) {
                 setOidcRequiredPostHydrationReplaceNavigationUrl({ rootRelativeRedirectUrl });
+                console.log("Set authResponse");
+                sessionStorage.setItem("authResponse", JSON.stringify(authResponse));
+                console.log("redirecting to", rootRelativeRedirectUrl);
+                location.href = rootRelativeRedirectUrl;
+                return { shouldLoadApp: false };
             } else {
                 history.replaceState({}, "", rootRelativeRedirectUrl);
             }

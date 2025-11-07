@@ -26,6 +26,7 @@ export const Route = createRootRoute({
             }
         ]
     }),
+    ssr: false,
     shellComponent: RootDocument
 });
 
