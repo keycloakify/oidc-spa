@@ -20,8 +20,19 @@ export function withHandlingOidcPostLoginNavigation<Props extends Record<string,
                 return;
             }
 
-            router.navigate({ to: rootRelativeRedirectUrl, replace: true });
-            rootRelativeRedirectUrl = undefined;
+            // Defer navigation to the next paint to avoid hydration mismatches.
+            // A double rAF schedules after hydration/paint without arbitrary timeouts.
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    if (rootRelativeRedirectUrl !== undefined) {
+                        router.navigate({
+                            to: rootRelativeRedirectUrl,
+                            replace: true
+                        });
+                        rootRelativeRedirectUrl = undefined;
+                    }
+                });
+            });
         }, []);
 
         return <Component {...props} />;

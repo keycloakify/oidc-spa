@@ -222,6 +222,7 @@ function handleOidcCallback(params: { isPostLoginRedirectManual?: boolean }): {
 
             if (isPostLoginRedirectManual) {
                 setOidcRequiredPostHydrationReplaceNavigationUrl({ rootRelativeRedirectUrl });
+                history.replaceState({}, "", rootRelativeOriginalLocationHref);
             } else {
                 history.replaceState({}, "", rootRelativeRedirectUrl);
             }
