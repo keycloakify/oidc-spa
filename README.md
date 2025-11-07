@@ -38,12 +38,15 @@ const oidc = await createOidc({
     //issuerUri: "https://xxx.us.auth0.com/..."
     //issuerUri: "https://accounts.google.com/o/oauth2/v2/auth"
     clientId: "myclient",
+    // Optional, for type safety.
     decodedIdTokenSchema: z.object({
         name: z.string(),
         picture: z.string().optional(),
         email: z.string(),
         realm_access: z.object({ roles: z.array(z.string()) })
     })
+    // Yes really, it's that simple no other params to provide.
+    // The Redirect URI (callback url) is the root url of your app.
 });
 
 if (!oidc.isUserLoggedIn) {
@@ -310,14 +313,25 @@ and the backend server is merely an OAuth2 resource server in the OIDC model.
 If you use BetterAuth to provide login via Keycloak, your backend becomes the OIDC client application,  
 which has some security benefits over browser token exchange, but at the cost of centralization and requiring backend infrastructure.
 
-One clear advantage BetterAuth has over oidc-spa is SSR support.
-In the oidc-spa model, the server doesn’t handle authentication directly, which makes it difficult to integrate with traditional full-stack frameworks that rely on server-side rendering.
+And if we look closer, it can feel reassuring, in the Auth.js or BetterAuth model, to know that tokens are never directly exposed to JavaScript.  
+However, it’s important to understand that if an attacker successfully injects and executes code within your app’s origin, there are effectively no restrictions on the requests they can make.  
+Even without having access to the token itself, the attacker can perform any action on behalf of the user, since authentication is automatically handled via cookies.
 
-The only SSR-capable framework we currently support is TanStack Start, because it provides the low-level primitives needed to render as much as possible on the server while deferring authentication logic to the client.
+With oidc-spa, the situation is different. Even in the event of an XSS attack, the attacker cannot send authenticated requests to the server unless they manually attach an access token.  
+Those tokens do exist in memory, but they are unreachable, and impossible to request, the runtime environment is hardened before any JS code other than oidc-spa gets a chance to run, making token extraction virtually impossible and ultimately making the attack harmless.
 
-This approach achieves a similar UX and performance to server-centric frameworks, but it’s inherently less flexible than streaming fully authenticated server components to the client.
+One clear advantage BetterAuth has over oidc-spa is better SSR (Server-Side Rendering) support.
+In the oidc-spa model, authentication is handled entirely on the client, which makes it challenging to integrate with traditional full-stack frameworks that depend on server-side rendering.
 
-oidc-spa is extremely lightweight, it’s just a library, with no infrastructure or backend requirements. It scales beautifully, delivers great performance at the edge, and keeps your deployment simple. The tradeoff is that SSR becomes harder, though not impossible, as [demonstrated with TanStack Start](https://example-tanstack-start.oidc-spa.dev/).
+Currently, the only SSR-capable framework we support is TanStack Start, which provides the low-level primitives required to render as much as possible on the server while deferring user-specific components to the client.
+We won’t pretend this is a small limitation, it significantly restricts what can actually be SSR’d. In practice, you can only server render content that’s identical for every user (such as the marketing pages and layout), while everything user-dependent must be rendered client-side.
+
+This doesn’t hurt UX or performance, but it’s inherently less flexible than streaming fully authenticated server components to the client.
+That said, with TanStack Start, the abstractions are elegant enough that this separation is mostly transparent, it just works.
+
+When it comes to Next.js or React Router frameworks with server features, however, we currently can’t offer a convincing solution.
+
+The strength of oidc-spa lies elsewhere: it’s extremely lightweight, requiring no backend, no extra infrastructure, and scaling effortlessly at the edge. It’s fast, secure, and keeps your deployments simple. The trade-off is that SSR becomes more difficult, though, as shown in [the TanStack Start example](https://example-tanstack-start.oidc-spa.dev/), not impossible.
 
 ## Acknowledgment
 
