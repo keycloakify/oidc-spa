@@ -158,16 +158,18 @@ export function oidcEarlyInit(params: {
         }
 
         if (safeMode) {
-            const original = Function.prototype.call;
+            for (const name of ["call", "apply", "bind"] as const) {
+                const original = Function.prototype[name];
 
-            Object.defineProperty(Function.prototype, "call", {
-                configurable: false,
-                enumerable: true,
-                get: () => original,
-                set: () => {
-                    throw createWriteError("window.Promise.prototype.call);");
-                }
-            });
+                Object.defineProperty(Function.prototype, name, {
+                    configurable: false,
+                    enumerable: true,
+                    get: () => original,
+                    set: () => {
+                        throw createWriteError(`window.Promise.prototype.${name});`);
+                    }
+                });
+            }
         }
 
         const _MessageEvent_prototype_data_get = (() => {
