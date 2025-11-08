@@ -17,7 +17,9 @@ const config = defineConfig({
         }),
         tailwindcss(),
         tanstackStart(),
-        oidcSpa(),
+        oidcSpa({
+            safeMode: true
+        }),
         viteReact()
     ]
 });

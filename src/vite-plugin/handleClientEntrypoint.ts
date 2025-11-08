@@ -64,12 +64,8 @@ export function createLoadHandleEntrypoint(params: {
 
         entryResolution.watchFiles.forEach(file => pluginContext.addWatchFile(file));
 
-        const {
-            freezeFetch = true,
-            freezeXMLHttpRequest = true,
-            freezeWebSocket = true,
-            ...rest
-        } = oidcSpaVitePluginParams ?? {};
+        const { freezeFetch, freezeXMLHttpRequest, freezeWebSocket, freezePromise, safeMode, ...rest } =
+            oidcSpaVitePluginParams ?? {};
 
         assert<Equals<typeof rest, {}>>;
 
@@ -81,6 +77,8 @@ export function createLoadHandleEntrypoint(params: {
             `    freezeFetch: ${freezeFetch},`,
             `    freezeXMLHttpRequest: ${freezeXMLHttpRequest},`,
             `    freezeWebSocket: ${freezeWebSocket},`,
+            `    freezePromise: ${freezePromise},`,
+            `    safeMode: ${safeMode},`,
             `    isPostLoginRedirectManual: ${projectType === "tanstack-start"},`,
             `    BASE_URL: "${resolvedConfig.base}"`,
             `});`,

@@ -7,11 +7,7 @@ export default defineConfig({
     plugins: [
         reactRouter(),
         oidcSpa({
-            // For security reason it's highly recommended to
-            // freeze the API that caries tokens.
-            freezeFetch: true,
-            freezeXMLHttpRequest: true,
-            freezeWebSocket: true
+            safeMode: true
         }),
         tsconfigPaths()
     ]

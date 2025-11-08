@@ -4,5 +4,11 @@ import tsconfigPaths from "vite-tsconfig-paths";
 import { oidcSpa } from "oidc-spa/vite-plugin";
 
 export default defineConfig({
-    plugins: [react(), oidcSpa(), tsconfigPaths()]
+    plugins: [
+        react(),
+        oidcSpa({
+            safeMode: true
+        }),
+        tsconfigPaths()
+    ]
 });

@@ -748,7 +748,14 @@ export async function createOidc_nonMemoized<
                     {
                         log?.(
                             `Handling login redirect auth response ${JSON.stringify(
-                                authResponse,
+                                {
+                                    ...authResponse,
+                                    ...(authResponse.code === undefined
+                                        ? undefined
+                                        : {
+                                              code: authResponse.code.slice(0, 20) + "..."
+                                          })
+                                },
                                 null,
                                 2
                             )}`
