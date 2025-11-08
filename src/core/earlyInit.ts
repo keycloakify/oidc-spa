@@ -194,7 +194,7 @@ export function oidcEarlyInit(params: {
             return get;
         })();
 
-        const _Event_prototype_stopImmediatePropagation_value = Event.prototype.stopPropagation;
+        const _Event_prototype_stopImmediatePropagation_value = Event.prototype.stopImmediatePropagation;
 
         const origin = window.location.origin;
 
