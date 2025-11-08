@@ -166,7 +166,7 @@ export function oidcEarlyInit(params: {
                     enumerable: true,
                     get: () => original,
                     set: () => {
-                        throw createWriteError(`window.Promise.prototype.${name});`);
+                        throw createWriteError(`window.Function.prototype.${name});`);
                     }
                 });
             }
