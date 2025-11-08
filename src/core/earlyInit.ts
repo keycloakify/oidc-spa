@@ -46,11 +46,14 @@ export function oidcEarlyInit(params: {
         const createWriteError = (target: string) =>
             new Error(
                 [
-                    `oidc-spa: ${target} has been frozen for security reasons.`,
-                    "Set `safeMode: false` in oidcEarlyInit() or in the Vite plugin configuration",
-                    "to disable this restriction at the cost of security.",
-                    "If you think this restriction is overzealous please open an issue at",
-                    "https://github.com/keycloakify/oidc-spa"
+                    `oidc-spa: Monkey patching of ${target} has been blocked for security reasons.`,
+                    "You can disable this restriction by setting `safeMode: false` in `oidcEarlyInit()`",
+                    "or in your Vite plugin configuration,",
+                    "but please note this will reduce security.",
+                    "If you believe this restriction is too strict, please open an issue at:",
+                    "https://github.com/keycloakify/oidc-spa",
+                    "We're still identifying real-world blockers and can safely add exceptions where needed.",
+                    "For now, we prefer to err on the side of hardening rather than exposure."
                 ].join(" ")
             );
 
@@ -109,8 +112,20 @@ export function oidcEarlyInit(params: {
 
             if ("prototype" in original) {
                 for (const propertyName of Object.getOwnPropertyNames(original.prototype)) {
-                    if (name === "Object" && propertyName === "toString") {
-                        continue;
+                    if (name === "Object") {
+                        if (
+                            propertyName === "toString" ||
+                            propertyName === "constructor" ||
+                            propertyName === "valueOf"
+                        ) {
+                            continue;
+                        }
+                    }
+
+                    if (name === "Array") {
+                        if (propertyName === "constructor" || propertyName === "concat") {
+                            continue;
+                        }
                     }
 
                     const pd = Object.getOwnPropertyDescriptor(original.prototype, propertyName);
