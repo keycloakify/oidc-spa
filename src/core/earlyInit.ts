@@ -46,9 +46,9 @@ export function oidcEarlyInit(params: {
         const createWriteError = (target: string) =>
             new Error(
                 [
-                    `oidc-spa: ${target} has been freezed for security reason.`,
-                    "set `safeMode: false` in the Vite plugin configuration to get rid",
-                    "of this error at the cost of security.",
+                    `oidc-spa: ${target} has been frozen for security reasons.`,
+                    "Set `safeMode: false` in oidcEarlyInit() or in the Vite plugin configuration",
+                    "to disable this restriction at the cost of security.",
                     "If you think this restriction is overzealous please open an issue at",
                     "https://github.com/keycloakify/oidc-spa"
                 ].join(" ")
