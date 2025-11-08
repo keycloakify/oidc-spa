@@ -131,6 +131,8 @@ export async function loginSilent(params: {
                 return;
             }
 
+            unsubscribe_evtIframeAuthResponse();
+
             const stateData = getStateData({ stateUrlParamValue: authResponse.state });
 
             assert(stateData !== undefined, "765645");
@@ -204,6 +206,7 @@ export async function loginSilent(params: {
     dResult.pr.then(result => {
         if (result.outcome === "timeout") {
             clearStateStore({ stateUrlParamValue: stateUrlParamValue_instance });
+            unsubscribe_evtIframeAuthResponse();
         }
     });
 
