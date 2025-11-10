@@ -14,7 +14,6 @@ type EntryResolution = {
     absolutePath: string;
     normalizedPath: string;
     watchFiles: string[];
-    virtualModuleId?: string;
 };
 
 const ORIGINAL_QUERY_PARAM = "oidc-spa-original";
@@ -49,16 +48,11 @@ export function createLoadHandleEntrypoint(params: {
         const { id, pluginContext } = params;
         const { path: rawPath, queryParams } = splitId(id);
 
-        const isVirtualModuleMatch =
-            entryResolution.virtualModuleId &&
-            (id === entryResolution.virtualModuleId ||
-                id.startsWith(entryResolution.virtualModuleId + "?"));
-
         const normalizedRequestPath = normalizeRequestPath(rawPath);
-        const isRegularFileMatch =
+        const isMatch =
             normalizedRequestPath && normalizedRequestPath === entryResolution.normalizedPath;
 
-        if (!isVirtualModuleMatch && !isRegularFileMatch) {
+        if (!isMatch) {
             return null;
         }
 
@@ -75,9 +69,9 @@ export function createLoadHandleEntrypoint(params: {
 
         assert<Equals<typeof rest, {}>>;
 
-        const originalEntryImport = entryResolution.virtualModuleId
-            ? `import("${entryResolution.virtualModuleId}?${ORIGINAL_QUERY_PARAM}=true")`
-            : `import("./${path.basename(entryResolution.absolutePath)}?${ORIGINAL_QUERY_PARAM}=true")`;
+        const originalEntryImport = `import("./${path.basename(
+            entryResolution.absolutePath
+        )}?${ORIGINAL_QUERY_PARAM}=true")`;
 
         const stubSourceCache = [
             `import { oidcEarlyInit } from "oidc-spa/entrypoint";`,
@@ -201,7 +195,6 @@ function resolveEntryForProject({
             const resolution: EntryResolution = {
                 absolutePath: entryPath,
                 normalizedPath: normalized,
-                virtualModuleId: "#app/entry",
                 watchFiles: []
             };
 
