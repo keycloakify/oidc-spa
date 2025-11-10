@@ -122,8 +122,11 @@ function resolveEntryForProject({
                 entryPath = rollupInput[0];
             } else if (rollupInput && typeof rollupInput === "object") {
                 const inputRecord = rollupInput;
-                entryPath = inputRecord.entry;
-                assert(entryPath !== undefined, "Nuxt rollupOptions.input object is empty");
+                assert(
+                    Object.keys(inputRecord).length > 0,
+                    "Nuxt rollupOptions.input object must contain at least one entry"
+                );
+                entryPath = Object.values(inputRecord)[0];
             } else {
                 throw new Error(
                     "Could not resolve Nuxt entry point from Vite config. " +

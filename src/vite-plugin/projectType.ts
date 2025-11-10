@@ -14,7 +14,11 @@ export function getProjectType(params: { pluginNames: string[] }) {
         return "react-router-framework";
     }
 
-    if (Array.from(pluginNames).some(pluginName => pluginName.startsWith("nuxt:"))) {
+    if (
+        Array.from(pluginNames).some(
+            pluginName => pluginName.startsWith("nuxt:") || pluginName.startsWith("nuxt:-")
+        )
+    ) {
         return "nuxt";
     }
 
