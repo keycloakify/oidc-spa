@@ -16,7 +16,7 @@ export function getProjectType(params: { pluginNames: string[] }) {
 
     if (
         Array.from(pluginNames).some(
-            pluginName => pluginName.startsWith("nuxt:") || pluginName.startsWith("nuxt:-")
+            pluginName => pluginName.startsWith("nuxt:") || pluginName.startsWith("nuxt-")
         )
     ) {
         return "nuxt";
