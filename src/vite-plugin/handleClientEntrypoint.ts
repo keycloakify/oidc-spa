@@ -110,6 +110,38 @@ function resolveEntryForProject({
     const root = config.root;
 
     switch (projectType) {
+        case "nuxt": {
+            const rollupInput = config.build.rollupOptions?.input;
+
+            let entryPath: string;
+
+            if (typeof rollupInput === "string") {
+                entryPath = rollupInput;
+            } else if (Array.isArray(rollupInput)) {
+                assert(rollupInput.length > 0, "Nuxt rollupOptions.input array is empty");
+                entryPath = rollupInput[0];
+            } else if (rollupInput && typeof rollupInput === "object") {
+                const inputRecord = rollupInput;
+                entryPath = inputRecord.entry;
+                assert(entryPath !== undefined, "Nuxt rollupOptions.input object is empty");
+            } else {
+                throw new Error(
+                    "Could not resolve Nuxt entry point from Vite config. " +
+                        "rollupOptions.input is undefined or has an unexpected type."
+                );
+            }
+
+            const normalized = normalizeAbsolute(entryPath);
+
+            const resolution: EntryResolution = {
+                absolutePath: entryPath,
+                normalizedPath: normalized,
+                watchFiles: []
+            };
+
+            return resolution;
+        }
+
         case "tanstack-start": {
             const candidate = resolveCandidate({
                 root,
