@@ -14,6 +14,7 @@ type EntryResolution = {
     absolutePath: string;
     normalizedPath: string;
     watchFiles: string[];
+    virtualModuleId?: string;
 };
 
 const ORIGINAL_QUERY_PARAM = "oidc-spa-original";
@@ -47,12 +48,17 @@ export function createLoadHandleEntrypoint(params: {
     }): Promise<null | string> {
         const { id, pluginContext } = params;
         const { path: rawPath, queryParams } = splitId(id);
-        const normalizedRequestPath = normalizeRequestPath(rawPath);
-        if (!normalizedRequestPath) {
-            return null;
-        }
 
-        if (normalizedRequestPath !== entryResolution.normalizedPath) {
+        const isVirtualModuleMatch =
+            entryResolution.virtualModuleId &&
+            (id === entryResolution.virtualModuleId ||
+                id.startsWith(entryResolution.virtualModuleId + "?"));
+
+        const normalizedRequestPath = normalizeRequestPath(rawPath);
+        const isRegularFileMatch =
+            normalizedRequestPath && normalizedRequestPath === entryResolution.normalizedPath;
+
+        if (!isVirtualModuleMatch && !isRegularFileMatch) {
             return null;
         }
 
@@ -68,6 +74,10 @@ export function createLoadHandleEntrypoint(params: {
             oidcSpaVitePluginParams ?? {};
 
         assert<Equals<typeof rest, {}>>;
+
+        const originalEntryImport = entryResolution.virtualModuleId
+            ? `import("${entryResolution.virtualModuleId}?${ORIGINAL_QUERY_PARAM}=true")`
+            : `import("./${path.basename(entryResolution.absolutePath)}?${ORIGINAL_QUERY_PARAM}=true")`;
 
         const stubSourceCache = [
             `import { oidcEarlyInit } from "oidc-spa/entrypoint";`,
@@ -86,9 +96,7 @@ export function createLoadHandleEntrypoint(params: {
             `if(shouldLoadApp){`,
             projectType === "tanstack-start" &&
                 `    preventConsoleLoggingOfUnifiedClientRetryForSsrLoadersError();`,
-            `    import("./${path.basename(
-                entryResolution.absolutePath
-            )}?${ORIGINAL_QUERY_PARAM}=true");`,
+            `    ${originalEntryImport};`,
             `}`
         ]
             .filter(line => typeof line === "string")
@@ -110,41 +118,6 @@ function resolveEntryForProject({
     const root = config.root;
 
     switch (projectType) {
-        case "nuxt": {
-            const rollupInput = config.build.rollupOptions?.input;
-
-            let entryPath: string;
-
-            if (typeof rollupInput === "string") {
-                entryPath = rollupInput;
-            } else if (Array.isArray(rollupInput)) {
-                assert(rollupInput.length > 0, "Nuxt rollupOptions.input array is empty");
-                entryPath = rollupInput[0];
-            } else if (rollupInput && typeof rollupInput === "object") {
-                const inputRecord = rollupInput;
-                assert(
-                    Object.keys(inputRecord).length > 0,
-                    "Nuxt rollupOptions.input object must contain at least one entry"
-                );
-                entryPath = Object.values(inputRecord)[0];
-            } else {
-                throw new Error(
-                    "Could not resolve Nuxt entry point from Vite config. " +
-                        "rollupOptions.input is undefined or has an unexpected type."
-                );
-            }
-
-            const normalized = normalizeAbsolute(entryPath);
-
-            const resolution: EntryResolution = {
-                absolutePath: entryPath,
-                normalizedPath: normalized,
-                watchFiles: []
-            };
-
-            return resolution;
-        }
-
         case "tanstack-start": {
             const candidate = resolveCandidate({
                 root,
@@ -194,6 +167,42 @@ function resolveEntryForProject({
                 absolutePath: entryPath,
                 normalizedPath: normalized,
                 watchFiles: candidate ? [entryPath] : []
+            };
+
+            return resolution;
+        }
+
+        case "nuxt": {
+            const rollupInput = config.build.rollupOptions?.input;
+
+            let entryPath: string;
+
+            if (typeof rollupInput === "string") {
+                entryPath = rollupInput;
+            } else if (Array.isArray(rollupInput)) {
+                assert(rollupInput.length > 0, "Nuxt rollupOptions.input array is empty");
+                entryPath = rollupInput[0];
+            } else if (rollupInput && typeof rollupInput === "object") {
+                const inputRecord = rollupInput;
+                assert(
+                    Object.keys(inputRecord).length > 0,
+                    "Nuxt rollupOptions.input object must contain at least one entry"
+                );
+                entryPath = Object.values(inputRecord)[0];
+            } else {
+                throw new Error(
+                    "Could not resolve Nuxt entry point from Vite config. " +
+                        "rollupOptions.input is undefined or has an unexpected type."
+                );
+            }
+
+            const normalized = normalizeAbsolute(entryPath);
+
+            const resolution: EntryResolution = {
+                absolutePath: entryPath,
+                normalizedPath: normalized,
+                virtualModuleId: "#app/entry",
+                watchFiles: []
             };
 
             return resolution;

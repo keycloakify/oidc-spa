@@ -61,6 +61,11 @@ export function manageOptimizedDeps(params: {
                 ((userConfig.optimizeDeps ??= {}).include ??= []).push(...moduleNames_include);
             }
             break;
+        case "nuxt":
+            {
+                ((userConfig.optimizeDeps ??= {}).exclude ??= []).push(...moduleNames);
+            }
+            break;
     }
 
     return userConfig;
