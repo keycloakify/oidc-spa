@@ -25,6 +25,7 @@ export function manageOptimizedDeps(params: {
 
     switch (projectType) {
         case "tanstack-start":
+        case "nuxt":
             {
                 ((userConfig.optimizeDeps ??= {}).exclude ??= []).push(...moduleNames);
             }
@@ -59,11 +60,6 @@ export function manageOptimizedDeps(params: {
                 moduleNames_include.push("oidc-spa");
 
                 ((userConfig.optimizeDeps ??= {}).include ??= []).push(...moduleNames_include);
-            }
-            break;
-        case "nuxt":
-            {
-                ((userConfig.optimizeDeps ??= {}).exclude ??= []).push(...moduleNames);
             }
             break;
     }
