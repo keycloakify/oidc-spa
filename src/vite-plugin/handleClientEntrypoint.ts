@@ -77,7 +77,8 @@ export function createLoadHandleEntrypoint(params: {
             `import { oidcEarlyInit } from "oidc-spa/entrypoint";`,
             projectType === "tanstack-start" &&
                 `import { preventConsoleLoggingOfUnifiedClientRetryForSsrLoadersError } from "oidc-spa/react-tanstack-start/rfcUnifiedClientRetryForSsrLoaders/entrypoint";`,
-            `const { shouldLoadApp } = oidcEarlyInit({`,
+            // Use Object.assign to force Rollup to preserve all properties
+            `const _oidc_params = Object.assign({}, {`,
             `    freezeFetch: ${freezeFetch},`,
             `    freezeXMLHttpRequest: ${freezeXMLHttpRequest},`,
             `    freezeWebSocket: ${freezeWebSocket},`,
@@ -86,6 +87,7 @@ export function createLoadHandleEntrypoint(params: {
             `    isPostLoginRedirectManual: ${projectType === "tanstack-start"},`,
             `    BASE_URL: "${resolvedConfig.base}"`,
             `});`,
+            `const { shouldLoadApp } = oidcEarlyInit(_oidc_params);`,
             ``,
             `if(shouldLoadApp){`,
             projectType === "tanstack-start" &&
