@@ -928,7 +928,20 @@ export async function createOidc_nonMemoized<
 
                 const { authResponse } = result_loginSilent;
 
-                log?.(`Silent signin auth response ${JSON.stringify(authResponse, null, 2)}`);
+                log?.(
+                    `Silent signin auth response ${JSON.stringify(
+                        {
+                            ...authResponse,
+                            ...(authResponse.code === undefined
+                                ? undefined
+                                : {
+                                      code: authResponse.code.slice(0, 20) + "..."
+                                  })
+                        },
+                        null,
+                        2
+                    )}`
+                );
 
                 authResponse_error = authResponse.error;
 
