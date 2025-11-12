@@ -30,12 +30,6 @@ export function manageOptimizedDeps(params: {
             }
             break;
         case "nuxt":
-            /*
-            {
-                ((userConfig.optimizeDeps ??= {}).exclude ??= []).push(...moduleNames);
-            }
-            */
-            break;
         case "react-router-framework":
             {
                 const moduleNames_include = [
