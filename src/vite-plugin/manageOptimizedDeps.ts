@@ -25,11 +25,11 @@ export function manageOptimizedDeps(params: {
 
     switch (projectType) {
         case "tanstack-start":
+        case "nuxt":
             {
-                ((userConfig.optimizeDeps ??= {}).exclude ??= []).push(...moduleNames);
+                ((userConfig.optimizeDeps ??= {}).exclude ??= []).push(...[...moduleNames, "zod"]);
             }
             break;
-        case "nuxt":
         case "react-router-framework":
             {
                 const moduleNames_include = [
