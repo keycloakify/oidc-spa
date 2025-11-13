@@ -47,12 +47,12 @@ export function createLoadHandleEntrypoint(params: {
     }): Promise<null | string> {
         const { id, pluginContext } = params;
         const { path: rawPath, queryParams } = splitId(id);
-        const normalizedRequestPath = normalizeRequestPath(rawPath);
-        if (!normalizedRequestPath) {
-            return null;
-        }
 
-        if (normalizedRequestPath !== entryResolution.normalizedPath) {
+        const normalizedRequestPath = normalizeRequestPath(rawPath);
+        const isMatch =
+            normalizedRequestPath && normalizedRequestPath === entryResolution.normalizedPath;
+
+        if (!isMatch) {
             return null;
         }
 
@@ -69,11 +69,16 @@ export function createLoadHandleEntrypoint(params: {
 
         assert<Equals<typeof rest, {}>>;
 
+        const originalEntryImport = `import("./${path.basename(
+            entryResolution.absolutePath
+        )}?${ORIGINAL_QUERY_PARAM}=true")`;
+
         const stubSourceCache = [
             `import { oidcEarlyInit } from "oidc-spa/entrypoint";`,
             projectType === "tanstack-start" &&
                 `import { preventConsoleLoggingOfUnifiedClientRetryForSsrLoadersError } from "oidc-spa/react-tanstack-start/rfcUnifiedClientRetryForSsrLoaders/entrypoint";`,
-            `const { shouldLoadApp } = oidcEarlyInit({`,
+            // Use Object.assign to force Rollup to preserve all properties
+            `const _oidc_params = Object.assign({}, {`,
             `    freezeFetch: ${freezeFetch},`,
             `    freezeXMLHttpRequest: ${freezeXMLHttpRequest},`,
             `    freezeWebSocket: ${freezeWebSocket},`,
@@ -82,13 +87,12 @@ export function createLoadHandleEntrypoint(params: {
             `    isPostLoginRedirectManual: ${projectType === "tanstack-start"},`,
             `    BASE_URL: "${resolvedConfig.base}"`,
             `});`,
+            `const { shouldLoadApp } = oidcEarlyInit(_oidc_params);`,
             ``,
             `if(shouldLoadApp){`,
             projectType === "tanstack-start" &&
                 `    preventConsoleLoggingOfUnifiedClientRetryForSsrLoadersError();`,
-            `    import("./${path.basename(
-                entryResolution.absolutePath
-            )}?${ORIGINAL_QUERY_PARAM}=true");`,
+            `    ${originalEntryImport};`,
             `}`
         ]
             .filter(line => typeof line === "string")
@@ -159,6 +163,41 @@ function resolveEntryForProject({
                 absolutePath: entryPath,
                 normalizedPath: normalized,
                 watchFiles: candidate ? [entryPath] : []
+            };
+
+            return resolution;
+        }
+
+        case "nuxt": {
+            const rollupInput = config.build.rollupOptions?.input;
+
+            let entryPath: string;
+
+            if (typeof rollupInput === "string") {
+                entryPath = rollupInput;
+            } else if (Array.isArray(rollupInput)) {
+                assert(rollupInput.length > 0, "Nuxt rollupOptions.input array is empty");
+                entryPath = rollupInput[0];
+            } else if (rollupInput && typeof rollupInput === "object") {
+                const inputRecord = rollupInput;
+                assert(
+                    Object.keys(inputRecord).length > 0,
+                    "Nuxt rollupOptions.input object must contain at least one entry"
+                );
+                entryPath = Object.values(inputRecord)[0];
+            } else {
+                throw new Error(
+                    "Could not resolve Nuxt entry point from Vite config. " +
+                        "rollupOptions.input is undefined or has an unexpected type."
+                );
+            }
+
+            const normalized = normalizeAbsolute(entryPath);
+
+            const resolution: EntryResolution = {
+                absolutePath: entryPath,
+                normalizedPath: normalized,
+                watchFiles: []
             };
 
             return resolution;

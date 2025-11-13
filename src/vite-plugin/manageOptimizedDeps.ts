@@ -22,6 +22,7 @@ export function manageOptimizedDeps(params: {
     switch (projectType) {
         case "other":
         case "tanstack-start":
+        case "nuxt":
             {
                 ((userConfig.optimizeDeps ??= {}).exclude ??= []).push(...[...moduleNames, "zod"]);
             }
