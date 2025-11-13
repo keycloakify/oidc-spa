@@ -11,10 +11,6 @@ export function manageOptimizedDeps(params: {
 }): UserConfig {
     const { userConfig, projectType } = params;
 
-    if (projectType === "other") {
-        return userConfig;
-    }
-
     const packageJsonParsed = JSON.parse(
         fs.readFileSync(pathJoin(getThisCodebaseRootDirPath(), "package.json")).toString("utf8")
     ) as { name: string; exports: Record<string, { module?: string }> };
@@ -24,9 +20,10 @@ export function manageOptimizedDeps(params: {
         .map(([key]) => key.replace(/^\./, packageJsonParsed.name));
 
     switch (projectType) {
+        case "other":
         case "tanstack-start":
             {
-                ((userConfig.optimizeDeps ??= {}).exclude ??= []).push(...moduleNames);
+                ((userConfig.optimizeDeps ??= {}).exclude ??= []).push(...[...moduleNames, "zod"]);
             }
             break;
         case "react-router-framework":
