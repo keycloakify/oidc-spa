@@ -166,16 +166,6 @@
             "types": "./dist/esm/tanstack-start/react/index.d.ts",
             "default": "./dist/esm/tanstack-start/react/index.js"
         },
-        "./react-tanstack-start/rfcUnifiedClientRetryForSsrLoaders": {
-            "module": "./dist/esm/tanstack-start/react/rfcUnifiedClientRetryForSsrLoaders/index.js",
-            "types": "./dist/esm/tanstack-start/react/rfcUnifiedClientRetryForSsrLoaders/index.d.ts",
-            "default": "./dist/esm/tanstack-start/react/rfcUnifiedClientRetryForSsrLoaders/index.js"
-        },
-        "./react-tanstack-start/rfcUnifiedClientRetryForSsrLoaders/entrypoint": {
-            "module": "./dist/esm/tanstack-start/react/rfcUnifiedClientRetryForSsrLoaders/entrypoint.js",
-            "types": "./dist/esm/tanstack-start/react/rfcUnifiedClientRetryForSsrLoaders/entrypoint.d.ts",
-            "default": "./dist/esm/tanstack-start/react/rfcUnifiedClientRetryForSsrLoaders/entrypoint.js"
-        },
         "./mock/react": {
             "module": "./dist/esm/mock/react.js",
             "default": "./dist/mock/react.js"

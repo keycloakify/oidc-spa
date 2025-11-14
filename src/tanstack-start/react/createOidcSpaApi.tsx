@@ -22,7 +22,7 @@ import { createServerFn, createMiddleware } from "@tanstack/react-start";
 // @ts-expect-error: Since our module is not labeled as ESM we don't have the types here.
 import { getRequest, setResponseHeader, setResponseStatus } from "@tanstack/react-start/server";
 import { toFullyQualifiedUrl } from "../../tools/toFullyQualifiedUrl";
-import { UnifiedClientRetryForSsrLoadersError } from "./rfcUnifiedClientRetryForSsrLoaders/UnifiedClientRetryForSsrLoadersError";
+import { BEFORE_LOAD_FN_BRAND_PROPERTY_NAME } from "./disableSsrIfLoginEnforced";
 import { setDesiredPostLoginRedirectUrl } from "../../core/desiredPostLoginRedirectUrl";
 import type { MaybeAsync } from "../../tools/MaybeAsync";
 
@@ -375,7 +375,7 @@ export function createOidcSpaApi<
         assert?: "user logged in" | "user not logged in" | "init completed";
     }): Promise<GetOidc.Oidc<DecodedIdToken>> {
         if (!isBrowser) {
-            throw new UnifiedClientRetryForSsrLoadersError(
+            throw new Error(
                 [
                     "oidc-spa: getOidc() can't be used on the server",
                     "if you use it in a loader, make sure to mark the route",
@@ -688,7 +688,7 @@ export function createOidcSpaApi<
         };
     }): Promise<void | never> {
         if (!isBrowser) {
-            throw new UnifiedClientRetryForSsrLoadersError(
+            throw new Error(
                 [
                     "oidc-spa: enforceLogin cannot be used on the server",
                     "make sure to mark any route that uses it as ssr: false"
@@ -759,7 +759,7 @@ export function createOidcSpaApi<
         }
     }
 
-    enforceLogin.__isOidcSpaEnforceLogin = true;
+    enforceLogin[BEFORE_LOAD_FN_BRAND_PROPERTY_NAME] = true;
 
     function OidcInitializationGate(props: {
         errorComponent?: ComponentType<{ oidcInitializationError: OidcInitializationError }>;

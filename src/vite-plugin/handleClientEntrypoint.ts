@@ -71,8 +71,6 @@ export function createLoadHandleEntrypoint(params: {
 
         const stubSourceCache = [
             `import { oidcEarlyInit } from "oidc-spa/entrypoint";`,
-            projectType === "tanstack-start" &&
-                `import { preventConsoleLoggingOfUnifiedClientRetryForSsrLoadersError } from "oidc-spa/react-tanstack-start/rfcUnifiedClientRetryForSsrLoaders/entrypoint";`,
             `const { shouldLoadApp } = oidcEarlyInit({`,
             `    freezeFetch: ${freezeFetch},`,
             `    freezeXMLHttpRequest: ${freezeXMLHttpRequest},`,
@@ -84,8 +82,6 @@ export function createLoadHandleEntrypoint(params: {
             `});`,
             ``,
             `if(shouldLoadApp){`,
-            projectType === "tanstack-start" &&
-                `    preventConsoleLoggingOfUnifiedClientRetryForSsrLoadersError();`,
             `    import("./${path.basename(
                 entryResolution.absolutePath
             )}?${ORIGINAL_QUERY_PARAM}=true");`,
