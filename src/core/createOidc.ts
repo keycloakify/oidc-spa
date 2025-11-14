@@ -53,6 +53,7 @@ import {
 } from "./instancesThatCantUseIframes";
 import { getDesiredPostLoginRedirectUrl } from "./desiredPostLoginRedirectUrl";
 import { getHomeAndRedirectUri } from "./homeAndRedirectUri";
+import { ensureNonBlankPaint } from "../tools/ensureNonBlankPaint";
 
 // NOTE: Replaced at build time
 const VERSION = "{{OIDC_SPA_VERSION}}";
@@ -984,6 +985,8 @@ export async function createOidc_nonMemoized<
                     if (autoLogin && persistedAuthState !== "logged in") {
                         evtInitializationOutcomeUserNotLoggedIn.post();
                     }
+
+                    ensureNonBlankPaint();
 
                     await waitForAllOtherOngoingLoginOrRefreshProcessesToComplete({
                         prUnlock:
