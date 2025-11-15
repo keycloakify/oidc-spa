@@ -160,8 +160,6 @@ export function oidcEarlyInit(params: {
                 }
             }
 
-            Object.freeze(original);
-
             Object.defineProperty(window, name, {
                 configurable: false,
                 enumerable: true,
