@@ -18,7 +18,6 @@ import { createOidc, type Oidc, OidcInitializationError } from "../../core";
 import { Deferred } from "../../tools/Deferred";
 import { decodeJwt } from "../../tools/decodeJwt";
 import { type KeycloakUtils, createKeycloakUtils } from "../keycloakUtils";
-import { workerTimers } from "../../vendor/frontend/worker-timers";
 import { type StatefulEvt, createStatefulEvt } from "../../tools/StatefulEvt";
 import { readExpirationTimeInJwt } from "../../tools/readExpirationTimeInJwt";
 import { getHomeAndRedirectUri } from "../../core/homeAndRedirectUri";
@@ -268,17 +267,17 @@ export class Keycloak {
                     return;
                 }
 
-                let timer: ReturnType<typeof workerTimers.setTimeout> | undefined = undefined;
+                let timer: ReturnType<typeof setTimeout> | undefined = undefined;
 
                 const onNewToken = () => {
                     if (timer !== undefined) {
-                        workerTimers.clearTimeout(timer);
+                        clearTimeout(timer);
                     }
 
                     const { tokens } = this.#state;
                     assert(tokens !== undefined);
 
-                    timer = workerTimers.setTimeout(() => {
+                    timer = setTimeout(() => {
                         onTokenExpired.call(this);
                     }, Math.max(tokens.accessTokenExpirationTime - tokens.getServerDateNow() - 3_000, 0));
                 };
@@ -289,7 +288,7 @@ export class Keycloak {
 
                 clear = () => {
                     if (timer !== undefined) {
-                        workerTimers.clearTimeout(timer);
+                        clearTimeout(timer);
                     }
                     unsubscribe();
                 };

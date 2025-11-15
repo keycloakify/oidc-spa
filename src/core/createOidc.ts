@@ -7,7 +7,6 @@ import {
 import { type OidcMetadata, fetchOidcMetadata } from "./OidcMetadata";
 import { assert, type Equals } from "../tools/tsafe/assert";
 import { id } from "../tools/tsafe/id";
-import { setTimeout, clearTimeout } from "../tools/workerTimers";
 import { Deferred } from "../tools/Deferred";
 import { createEvtIsUserActive } from "./evtIsUserActive";
 import { createStartCountdown } from "../tools/startCountdown";

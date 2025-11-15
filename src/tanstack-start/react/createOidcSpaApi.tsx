@@ -71,7 +71,7 @@ export function createOidcSpaApi<
         }
         assert<Equals<typeof paramsOfBootstrap.implementation, "real">>;
 
-        const { warnUserSecondsBeforeAutoLogout = 45 } = paramsOfBootstrap;
+        const { warnUserSecondsBeforeAutoLogout = 60 } = paramsOfBootstrap;
 
         if (
             oidcCoreOrInitializationError === undefined ||
