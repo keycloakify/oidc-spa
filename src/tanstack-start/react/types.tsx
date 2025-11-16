@@ -1,4 +1,3 @@
-import type { ReactNode, ComponentType } from "react";
 import type { Oidc as Oidc_core, OidcInitializationError } from "../../core";
 import type { FunctionMiddlewareAfterServer, RequestMiddlewareAfterServer } from "@tanstack/react-start";
 import type { GetterOrDirectValue } from "../../tools/GetterOrDirectValue";
@@ -9,15 +8,16 @@ export type UseOidc<DecodedIdToken> = {
     (params?: { assert?: undefined }): UseOidc.Oidc<DecodedIdToken>;
     (params: { assert: "user logged in" }): UseOidc.Oidc.LoggedIn<DecodedIdToken>;
     (params: { assert: "user not logged in" }): UseOidc.Oidc.NotLoggedIn;
+    (params: { assert: "ready" }): UseOidc.Oidc.NotLoggedIn | UseOidc.Oidc.LoggedIn<DecodedIdToken>;
 };
 
 export namespace UseOidc {
     export type WithAutoLogin<DecodedIdToken> = (params?: {
-        assert: "init completed";
+        assert: "ready";
     }) => Oidc.LoggedIn<DecodedIdToken>;
 
     export type Oidc<DecodedIdToken> =
-        | (Oidc.InitNotCompleted & {
+        | (Oidc.NotReady & {
               isUserLoggedIn?: never;
               issuerUri?: never;
               clientId?: never;
@@ -31,7 +31,6 @@ export namespace UseOidc {
               isNewBrowserSession?: never;
 
               login?: never;
-              initializationError?: never;
           })
         | (Oidc.NotLoggedIn & {
               decodedIdToken?: never;
@@ -43,19 +42,20 @@ export namespace UseOidc {
           })
         | (Oidc.LoggedIn<DecodedIdToken> & {
               login?: never;
-              initializationError?: never;
+              oidcInitializationError?: never;
           });
 
     export namespace Oidc {
-        export type InitNotCompleted = {
-            hasInitCompleted: false;
+        export type NotReady = {
+            isOidcReady: false;
             autoLogoutState: {
                 shouldDisplayWarning: false;
             };
+            oidcInitializationError: OidcInitializationError | undefined;
         };
 
         export type NotLoggedIn = {
-            hasInitCompleted: true;
+            isOidcReady: true;
             isUserLoggedIn: false;
             issuerUri: string;
             clientId: string;
@@ -68,11 +68,11 @@ export namespace UseOidc {
             autoLogoutState: {
                 shouldDisplayWarning: false;
             };
-            initializationError: OidcInitializationError | undefined;
+            oidcInitializationError: OidcInitializationError | undefined;
         };
 
         export type LoggedIn<DecodedIdToken> = {
-            hasInitCompleted: true;
+            isOidcReady: true;
             isUserLoggedIn: true;
             issuerUri: string;
             clientId: string;
@@ -445,13 +445,7 @@ export type OidcSpaApi<AutoLogin, DecodedIdToken, AccessTokenClaims> = {
               : OidcRequestMiddleware<AccessTokenClaims>;
       }) &
     (AutoLogin extends true
-        ? {
-              OidcInitializationGate: (props: {
-                  errorComponent?: ComponentType<{ oidcInitializationError: OidcInitializationError }>;
-                  pendingComponent?: ComponentType<{}>;
-                  children: ReactNode;
-              }) => ReactNode;
-          }
+        ? {}
         : {
               enforceLogin: (loaderContext: {
                   cause: "preload" | string;

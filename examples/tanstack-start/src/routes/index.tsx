@@ -267,9 +267,9 @@ function App() {
 }
 
 function Greeting() {
-    const { hasInitCompleted, isUserLoggedIn, decodedIdToken } = useOidc();
+    const { isOidcReady, isUserLoggedIn, decodedIdToken } = useOidc();
 
-    if (!hasInitCompleted) {
+    if (!isOidcReady) {
         return <>&nbsp;</>;
     }
 
