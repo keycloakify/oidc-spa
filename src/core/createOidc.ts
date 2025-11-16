@@ -1023,9 +1023,7 @@ export async function createOidc_nonMemoized<
 
                             return getDesiredPostLoginRedirectUrl() ?? window.location.href;
                         })(),
-                        // NOTE: Wether or not it's the preferred behavior, pushing to history
-                        // only works on user interaction so it have to be false
-                        doNavigateBackToLastPublicUrlIfTheTheUserNavigateBack: false,
+                        doNavigateBackToLastPublicUrlIfTheTheUserNavigateBack: true,
                         extraQueryParams_local: undefined,
                         transformUrlBeforeRedirect_local: undefined,
                         interaction: (() => {
@@ -1427,7 +1425,7 @@ export async function createOidc_nonMemoized<
                         doForceReloadOnBfCache: true,
                         extraQueryParams_local: undefined,
                         transformUrlBeforeRedirect_local: undefined,
-                        doNavigateBackToLastPublicUrlIfTheTheUserNavigateBack: false,
+                        doNavigateBackToLastPublicUrlIfTheTheUserNavigateBack: true,
                         interaction: "directly redirect if active session show login otherwise",
                         preRedirectHook: undefined
                     });
