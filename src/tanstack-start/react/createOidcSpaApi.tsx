@@ -25,6 +25,7 @@ import { toFullyQualifiedUrl } from "../../tools/toFullyQualifiedUrl";
 import { BEFORE_LOAD_FN_BRAND_PROPERTY_NAME } from "./disableSsrIfLoginEnforced";
 import { setDesiredPostLoginRedirectUrl } from "../../core/desiredPostLoginRedirectUrl";
 import type { MaybeAsync } from "../../tools/MaybeAsync";
+import { enableStateDataCookie } from "../../core/StateDataCookie";
 
 export function createOidcSpaApi<
     AutoLogin extends boolean,
@@ -640,6 +641,8 @@ export function createOidcSpaApi<
                     break;
                 case "real":
                     {
+                        enableStateDataCookie();
+
                         const { createOidc } = await prModuleCore;
 
                         let oidcCoreOrInitializationError:

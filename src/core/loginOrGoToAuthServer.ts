@@ -8,6 +8,7 @@ import { createStatefulEvt } from "../tools/StatefulEvt";
 import { Deferred } from "../tools/Deferred";
 import { addOrUpdateSearchParam, getAllSearchParams } from "../tools/urlSearchParams";
 import { getIsOnline } from "../tools/getIsOnline";
+import { setStateDataCookieIfEnabled } from "./StateDataCookie";
 
 const globalContext = {
     evtHasLoginBeenCalled: createStatefulEvt(() => false)
@@ -65,7 +66,9 @@ export function createLoginOrGoToAuthServer(params: {
     getExtraTokenParams: (() => Record<string, string | undefined>) | undefined;
 
     homeUrl: string;
+    stateUrlParamValue_instance: string;
     evtInitializationOutcomeUserNotLoggedIn: NonPostableEvt<void>;
+
     log: typeof console.log | undefined;
 }) {
     const {
@@ -78,6 +81,7 @@ export function createLoginOrGoToAuthServer(params: {
         getExtraTokenParams,
 
         homeUrl,
+        stateUrlParamValue_instance,
         evtInitializationOutcomeUserNotLoggedIn,
 
         log
@@ -204,20 +208,32 @@ export function createLoginOrGoToAuthServer(params: {
 
         log?.(`redirectUrl: ${rootRelativeRedirectUrl}`);
 
-        const stateData: StateData = {
+        const rootRelativeRedirectUrl_consentRequiredCase = (() => {
+            switch (rest.action) {
+                case "login":
+                    return (lastPublicUrl ?? homeUrl).slice(window.location.origin.length);
+                case "go to auth server":
+                    return rootRelativeRedirectUrl;
+            }
+        })();
+
+        setStateDataCookieIfEnabled({
+            homeUrl,
+            stateUrlParamValue_instance,
+            stateDataCookie: {
+                action: "login",
+                rootRelativeRedirectUrl,
+                rootRelativeRedirectUrl_consentRequiredCase
+            }
+        });
+
+        const stateData: StateData.Redirect = {
             context: "redirect",
             rootRelativeRedirectUrl,
             extraQueryParams: {},
             configId,
             action: "login",
-            rootRelativeRedirectUrl_consentRequiredCase: (() => {
-                switch (rest.action) {
-                    case "login":
-                        return (lastPublicUrl ?? homeUrl).slice(window.location.origin.length);
-                    case "go to auth server":
-                        return rootRelativeRedirectUrl;
-                }
-            })()
+            rootRelativeRedirectUrl_consentRequiredCase
         };
 
         const isSilent = rest.action === "login" && rest.interaction === "ensure no interaction";

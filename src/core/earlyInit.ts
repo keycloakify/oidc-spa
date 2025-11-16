@@ -1,7 +1,6 @@
 import { getStateData, getIsStatQueryParamValue } from "./StateData";
 import { assert, type Equals } from "../tools/tsafe/assert";
 import type { AuthResponse } from "./AuthResponse";
-import { setOidcRequiredPostHydrationReplaceNavigationUrl } from "./requiredPostHydrationReplaceNavigationUrl";
 import { setBASE_URL } from "./BASE_URL";
 import { resolvePrShouldLoadApp } from "./prShouldLoadApp";
 import { isBrowser } from "../tools/isBrowser";
@@ -17,7 +16,6 @@ export function oidcEarlyInit(params: {
     freezeWebSocket?: boolean;
     freezePromise?: boolean;
     safeMode?: boolean;
-    isPostLoginRedirectManual?: boolean;
     BASE_URL?: string;
 }) {
     if (hasEarlyInitBeenCalled) {
@@ -36,11 +34,10 @@ export function oidcEarlyInit(params: {
         freezeWebSocket,
         freezePromise,
         safeMode = false,
-        isPostLoginRedirectManual = false,
         BASE_URL
     } = params;
 
-    const { shouldLoadApp } = handleOidcCallback({ isPostLoginRedirectManual });
+    const { shouldLoadApp } = handleOidcCallback();
 
     if (shouldLoadApp) {
         const createWriteError = (target: string) =>
@@ -285,11 +282,9 @@ export function getRootRelativeOriginalLocationHref() {
     return rootRelativeOriginalLocationHref;
 }
 
-function handleOidcCallback(params: { isPostLoginRedirectManual?: boolean }): {
+function handleOidcCallback(): {
     shouldLoadApp: boolean;
 } {
-    const { isPostLoginRedirectManual } = params;
-
     const location_urlObj = new URL(window.location.href);
 
     const locationHrefAssessment = (() => {
@@ -390,7 +385,6 @@ function handleOidcCallback(params: { isPostLoginRedirectManual?: boolean }): {
             return { shouldLoadApp: false };
         case "redirect": {
             redirectAuthResponse = authResponse;
-
             const rootRelativeRedirectUrl = (() => {
                 if (stateData.action === "login" && authResponse.error === "consent_required") {
                     return stateData.rootRelativeRedirectUrl_consentRequiredCase;
@@ -398,13 +392,7 @@ function handleOidcCallback(params: { isPostLoginRedirectManual?: boolean }): {
                 return stateData.rootRelativeRedirectUrl;
             })();
 
-            if (isPostLoginRedirectManual) {
-                setOidcRequiredPostHydrationReplaceNavigationUrl({ rootRelativeRedirectUrl });
-                history.replaceState({}, "", rootRelativeOriginalLocationHref);
-            } else {
-                history.replaceState({}, "", rootRelativeRedirectUrl);
-            }
-
+            history.replaceState({}, "", rootRelativeRedirectUrl);
             return { shouldLoadApp: true };
         }
         default:
