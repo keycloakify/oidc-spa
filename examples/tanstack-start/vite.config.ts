@@ -18,7 +18,9 @@ const config = defineConfig({
         tailwindcss(),
         tanstackStart(),
         oidcSpa({
-            safeMode: true
+            freezeFetch: true,
+            freezeXMLHttpRequest: true,
+            freezeWebSocket: true
         }),
         viteReact()
     ]
