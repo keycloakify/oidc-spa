@@ -4,8 +4,15 @@ import { AutoLogoutWarningOverlay } from "./components/AutoLogoutWarningOverlay"
 import Home from "./pages/Home";
 import Protected, * as protected_ from "./pages/Protected";
 import AdminOnly, * as adminOnly from "./pages/AdminOnly";
+import { useOidc } from "~/oidc";
 
 function Layout() {
+    const { isOidcReady } = useOidc();
+
+    if (!isOidcReady) {
+        return null;
+    }
+
     return (
         <div className="min-h-screen bg-slate-950 text-slate-100 antialiased">
             <Header />

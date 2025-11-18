@@ -6,14 +6,30 @@ export type UseOidc<DecodedIdToken> = {
     (params?: { assert?: undefined }): UseOidc.Oidc<DecodedIdToken>;
     (params: { assert: "user logged in" }): UseOidc.Oidc.LoggedIn<DecodedIdToken>;
     (params: { assert: "user not logged in" }): UseOidc.Oidc.NotLoggedIn;
+    (params: { assert: "ready" }): Exclude<UseOidc.Oidc<DecodedIdToken>, UseOidc.Oidc.NotReady>;
 };
 
 export namespace UseOidc {
     export type WithAutoLogin<DecodedIdToken> = (params?: {
-        assert: "user logged in";
+        assert: "ready";
     }) => Oidc.LoggedIn<DecodedIdToken>;
 
     export type Oidc<DecodedIdToken> =
+        | (Oidc.NotReady & {
+              isUserLoggedIn?: never;
+              issuerUri?: never;
+              clientId?: never;
+              validRedirectUri?: never;
+
+              decodedIdToken?: never;
+              logout?: never;
+              renewTokens?: never;
+              goToAuthServer?: never;
+              backFromAuthServer?: never;
+              isNewBrowserSession?: never;
+
+              login?: never;
+          })
         | (Oidc.NotLoggedIn & {
               decodedIdToken?: never;
               logout?: never;
@@ -24,11 +40,21 @@ export namespace UseOidc {
           })
         | (Oidc.LoggedIn<DecodedIdToken> & {
               login?: never;
-              initializationError?: never;
+              oidcInitializationError?: never;
           });
 
     export namespace Oidc {
+        export type NotReady = {
+            isOidcReady: false;
+            autoLogoutState: {
+                shouldDisplayWarning: false;
+            };
+            oidcInitializationError: OidcInitializationError | undefined;
+        };
+
         export type NotLoggedIn = {
+            isOidcReady: true;
+            isUserLoggedIn: false;
             issuerUri: string;
             clientId: string;
             validRedirectUri: string;
@@ -40,15 +66,15 @@ export namespace UseOidc {
             autoLogoutState: {
                 shouldDisplayWarning: false;
             };
-            isUserLoggedIn: false;
-            initializationError: OidcInitializationError | undefined;
+            oidcInitializationError: OidcInitializationError | undefined;
         };
 
         export type LoggedIn<DecodedIdToken> = {
+            isOidcReady: true;
+            isUserLoggedIn: true;
             issuerUri: string;
             clientId: string;
             validRedirectUri: string;
-            isUserLoggedIn: true;
             decodedIdToken: DecodedIdToken;
             logout: Oidc_core.LoggedIn["logout"];
             renewTokens: Oidc_core.LoggedIn["renewTokens"];
@@ -317,16 +343,8 @@ export type OidcSpaApi<AutoLogin, DecodedIdToken> = {
     bootstrapOidc: (params: ParamsOfBootstrap<AutoLogin, DecodedIdToken>) => Promise<void>;
     useOidc: AutoLogin extends true ? UseOidc.WithAutoLogin<DecodedIdToken> : UseOidc<DecodedIdToken>;
     getOidc: AutoLogin extends true ? GetOidc.WithAutoLogin<DecodedIdToken> : GetOidc<DecodedIdToken>;
-    OidcInitializationGate: (props: { fallback?: ReactNode; children: ReactNode }) => ReactNode;
 } & (AutoLogin extends true
-    ? {
-          OidcInitializationErrorGate: (props: {
-              errorComponent: ComponentType<{
-                  oidcInitializationError: OidcInitializationError;
-              }>;
-              children: ReactNode;
-          }) => ReactNode;
-      }
+    ? {}
     : {
           enforceLogin: (loaderContext: {
               request?: { url?: string };

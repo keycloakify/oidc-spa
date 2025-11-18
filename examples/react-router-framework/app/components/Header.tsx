@@ -45,7 +45,7 @@ export function Header() {
 }
 
 function AuthButtons() {
-    const { isUserLoggedIn } = useOidc();
+    const { isUserLoggedIn } = useOidc({ assert: "ready" });
 
     return isUserLoggedIn ? <LoggedInAuthButtons /> : <NotLoggedInAuthButtons />;
 }

@@ -60,7 +60,7 @@ export default function Home() {
 }
 
 function Greeting() {
-    const { isUserLoggedIn, decodedIdToken } = useOidc();
+    const { isUserLoggedIn, decodedIdToken } = useOidc({ assert: "ready" });
 
     return (
         <div className="inline-flex items-center rounded-full border border-slate-800 bg-slate-900 px-4 py-2 text-sm font-medium text-slate-200">

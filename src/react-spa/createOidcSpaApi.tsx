@@ -90,34 +90,39 @@ export function createOidcSpaApi<
     });
 
     function useOidc(params?: {
-        assert?: "user logged in" | "user not logged in";
+        assert?: "user logged in" | "user not logged in" | "ready";
     }): UseOidc.Oidc<DecodedIdToken> {
         const { assert: assert_params } = params ?? {};
 
-        if (!isBrowser) {
-            throw new Error(
-                [
-                    "oidc-spa: useOidc() can't be used on the server.",
-                    "You can prevent this component from rendering on the server",
-                    "by wrapping it into <OidcInitializationGate />"
-                ].join(" ")
-            );
-        }
-
-        const { hasResolved, value: oidcCore } = dOidcCoreOrInitializationError.getState();
-
-        if (!hasResolved) {
-            throw dOidcCoreOrInitializationError.pr;
-        }
-
-        if (oidcCore instanceof OidcInitializationError) {
-            throw oidcCore;
-        }
+        const { hasResolved, value: oidcCoreOrInitializationError } =
+            dOidcCoreOrInitializationError.getState();
 
         check_assertion: {
             if (assert_params === undefined) {
                 break check_assertion;
             }
+
+            if (!hasResolved || oidcCoreOrInitializationError instanceof Error) {
+                throw new Error(
+                    [
+                        "oidc-spa: There is a logic error in the application.",
+                        `you called useOidc({ assert: "${assert_params}" }) but`,
+                        ...(isBrowser
+                            ? [
+                                  "the component making this call was rendered before",
+                                  "the auth state of the user was established."
+                              ]
+                            : ["we are on the server, this assertion will always be wrong."]),
+                        "\nTo avoid this error make sure to check isOidcReady higher in the tree."
+                    ].join(" ")
+                );
+            }
+
+            if (assert_params === "ready") {
+                break check_assertion;
+            }
+
+            const oidcCore = oidcCoreOrInitializationError;
 
             const getMessage = (v: string) =>
                 [
@@ -142,7 +147,38 @@ export function createOidcSpaApi<
             }
         }
 
+        const [, reRender] = useReducer(n => n + 1, 0);
+
+        useEffect(() => {
+            if (hasResolved) {
+                return;
+            }
+
+            let isActive = true;
+
+            dOidcCoreOrInitializationError.pr.then(() => {
+                if (!isActive) {
+                    return;
+                }
+                reRender();
+            });
+
+            return () => {
+                isActive = false;
+            };
+        }, []);
+
         const [, reRenderIfDecodedIdTokenChanged] = useState<DecodedIdToken | undefined>(() => {
+            if (!hasResolved) {
+                return undefined;
+            }
+
+            if (oidcCoreOrInitializationError instanceof Error) {
+                return undefined;
+            }
+
+            const oidcCore = oidcCoreOrInitializationError;
+
             if (!oidcCore.isUserLoggedIn) {
                 return undefined;
             }
@@ -152,6 +188,16 @@ export function createOidcSpaApi<
         const [evtIsDecodedIdTokenUsed] = useState(() => createStatefulEvt<boolean>(() => false));
 
         useEffect(() => {
+            if (!hasResolved) {
+                return;
+            }
+
+            if (oidcCoreOrInitializationError instanceof Error) {
+                return;
+            }
+
+            const oidcCore = oidcCoreOrInitializationError;
+
             if (!oidcCore.isUserLoggedIn) {
                 return;
             }
@@ -188,7 +234,7 @@ export function createOidcSpaApi<
                 isActive = false;
                 unsubscribe?.();
             };
-        }, []);
+        }, [hasResolved]);
 
         const [evtIsAutoLogoutStateUsed] = useState(() => createStatefulEvt<boolean>(() => false));
 
@@ -226,10 +272,47 @@ export function createOidcSpaApi<
             };
         }, []);
 
+        const [hasHydrated, setHasHydratedToTrue] = useReducer(
+            () => true,
+            assert_params !== undefined ? undefined : false
+        );
+
+        useEffect(() => {
+            if (hasHydrated === undefined) {
+                return;
+            }
+            setHasHydratedToTrue();
+        }, []);
+
+        if (!hasResolved || oidcCoreOrInitializationError instanceof Error || hasHydrated === false) {
+            return id<UseOidc.Oidc.NotReady>({
+                isOidcReady: false,
+                autoLogoutState: {
+                    shouldDisplayWarning: false
+                },
+                oidcInitializationError: (() => {
+                    if (hasHydrated === false) {
+                        return undefined;
+                    }
+
+                    if (!hasResolved) {
+                        return undefined;
+                    }
+                    if (!(oidcCoreOrInitializationError instanceof Error)) {
+                        return undefined;
+                    }
+                    return oidcCoreOrInitializationError;
+                })()
+            });
+        }
+
+        const oidcCore = oidcCoreOrInitializationError;
+
         if (!oidcCore.isUserLoggedIn) {
             return id<UseOidc.Oidc.NotLoggedIn>({
+                isOidcReady: true,
                 isUserLoggedIn: false,
-                initializationError: oidcCore.initializationError,
+                oidcInitializationError: oidcCore.initializationError,
                 issuerUri: oidcCore.params.issuerUri,
                 clientId: oidcCore.params.clientId,
                 validRedirectUri: oidcCore.params.validRedirectUri,
@@ -243,6 +326,7 @@ export function createOidcSpaApi<
         }
 
         return id<UseOidc.Oidc.LoggedIn<DecodedIdToken>>({
+            isOidcReady: true,
             isUserLoggedIn: true,
             get decodedIdToken() {
                 evtIsDecodedIdTokenUsed.current = true;
@@ -503,63 +587,6 @@ export function createOidcSpaApi<
         }
     }
 
-    function OidcInitializationErrorGate(props: {
-        errorComponent: ComponentType<{
-            oidcInitializationError: OidcInitializationError;
-        }>;
-        children: ReactNode;
-    }): ReactNode {
-        const { errorComponent: ErrorComponent, children } = props;
-
-        const { hasResolved, value: oidcCoreOrOidcInitializationError } =
-            dOidcCoreOrInitializationError.getState();
-
-        if (!hasResolved) {
-            throw dOidcCoreOrInitializationError.pr;
-        }
-
-        if (oidcCoreOrOidcInitializationError instanceof OidcInitializationError) {
-            const oidcInitializationError = oidcCoreOrOidcInitializationError;
-
-            return <ErrorComponent oidcInitializationError={oidcInitializationError} />;
-        }
-
-        return children;
-    }
-
-    function OidcInitializationGate(props: { fallback?: ReactNode; children: ReactNode }) {
-        const { fallback, children } = props;
-
-        const { hasResolved } = dOidcCoreOrInitializationError.getState();
-
-        const [, reRender] = useReducer(n => n + 1, 0);
-
-        useEffect(() => {
-            if (hasResolved) {
-                return;
-            }
-
-            let isActive = true;
-
-            dOidcCoreOrInitializationError.pr.then(() => {
-                if (!isActive) {
-                    return;
-                }
-                reRender();
-            });
-
-            return () => {
-                isActive = false;
-            };
-        }, []);
-
-        if (!hasResolved) {
-            return fallback !== undefined ? fallback : null;
-        }
-
-        return children;
-    }
-
     function withLoginEnforced<Props extends Record<string, unknown>>(
         component: ComponentType<Props>
     ): (props: Props) => ReactNode {
@@ -595,8 +622,6 @@ export function createOidcSpaApi<
         bootstrapOidc,
         useOidc,
         getOidc,
-        OidcInitializationGate,
-        OidcInitializationErrorGate,
         enforceLogin,
         withLoginEnforced
     };

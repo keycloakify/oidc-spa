@@ -317,6 +317,10 @@ export function createOidcSpaApi<
                     shouldDisplayWarning: false
                 },
                 oidcInitializationError: (() => {
+                    if (hasHydrated === false) {
+                        return undefined;
+                    }
+
                     if (!hasResolved) {
                         return undefined;
                     }

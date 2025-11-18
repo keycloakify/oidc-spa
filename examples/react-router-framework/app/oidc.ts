@@ -1,15 +1,7 @@
 import { oidcSpa } from "oidc-spa/react-spa";
 import { z } from "zod";
 
-export const {
-    bootstrapOidc,
-    useOidc,
-    getOidc,
-    enforceLogin,
-    // Wrap your all application within this component in src/main.tsx
-    // Non blocking rendering is possible, see: https://docs.oidc-spa.dev/v/v8/features/non-blocking-rendering#react-spas
-    OidcInitializationGate
-} = oidcSpa
+export const { bootstrapOidc, useOidc, getOidc, enforceLogin } = oidcSpa
     .withExpectedDecodedIdTokenShape({
         // Describe the expected shape of the ID Token.
         // Think of `decodedIdToken` as your “user” object.

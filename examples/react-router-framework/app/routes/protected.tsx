@@ -4,11 +4,11 @@ import { useOidc, enforceLogin, fetchWithAuth } from "~/oidc";
 import { isKeycloak, createKeycloakUtils } from "oidc-spa/keycloak";
 import type { Route } from "./+types/protected";
 
-export async function clientLoader(params: Route.ClientLoaderArgs) {
+export async function clientLoader(args: Route.ClientLoaderArgs) {
     // This is the way to make sure that only logged in users can access
     // this page. if the user is not logged in it will be redirected to your
     // IdP login pages.
-    await enforceLogin(params);
+    await enforceLogin(args);
 
     const demoPosts: {
         id: number;
