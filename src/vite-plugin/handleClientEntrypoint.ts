@@ -82,9 +82,9 @@ export function createHandleClientEntrypoint(params: {
         const nuxtRuntimeConfig =
             projectType === "nuxt"
                 ? [
-                      `const useRuntimeConfig$1 = () => window?.__NUXT__?.config || window?.useNuxtApp?.().payload?.config;`,
-                      `const getAppConfig = () => useRuntimeConfig$1().app;`,
-                      `const baseURL = () => getAppConfig().baseURL;`
+                      `const useRuntimeConfig = () => window?.__NUXT__?.config || window?.useNuxtApp?.().payload?.config;`,
+                      `const getAppConfig = () => useRuntimeConfig()?.app;`,
+                      `const baseURL = () => getAppConfig()?.baseURL;`
                   ]
                 : [];
 
