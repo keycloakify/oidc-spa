@@ -687,7 +687,7 @@ export function createOidcSpaApi<
     async function enforceLogin(loaderContext: {
         cause: "preload" | string;
         location: {
-            href: string;
+            publicHref: string;
         };
     }): Promise<void | never> {
         if (!isBrowser) {
@@ -702,9 +702,9 @@ export function createOidcSpaApi<
         const { cause } = loaderContext;
 
         const redirectUrl = (() => {
-            if (loaderContext.location?.href !== undefined) {
+            if (loaderContext.location?.publicHref !== undefined) {
                 return toFullyQualifiedUrl({
-                    urlish: loaderContext.location.href,
+                    urlish: loaderContext.location.publicHref,
                     doAssertNoQueryParams: false
                 });
             }
