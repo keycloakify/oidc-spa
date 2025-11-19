@@ -77,16 +77,34 @@ export function createHandleClientEntrypoint(params: {
             entryResolution.absolutePath
         )}?${ORIGINAL_QUERY_PARAM}=true")`;
 
+        // For Nuxt, resolvedConfig.base points to the public directory of assets, not the dynamic baseURL.
+        // We need to extract the baseURL from Nuxt's runtime config to handle dynamic base paths correctly.
+        const nuxtRuntimeConfig =
+            projectType === "nuxt"
+                ? [
+                      `const useRuntimeConfig$1 = () => window?.__NUXT__?.config || window?.useNuxtApp?.().payload?.config;`,
+                      `const getAppConfig = () => useRuntimeConfig$1().app;`,
+                      `const baseURL = () => getAppConfig().baseURL;`
+                  ]
+                : [];
+
+        const baseUrl = projectType === "nuxt" ? "baseURL()" : `"${resolvedConfig.base}"`;
+
+        const oidcParams = [
+            `freezeFetch: ${freezeFetch},`,
+            `freezeXMLHttpRequest: ${freezeXMLHttpRequest},`,
+            `freezeWebSocket: ${freezeWebSocket},`,
+            `freezePromise: ${freezePromise},`,
+            `safeMode: ${safeMode},`,
+            `BASE_URL: ${baseUrl}`
+        ];
+
+        // Use Object.assign to force Rollup to preserve all properties
         const stubSourceCache = [
             `import { oidcEarlyInit } from "oidc-spa/entrypoint";`,
-            // Use Object.assign to force Rollup to preserve all properties
+            ...nuxtRuntimeConfig,
             `const _oidc_params = Object.assign({}, {`,
-            `    freezeFetch: ${freezeFetch},`,
-            `    freezeXMLHttpRequest: ${freezeXMLHttpRequest},`,
-            `    freezeWebSocket: ${freezeWebSocket},`,
-            `    freezePromise: ${freezePromise},`,
-            `    safeMode: ${safeMode},`,
-            `    BASE_URL: "${resolvedConfig.base}"`,
+            ...oidcParams,
             `});`,
             `const { shouldLoadApp } = oidcEarlyInit(_oidc_params);`,
             ``,
