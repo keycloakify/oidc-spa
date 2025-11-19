@@ -209,10 +209,16 @@ function resolveEntryForProject({
                 );
             }
 
-            const normalized = normalizeAbsolute(entryPath);
+            // Ensure entryPath is absolute before normalizing.
+            // Nuxt's rollupOptions.input can be relative, but Vite resolves IDs to absolute paths.
+            const absoluteEntryPath = path.isAbsolute(entryPath)
+                ? entryPath
+                : path.resolve(root, entryPath);
+
+            const normalized = normalizeAbsolute(absoluteEntryPath);
 
             const resolution: EntryResolution = {
-                absolutePath: entryPath,
+                absolutePath: absoluteEntryPath,
                 normalizedPath: normalized,
                 watchFiles: []
             };
