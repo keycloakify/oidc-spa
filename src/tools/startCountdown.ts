@@ -1,5 +1,3 @@
-import { setTimeout, clearTimeout } from "../tools/workerTimers";
-
 export function createStartCountdown(params: {
     tickCallback: (params: { secondsLeft: number | undefined }) => void;
 }) {
@@ -13,14 +11,26 @@ export function createStartCountdown(params: {
         (async () => {
             let secondsLeft = Math.floor(countDownFromSeconds);
 
-            while (secondsLeft >= 0) {
-                tickCallback({ secondsLeft });
+            while (true) {
+                const start = performance.now();
 
                 await new Promise<void>(resolve => {
                     timer = setTimeout(resolve, 1_000);
                 });
 
-                secondsLeft--;
+                const elapsed = Math.floor((performance.now() - start) / 1000);
+
+                secondsLeft = secondsLeft - elapsed;
+
+                if (secondsLeft < 0) {
+                    secondsLeft = 0;
+                }
+
+                tickCallback({ secondsLeft });
+
+                if (secondsLeft === 0) {
+                    break;
+                }
             }
         })();
 

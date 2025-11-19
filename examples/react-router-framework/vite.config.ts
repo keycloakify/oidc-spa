@@ -7,7 +7,9 @@ export default defineConfig({
     plugins: [
         reactRouter(),
         oidcSpa({
-            safeMode: true
+            freezeFetch: true,
+            freezeXMLHttpRequest: true,
+            freezeWebSocket: true
         }),
         tsconfigPaths()
     ]

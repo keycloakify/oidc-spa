@@ -2,15 +2,13 @@ import type { Plugin, TransformResult } from "vite";
 import { assert } from "../tools/tsafe/assert";
 import type { Param0 } from "../tools/tsafe/Param0";
 import type { oidcEarlyInit } from "../entrypoint";
-import { createLoadHandleEntrypoint } from "./handleClientEntrypoint";
+import { createHandleClientEntrypoint } from "./handleClientEntrypoint";
+import { createHandleServerEntrypoint } from "./handleServerEntrypoint";
 import { manageOptimizedDeps } from "./manageOptimizedDeps";
 import { transformCreateFileRoute } from "./transformTanstackRouterCreateFileRoute";
 import { getProjectType, type ProjectType } from "./projectType";
 
-export type OidcSpaVitePluginParams = Omit<
-    Param0<typeof oidcEarlyInit>,
-    "isPostLoginRedirectManual" | "BASE_URL"
->;
+export type OidcSpaVitePluginParams = Omit<Param0<typeof oidcEarlyInit>, "BASE_URL">;
 
 export function oidcSpa(
     params: OidcSpaVitePluginParams = {
@@ -19,7 +17,12 @@ export function oidcSpa(
         freezeWebSocket: true
     }
 ) {
-    let loadHandleEntrypoint: ReturnType<typeof createLoadHandleEntrypoint> | undefined = undefined;
+    let load_handleClientEntrypoint:
+        | ReturnType<typeof createHandleClientEntrypoint>["load_handleClientEntrypoint"]
+        | undefined = undefined;
+    let load_handleServerEntrypoint:
+        | ReturnType<typeof createHandleServerEntrypoint>["load_handleServerEntrypoint"]
+        | undefined = undefined;
 
     let projectType: ProjectType | undefined = undefined;
 
@@ -44,11 +47,16 @@ export function oidcSpa(
                 pluginNames: resolvedConfig.plugins.map(({ name }) => name)
             });
 
-            loadHandleEntrypoint = createLoadHandleEntrypoint({
+            load_handleClientEntrypoint = createHandleClientEntrypoint({
                 oidcSpaVitePluginParams: params,
                 resolvedConfig,
                 projectType
-            });
+            }).load_handleClientEntrypoint;
+
+            load_handleServerEntrypoint = createHandleServerEntrypoint({
+                resolvedConfig,
+                projectType
+            }).load_handleServerEntrypoint;
         },
         transform(code, id) {
             let transformed: TransformResult | null = null;
@@ -69,10 +77,23 @@ export function oidcSpa(
             return transformed;
         },
         async load(id) {
-            assert(loadHandleEntrypoint !== undefined);
+            {
+                assert(load_handleClientEntrypoint !== undefined);
+
+                const r = await load_handleClientEntrypoint({
+                    id,
+                    pluginContext: this
+                });
+
+                if (r !== null) {
+                    return r;
+                }
+            }
 
             {
-                const r = await loadHandleEntrypoint({
+                assert(load_handleServerEntrypoint !== undefined);
+
+                const r = await load_handleServerEntrypoint({
                     id,
                     pluginContext: this
                 });

@@ -1,11 +1,9 @@
 import { MagicString } from "../vendor/build-runtime/magic-string";
 import { babelParser, babelTraverse, babelTypes as t } from "../vendor/build-runtime/babel";
 
-const ENABLE_IMPORT_SPECIFIER = "enableUnifiedClientRetryForSsrLoaders";
-const ENABLE_IMPORT_SOURCE = "oidc-spa/react-tanstack-start/rfcUnifiedClientRetryForSsrLoaders";
+const DISABLE_SSR_SPECIFIER = "__disableSsrIfLoginEnforced";
+const DISABLE_SSR_SOURCE = "oidc-spa/react-tanstack-start";
 const CREATE_FILE_ROUTE_IDENTIFIER = "createFileRoute";
-const POST_LOGIN_IMPORT_SPECIFIER = "withHandlingOidcPostLoginNavigation";
-const POST_LOGIN_IMPORT_SOURCE = "oidc-spa/react-tanstack-start";
 
 type TransformParams = {
     code: string;
@@ -38,9 +36,7 @@ export function transformCreateFileRoute(params: TransformParams): TransformResu
     const magicString = new MagicString(code);
     let hasCreateFileRouteImport = false;
     let hasEnableImport = false;
-    let hasPostLoginImport = false;
     let requiresEnableImport = false;
-    let requiresPostLoginImport = false;
     let lastImportEnd: number | undefined;
     let mutated = false;
 
@@ -68,27 +64,15 @@ export function transformCreateFileRoute(params: TransformParams): TransformResu
                 }
             }
 
-            if (sourceValue === ENABLE_IMPORT_SOURCE) {
+            if (sourceValue === DISABLE_SSR_SOURCE) {
                 if (
                     path.node.specifiers.some(
                         specifier =>
                             t.isImportSpecifier(specifier) &&
-                            t.isIdentifier(specifier.imported, { name: ENABLE_IMPORT_SPECIFIER })
+                            t.isIdentifier(specifier.imported, { name: DISABLE_SSR_SPECIFIER })
                     )
                 ) {
                     hasEnableImport = true;
-                }
-            }
-
-            if (sourceValue === POST_LOGIN_IMPORT_SOURCE) {
-                if (
-                    path.node.specifiers.some(
-                        specifier =>
-                            t.isImportSpecifier(specifier) &&
-                            t.isIdentifier(specifier.imported, { name: POST_LOGIN_IMPORT_SPECIFIER })
-                    )
-                ) {
-                    hasPostLoginImport = true;
                 }
             }
         },
@@ -121,37 +105,10 @@ export function transformCreateFileRoute(params: TransformParams): TransformResu
                 const end = configNode.end ?? undefined;
 
                 if (typeof start === "number" && typeof end === "number") {
-                    magicString.appendLeft(start, `${ENABLE_IMPORT_SPECIFIER}(`);
+                    magicString.appendLeft(start, `${DISABLE_SSR_SPECIFIER}(`);
                     magicString.appendRight(end, ")");
                     requiresEnableImport = true;
                     localMutated = true;
-                }
-            }
-
-            const innerArgs = callee.node.arguments ?? [];
-            const isRootRoute =
-                innerArgs.length > 0 && t.isStringLiteral(innerArgs[0]) && innerArgs[0].value === "/";
-
-            if (isRootRoute) {
-                const componentProp = findComponentProperty(configNode);
-                if (componentProp) {
-                    const valueNode = componentProp.value as t.Expression;
-
-                    if (!isWrappedWithHandling(valueNode)) {
-                        const start = valueNode.start ?? undefined;
-                        const end = valueNode.end ?? undefined;
-
-                        if (typeof start === "number" && typeof end === "number") {
-                            const original = code.slice(start, end);
-                            magicString.overwrite(
-                                start,
-                                end,
-                                `${POST_LOGIN_IMPORT_SPECIFIER}(${original})`
-                            );
-                            requiresPostLoginImport = true;
-                            localMutated = true;
-                        }
-                    }
                 }
             }
 
@@ -168,13 +125,7 @@ export function transformCreateFileRoute(params: TransformParams): TransformResu
     const importStatements: string[] = [];
 
     if (requiresEnableImport && !hasEnableImport) {
-        importStatements.push(`import { ${ENABLE_IMPORT_SPECIFIER} } from "${ENABLE_IMPORT_SOURCE}";`);
-    }
-
-    if (requiresPostLoginImport && !hasPostLoginImport) {
-        importStatements.push(
-            `import { ${POST_LOGIN_IMPORT_SPECIFIER} } from "${POST_LOGIN_IMPORT_SOURCE}";`
-        );
+        importStatements.push(`import { ${DISABLE_SSR_SPECIFIER} } from "${DISABLE_SSR_SOURCE}";`);
     }
 
     if (importStatements.length > 0) {
@@ -188,15 +139,6 @@ export function transformCreateFileRoute(params: TransformParams): TransformResu
         code: magicString.toString(),
         map: magicString.generateMap({ hires: true, source: cleanId })
     };
-}
-
-function findComponentProperty(node: t.ObjectExpression): t.ObjectProperty | undefined {
-    return node.properties.find(
-        prop =>
-            t.isObjectProperty(prop) &&
-            ((t.isIdentifier(prop.key) && prop.key.name === "component") ||
-                (t.isStringLiteral(prop.key) && prop.key.value === "component"))
-    ) as t.ObjectProperty | undefined;
 }
 
 function objectContainsLoaderOrBeforeLoad(node: t.ObjectExpression): boolean {
@@ -216,12 +158,6 @@ function objectContainsLoaderOrBeforeLoad(node: t.ObjectExpression): boolean {
 
         return false;
     });
-}
-
-function isWrappedWithHandling(node: t.Node): boolean {
-    return (
-        t.isCallExpression(node) && t.isIdentifier(node.callee, { name: POST_LOGIN_IMPORT_SPECIFIER })
-    );
 }
 
 function isCandidateFile(id: string): boolean {

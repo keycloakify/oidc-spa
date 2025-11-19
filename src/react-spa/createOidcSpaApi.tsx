@@ -46,7 +46,7 @@ export function createOidcSpaApi<
         }
         assert<Equals<typeof paramsOfBootstrap.implementation, "real">>;
 
-        const { warnUserSecondsBeforeAutoLogout = 45 } = paramsOfBootstrap;
+        const { warnUserSecondsBeforeAutoLogout = 60 } = paramsOfBootstrap;
 
         if (
             oidcCoreOrInitializationError === undefined ||
@@ -430,7 +430,7 @@ export function createOidcSpaApi<
         request?: { url?: string };
         cause?: "preload" | string;
         location?: {
-            href?: string;
+            publicHref?: string;
         };
     }): Promise<void | never> {
         if (!isBrowser) {
@@ -447,9 +447,9 @@ export function createOidcSpaApi<
                 });
             }
 
-            if (loaderContext.location?.href !== undefined) {
+            if (loaderContext.location?.publicHref !== undefined) {
                 return toFullyQualifiedUrl({
-                    urlish: loaderContext.location.href,
+                    urlish: loaderContext.location.publicHref,
                     doAssertNoQueryParams: false
                 });
             }

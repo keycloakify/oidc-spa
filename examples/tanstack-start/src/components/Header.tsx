@@ -175,9 +175,9 @@ export default function Header() {
 function AuthButtons(props: { className?: string }) {
     const { className } = props;
 
-    const { hasInitCompleted, isUserLoggedIn } = useOidc();
+    const { isOidcReady, isUserLoggedIn } = useOidc();
 
-    if (!hasInitCompleted) {
+    if (!isOidcReady) {
         return null;
     }
 

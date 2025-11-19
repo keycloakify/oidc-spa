@@ -1,14 +1,18 @@
 import type { OidcSpaVitePluginParams } from "./vite-plugin";
 import type { ResolvedConfig } from "vite";
 import type { PluginContext } from "rollup";
-import { existsSync } from "node:fs";
 import { promises as fs } from "node:fs";
 import * as path from "node:path";
-import { fileURLToPath } from "node:url";
-import { normalizePath } from "vite";
 import { assert } from "../tools/tsafe/assert";
 import type { Equals } from "../tools/tsafe/Equals";
 import type { ProjectType } from "./projectType";
+import {
+    resolveCandidate,
+    resolvePackageFile,
+    normalizeAbsolute,
+    splitId,
+    normalizeRequestPath
+} from "./utils";
 
 type EntryResolution = {
     absolutePath: string;
@@ -29,7 +33,7 @@ const REACT_ROUTER_ENTRY_CANDIDATES = [
 
 const TANSTACK_ENTRY_CANDIDATES = ["client.tsx", "client.ts", "client.jsx", "client.js"];
 
-export function createLoadHandleEntrypoint(params: {
+export function createHandleClientEntrypoint(params: {
     oidcSpaVitePluginParams: OidcSpaVitePluginParams;
     resolvedConfig: ResolvedConfig;
     projectType: ProjectType;
@@ -41,7 +45,7 @@ export function createLoadHandleEntrypoint(params: {
         projectType
     });
 
-    async function loadHandleEntrypoint(params: {
+    async function load_handleClientEntrypoint(params: {
         id: string;
         pluginContext: PluginContext;
     }): Promise<null | string> {
@@ -75,8 +79,6 @@ export function createLoadHandleEntrypoint(params: {
 
         const stubSourceCache = [
             `import { oidcEarlyInit } from "oidc-spa/entrypoint";`,
-            projectType === "tanstack-start" &&
-                `import { preventConsoleLoggingOfUnifiedClientRetryForSsrLoadersError } from "oidc-spa/react-tanstack-start/rfcUnifiedClientRetryForSsrLoaders/entrypoint";`,
             // Use Object.assign to force Rollup to preserve all properties
             `const _oidc_params = Object.assign({}, {`,
             `    freezeFetch: ${freezeFetch},`,
@@ -84,14 +86,11 @@ export function createLoadHandleEntrypoint(params: {
             `    freezeWebSocket: ${freezeWebSocket},`,
             `    freezePromise: ${freezePromise},`,
             `    safeMode: ${safeMode},`,
-            `    isPostLoginRedirectManual: ${projectType === "tanstack-start"},`,
             `    BASE_URL: "${resolvedConfig.base}"`,
             `});`,
             `const { shouldLoadApp } = oidcEarlyInit(_oidc_params);`,
             ``,
-            `if(shouldLoadApp){`,
-            projectType === "tanstack-start" &&
-                `    preventConsoleLoggingOfUnifiedClientRetryForSsrLoadersError();`,
+            `if (shouldLoadApp) {`,
             `    ${originalEntryImport};`,
             `}`
         ]
@@ -101,7 +100,7 @@ export function createLoadHandleEntrypoint(params: {
         return stubSourceCache;
     }
 
-    return loadHandleEntrypoint;
+    return { load_handleClientEntrypoint };
 }
 
 function resolveEntryForProject({
@@ -234,64 +233,4 @@ function loadOriginalModule(
 ): Promise<string> {
     entry.watchFiles.forEach(file => context.addWatchFile(file));
     return fs.readFile(entry.absolutePath, "utf8");
-}
-
-function resolveCandidate({
-    root,
-    subDirectories,
-    filenames
-}: {
-    root: string;
-    subDirectories: string[];
-    filenames: string[];
-}): string | undefined {
-    for (const subDirectory of subDirectories) {
-        for (const filename of filenames) {
-            const candidate = path.resolve(root, subDirectory, filename);
-            if (existsSync(candidate)) {
-                return candidate;
-            }
-        }
-    }
-    return undefined;
-}
-
-function resolvePackageFile(packageName: string, segments: string[]): string {
-    const pkgPath = require.resolve(`${packageName}/package.json`);
-    return path.resolve(path.dirname(pkgPath), ...segments);
-}
-
-function normalizeAbsolute(filePath: string): string {
-    return normalizePath(filePath);
-}
-
-function splitId(id: string): { path: string; queryParams: URLSearchParams } {
-    const queryIndex = id.indexOf("?");
-    if (queryIndex === -1) {
-        return { path: id, queryParams: new URLSearchParams() };
-    }
-
-    const pathPart = id.slice(0, queryIndex);
-    const queryString = id.slice(queryIndex + 1);
-    return { path: pathPart, queryParams: new URLSearchParams(queryString) };
-}
-
-function normalizeRequestPath(id: string): string {
-    let requestPath = id;
-
-    if (requestPath.startsWith("\0")) {
-        requestPath = requestPath.slice(1);
-    }
-
-    if (requestPath.startsWith("/@fs/")) {
-        requestPath = requestPath.slice("/@fs/".length);
-    } else if (requestPath.startsWith("file://")) {
-        requestPath = fileURLToPath(requestPath);
-    }
-
-    if (path.isAbsolute(requestPath) || requestPath.startsWith(".")) {
-        return normalizePath(requestPath);
-    }
-
-    return normalizePath(requestPath);
 }

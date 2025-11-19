@@ -1,4 +1,4 @@
-import { useState, useEffect, type ReactNode, useReducer, type ComponentType } from "react";
+import { useState, useEffect, useReducer } from "react";
 import type {
     CreateValidateAndGetAccessTokenClaims,
     OidcSpaApi,
@@ -22,9 +22,10 @@ import { createServerFn, createMiddleware } from "@tanstack/react-start";
 // @ts-expect-error: Since our module is not labeled as ESM we don't have the types here.
 import { getRequest, setResponseHeader, setResponseStatus } from "@tanstack/react-start/server";
 import { toFullyQualifiedUrl } from "../../tools/toFullyQualifiedUrl";
-import { UnifiedClientRetryForSsrLoadersError } from "./rfcUnifiedClientRetryForSsrLoaders/UnifiedClientRetryForSsrLoadersError";
+import { BEFORE_LOAD_FN_BRAND_PROPERTY_NAME } from "./disableSsrIfLoginEnforced";
 import { setDesiredPostLoginRedirectUrl } from "../../core/desiredPostLoginRedirectUrl";
 import type { MaybeAsync } from "../../tools/MaybeAsync";
+import { enableStateDataCookie } from "../../core/StateDataCookie";
 
 export function createOidcSpaApi<
     AutoLogin extends boolean,
@@ -71,7 +72,7 @@ export function createOidcSpaApi<
         }
         assert<Equals<typeof paramsOfBootstrap.implementation, "real">>;
 
-        const { warnUserSecondsBeforeAutoLogout = 45 } = paramsOfBootstrap;
+        const { warnUserSecondsBeforeAutoLogout = 60 } = paramsOfBootstrap;
 
         if (
             oidcCoreOrInitializationError === undefined ||
@@ -115,65 +116,39 @@ export function createOidcSpaApi<
     });
 
     function useOidc(params?: {
-        assert?: "user logged in" | "user not logged in" | "init completed";
+        assert?: "user logged in" | "user not logged in" | "ready";
     }): UseOidc.Oidc<DecodedIdToken> {
         const { assert: assert_params } = params ?? {};
 
-        /*
-        if (!isBrowser) {
-            throw new Error(
-                [
-                    "oidc-spa: useOidc() can't be used on the server.",
-                    "You can prevent this component from rendering on the server",
-                    "by wrapping it into <OidcInitializationGate />"
-                ].join(" ")
-            );
-        }
-        */
-
-        const { hasResolved, value: oidcCore } = dOidcCoreOrInitializationError.getState();
-
-        if (oidcCore instanceof OidcInitializationError) {
-            throw oidcCore;
-        }
+        const { hasResolved, value: oidcCoreOrInitializationError } =
+            dOidcCoreOrInitializationError.getState();
 
         check_assertion: {
             if (assert_params === undefined) {
                 break check_assertion;
             }
 
-            if (assert_params === "init completed") {
-                if (!hasResolved) {
-                    throw new Error(
-                        [
-                            "oidc-spa: There is a logic error in the application.",
-                            "you called useOidc({ assert: 'init completed' }) but",
-                            ...(isBrowser
-                                ? [
-                                      "the component making this call was rendered before",
-                                      "the oidc initialization has completed."
-                                  ]
-                                : ["we are on the server, this assertion will always be wrong."]),
-                            "\nTo avoid this error make sure you call this within",
-                            "<OidcInitializationGate /> or remove the assertion and check",
-                            "the hasInitCompleted property."
-                        ].join(" ")
-                    );
-                }
-
-                break check_assertion;
-            }
-
-            if (!hasResolved) {
+            if (!hasResolved || oidcCoreOrInitializationError instanceof Error) {
                 throw new Error(
                     [
                         "oidc-spa: There is a logic error in the application.",
                         `you called useOidc({ assert: "${assert_params}" }) but`,
-                        "initialization hasn't completed yet, we don't know yet if the",
-                        "user is logged in or not."
+                        ...(isBrowser
+                            ? [
+                                  "the component making this call was rendered before",
+                                  "the auth state of the user was established."
+                              ]
+                            : ["we are on the server, this assertion will always be wrong."]),
+                        "\nTo avoid this error make sure to check isOidcReady higher in the tree."
                     ].join(" ")
                 );
             }
+
+            if (assert_params === "ready") {
+                break check_assertion;
+            }
+
+            const oidcCore = oidcCoreOrInitializationError;
 
             const getMessage = (v: string) =>
                 [
@@ -220,9 +195,15 @@ export function createOidcSpaApi<
         }, []);
 
         const [, reRenderIfDecodedIdTokenChanged] = useState<DecodedIdToken | undefined>(() => {
-            if (oidcCore === undefined) {
+            if (!hasResolved) {
                 return undefined;
             }
+
+            if (oidcCoreOrInitializationError instanceof Error) {
+                return undefined;
+            }
+
+            const oidcCore = oidcCoreOrInitializationError;
 
             if (!oidcCore.isUserLoggedIn) {
                 return undefined;
@@ -233,9 +214,15 @@ export function createOidcSpaApi<
         const [evtIsDecodedIdTokenUsed] = useState(() => createStatefulEvt<boolean>(() => false));
 
         useEffect(() => {
-            if (oidcCore === undefined) {
-                return undefined;
+            if (!hasResolved) {
+                return;
             }
+
+            if (oidcCoreOrInitializationError instanceof Error) {
+                return;
+            }
+
+            const oidcCore = oidcCoreOrInitializationError;
 
             if (!oidcCore.isUserLoggedIn) {
                 return;
@@ -273,7 +260,7 @@ export function createOidcSpaApi<
                 isActive = false;
                 unsubscribe?.();
             };
-        }, []);
+        }, [hasResolved]);
 
         const [evtIsAutoLogoutStateUsed] = useState(() => createStatefulEvt<boolean>(() => false));
 
@@ -323,20 +310,34 @@ export function createOidcSpaApi<
             setHasHydratedToTrue();
         }, []);
 
-        if (!hasResolved || hasHydrated === false) {
-            return id<UseOidc.Oidc.InitNotCompleted>({
-                hasInitCompleted: false,
+        if (!hasResolved || oidcCoreOrInitializationError instanceof Error || hasHydrated === false) {
+            return id<UseOidc.Oidc.NotReady>({
+                isOidcReady: false,
                 autoLogoutState: {
                     shouldDisplayWarning: false
-                }
+                },
+                oidcInitializationError: (() => {
+                    if (!hasHydrated) {
+                        return undefined;
+                    }
+                    if (!hasResolved) {
+                        return undefined;
+                    }
+                    if (!(oidcCoreOrInitializationError instanceof Error)) {
+                        return undefined;
+                    }
+                    return oidcCoreOrInitializationError;
+                })()
             });
         }
 
+        const oidcCore = oidcCoreOrInitializationError;
+
         if (!oidcCore.isUserLoggedIn) {
             return id<UseOidc.Oidc.NotLoggedIn>({
-                hasInitCompleted: true,
+                isOidcReady: true,
                 isUserLoggedIn: false,
-                initializationError: oidcCore.initializationError,
+                oidcInitializationError: oidcCore.initializationError,
                 issuerUri: oidcCore.params.issuerUri,
                 clientId: oidcCore.params.clientId,
                 validRedirectUri: oidcCore.params.validRedirectUri,
@@ -350,7 +351,7 @@ export function createOidcSpaApi<
         }
 
         return id<UseOidc.Oidc.LoggedIn<DecodedIdToken>>({
-            hasInitCompleted: true,
+            isOidcReady: true,
             isUserLoggedIn: true,
             get decodedIdToken() {
                 evtIsDecodedIdTokenUsed.current = true;
@@ -375,7 +376,7 @@ export function createOidcSpaApi<
         assert?: "user logged in" | "user not logged in" | "init completed";
     }): Promise<GetOidc.Oidc<DecodedIdToken>> {
         if (!isBrowser) {
-            throw new UnifiedClientRetryForSsrLoadersError(
+            throw new Error(
                 [
                     "oidc-spa: getOidc() can't be used on the server",
                     "if you use it in a loader, make sure to mark the route",
@@ -640,6 +641,8 @@ export function createOidcSpaApi<
                     break;
                 case "real":
                     {
+                        enableStateDataCookie();
+
                         const { createOidc } = await prModuleCore;
 
                         let oidcCoreOrInitializationError:
@@ -684,11 +687,11 @@ export function createOidcSpaApi<
     async function enforceLogin(loaderContext: {
         cause: "preload" | string;
         location: {
-            href: string;
+            publicHref: string;
         };
     }): Promise<void | never> {
         if (!isBrowser) {
-            throw new UnifiedClientRetryForSsrLoadersError(
+            throw new Error(
                 [
                     "oidc-spa: enforceLogin cannot be used on the server",
                     "make sure to mark any route that uses it as ssr: false"
@@ -699,9 +702,9 @@ export function createOidcSpaApi<
         const { cause } = loaderContext;
 
         const redirectUrl = (() => {
-            if (loaderContext.location?.href !== undefined) {
+            if (loaderContext.location?.publicHref !== undefined) {
                 return toFullyQualifiedUrl({
-                    urlish: loaderContext.location.href,
+                    urlish: loaderContext.location.publicHref,
                     doAssertNoQueryParams: false
                 });
             }
@@ -759,50 +762,7 @@ export function createOidcSpaApi<
         }
     }
 
-    enforceLogin.__isOidcSpaEnforceLogin = true;
-
-    function OidcInitializationGate(props: {
-        errorComponent?: ComponentType<{ oidcInitializationError: OidcInitializationError }>;
-        pendingComponent?: ComponentType<{}>;
-        children: ReactNode;
-    }): ReactNode {
-        const { errorComponent: ErrorComponent, pendingComponent: PendingComponent, children } = props;
-
-        const [oidcCoreOrInitializationError, setOidcCoreOrInitializationError] = useState<
-            Oidc_core<DecodedIdToken> | OidcInitializationError | undefined
-        >(undefined);
-
-        useEffect(() => {
-            let isActive = true;
-
-            dOidcCoreOrInitializationError.pr.then(oidcCoreOrInitializationError => {
-                if (!isActive) {
-                    return;
-                }
-                setOidcCoreOrInitializationError(oidcCoreOrInitializationError);
-            });
-
-            return () => {
-                isActive = false;
-            };
-        }, []);
-
-        if (oidcCoreOrInitializationError === undefined) {
-            if (PendingComponent === undefined) {
-                return null;
-            }
-            return <PendingComponent />;
-        }
-
-        if (oidcCoreOrInitializationError instanceof OidcInitializationError) {
-            if (ErrorComponent === undefined) {
-                throw oidcCoreOrInitializationError;
-            }
-            return <ErrorComponent oidcInitializationError={oidcCoreOrInitializationError} />;
-        }
-
-        return children;
-    }
+    enforceLogin[BEFORE_LOAD_FN_BRAND_PROPERTY_NAME] = true;
 
     const prValidateAndGetAccessTokenClaims =
         createValidateAndGetAccessTokenClaims === undefined
@@ -1017,7 +977,6 @@ export function createOidcSpaApi<
         getOidc,
         bootstrapOidc,
         enforceLogin,
-        OidcInitializationGate,
         oidcFnMiddleware,
         oidcRequestMiddleware
     };

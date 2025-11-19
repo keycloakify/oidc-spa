@@ -166,7 +166,7 @@ export type ParamsOfProvide = {
      * with the app.
      * This value let you define how long before how long before auto logout this warning should
      * start showing.
-     * Default is 45 seconds.
+     * Default is 60 seconds.
      */
     warnUserSecondsBeforeAutoLogout?: number;
 };
@@ -204,7 +204,7 @@ export abstract class AbstractOidcService<
     protected mockDecodedIdToken: (() => Promise<T_DecodedIdToken>) | T_DecodedIdToken | undefined =
         undefined;
 
-    #warnUserSecondsBeforeAutoLogout = 45;
+    #warnUserSecondsBeforeAutoLogout = 60;
 
     #isRunningGetParams = false;
 

@@ -7,7 +7,6 @@ import {
 import { type OidcMetadata, fetchOidcMetadata } from "./OidcMetadata";
 import { assert, type Equals } from "../tools/tsafe/assert";
 import { id } from "../tools/tsafe/id";
-import { setTimeout, clearTimeout } from "../tools/workerTimers";
 import { Deferred } from "../tools/Deferred";
 import { createEvtIsUserActive } from "./evtIsUserActive";
 import { createStartCountdown } from "../tools/startCountdown";
@@ -53,6 +52,12 @@ import {
 } from "./instancesThatCantUseIframes";
 import { getDesiredPostLoginRedirectUrl } from "./desiredPostLoginRedirectUrl";
 import { getHomeAndRedirectUri } from "./homeAndRedirectUri";
+import { ensureNonBlankPaint } from "../tools/ensureNonBlankPaint";
+import {
+    setStateDataCookieIfEnabled,
+    clearStateDataCookie,
+    getIsStateDataCookieEnabled
+} from "./StateDataCookie";
 
 // NOTE: Replaced at build time
 const VERSION = "{{OIDC_SPA_VERSION}}";
@@ -373,9 +378,10 @@ export async function createOidc_nonMemoized<
         __unsafe_clientSecret,
         __unsafe_useIdTokenAsAccessToken = false,
         __metadata,
-        scopes = ["openid", "profile"],
         sessionRestorationMethod = params.autoLogin === true ? "full page redirect" : "auto"
     } = params;
+
+    const scopes = Array.from(new Set(["openid", ...(params.scopes ?? ["profile"])]));
 
     const BASE_URL_params = params.BASE_URL ?? params.homeUrl;
 
@@ -607,9 +613,10 @@ export async function createOidc_nonMemoized<
                   redirect_uri: homeUrlAndRedirectUri,
                   silent_redirect_uri: homeUrlAndRedirectUri,
                   post_logout_redirect_uri: homeUrlAndRedirectUri,
-                  response_mode: isKeycloak({ issuerUri }) ? "fragment" : "query",
+                  response_mode:
+                      isKeycloak({ issuerUri }) && !getIsStateDataCookieEnabled() ? "fragment" : "query",
                   response_type: "code",
-                  scope: Array.from(new Set(["openid", ...scopes])).join(" "),
+                  scope: scopes.join(" "),
                   automaticSilentRenew: false,
                   userStore: new WebStorageStateStore({
                       store: (() => {
@@ -647,6 +654,7 @@ export async function createOidc_nonMemoized<
         getExtraQueryParams,
         getExtraTokenParams,
         homeUrl: homeUrlAndRedirectUri,
+        stateUrlParamValue_instance,
         evtInitializationOutcomeUserNotLoggedIn,
         log
     });
@@ -741,6 +749,8 @@ export async function createOidc_nonMemoized<
                 break handle_redirect_auth_response;
             }
 
+            // TODO: Delete cookie if exist
+
             const { stateData, authResponse } = stateDataAndAuthResponse;
 
             switch (stateData.action) {
@@ -762,6 +772,8 @@ export async function createOidc_nonMemoized<
                         );
 
                         const authResponseUrl = authResponseToUrl(authResponse);
+
+                        clearStateDataCookie({ stateUrlParamValue: authResponse.state });
 
                         let oidcClientTsUser: OidcClientTsUser | undefined = undefined;
 
@@ -786,7 +798,10 @@ export async function createOidc_nonMemoized<
 
                                 if (authResponse_error !== undefined) {
                                     log?.(
-                                        `The auth server responded with: ${authResponse_error}, trying to restore from the http only cookie`
+                                        [
+                                            `The auth server responded with: ${authResponse_error},`,
+                                            `trying to restore session as if we didn't had a auth response.`
+                                        ].join(" ")
                                     );
                                     break handle_redirect_auth_response;
                                 }
@@ -928,7 +943,22 @@ export async function createOidc_nonMemoized<
 
                 const { authResponse } = result_loginSilent;
 
-                log?.(`Silent signin auth response ${JSON.stringify(authResponse, null, 2)}`);
+                log?.(
+                    `Silent signin auth response ${JSON.stringify(
+                        {
+                            ...authResponse,
+                            ...(authResponse.code === undefined
+                                ? undefined
+                                : {
+                                      code: authResponse.code.slice(0, 20) + "..."
+                                  })
+                        },
+                        null,
+                        2
+                    )}`
+                );
+
+                clearStateDataCookie({ stateUrlParamValue: authResponse.state });
 
                 authResponse_error = authResponse.error;
 
@@ -972,6 +1002,8 @@ export async function createOidc_nonMemoized<
                         evtInitializationOutcomeUserNotLoggedIn.post();
                     }
 
+                    ensureNonBlankPaint();
+
                     await waitForAllOtherOngoingLoginOrRefreshProcessesToComplete({
                         prUnlock:
                             getPrSafelyRestoredFromBfCacheAfterLoginBackNavigationOrInitializationError()
@@ -991,9 +1023,7 @@ export async function createOidc_nonMemoized<
 
                             return getDesiredPostLoginRedirectUrl() ?? window.location.href;
                         })(),
-                        // NOTE: Wether or not it's the preferred behavior, pushing to history
-                        // only works on user interaction so it have to be false
-                        doNavigateBackToLastPublicUrlIfTheTheUserNavigateBack: false,
+                        doNavigateBackToLastPublicUrlIfTheTheUserNavigateBack: true,
                         extraQueryParams_local: undefined,
                         transformUrlBeforeRedirect_local: undefined,
                         interaction: (() => {
@@ -1349,6 +1379,15 @@ export async function createOidc_nonMemoized<
                 location.reload();
             });
 
+            setStateDataCookieIfEnabled({
+                homeUrl: homeUrlAndRedirectUri,
+                stateUrlParamValue_instance,
+                stateDataCookie: {
+                    action: "logout",
+                    rootRelativeRedirectUrl: rootRelativePostLogoutRedirectUrl
+                }
+            });
+
             try {
                 await oidcClientTsUserManager.signoutRedirect({
                     state: id<StateData.Redirect>({
@@ -1386,7 +1425,7 @@ export async function createOidc_nonMemoized<
                         doForceReloadOnBfCache: true,
                         extraQueryParams_local: undefined,
                         transformUrlBeforeRedirect_local: undefined,
-                        doNavigateBackToLastPublicUrlIfTheTheUserNavigateBack: false,
+                        doNavigateBackToLastPublicUrlIfTheTheUserNavigateBack: true,
                         interaction: "directly redirect if active session show login otherwise",
                         preRedirectHook: undefined
                     });
@@ -1449,6 +1488,8 @@ export async function createOidc_nonMemoized<
                             const { authResponse } = result_loginSilent;
 
                             log?.("Tokens refresh using iframe", authResponse);
+
+                            clearStateDataCookie({ stateUrlParamValue: authResponse.state });
 
                             const authResponse_error = authResponse.error;
 

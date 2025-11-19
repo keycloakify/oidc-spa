@@ -149,10 +149,10 @@ export namespace ParamsOfBootstrap {
         clientId: string;
 
         /**
-         * Default: 45 second.
+         * Default: 60 second.
          * It defines how long before the auto logout we should start
          * displaying an overlay message to the user alerting them
-         * like: "Are you still there? You'll be disconnected in 45...44..."
+         * like: "Are you still there? You'll be disconnected in 59...58..."
          * NOTE: This parameter is only UI related! It does not defines
          * after how much time of inactivity the user should be auto logged out.
          * This is a server policy (that can be overwrote by idleSessionLifetimeInSeconds)

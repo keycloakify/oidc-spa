@@ -1,6 +1,6 @@
 {
     "name": "oidc-spa",
-    "version": "8.3.1",
+    "version": "8.4.3",
     "description": "OIDC Client for Client Centric Web Applications",
     "repository": {
         "type": "git",
@@ -105,7 +105,6 @@
         "typescript": "5.7.2",
         "webpack": "5.93.0",
         "webpack-cli": "5.1.4",
-        "worker-timers": "7.1.7",
         "zod": "^3.23.8",
         "rxjs": "^7.8.2",
         "@angular/core": "^20.3.1",
@@ -165,16 +164,6 @@
             "module": "./dist/esm/tanstack-start/react/index.js",
             "types": "./dist/esm/tanstack-start/react/index.d.ts",
             "default": "./dist/esm/tanstack-start/react/index.js"
-        },
-        "./react-tanstack-start/rfcUnifiedClientRetryForSsrLoaders": {
-            "module": "./dist/esm/tanstack-start/react/rfcUnifiedClientRetryForSsrLoaders/index.js",
-            "types": "./dist/esm/tanstack-start/react/rfcUnifiedClientRetryForSsrLoaders/index.d.ts",
-            "default": "./dist/esm/tanstack-start/react/rfcUnifiedClientRetryForSsrLoaders/index.js"
-        },
-        "./react-tanstack-start/rfcUnifiedClientRetryForSsrLoaders/entrypoint": {
-            "module": "./dist/esm/tanstack-start/react/rfcUnifiedClientRetryForSsrLoaders/entrypoint.js",
-            "types": "./dist/esm/tanstack-start/react/rfcUnifiedClientRetryForSsrLoaders/entrypoint.d.ts",
-            "default": "./dist/esm/tanstack-start/react/rfcUnifiedClientRetryForSsrLoaders/entrypoint.js"
         },
         "./mock/react": {
             "module": "./dist/esm/mock/react.js",
