@@ -8,7 +8,6 @@ export type UseOidc<DecodedIdToken> = {
     (params?: { assert?: undefined }): UseOidc.Oidc<DecodedIdToken>;
     (params: { assert: "user logged in" }): UseOidc.Oidc.LoggedIn<DecodedIdToken>;
     (params: { assert: "user not logged in" }): UseOidc.Oidc.NotLoggedIn;
-    (params: { assert: "ready" }): Exclude<UseOidc.Oidc<DecodedIdToken>, UseOidc.Oidc.NotReady>;
 };
 
 export namespace UseOidc {
