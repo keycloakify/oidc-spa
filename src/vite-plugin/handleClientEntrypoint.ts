@@ -220,6 +220,7 @@ function resolveEntryForProject({
             const resolution: EntryResolution = {
                 absolutePath: absoluteEntryPath,
                 normalizedPath: normalized,
+                // Nuxt's entry is generated/virtual and managed internally; watching not needed
                 watchFiles: []
             };
 
