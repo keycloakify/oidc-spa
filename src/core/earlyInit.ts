@@ -58,6 +58,8 @@ export function oidcEarlyInit(params: {
             "fetch",
             "XMLHttpRequest",
             "WebSocket",
+            "Headers",
+            "URLSearchParams",
             "String",
             "Object",
             "Promise",
