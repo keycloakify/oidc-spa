@@ -113,6 +113,7 @@ function resolveEntryForProject({
             return resolution;
         }
         case "react-router-framework":
+        case "nuxt":
         case "other":
             return undefined;
         default:

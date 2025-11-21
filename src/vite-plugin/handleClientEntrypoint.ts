@@ -51,12 +51,12 @@ export function createHandleClientEntrypoint(params: {
     }): Promise<null | string> {
         const { id, pluginContext } = params;
         const { path: rawPath, queryParams } = splitId(id);
-        const normalizedRequestPath = normalizeRequestPath(rawPath);
-        if (!normalizedRequestPath) {
-            return null;
-        }
 
-        if (normalizedRequestPath !== entryResolution.normalizedPath) {
+        const normalizedRequestPath = normalizeRequestPath(rawPath);
+        const isMatch =
+            normalizedRequestPath && normalizedRequestPath === entryResolution.normalizedPath;
+
+        if (!isMatch) {
             return null;
         }
 
@@ -73,21 +73,43 @@ export function createHandleClientEntrypoint(params: {
 
         assert<Equals<typeof rest, {}>>;
 
+        const originalEntryImport = `import("./${path.basename(
+            entryResolution.absolutePath
+        )}?${ORIGINAL_QUERY_PARAM}=true")`;
+
+        // For Nuxt, resolvedConfig.base points to the public directory of assets, not the dynamic baseURL.
+        // We need to extract the baseURL from Nuxt's runtime config to handle dynamic base paths correctly.
+        const nuxtRuntimeConfig =
+            projectType === "nuxt"
+                ? [
+                      `const useRuntimeConfig = () => window?.__NUXT__?.config || window?.useNuxtApp?.().payload?.config;`,
+                      `const getAppConfig = () => useRuntimeConfig()?.app;`,
+                      `const baseURL = () => getAppConfig()?.baseURL;`
+                  ]
+                : [];
+
+        const baseUrl = projectType === "nuxt" ? "baseURL()" : `"${resolvedConfig.base}"`;
+
+        const oidcParams = [
+            `freezeFetch: ${freezeFetch},`,
+            `freezeXMLHttpRequest: ${freezeXMLHttpRequest},`,
+            `freezeWebSocket: ${freezeWebSocket},`,
+            `freezePromise: ${freezePromise},`,
+            `safeMode: ${safeMode},`,
+            `BASE_URL: ${baseUrl}`
+        ];
+
+        // Use Object.assign to force Rollup to preserve all properties
         const stubSourceCache = [
             `import { oidcEarlyInit } from "oidc-spa/entrypoint";`,
-            `const { shouldLoadApp } = oidcEarlyInit({`,
-            `    freezeFetch: ${freezeFetch},`,
-            `    freezeXMLHttpRequest: ${freezeXMLHttpRequest},`,
-            `    freezeWebSocket: ${freezeWebSocket},`,
-            `    freezePromise: ${freezePromise},`,
-            `    safeMode: ${safeMode},`,
-            `    BASE_URL: "${resolvedConfig.base}"`,
+            ...nuxtRuntimeConfig,
+            `const _oidc_params = Object.assign({}, {`,
+            ...oidcParams,
             `});`,
+            `const { shouldLoadApp } = oidcEarlyInit(_oidc_params);`,
             ``,
-            `if(shouldLoadApp){`,
-            `    import("./${path.basename(
-                entryResolution.absolutePath
-            )}?${ORIGINAL_QUERY_PARAM}=true");`,
+            `if (shouldLoadApp) {`,
+            `    ${originalEntryImport};`,
             `}`
         ]
             .filter(line => typeof line === "string")
@@ -158,6 +180,48 @@ function resolveEntryForProject({
                 absolutePath: entryPath,
                 normalizedPath: normalized,
                 watchFiles: candidate ? [entryPath] : []
+            };
+
+            return resolution;
+        }
+
+        case "nuxt": {
+            const rollupInput = config.build.rollupOptions?.input;
+
+            let entryPath: string;
+
+            if (typeof rollupInput === "string") {
+                entryPath = rollupInput;
+            } else if (Array.isArray(rollupInput)) {
+                assert(rollupInput.length > 0, "Nuxt rollupOptions.input array is empty");
+                entryPath = rollupInput[0];
+            } else if (rollupInput && typeof rollupInput === "object") {
+                const inputRecord = rollupInput;
+                assert(
+                    Object.keys(inputRecord).length > 0,
+                    "Nuxt rollupOptions.input object must contain at least one entry"
+                );
+                entryPath = Object.values(inputRecord)[0];
+            } else {
+                throw new Error(
+                    "Could not resolve Nuxt entry point from Vite config. " +
+                        "rollupOptions.input is undefined or has an unexpected type."
+                );
+            }
+
+            // Ensure entryPath is absolute before normalizing.
+            // Nuxt's rollupOptions.input can be relative, but Vite resolves IDs to absolute paths.
+            const absoluteEntryPath = path.isAbsolute(entryPath)
+                ? entryPath
+                : path.resolve(root, entryPath);
+
+            const normalized = normalizeAbsolute(absoluteEntryPath);
+
+            const resolution: EntryResolution = {
+                absolutePath: absoluteEntryPath,
+                normalizedPath: normalized,
+                // Nuxt's entry is generated/virtual and managed internally; watching not needed
+                watchFiles: []
             };
 
             return resolution;
