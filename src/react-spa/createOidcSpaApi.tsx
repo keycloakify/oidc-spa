@@ -530,22 +530,16 @@ export function createOidcSpaApi<
     function OidcInitializationGate(props: { fallback?: ReactNode; children: ReactNode }) {
         const { fallback, children } = props;
 
-        const { hasResolved } = dOidcCoreOrInitializationError.getState();
-
-        const [, reRender] = useReducer(n => n + 1, 0);
+        const [isReadyToRender, readyToRender] = useReducer(() => true, false);
 
         useEffect(() => {
-            if (hasResolved) {
-                return;
-            }
-
             let isActive = true;
 
             dOidcCoreOrInitializationError.pr.then(() => {
                 if (!isActive) {
                     return;
                 }
-                reRender();
+                readyToRender();
             });
 
             return () => {
@@ -553,7 +547,7 @@ export function createOidcSpaApi<
             };
         }, []);
 
-        if (!hasResolved) {
+        if (!isReadyToRender) {
             return fallback !== undefined ? fallback : null;
         }
 
