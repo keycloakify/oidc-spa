@@ -9,7 +9,7 @@ const AdminOnly = lazy(() => import("./pages/AdminOnly"));
 
 export function App() {
     return (
-        <div className="min-h-screen bg-slate-950 text-slate-100 antialiased">
+        <>
             <Header />
             <main className="mx-auto flex w-full max-w-4xl flex-col gap-10 px-6 pb-16 pt-28">
                 <Routes>
@@ -20,6 +20,6 @@ export function App() {
                 </Routes>
             </main>
             <AutoLogoutWarningOverlay />
-        </div>
+        </>
     );
 }

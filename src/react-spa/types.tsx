@@ -9,9 +9,7 @@ export type UseOidc<DecodedIdToken> = {
 };
 
 export namespace UseOidc {
-    export type WithAutoLogin<DecodedIdToken> = (params?: {
-        assert: "user logged in";
-    }) => Oidc.LoggedIn<DecodedIdToken>;
+    export type WithAutoLogin<DecodedIdToken> = () => Oidc.LoggedIn<DecodedIdToken>;
 
     export type Oidc<DecodedIdToken> =
         | (Oidc.NotLoggedIn & {
