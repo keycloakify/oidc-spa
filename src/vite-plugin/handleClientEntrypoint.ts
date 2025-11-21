@@ -85,7 +85,7 @@ export function createHandleClientEntrypoint(params: {
                 `   BASE_URL: ${(() => {
                     switch (projectType) {
                         case "nuxt":
-                            return "useRuntimeConfig().app.baseURL";
+                            return "__NUXT__.config.app.baseURL";
                         default:
                             return `"${resolvedConfig.base}"`;
                     }
