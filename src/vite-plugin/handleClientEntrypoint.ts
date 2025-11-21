@@ -73,49 +73,31 @@ export function createHandleClientEntrypoint(params: {
 
         assert<Equals<typeof rest, {}>>;
 
-        const originalEntryImport = `import("./${path.basename(
-            entryResolution.absolutePath
-        )}?${ORIGINAL_QUERY_PARAM}=true")`;
-
-        // For Nuxt, resolvedConfig.base points to the public directory of assets, not the dynamic baseURL.
-        // We need to extract the baseURL from Nuxt's runtime config to handle dynamic base paths correctly.
-        const nuxtRuntimeConfig =
-            projectType === "nuxt"
-                ? [
-                      `const useRuntimeConfig = () => window?.__NUXT__?.config || window?.useNuxtApp?.().payload?.config;`,
-                      `const getAppConfig = () => useRuntimeConfig()?.app;`,
-                      `const baseURL = () => getAppConfig()?.baseURL;`
-                  ]
-                : [];
-
-        const baseUrl = projectType === "nuxt" ? "baseURL()" : `"${resolvedConfig.base}"`;
-
-        const oidcParams = [
-            `freezeFetch: ${freezeFetch},`,
-            `freezeXMLHttpRequest: ${freezeXMLHttpRequest},`,
-            `freezeWebSocket: ${freezeWebSocket},`,
-            `freezePromise: ${freezePromise},`,
-            `safeMode: ${safeMode},`,
-            `BASE_URL: ${baseUrl}`
-        ];
-
-        // Use Object.assign to force Rollup to preserve all properties
-        const stubSourceCache = [
+        return [
             `import { oidcEarlyInit } from "oidc-spa/entrypoint";`,
-            ...nuxtRuntimeConfig,
-            `const _oidc_params = Object.assign({}, {`,
-            ...oidcParams,
+            `const { shouldLoadApp } = oidcEarlyInit({`,
+            ...[
+                `   freezeFetch: ${freezeFetch},`,
+                `   freezeXMLHttpRequest: ${freezeXMLHttpRequest},`,
+                `   freezeWebSocket: ${freezeWebSocket},`,
+                `   freezePromise: ${freezePromise},`,
+                `   safeMode: ${safeMode},`,
+                `   BASE_URL: ${(() => {
+                    switch (projectType) {
+                        case "nuxt":
+                            return "useRuntimeConfig().app.baseURL";
+                        default:
+                            return `"${resolvedConfig.base}"`;
+                    }
+                })()}`
+            ],
             `});`,
-            `const { shouldLoadApp } = oidcEarlyInit(_oidc_params);`,
             ``,
             `if (shouldLoadApp) {`,
-            `    ${originalEntryImport};`,
+            // prettier-ignore
+            `    import("./${path.basename(entryResolution.absolutePath)}?${ORIGINAL_QUERY_PARAM}=true");`,
             `}`
-        ]
-            .filter(line => typeof line === "string")
-            .join("\n");
-
-        return stubSourceCache;
+        ].join("\n");
     }
 
     return { load_handleClientEntrypoint };
