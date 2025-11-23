@@ -37,7 +37,7 @@ export function getTokensPlaceholders(params: { configId: string; tokens: Tokens
         setTimeout(() => {
             const index = entries.indexOf(entry);
 
-            if (index !== -1) {
+            if (index === -1) {
                 return;
             }
 
