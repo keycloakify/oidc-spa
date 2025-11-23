@@ -704,7 +704,6 @@ function runMonkeyPatchingPrevention() {
         "Headers",
         "URLSearchParams",
         "EventSource",
-        "navigator.serviceWorker",
         "ServiceWorkerContainer",
         "ServiceWorkerRegistration",
         "ServiceWorker",
@@ -726,8 +725,11 @@ function runMonkeyPatchingPrevention() {
         "atob",
         "btoa"
     ] as const) {
-        const original =
-            name === "navigator.serviceWorker" ? window.navigator.serviceWorker : window[name];
+        const original = window[name];
+
+        if (!original) {
+            continue;
+        }
 
         if ("prototype" in original) {
             for (const propertyName of Object.getOwnPropertyNames(original.prototype)) {
@@ -783,6 +785,21 @@ function runMonkeyPatchingPrevention() {
             get: () => original,
             set: () => {
                 throw createWriteError(`window.${name}`);
+            }
+        });
+    }
+
+    {
+        const name = "serviceWorker";
+
+        const original = navigator[name];
+
+        Object.defineProperty(navigator, name, {
+            configurable: false,
+            enumerable: true,
+            get: () => original,
+            set: () => {
+                throw createWriteError(`window.navigator.${name}`);
             }
         });
     }

@@ -86,6 +86,10 @@ export function handleTokenExfiltrationDefense_legacy(params: Params) {
 
         const original = window[name];
 
+        if (!original) {
+            continue;
+        }
+
         if ("prototype" in original) {
             for (const propertyName of Object.getOwnPropertyNames(original.prototype)) {
                 if (name === "Object") {
