@@ -812,7 +812,7 @@ function runMonkeyPatchingPrevention() {
             enumerable: true,
             get: () => original,
             set: () => {
-                throw createWriteError(`window.Function.prototype.${name});`);
+                throw createWriteError(`window.Function.prototype.${name})`);
             }
         });
     }

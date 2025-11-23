@@ -157,7 +157,7 @@ export function handleTokenExfiltrationDefense_legacy(params: Params) {
                 enumerable: true,
                 get: () => original,
                 set: () => {
-                    throw createWriteError(`window.Function.prototype.${name});`);
+                    throw createWriteError(`window.Function.prototype.${name})`);
                 }
             });
         }
