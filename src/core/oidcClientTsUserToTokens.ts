@@ -5,8 +5,10 @@ import { readExpirationTimeInJwt } from "../tools/readExpirationTimeInJwt";
 import { decodeJwt } from "../tools/decodeJwt";
 import type { Oidc } from "./Oidc";
 import { INFINITY_TIME } from "../tools/INFINITY_TIME";
+import { getIsTokenSubstitutionEnabled, getTokensPlaceholders } from "./tokenPlaceholderSubstitution";
 
 export function oidcClientTsUserToTokens<DecodedIdToken extends Record<string, unknown>>(params: {
+    configId: string;
     oidcClientTsUser: OidcClientTsUser;
     decodedIdTokenSchema?: {
         parse: (decodedIdToken_original: Oidc.Tokens.DecodedIdToken_OidcCoreSpec) => DecodedIdToken;
@@ -16,6 +18,7 @@ export function oidcClientTsUserToTokens<DecodedIdToken extends Record<string, u
     log: typeof console.log | undefined;
 }): Oidc.Tokens<DecodedIdToken> {
     const {
+        configId,
         oidcClientTsUser,
         decodedIdTokenSchema,
         __unsafe_useIdTokenAsAccessToken,
@@ -225,6 +228,17 @@ export function oidcClientTsUserToTokens<DecodedIdToken extends Record<string, u
                       return undefined;
                   })()
               });
+
+    if (getIsTokenSubstitutionEnabled()) {
+        const placeholders = getTokensPlaceholders({
+            configId,
+            tokens
+        });
+
+        tokens.accessToken = placeholders.accessToken;
+        tokens.idToken = placeholders.idToken;
+        tokens.refreshToken = placeholders.refreshToken;
+    }
 
     if (
         isFirstInit &&
