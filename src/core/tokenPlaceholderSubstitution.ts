@@ -47,10 +47,14 @@ export function getTokensPlaceholders(params: { configId: string; tokens: Tokens
 
     const id = counter++;
 
-    const entry_new = {
+    const entry_new: (typeof entries)[number] = {
         id,
         configId,
-        tokens
+        tokens: {
+            accessToken: tokens.accessToken,
+            idToken: tokens.idToken,
+            refreshToken: tokens.refreshToken
+        }
     };
 
     entries.push(entry_new);
