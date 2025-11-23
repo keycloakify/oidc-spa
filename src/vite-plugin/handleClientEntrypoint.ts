@@ -74,21 +74,21 @@ export function createHandleClientEntrypoint(params: {
             ...(() => {
                 if ("enableTokenExfiltrationDefense" in oidcSpaVitePluginParams) {
                     const {
+                        enableTokenExfiltrationDefense,
                         serviceWorkersAllowedHostnames,
                         resourceServersAllowedHostnames,
-                        enableTokenExfiltrationDefense,
                         ...rest
                     } = oidcSpaVitePluginParams ?? {};
 
                     assert<Equals<typeof rest, {}>>;
 
                     return [
-                        `   serviceWorkersAllowedHostnames: ${serviceWorkersAllowedHostnames},`,
+                        `   enableTokenExfiltrationDefense: ${enableTokenExfiltrationDefense},`,
                         `   resourceServersAllowedHostnames: ${JSON.stringify(
                             resourceServersAllowedHostnames
                         )},`,
-                        `   enableTokenExfiltrationDefense: ${JSON.stringify(
-                            enableTokenExfiltrationDefense
+                        `   serviceWorkersAllowedHostnames: ${JSON.stringify(
+                            serviceWorkersAllowedHostnames
                         )},`,
                         `   BASE_URL: ${(() => {
                             switch (projectType) {
