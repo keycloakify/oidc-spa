@@ -313,12 +313,9 @@ and the backend server is merely an OAuth2 resource server in the OIDC model.
 If you use BetterAuth to provide login via Keycloak, your backend becomes the OIDC client application,  
 which has some security benefits over browser token exchange, but at the cost of centralization and requiring backend infrastructure.
 
-And if we look closer, it can feel reassuring, in the Auth.js or BetterAuth model, to know that tokens are never directly exposed to JavaScript.  
-However, it’s important to understand that if an attacker successfully injects and executes code within your app’s origin, there are effectively no restrictions on the requests they can make.  
-Even without having access to the token itself, the attacker can perform any action on behalf of the user, since authentication is automatically handled via cookies.
+And with the [advanced exfiltration model enabled](https://docs.oidc-spa.dev/resources/xss-and-supply-chain-attack-protection), the security guarantees of a frontend-based approach become _theoretically equivalent_ to backend-based token exchange.
 
-With oidc-spa, the situation is different. Even in the event of an XSS attack, the attacker cannot send authenticated requests to the server unless they manually attach an access token.  
-Those tokens do exist in memory, but they are unreachable, and impossible to request, the runtime environment is hardened before any JS code other than oidc-spa gets a chance to run, making token extraction virtually impossible and ultimately making the attack harmless.
+I say “theoretically” not because users might misconfigure oidc-spa, the library refuses to start unless all requirements are met, but because this equivalence ultimately depends on the correctness of oidc-spa’s own hardening implementation. Backend flows avoid this concern entirely since tokens never enter the execution environment in the first place.
 
 One clear advantage BetterAuth has over oidc-spa is better SSR (Server-Side Rendering) support.
 In the oidc-spa model, authentication is handled entirely on the client, which makes it challenging to integrate with traditional full-stack frameworks that depend on server-side rendering.
