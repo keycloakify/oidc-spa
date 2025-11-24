@@ -373,15 +373,7 @@ function patchWebSocketApiToSubstituteTokenPlaceholder(params: {
         didSubstitute: boolean;
     };
 
-    const wsDataSymbol = Symbol("oidc-spa WebSocket data");
-
-    const getWsData = (ws: WebSocket): WsData => {
-        const data = (ws as any)[wsDataSymbol] as WsData | undefined;
-
-        assert(data !== undefined);
-
-        return data;
-    };
+    const wsDataByWs = new WeakMap<WebSocket, WsData>();
 
     const WebSocketPatched = function WebSocket(url: string | URL, protocols?: string | string[]) {
         const urlStr = typeof url === "string" ? url : url.href;
@@ -450,12 +442,12 @@ function patchWebSocketApiToSubstituteTokenPlaceholder(params: {
 
         const ws = new WebSocket_actual(nextUrl, nextProtocols as Parameters<typeof WebSocket>[1]);
 
-        (ws as any)[wsDataSymbol] = {
+        wsDataByWs.set(ws, {
             url: nextUrl,
             hostname,
             pathname,
             didSubstitute
-        } satisfies WsData;
+        });
 
         return ws;
     };
@@ -473,8 +465,13 @@ function patchWebSocketApiToSubstituteTokenPlaceholder(params: {
 
     window.WebSocket = WebSocketPatched as unknown as typeof WebSocket;
 
-    WebSocket_actual.prototype.send = function send(data: Parameters<WebSocket["send"]>[0]) {
-        const wsData = getWsData(this);
+    WebSocket_actual.prototype.send = function send(data) {
+        const wsData = wsDataByWs.get(this);
+
+        if (wsData === undefined) {
+            // NOTE: This can happen for Vite's dev server websocket
+            return send_actual.call(this, data);
+        }
 
         let nextData = data;
 
