@@ -1211,6 +1211,7 @@ export async function createOidc_nonMemoized<
     assert(oidcMetadata !== undefined, "30483403");
 
     let currentTokens = oidcClientTsUserToTokens({
+        configId,
         oidcClientTsUser: resultOfLoginProcess.oidcClientTsUser,
         decodedIdTokenSchema,
         __unsafe_useIdTokenAsAccessToken,
@@ -1537,6 +1538,7 @@ export async function createOidc_nonMemoized<
                 }
 
                 currentTokens = oidcClientTsUserToTokens({
+                    configId,
                     oidcClientTsUser,
                     decodedIdTokenSchema,
                     __unsafe_useIdTokenAsAccessToken,

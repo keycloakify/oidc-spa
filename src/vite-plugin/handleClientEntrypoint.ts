@@ -68,29 +68,66 @@ export function createHandleClientEntrypoint(params: {
 
         entryResolution.watchFiles.forEach(file => pluginContext.addWatchFile(file));
 
-        const { freezeFetch, freezeXMLHttpRequest, freezeWebSocket, freezePromise, safeMode, ...rest } =
-            oidcSpaVitePluginParams ?? {};
-
-        assert<Equals<typeof rest, {}>>;
-
         return [
             `import { oidcEarlyInit } from "oidc-spa/entrypoint";`,
             `const { shouldLoadApp } = oidcEarlyInit({`,
-            ...[
-                `   freezeFetch: ${freezeFetch},`,
-                `   freezeXMLHttpRequest: ${freezeXMLHttpRequest},`,
-                `   freezeWebSocket: ${freezeWebSocket},`,
-                `   freezePromise: ${freezePromise},`,
-                `   safeMode: ${safeMode},`,
-                `   BASE_URL: ${(() => {
-                    switch (projectType) {
-                        case "nuxt":
-                            return "__NUXT__.config.app.baseURL";
-                        default:
-                            return `"${resolvedConfig.base}"`;
-                    }
-                })()}`
-            ],
+            ...(() => {
+                if ("enableTokenExfiltrationDefense" in oidcSpaVitePluginParams) {
+                    const {
+                        enableTokenExfiltrationDefense,
+                        serviceWorkersAllowedHostnames,
+                        resourceServersAllowedHostnames,
+                        ...rest
+                    } = oidcSpaVitePluginParams ?? {};
+
+                    assert<Equals<typeof rest, {}>>;
+
+                    return [
+                        `   enableTokenExfiltrationDefense: ${enableTokenExfiltrationDefense},`,
+                        `   resourceServersAllowedHostnames: ${JSON.stringify(
+                            resourceServersAllowedHostnames
+                        )},`,
+                        `   serviceWorkersAllowedHostnames: ${JSON.stringify(
+                            serviceWorkersAllowedHostnames
+                        )},`,
+                        `   BASE_URL: ${(() => {
+                            switch (projectType) {
+                                case "nuxt":
+                                    return "__NUXT__.config.app.baseURL";
+                                default:
+                                    return `"${resolvedConfig.base}"`;
+                            }
+                        })()}`
+                    ];
+                }
+
+                const {
+                    freezeFetch,
+                    freezeXMLHttpRequest,
+                    freezeWebSocket,
+                    freezePromise,
+                    safeMode,
+                    ...rest
+                } = oidcSpaVitePluginParams ?? {};
+
+                assert<Equals<typeof rest, {}>>;
+
+                return [
+                    `   freezeFetch: ${freezeFetch},`,
+                    `   freezeXMLHttpRequest: ${freezeXMLHttpRequest},`,
+                    `   freezeWebSocket: ${freezeWebSocket},`,
+                    `   freezePromise: ${freezePromise},`,
+                    `   safeMode: ${safeMode},`,
+                    `   BASE_URL: ${(() => {
+                        switch (projectType) {
+                            case "nuxt":
+                                return "__NUXT__.config.app.baseURL";
+                            default:
+                                return `"${resolvedConfig.base}"`;
+                        }
+                    })()}`
+                ];
+            })(),
             `});`,
             ``,
             `if (shouldLoadApp) {`,

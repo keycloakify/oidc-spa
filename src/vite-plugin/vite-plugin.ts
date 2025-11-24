@@ -1,22 +1,17 @@
 import type { Plugin, TransformResult } from "vite";
 import { assert } from "../tools/tsafe/assert";
-import type { Param0 } from "../tools/tsafe/Param0";
-import type { oidcEarlyInit } from "../entrypoint";
+import type { ParamsOfEarlyInit, ParamsOfEarlyInit_legacy } from "../core/earlyInit";
 import { createHandleClientEntrypoint } from "./handleClientEntrypoint";
 import { createHandleServerEntrypoint } from "./handleServerEntrypoint";
 import { manageOptimizedDeps } from "./manageOptimizedDeps";
 import { transformCreateFileRoute } from "./transformTanstackRouterCreateFileRoute";
 import { getProjectType, type ProjectType } from "./projectType";
 
-export type OidcSpaVitePluginParams = Omit<Param0<typeof oidcEarlyInit>, "BASE_URL">;
+export type OidcSpaVitePluginParams =
+    | Omit<ParamsOfEarlyInit, "BASE_URL">
+    | Omit<ParamsOfEarlyInit_legacy, "BASE_URL">;
 
-export function oidcSpa(
-    params: OidcSpaVitePluginParams = {
-        freezeFetch: true,
-        freezeXMLHttpRequest: true,
-        freezeWebSocket: true
-    }
-) {
+export function oidcSpa(params: OidcSpaVitePluginParams) {
     let load_handleClientEntrypoint:
         | ReturnType<typeof createHandleClientEntrypoint>["load_handleClientEntrypoint"]
         | undefined = undefined;
