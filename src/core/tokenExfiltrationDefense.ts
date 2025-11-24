@@ -223,7 +223,7 @@ function patchFetchApiToSubstituteTokenPlaceholder(params: {
             );
         }
 
-        return fetch_actual(request.url, {
+        const nextInit: RequestInit = {
             method: request.method,
             headers,
             body,
@@ -236,7 +236,19 @@ function patchFetchApiToSubstituteTokenPlaceholder(params: {
             integrity: request.integrity,
             keepalive: request.keepalive,
             signal: request.signal
-        });
+        };
+
+        {
+            //@ts-expect-error
+            const duplex = init?.duplex ?? (input instanceof Request ? input.duplex : undefined);
+
+            if (duplex !== undefined) {
+                //@ts-expect-error
+                nextInit.duplex = duplex;
+            }
+        }
+
+        return fetch_actual(request.url, nextInit);
     };
 }
 
