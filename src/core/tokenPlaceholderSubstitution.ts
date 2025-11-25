@@ -66,7 +66,12 @@ export function getTokensPlaceholders(params: { configId: string; tokens: Tokens
     };
 }
 
-export function substitutePlaceholderByRealToken(text: string): string {
+export function substitutePlaceholderByRealToken(params: {
+    text: string;
+    doEncodeUriComponent: boolean;
+}): string {
+    const { text, doEncodeUriComponent } = params;
+
     let text_modified = text;
 
     for (const [tokenType, regExp] of [
@@ -89,15 +94,19 @@ export function substitutePlaceholderByRealToken(text: string): string {
                 );
             }
 
-            switch (tokenType) {
-                case "access_token":
-                    return entry.tokens.accessToken;
-                case "id_token":
-                    return entry.tokens.idToken;
-                case "refresh_token":
-                    assert(entry.tokens.refreshToken !== undefined, "204392284");
-                    return entry.tokens.refreshToken;
-            }
+            const token = (() => {
+                switch (tokenType) {
+                    case "access_token":
+                        return entry.tokens.accessToken;
+                    case "id_token":
+                        return entry.tokens.idToken;
+                    case "refresh_token":
+                        assert(entry.tokens.refreshToken !== undefined, "204392284");
+                        return entry.tokens.refreshToken;
+                }
+            })();
+
+            return doEncodeUriComponent ? encodeURIComponent(token) : token;
         });
     }
 

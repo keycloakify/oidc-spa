@@ -51,7 +51,10 @@ function patchFetchApiToSubstituteTokenPlaceholder(params: {
 
         const headers = new Headers();
         request.headers.forEach((value, key) => {
-            const nextValue = substitutePlaceholderByRealToken(value);
+            const nextValue = substitutePlaceholderByRealToken({
+                text: value,
+                doEncodeUriComponent: false
+            });
 
             if (nextValue !== value) {
                 didSubstitute = true;
@@ -77,7 +80,10 @@ function patchFetchApiToSubstituteTokenPlaceholder(params: {
                 }
 
                 if (typeof init.body === "string") {
-                    body = substitutePlaceholderByRealToken(init.body);
+                    body = substitutePlaceholderByRealToken({
+                        text: init.body,
+                        doEncodeUriComponent: false
+                    });
 
                     if (init.body !== body) {
                         didSubstitute = true;
@@ -91,7 +97,10 @@ function patchFetchApiToSubstituteTokenPlaceholder(params: {
                     const next = new URLSearchParams();
 
                     init.body.forEach((value, key) => {
-                        const nextValue = substitutePlaceholderByRealToken(value);
+                        const nextValue = substitutePlaceholderByRealToken({
+                            text: value,
+                            doEncodeUriComponent: false
+                        });
 
                         if (nextValue !== value) {
                             didUrlSearchParamsSubstitute = true;
@@ -115,7 +124,10 @@ function patchFetchApiToSubstituteTokenPlaceholder(params: {
 
                     init.body.forEach((value, key) => {
                         if (typeof value === "string") {
-                            const nextValue = substitutePlaceholderByRealToken(value);
+                            const nextValue = substitutePlaceholderByRealToken({
+                                text: value,
+                                doEncodeUriComponent: false
+                            });
 
                             if (nextValue !== value) {
                                 didFormDataSubstitute = true;
@@ -188,13 +200,28 @@ function patchFetchApiToSubstituteTokenPlaceholder(params: {
             }
 
             const bodyText = await request.clone().text();
-            const nextBodyText = substitutePlaceholderByRealToken(bodyText);
+            const nextBodyText = substitutePlaceholderByRealToken({
+                text: bodyText,
+                doEncodeUriComponent: false
+            });
 
             if (nextBodyText !== bodyText) {
                 didSubstitute = true;
             }
 
             body = nextBodyText;
+        }
+
+        let url: string;
+
+        {
+            const url_before = request.url;
+
+            url = substitutePlaceholderByRealToken({ text: url_before, doEncodeUriComponent: true });
+
+            if (url !== url_before) {
+                didSubstitute = true;
+            }
         }
 
         block_authed_request_to_unauthorized_hostnames: {
@@ -248,7 +275,7 @@ function patchFetchApiToSubstituteTokenPlaceholder(params: {
             }
         }
 
-        return fetch_actual(request.url, nextInit);
+        return fetch_actual(url, nextInit);
     };
 }
 
@@ -261,29 +288,7 @@ function patchXMLHttpRequestApiToSubstituteTokenPlaceholder(params: {
     const send_actual = XMLHttpRequest.prototype.send;
     const setRequestHeader_actual = XMLHttpRequest.prototype.setRequestHeader;
 
-    type XhrData = {
-        url: string;
-        didSubstitute: boolean;
-    };
-
-    const xhrDataSymbol = Symbol("oidc-spa XMLHttpRequest data");
-
-    const getXhrData = (xhr: XMLHttpRequest): XhrData => {
-        const xhr_any = xhr as any;
-
-        if (xhr_any[xhrDataSymbol] !== undefined) {
-            return xhr_any[xhrDataSymbol];
-        }
-
-        const data: XhrData = {
-            url: "",
-            didSubstitute: false
-        };
-
-        xhr_any[xhrDataSymbol] = data;
-
-        return data;
-    };
+    const stateByInstance = new WeakMap<XMLHttpRequest, { url: string; didSubstitute: boolean }>();
 
     XMLHttpRequest.prototype.open = function open(
         method: string,
@@ -292,10 +297,27 @@ function patchXMLHttpRequestApiToSubstituteTokenPlaceholder(params: {
         username?: string | null,
         password?: string | null
     ) {
-        const xhrData = getXhrData(this);
+        const state = { url: "", didSubstitute: false };
 
-        xhrData.url = typeof url === "string" ? url : url.href;
-        xhrData.didSubstitute = false;
+        {
+            const url_str = typeof url === "string" ? url : url.href;
+            state.url = substitutePlaceholderByRealToken({ text: url_str, doEncodeUriComponent: true });
+            if (url_str !== state.url) {
+                state.didSubstitute = true;
+            }
+        }
+
+        stateByInstance.set(this, state);
+
+        prevent_fetching_of_hashed_js_assets: {
+            const { pathname } = new URL(state.url, window.location.href);
+
+            if (!viteHashedJsAssetPathRegExp.test(pathname)) {
+                break prevent_fetching_of_hashed_js_assets;
+            }
+
+            throw new Error("oidc-spa: Blocked request to hashed static asset.");
+        }
 
         if (async === undefined) {
             return open_actual.bind(this)(method, url);
@@ -305,47 +327,45 @@ function patchXMLHttpRequestApiToSubstituteTokenPlaceholder(params: {
     };
 
     XMLHttpRequest.prototype.setRequestHeader = function setRequestHeader(name, value) {
-        const xhrData = getXhrData(this);
-        const nextValue = substitutePlaceholderByRealToken(value);
+        const state = stateByInstance.get(this);
+
+        assert(state !== undefined, "29440283");
+
+        const nextValue = substitutePlaceholderByRealToken({ text: value, doEncodeUriComponent: false });
 
         if (nextValue !== value) {
-            xhrData.didSubstitute = true;
+            state.didSubstitute = true;
         }
 
         return setRequestHeader_actual.call(this, name, nextValue);
     };
 
     XMLHttpRequest.prototype.send = function send(body) {
-        const xhrData = getXhrData(this);
+        const state = stateByInstance.get(this);
 
-        prevent_fetching_of_hashed_js_assets: {
-            const { pathname } = new URL(xhrData.url, window.location.href);
-
-            if (!viteHashedJsAssetPathRegExp.test(pathname)) {
-                break prevent_fetching_of_hashed_js_assets;
-            }
-
-            throw new Error("oidc-spa: Blocked request to hashed static asset.");
-        }
+        assert(state !== undefined, "32323484");
 
         let nextBody = body;
 
         if (typeof body === "string") {
-            const nextBodyText = substitutePlaceholderByRealToken(body);
+            const nextBodyText = substitutePlaceholderByRealToken({
+                text: body,
+                doEncodeUriComponent: false
+            });
 
             if (nextBodyText !== body) {
-                xhrData.didSubstitute = true;
+                state.didSubstitute = true;
             }
 
             nextBody = nextBodyText;
         }
 
         block_authed_request_to_unauthorized_hostnames: {
-            if (!xhrData.didSubstitute) {
+            if (!state.didSubstitute) {
                 break block_authed_request_to_unauthorized_hostnames;
             }
 
-            const { hostname } = new URL(xhrData.url, window.location.href);
+            const { hostname } = new URL(state.url, window.location.href);
 
             if (
                 getIsHostnameAuthorized({
@@ -389,42 +409,8 @@ function patchWebSocketApiToSubstituteTokenPlaceholder(params: {
 
     const WebSocketPatched = function WebSocket(url: string | URL, protocols?: string | string[]) {
         const urlStr = typeof url === "string" ? url : url.href;
-        const nextUrl = substitutePlaceholderByRealToken(urlStr);
+        const nextUrl = substitutePlaceholderByRealToken({ text: urlStr, doEncodeUriComponent: true });
         let didSubstitute = nextUrl !== urlStr;
-
-        const nextProtocols = (() => {
-            if (protocols === undefined) {
-                return protocols;
-            }
-
-            if (typeof protocols === "string") {
-                const next = substitutePlaceholderByRealToken(protocols);
-
-                if (next !== protocols) {
-                    didSubstitute = true;
-                }
-
-                return next;
-            }
-
-            let didProtocolsSubstitute = false;
-
-            const next = protocols.map(protocol => {
-                const nextProtocol = substitutePlaceholderByRealToken(protocol);
-
-                if (nextProtocol !== protocol) {
-                    didProtocolsSubstitute = true;
-                }
-
-                return nextProtocol;
-            });
-
-            if (didProtocolsSubstitute) {
-                didSubstitute = true;
-            }
-
-            return next;
-        })();
 
         const { hostname, pathname } = new URL(nextUrl, window.location.href);
 
@@ -452,7 +438,7 @@ function patchWebSocketApiToSubstituteTokenPlaceholder(params: {
             );
         }
 
-        const ws = new WebSocket_actual(nextUrl, nextProtocols as Parameters<typeof WebSocket>[1]);
+        const ws = new WebSocket_actual(nextUrl, protocols as Parameters<typeof WebSocket>[1]);
 
         wsDataByWs.set(ws, {
             url: nextUrl,
@@ -488,7 +474,10 @@ function patchWebSocketApiToSubstituteTokenPlaceholder(params: {
         let nextData = data;
 
         if (typeof data === "string") {
-            const nextDataText = substitutePlaceholderByRealToken(data);
+            const nextDataText = substitutePlaceholderByRealToken({
+                text: data,
+                doEncodeUriComponent: false
+            });
 
             if (nextDataText !== data) {
                 wsData.didSubstitute = true;
@@ -549,7 +538,7 @@ function patchEventSourceApiToSubstituteTokenPlaceholder(params: {
         eventSourceInitDict?: EventSourceInit
     ) {
         const urlStr = typeof url === "string" ? url : url.href;
-        const nextUrl = substitutePlaceholderByRealToken(urlStr);
+        const nextUrl = substitutePlaceholderByRealToken({ text: urlStr, doEncodeUriComponent: true });
         const didSubstitute = nextUrl !== urlStr;
 
         const { hostname } = new URL(nextUrl, window.location.href);
@@ -610,7 +599,7 @@ function patchNavigatorSendBeaconApiToSubstituteTokenPlaceholder(params: {
 
     navigator.sendBeacon = function sendBeacon(url: string | URL, data?: BodyInit | null) {
         const urlStr = typeof url === "string" ? url : url.href;
-        const nextUrl = substitutePlaceholderByRealToken(urlStr);
+        const nextUrl = substitutePlaceholderByRealToken({ text: urlStr, doEncodeUriComponent: true });
         let didSubstitute = nextUrl !== urlStr;
 
         const { hostname } = new URL(nextUrl, window.location.href);
@@ -618,7 +607,7 @@ function patchNavigatorSendBeaconApiToSubstituteTokenPlaceholder(params: {
         let nextData = data;
 
         if (typeof data === "string") {
-            const next = substitutePlaceholderByRealToken(data);
+            const next = substitutePlaceholderByRealToken({ text: data, doEncodeUriComponent: false });
 
             if (next !== data) {
                 didSubstitute = true;
@@ -630,7 +619,10 @@ function patchNavigatorSendBeaconApiToSubstituteTokenPlaceholder(params: {
             const next = new URLSearchParams();
 
             data.forEach((value, key) => {
-                const nextValue = substitutePlaceholderByRealToken(value);
+                const nextValue = substitutePlaceholderByRealToken({
+                    text: value,
+                    doEncodeUriComponent: false
+                });
 
                 if (nextValue !== value) {
                     didUrlSearchParamsSubstitute = true;
@@ -649,7 +641,10 @@ function patchNavigatorSendBeaconApiToSubstituteTokenPlaceholder(params: {
 
             data.forEach((value, key) => {
                 if (typeof value === "string") {
-                    const nextValue = substitutePlaceholderByRealToken(value);
+                    const nextValue = substitutePlaceholderByRealToken({
+                        text: value,
+                        doEncodeUriComponent: false
+                    });
 
                     if (nextValue !== value) {
                         didFormDataSubstitute = true;
@@ -717,6 +712,7 @@ function runMonkeyPatchingPrevention() {
         "ServiceWorkerRegistration",
         "ServiceWorker",
         "FormData",
+        "WeakMap",
         "Blob",
         "String",
         "Object",
