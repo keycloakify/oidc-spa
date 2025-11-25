@@ -1697,32 +1697,33 @@ export async function createOidc_nonMemoized<
             return;
         }
 
+        const CHECK_DELAY_MS = 5_000;
+        const DRIFT_THRESHOLD_MS = 1_000;
+
+        // NOTE: performance.now() is monotonic and not subject to system clock changes,
+        // so the difference between Date.now() and performance.now() lets us detect
+        // local clock adjustments even if timers are throttled in background tabs.
+        const getClockOffset = () => Date.now() - performance.now();
+
+        let referenceClockOffset = getClockOffset();
         let timer: ReturnType<typeof setTimeout> | undefined = undefined;
 
-        const DELAY = 5_000;
+        const scheduleCheck = () => {
+            timer = setTimeout(() => {
+                const currentClockOffset = getClockOffset();
 
-        (async () => {
-            while (true) {
-                const before = Date.now();
-                await new Promise<void>(resolve => {
-                    timer = setTimeout(resolve, DELAY);
-                });
-                const after = Date.now();
-
-                const elapsed_measured = after - before;
-                const elapsed_theoretical = DELAY;
-
-                if (Math.abs(elapsed_measured - elapsed_theoretical) > 1_000) {
+                if (Math.abs(currentClockOffset - referenceClockOffset) > DRIFT_THRESHOLD_MS) {
                     log?.("Renewing token now as local time might have shifted");
-                    // NOTE: This **will** happen, even if there is no local time drift.
-                    // For example when the computer wakes up after sleep.
-                    // But it doesn't matter, we'll just make a token renewal that was probably
-                    // not necessary. It's best than risking to deem expired token as valid.
                     oidc_loggedIn.renewTokens();
                     return;
                 }
-            }
-        })();
+
+                referenceClockOffset = currentClockOffset;
+                scheduleCheck();
+            }, CHECK_DELAY_MS);
+        };
+
+        scheduleCheck();
 
         const { unsubscribe: tokenChangeUnsubscribe } = oidc_loggedIn.subscribeToTokensChange(() => {
             if (timer !== undefined) {
