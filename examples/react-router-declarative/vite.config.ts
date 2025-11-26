@@ -8,7 +8,7 @@ export default defineConfig({
         react(),
         oidcSpa({
             // See https://docs.oidc-spa.dev/v/v8/resources/token-exfiltration-defence
-            enableTokenExfiltrationDefense: true
+            enableTokenExfiltrationDefense: false
         }),
         tsconfigPaths()
     ]
