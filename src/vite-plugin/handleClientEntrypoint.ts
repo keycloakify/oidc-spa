@@ -1,7 +1,7 @@
 import type { OidcSpaVitePluginParams } from "./vite-plugin";
 import type { ResolvedConfig } from "vite";
 import type { PluginContext } from "rollup";
-import { promises as fs } from "node:fs";
+import { promises as fs, readFileSync, existsSync } from "node:fs";
 import * as path from "node:path";
 import { assert } from "../tools/tsafe/assert";
 import type { Equals } from "../tools/tsafe/Equals";
@@ -21,8 +21,6 @@ type EntryResolution = {
 };
 
 const ORIGINAL_QUERY_PARAM = "oidc-spa-original";
-
-const GENERIC_ENTRY_CANDIDATES = ["src/main.tsx", "src/main.ts", "src/main.jsx", "src/main.js"];
 
 const REACT_ROUTER_ENTRY_CANDIDATES = [
     "entry.client.tsx",
@@ -63,7 +61,8 @@ export function createHandleClientEntrypoint(params: {
         const isOriginalRequest = queryParams.getAll(ORIGINAL_QUERY_PARAM).includes("true");
 
         if (isOriginalRequest) {
-            return loadOriginalModule(entryResolution, pluginContext);
+            entryResolution.watchFiles.forEach(file => pluginContext.addWatchFile(file));
+            return fs.readFile(entryResolution.absolutePath, "utf8");
         }
 
         entryResolution.watchFiles.forEach(file => pluginContext.addWatchFile(file));
@@ -247,34 +246,152 @@ function resolveEntryForProject({
         }
 
         case "other": {
-            const candidate = resolveCandidate({
-                root,
-                subDirectories: ["."],
-                filenames: GENERIC_ENTRY_CANDIDATES
-            });
+            const indexHtmlPath = (() => {
+                const rollupInput = config.build.rollupOptions?.input;
 
-            assert(candidate !== undefined);
+                const htmlCandidates: string[] = [];
 
-            const normalized = normalizeAbsolute(candidate);
+                const addCandidate = (maybePath: string) => {
+                    const candidate = path.isAbsolute(maybePath)
+                        ? maybePath
+                        : path.resolve(root, maybePath);
 
-            const resolution: EntryResolution = {
-                absolutePath: candidate,
-                normalizedPath: normalized,
-                watchFiles: [candidate]
+                    if (path.extname(candidate).toLowerCase() === ".html") {
+                        htmlCandidates.push(candidate);
+                    }
+                };
+
+                if (typeof rollupInput === "string") {
+                    addCandidate(rollupInput);
+                } else if (Array.isArray(rollupInput)) {
+                    rollupInput.forEach(addCandidate);
+                } else if (rollupInput && typeof rollupInput === "object") {
+                    Object.values(rollupInput).forEach(addCandidate);
+                }
+
+                if (htmlCandidates.length > 1) {
+                    throw new Error(
+                        [
+                            "oidc-spa: Multiple HTML inputs detected in Vite configuration.",
+                            `Found: ${htmlCandidates.join(", ")}.`,
+                            "No worries, if the oidc-spa Vite plugin fails you can still configure the client entrypoint manually.",
+                            "Please refer to the documentation for more details."
+                        ].join(" ")
+                    );
+                }
+
+                const defaultIndexHtml = path.resolve(root, "index.html");
+
+                const indexHtmlPath =
+                    htmlCandidates[0] ?? (existsSync(defaultIndexHtml) ? defaultIndexHtml : undefined);
+
+                if (indexHtmlPath === undefined) {
+                    throw new Error(
+                        [
+                            "oidc-spa: Could not locate index.html.",
+                            "Checked Vite rollupOptions.input for HTML entries and the default index.html at the project root.",
+                            "No worries, if the oidc-spa Vite plugin fails you can still configure the client entrypoint manually.",
+                            "Please refer to the documentation for more details."
+                        ].join(" ")
+                    );
+                }
+
+                return indexHtmlPath;
+            })();
+
+            const indexHtmlContent = readFileSync(indexHtmlPath, "utf8");
+
+            const bodyMatch = indexHtmlContent.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+            const bodyContent = bodyMatch?.[1] ?? indexHtmlContent;
+
+            const moduleScriptSrcs: string[] = [];
+            const scriptRegex =
+                /<script\b[^>]*\btype\s*=\s*["']module["'][^>]*\bsrc\s*=\s*["']([^"']+)["'][^>]*>/gi;
+
+            let match: RegExpExecArray | null;
+            // eslint-disable-next-line no-cond-assign
+            while ((match = scriptRegex.exec(bodyContent)) !== null) {
+                const [, src] = match;
+                moduleScriptSrcs.push(src);
+            }
+
+            if (moduleScriptSrcs.length === 0) {
+                throw new Error(
+                    [
+                        'oidc-spa: Could not find a <script type="module" src="..."> tag in index.html.',
+                        "No worries, if the oidc-spa Vite plugin fails you can still configure the client entrypoint manually.",
+                        "Please refer to the documentation for more details."
+                    ].join(" ")
+                );
+            }
+
+            if (moduleScriptSrcs.length > 1) {
+                throw new Error(
+                    [
+                        "oidc-spa: Unable to determine a unique client entrypoint from index.html.",
+                        `Found multiple <script type=\"module\" src=\"...\"> tags: ${moduleScriptSrcs.join(
+                            ", "
+                        )}.`,
+                        "No worries, if the oidc-spa Vite plugin fails you can still configure the client entrypoint manually.",
+                        "Please refer to the documentation for more details."
+                    ].join(" ")
+                );
+            }
+
+            const [rawSrc] = moduleScriptSrcs;
+            const cleanedSrc = rawSrc.replace(/[?#].*$/, "");
+
+            if (/^[a-zA-Z][a-zA-Z\d+.-]*:/.test(cleanedSrc)) {
+                throw new Error(
+                    [
+                        "oidc-spa: The client entrypoint in index.html points to an external URL,",
+                        `got "${rawSrc}".`,
+                        "\nNo worries, if the oidc-spa Vite plugin fails you can still configure the client entrypoint manually.",
+                        "Please refer to the documentation for more details."
+                    ].join(" ")
+                );
+            }
+
+            const indexDir = path.dirname(indexHtmlPath);
+
+            const absoluteCandidates = (() => {
+                const resolvedPath = cleanedSrc.startsWith("/")
+                    ? path.join(root, cleanedSrc.replace(/^\//, ""))
+                    : path.resolve(indexDir, cleanedSrc);
+
+                const hasExtension = path.extname(resolvedPath) !== "";
+
+                if (hasExtension) {
+                    return [resolvedPath];
+                }
+
+                const extensions = [".tsx", ".ts", ".jsx", ".js"];
+
+                return extensions.map(ext => `${resolvedPath}${ext}`);
+            })();
+
+            const existingCandidate = absoluteCandidates.find(candidate => existsSync(candidate));
+
+            if (!existingCandidate) {
+                throw new Error(
+                    [
+                        "oidc-spa: Could not locate the client entrypoint referenced in index.html.",
+                        `Found src="${rawSrc}" and tried: ${absoluteCandidates.join(", ")}.`,
+                        "Please ensure the file exists or configure the client entrypoint manually.",
+                        "\nNo worries, if the oidc-spa Vite plugin fails you can still configure the client entrypoint manually.",
+                        "Please refer to the documentation for more details."
+                    ].join(" ")
+                );
+            }
+
+            return {
+                absolutePath: existingCandidate,
+                normalizedPath: normalizeAbsolute(existingCandidate),
+                watchFiles: [indexHtmlPath, existingCandidate]
             };
-
-            return resolution;
         }
 
         default:
             assert<Equals<typeof projectType, never>>(false);
     }
-}
-
-function loadOriginalModule(
-    entry: EntryResolution,
-    context: { addWatchFile(id: string): void }
-): Promise<string> {
-    entry.watchFiles.forEach(file => context.addWatchFile(file));
-    return fs.readFile(entry.absolutePath, "utf8");
 }
