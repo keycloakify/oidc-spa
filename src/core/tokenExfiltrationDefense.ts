@@ -1,6 +1,6 @@
 import { assert } from "../tools/tsafe/assert";
 import {
-    markTokenSubstitutionAdEnabled,
+    markTokenSubstitutionAsEnabled,
     substitutePlaceholderByRealToken
 } from "./tokenPlaceholderSubstitution";
 import { getIsHostnameAuthorized } from "../tools/isHostnameAuthorized";
@@ -15,7 +15,7 @@ const viteHashedJsAssetPathRegExp = /\/assets\/[^/]+-[a-zA-Z0-9_-]{8}\.js$/;
 export function enableTokenExfiltrationDefense(params: Params) {
     const { resourceServersAllowedHostnames = [], serviceWorkersAllowedHostnames = [] } = params;
 
-    markTokenSubstitutionAdEnabled();
+    markTokenSubstitutionAsEnabled();
 
     patchFetchApiToSubstituteTokenPlaceholder({ resourceServersAllowedHostnames });
     patchXMLHttpRequestApiToSubstituteTokenPlaceholder({ resourceServersAllowedHostnames });
@@ -51,10 +51,7 @@ function patchFetchApiToSubstituteTokenPlaceholder(params: {
 
         const headers = new Headers();
         request.headers.forEach((value, key) => {
-            const nextValue = substitutePlaceholderByRealToken({
-                text: value,
-                doEncodeUriComponent: false
-            });
+            const nextValue = substitutePlaceholderByRealToken(value);
 
             if (nextValue !== value) {
                 didSubstitute = true;
@@ -80,10 +77,7 @@ function patchFetchApiToSubstituteTokenPlaceholder(params: {
                 }
 
                 if (typeof init.body === "string") {
-                    body = substitutePlaceholderByRealToken({
-                        text: init.body,
-                        doEncodeUriComponent: false
-                    });
+                    body = substitutePlaceholderByRealToken(init.body);
 
                     if (init.body !== body) {
                         didSubstitute = true;
@@ -97,10 +91,7 @@ function patchFetchApiToSubstituteTokenPlaceholder(params: {
                     const next = new URLSearchParams();
 
                     init.body.forEach((value, key) => {
-                        const nextValue = substitutePlaceholderByRealToken({
-                            text: value,
-                            doEncodeUriComponent: false
-                        });
+                        const nextValue = substitutePlaceholderByRealToken(value);
 
                         if (nextValue !== value) {
                             didUrlSearchParamsSubstitute = true;
@@ -124,10 +115,7 @@ function patchFetchApiToSubstituteTokenPlaceholder(params: {
 
                     init.body.forEach((value, key) => {
                         if (typeof value === "string") {
-                            const nextValue = substitutePlaceholderByRealToken({
-                                text: value,
-                                doEncodeUriComponent: false
-                            });
+                            const nextValue = substitutePlaceholderByRealToken(value);
 
                             if (nextValue !== value) {
                                 didFormDataSubstitute = true;
@@ -200,10 +188,7 @@ function patchFetchApiToSubstituteTokenPlaceholder(params: {
             }
 
             const bodyText = await request.clone().text();
-            const nextBodyText = substitutePlaceholderByRealToken({
-                text: bodyText,
-                doEncodeUriComponent: false
-            });
+            const nextBodyText = substitutePlaceholderByRealToken(bodyText);
 
             if (nextBodyText !== bodyText) {
                 didSubstitute = true;
@@ -217,7 +202,7 @@ function patchFetchApiToSubstituteTokenPlaceholder(params: {
         {
             const url_before = request.url;
 
-            url = substitutePlaceholderByRealToken({ text: url_before, doEncodeUriComponent: true });
+            url = substitutePlaceholderByRealToken(url_before);
 
             if (url !== url_before) {
                 didSubstitute = true;
@@ -301,7 +286,7 @@ function patchXMLHttpRequestApiToSubstituteTokenPlaceholder(params: {
 
         {
             const url_str = typeof url === "string" ? url : url.href;
-            state.url = substitutePlaceholderByRealToken({ text: url_str, doEncodeUriComponent: true });
+            state.url = substitutePlaceholderByRealToken(url_str);
             if (url_str !== state.url) {
                 state.didSubstitute = true;
             }
@@ -331,7 +316,7 @@ function patchXMLHttpRequestApiToSubstituteTokenPlaceholder(params: {
 
         assert(state !== undefined, "29440283");
 
-        const nextValue = substitutePlaceholderByRealToken({ text: value, doEncodeUriComponent: false });
+        const nextValue = substitutePlaceholderByRealToken(value);
 
         if (nextValue !== value) {
             state.didSubstitute = true;
@@ -348,10 +333,7 @@ function patchXMLHttpRequestApiToSubstituteTokenPlaceholder(params: {
         let nextBody = body;
 
         if (typeof body === "string") {
-            const nextBodyText = substitutePlaceholderByRealToken({
-                text: body,
-                doEncodeUriComponent: false
-            });
+            const nextBodyText = substitutePlaceholderByRealToken(body);
 
             if (nextBodyText !== body) {
                 state.didSubstitute = true;
@@ -409,7 +391,7 @@ function patchWebSocketApiToSubstituteTokenPlaceholder(params: {
 
     const WebSocketPatched = function WebSocket(url: string | URL, protocols?: string | string[]) {
         const urlStr = typeof url === "string" ? url : url.href;
-        const nextUrl = substitutePlaceholderByRealToken({ text: urlStr, doEncodeUriComponent: true });
+        const nextUrl = substitutePlaceholderByRealToken(urlStr);
         let didSubstitute = nextUrl !== urlStr;
 
         const { hostname, pathname } = new URL(nextUrl, window.location.href);
@@ -474,10 +456,7 @@ function patchWebSocketApiToSubstituteTokenPlaceholder(params: {
         let nextData = data;
 
         if (typeof data === "string") {
-            const nextDataText = substitutePlaceholderByRealToken({
-                text: data,
-                doEncodeUriComponent: false
-            });
+            const nextDataText = substitutePlaceholderByRealToken(data);
 
             if (nextDataText !== data) {
                 wsData.didSubstitute = true;
@@ -538,7 +517,7 @@ function patchEventSourceApiToSubstituteTokenPlaceholder(params: {
         eventSourceInitDict?: EventSourceInit
     ) {
         const urlStr = typeof url === "string" ? url : url.href;
-        const nextUrl = substitutePlaceholderByRealToken({ text: urlStr, doEncodeUriComponent: true });
+        const nextUrl = substitutePlaceholderByRealToken(urlStr);
         const didSubstitute = nextUrl !== urlStr;
 
         const { hostname } = new URL(nextUrl, window.location.href);
@@ -599,7 +578,7 @@ function patchNavigatorSendBeaconApiToSubstituteTokenPlaceholder(params: {
 
     navigator.sendBeacon = function sendBeacon(url: string | URL, data?: BodyInit | null) {
         const urlStr = typeof url === "string" ? url : url.href;
-        const nextUrl = substitutePlaceholderByRealToken({ text: urlStr, doEncodeUriComponent: true });
+        const nextUrl = substitutePlaceholderByRealToken(urlStr);
         let didSubstitute = nextUrl !== urlStr;
 
         const { hostname } = new URL(nextUrl, window.location.href);
@@ -607,7 +586,7 @@ function patchNavigatorSendBeaconApiToSubstituteTokenPlaceholder(params: {
         let nextData = data;
 
         if (typeof data === "string") {
-            const next = substitutePlaceholderByRealToken({ text: data, doEncodeUriComponent: false });
+            const next = substitutePlaceholderByRealToken(data);
 
             if (next !== data) {
                 didSubstitute = true;
@@ -619,10 +598,7 @@ function patchNavigatorSendBeaconApiToSubstituteTokenPlaceholder(params: {
             const next = new URLSearchParams();
 
             data.forEach((value, key) => {
-                const nextValue = substitutePlaceholderByRealToken({
-                    text: value,
-                    doEncodeUriComponent: false
-                });
+                const nextValue = substitutePlaceholderByRealToken(value);
 
                 if (nextValue !== value) {
                     didUrlSearchParamsSubstitute = true;
@@ -641,10 +617,7 @@ function patchNavigatorSendBeaconApiToSubstituteTokenPlaceholder(params: {
 
             data.forEach((value, key) => {
                 if (typeof value === "string") {
-                    const nextValue = substitutePlaceholderByRealToken({
-                        text: value,
-                        doEncodeUriComponent: false
-                    });
+                    const nextValue = substitutePlaceholderByRealToken(value);
 
                     if (nextValue !== value) {
                         didFormDataSubstitute = true;

@@ -58,6 +58,7 @@ import {
     clearStateDataCookie,
     getIsStateDataCookieEnabled
 } from "./StateDataCookie";
+import { getIsTokenSubstitutionEnabled } from "./tokenPlaceholderSubstitution";
 
 // NOTE: Replaced at build time
 const VERSION = "{{OIDC_SPA_VERSION}}";
@@ -425,6 +426,23 @@ export async function createOidc_nonMemoized<
             2
         )}`
     );
+
+    if (getIsTokenSubstitutionEnabled()) {
+        log?.(
+            [
+                "Token exfiltration defense successfully enabled.",
+                "",
+                "→ Tokens exposed to the application layer are unusable for resource server calls.",
+                "→ They remain structurally valid JWTs, but their signature segment is replaced.",
+                "→ Before any request leaves the app (fetch, XHR, WebSocket, beacon),",
+                "   the real tokens are restored inside a fully hardened, sandboxed interceptor.",
+                "",
+                "This means that even with an XSS vulnerability or a compromised dependency,",
+                "an attacker cannot extract valid tokens, unless they have also compromised",
+                "your application's build pipeline."
+            ].join("\n")
+        );
+    }
 
     const stateUrlParamValue_instance = generateStateUrlParamValue();
 
