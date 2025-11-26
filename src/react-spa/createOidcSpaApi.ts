@@ -1,4 +1,11 @@
-import { useState, useEffect, useReducer, type ReactNode, type ComponentType } from "react";
+import {
+    useState,
+    useEffect,
+    useReducer,
+    createElement,
+    type ReactNode,
+    type ComponentType
+} from "react";
 import type { UseOidc, OidcSpaApi, GetOidc, ParamsOfBootstrap } from "./types";
 import type { ZodSchemaLike } from "../tools/ZodSchemaLike";
 import type { Oidc as Oidc_core } from "../core";
@@ -521,7 +528,7 @@ export function createOidcSpaApi<
         if (oidcCoreOrOidcInitializationError instanceof OidcInitializationError) {
             const oidcInitializationError = oidcCoreOrOidcInitializationError;
 
-            return <ErrorComponent oidcInitializationError={oidcInitializationError} />;
+            return createElement(ErrorComponent, { oidcInitializationError });
         }
 
         return children;
@@ -574,7 +581,7 @@ export function createOidcSpaApi<
                 throw oidcCore.login({ doesCurrentHrefRequiresAuth: true });
             }
 
-            return <Component {...props} />;
+            return createElement(Component, props);
         }
 
         ComponentWithLoginEnforced.displayName = `${
