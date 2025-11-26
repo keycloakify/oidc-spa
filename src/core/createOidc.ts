@@ -1170,7 +1170,7 @@ export async function createOidc_nonMemoized<
                         if (!canUseIframe) {
                             log?.(
                                 [
-                                    "⚠️ IMPORTANT DEBUG INFO:",
+                                    "IMPORTANT DEBUG INFO:",
                                     "\nWe are about to redirect to your Identity Provider (IdP).",
                                     "\nIf you see an 'Invalid Redirect URI' error on the IdP page, make sure you've added:",
                                     `\n${homeUrlAndRedirectUri}`,
@@ -1383,7 +1383,7 @@ export async function createOidc_nonMemoized<
 
             log?.(
                 [
-                    "⚠️ IMPORTANT DEBUG INFO:",
+                    "IMPORTANT DEBUG INFO:",
                     "\nWe are about to redirect to your Identity Provider (IdP).",
                     "\nIf you see an 'Invalid Redirect URI' error on the IdP page, make sure you've added:",
                     `\n${homeUrlAndRedirectUri}`,

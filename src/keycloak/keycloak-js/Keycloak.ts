@@ -71,7 +71,7 @@ type ConstructorParams = KeycloakServerConfig & {
  * This module provides a drop-in replacement for `keycloak-js`,
  * designed for teams migrating to `oidc-spa` with minimal changes.
  *
- * ⚠️ While the import path is `oidc-spa/keycloak-js`, this is *not* a re-export or patch —
+ * While the import path is `oidc-spa/keycloak-js`, this is *not* a re-export or patch —
  * it is a full alternative implementation aligned with the `keycloak-js` API.
  */
 export class Keycloak {
