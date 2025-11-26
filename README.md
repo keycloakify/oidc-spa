@@ -120,7 +120,7 @@ oidc-spa is a framework-agnostic OpenID Connect client for browser-centric web a
 It work with any spec compliant OIDC provider like [Keycloak](https://www.keycloak.org/), [Auth0](https://auth0.com/) or [Microsoft EntraID](https://www.microsoft.com/fr-fr/security/business/identity-access/microsoft-entra-id) and replace provider-specific SDKs like [keycloak-js](https://www.npmjs.com/package/keycloak-js), [auth0-spa-js](https://www.npmjs.com/package/@auth0/auth0-spa-js), or [@azure/msal-browser](https://www.npmjs.com/package/@azure/msal-browser) with one unified API, freeing your app from vendor lock-in and making it deployable in any IT system.  
 Concretely this mean that it let you build an app and sell it to different companies ensuring they will be able to deploy it in their environment regardless of what auth platform they use internally. &#x20;
 
-oidc-spa provides strong guarantees regarding the protection of your tokens [**even in case of successful XSS or supply chain attacks**](https://docs.oidc-spa.dev/v/v8/resources/xss-and-supply-chain-attack-protection). No other implementation can currently claim that. &#x20;
+oidc-spa provides strong guarantees regarding token exfiltration prevention [**even in case of successful XSS or supply chain attacks**](https://docs.oidc-spa.dev/v/v8/resources/token-exfiltration-defence). No other implementation can currently claim that. &#x20;
 
 It is uncompromising in terms of performance, security, DX, and UX. You get a state-of-the-art authentication and authorization system out of the box with zero glue code to write and no knobs to adjust.
 
@@ -290,7 +290,7 @@ oidc-spa exposes an Angular adapter: [oidc-spa/angular](https://docs.oidc-spa.de
 This is a solid generic OIDC adapter.  
 However, `oidc-spa/angular` still has several advantages:
 
--   [Better security guarantees](https://docs.oidc-spa.dev/resources/xss-and-supply-chain-attack-protection) (angular-oauth2-oidc does not protect tokens from XSS or supply-chain attacks)
+-   [Better security guarantees](https://docs.oidc-spa.dev/resources/token-exfiltration-defence) (angular-oauth2-oidc does not protect tokens from XSS or supply-chain attacks)
 -   DX more aligned with modern Angular.
 -   Auto logout overlay (“Are you still there?” countdown)
 -   Stronger type safety with propagated user profile types
@@ -313,7 +313,7 @@ and the backend server is merely an OAuth2 resource server in the OIDC model.
 If you use BetterAuth to provide login via Keycloak, your backend becomes the OIDC client application,  
 which has some security benefits over browser token exchange, but at the cost of centralization and requiring backend infrastructure.
 
-And with the [advanced exfiltration model enabled](https://docs.oidc-spa.dev/resources/xss-and-supply-chain-attack-protection), the security guarantees of a frontend-based approach become _theoretically equivalent_ to backend-based token exchange.
+And with the [advanced exfiltration model enabled](https://docs.oidc-spa.dev/resources/token-exfiltration-defence), the security guarantees of a frontend-based approach become _theoretically equivalent_ to backend-based token exchange.
 
 I say “theoretically” not because users might misconfigure oidc-spa, the library refuses to start unless all requirements are met, but because this equivalence ultimately depends on the correctness of oidc-spa’s own hardening implementation. Backend flows avoid this concern entirely since tokens never enter the execution environment in the first place.
 

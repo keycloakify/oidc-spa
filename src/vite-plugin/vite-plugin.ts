@@ -11,7 +11,7 @@ export type OidcSpaVitePluginParams =
     | Omit<ParamsOfEarlyInit, "BASE_URL">
     | Omit<ParamsOfEarlyInit_legacy, "BASE_URL">;
 
-export function oidcSpa(params: OidcSpaVitePluginParams) {
+export function oidcSpa(params: OidcSpaVitePluginParams = {}) {
     let load_handleClientEntrypoint:
         | ReturnType<typeof createHandleClientEntrypoint>["load_handleClientEntrypoint"]
         | undefined = undefined;

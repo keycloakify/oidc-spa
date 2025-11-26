@@ -4,13 +4,5 @@ import tsconfigPaths from "vite-tsconfig-paths";
 import { oidcSpa } from "oidc-spa/vite-plugin";
 
 export default defineConfig({
-    plugins: [
-        reactRouter(),
-        oidcSpa({
-            freezeFetch: true,
-            freezeXMLHttpRequest: true,
-            freezeWebSocket: true
-        }),
-        tsconfigPaths()
-    ]
+    plugins: [reactRouter(), oidcSpa(), tsconfigPaths()]
 });
