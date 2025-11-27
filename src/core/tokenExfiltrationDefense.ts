@@ -169,8 +169,10 @@ function patchFetchApiToSubstituteTokenPlaceholder(params: {
 
                 const len_str = request.headers.get("Content-Length");
 
-                if (!len_str) {
-                    return false;
+                if (len_str === null) {
+                    // NOTE: This will have performance implications for large bodies
+                    // but we have no other way to know the size
+                    return true;
                 }
 
                 const len = parseInt(len_str, 10);
