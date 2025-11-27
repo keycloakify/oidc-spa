@@ -305,9 +305,9 @@ function patchXMLHttpRequestApiToSubstituteTokenPlaceholder(params: {
         }
 
         if (async === undefined) {
-            return open_actual.bind(this)(method, url);
+            return open_actual.bind(this)(method, state.url);
         } else {
-            return open_actual.call(this, method, url, async, username, password);
+            return open_actual.call(this, method, state.url, async, username, password);
         }
     };
 
