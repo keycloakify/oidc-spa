@@ -365,11 +365,6 @@ function patchXMLHttpRequestApiToSubstituteTokenPlaceholder(params: {
     XMLHttpRequest.prototype.send = function send(body) {
         const state = stateByInstance.get(this);
 
-        // NOTE: Vite's dev server instantiates a websocket before earlyInit runs.
-        if (state === undefined && getIsLikelyDevServer()) {
-            return send_actual.call(this, body);
-        }
-
         assert(state !== undefined, "32323484");
 
         let nextBody = body;
@@ -429,7 +424,7 @@ function patchWebSocketApiToSubstituteTokenPlaceholder(params: {
         didSubstitute: boolean;
     };
 
-    const wsDataByWs = new WeakMap<WebSocket, WsData>();
+    const stateByInstance = new WeakMap<WebSocket, WsData>();
 
     const WebSocketPatched = function WebSocket(url: string | URL, protocols?: string | string[]) {
         const urlStr = `${typeof url === "string" ? url : url.href}`;
@@ -462,16 +457,16 @@ function patchWebSocketApiToSubstituteTokenPlaceholder(params: {
             );
         }
 
-        const ws = new WebSocket_actual(nextUrl, protocols as Parameters<typeof WebSocket>[1]);
+        const instance = new WebSocket_actual(nextUrl, protocols as Parameters<typeof WebSocket>[1]);
 
-        wsDataByWs.set(ws, {
+        stateByInstance.set(instance, {
             url: nextUrl,
             hostname,
             pathname,
             didSubstitute
         });
 
-        return ws;
+        return instance;
     };
 
     WebSocketPatched.prototype = WebSocket_actual.prototype;
@@ -488,9 +483,14 @@ function patchWebSocketApiToSubstituteTokenPlaceholder(params: {
     window.WebSocket = WebSocketPatched as unknown as typeof WebSocket;
 
     WebSocket_actual.prototype.send = function send(data) {
-        const wsData = wsDataByWs.get(this);
+        const state = stateByInstance.get(this);
 
-        assert(wsData !== undefined, "49204832");
+        // NOTE: Vite's dev server instantiates a websocket before earlyInit runs.
+        if (state === undefined && getIsLikelyDevServer()) {
+            return send_actual.call(this, data);
+        }
+
+        assert(state !== undefined, "49204832");
 
         let nextData = data;
 
@@ -498,14 +498,14 @@ function patchWebSocketApiToSubstituteTokenPlaceholder(params: {
             const nextDataText = substitutePlaceholderByRealToken(data);
 
             if (nextDataText !== data) {
-                wsData.didSubstitute = true;
+                state.didSubstitute = true;
             }
 
             nextData = nextDataText;
         }
 
         block_authed_request_to_unauthorized_hostnames: {
-            if (!wsData.didSubstitute) {
+            if (!state.didSubstitute) {
                 break block_authed_request_to_unauthorized_hostnames;
             }
 
@@ -513,7 +513,7 @@ function patchWebSocketApiToSubstituteTokenPlaceholder(params: {
                 getIsHostnameAuthorized({
                     allowedHostnames: resourceServersAllowedHostnames,
                     extendAuthorizationToParentDomain: true,
-                    hostname: wsData.hostname
+                    hostname: state.hostname
                 })
             ) {
                 break block_authed_request_to_unauthorized_hostnames;
@@ -521,15 +521,15 @@ function patchWebSocketApiToSubstituteTokenPlaceholder(params: {
 
             throw new Error(
                 [
-                    `oidc-spa: Blocked authed request to ${wsData.hostname}.`,
-                    `To authorize this request add "${wsData.hostname}" to`,
+                    `oidc-spa: Blocked authed request to ${state.hostname}.`,
+                    `To authorize this request add "${state.hostname}" to`,
                     "`resourceServersAllowedHostnames`."
                 ].join(" ")
             );
         }
 
         prevent_fetching_of_hashed_js_assets: {
-            if (!viteHashedJsAssetPathRegExp.test(wsData.pathname)) {
+            if (!viteHashedJsAssetPathRegExp.test(state.pathname)) {
                 break prevent_fetching_of_hashed_js_assets;
             }
 
