@@ -42,7 +42,7 @@ function patchFetchApiToSubstituteTokenPlaceholder(params: {
         let url: string;
 
         {
-            const url_before = request.url;
+            const url_before = `${request.url}`;
 
             url = substitutePlaceholderByRealToken(url_before);
 
@@ -287,7 +287,7 @@ function patchXMLHttpRequestApiToSubstituteTokenPlaceholder(params: {
         const state = { url: "", didSubstitute: false };
 
         {
-            const url_str = typeof url === "string" ? url : url.href;
+            const url_str = `${typeof url === "string" ? url : url.href}`;
             state.url = substitutePlaceholderByRealToken(url_str);
             if (url_str !== state.url) {
                 state.didSubstitute = true;
@@ -392,7 +392,7 @@ function patchWebSocketApiToSubstituteTokenPlaceholder(params: {
     const wsDataByWs = new WeakMap<WebSocket, WsData>();
 
     const WebSocketPatched = function WebSocket(url: string | URL, protocols?: string | string[]) {
-        const urlStr = typeof url === "string" ? url : url.href;
+        const urlStr = `${typeof url === "string" ? url : url.href}`;
         const nextUrl = substitutePlaceholderByRealToken(urlStr);
         let didSubstitute = nextUrl !== urlStr;
 
@@ -515,7 +515,7 @@ function patchEventSourceApiToSubstituteTokenPlaceholder(params: {
         url: string | URL,
         eventSourceInitDict?: EventSourceInit
     ) {
-        const urlStr = typeof url === "string" ? url : url.href;
+        const urlStr = `${typeof url === "string" ? url : url.href}`;
         const nextUrl = substitutePlaceholderByRealToken(urlStr);
         const didSubstitute = nextUrl !== urlStr;
 
@@ -684,6 +684,7 @@ function runMonkeyPatchingPrevention() {
         "ServiceWorkerRegistration",
         "ServiceWorker",
         "FormData",
+        "URL",
         "WeakMap",
         "Blob",
         "String",
@@ -806,7 +807,7 @@ function restrictServiceWorkerRegistration(params: { serviceWorkersAllowedHostna
         scriptURL: Parameters<ServiceWorkerContainer["register"]>[0],
         options?: Parameters<ServiceWorkerContainer["register"]>[1]
     ) {
-        const url = typeof scriptURL === "string" ? scriptURL : scriptURL.href;
+        const url = `${typeof scriptURL === "string" ? scriptURL : scriptURL.href}`;
 
         const { hostname, protocol } = new URL(url, window.location.href);
 
