@@ -450,10 +450,7 @@ function patchWebSocketApiToSubstituteTokenPlaceholder(params: {
     WebSocket_actual.prototype.send = function send(data) {
         const wsData = wsDataByWs.get(this);
 
-        if (wsData === undefined) {
-            // NOTE: This can happen for Vite's dev server websocket
-            return send_actual.call(this, data);
-        }
+        assert(wsData !== undefined, "49204832");
 
         let nextData = data;
 
