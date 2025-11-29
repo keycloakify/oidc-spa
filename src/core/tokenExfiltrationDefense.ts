@@ -4,6 +4,7 @@ import {
     substitutePlaceholderByRealToken
 } from "./tokenPlaceholderSubstitution";
 import { getIsHostnameAuthorized } from "../tools/isHostnameAuthorized";
+import { getIsLikelyDevServer } from "../tools/isLikelyDevServer";
 
 type Params = {
     resourceServersAllowedHostnames: string[] | undefined;
@@ -363,6 +364,11 @@ function patchXMLHttpRequestApiToSubstituteTokenPlaceholder(params: {
 
     XMLHttpRequest.prototype.send = function send(body) {
         const state = stateByInstance.get(this);
+
+        // NOTE: Vite's dev server instantiates a websocket before earlyInit runs.
+        if (state === undefined && getIsLikelyDevServer()) {
+            return send_actual.call(this, body);
+        }
 
         assert(state !== undefined, "32323484");
 

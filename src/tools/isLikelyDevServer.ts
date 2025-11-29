@@ -1,4 +1,8 @@
+import { isBrowser } from "./isBrowser";
+
 let isLikelyDevServer_cache: boolean | undefined = undefined;
+
+const hasRefreshReg = isBrowser && "$RefreshReg$" in window;
 
 export function getIsLikelyDevServer(): boolean {
     if (isLikelyDevServer_cache !== undefined) {
@@ -6,6 +10,10 @@ export function getIsLikelyDevServer(): boolean {
     }
 
     const isLikelyDevServer = (() => {
+        if (hasRefreshReg) {
+            return true;
+        }
+
         const origin = window.location.origin;
 
         if (/^https?:\/\/localhost/.test(origin)) {
