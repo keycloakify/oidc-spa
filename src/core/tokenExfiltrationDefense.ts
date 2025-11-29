@@ -776,6 +776,8 @@ function runMonkeyPatchingPrevention() {
                     continue;
                 }
 
+                const target = `window.${name}.prototype.${propertyName}`;
+
                 Object.defineProperty(original.prototype, propertyName, {
                     enumerable: pd.enumerable,
                     configurable: false,
@@ -783,7 +785,7 @@ function runMonkeyPatchingPrevention() {
                         ? {
                               get: () => pd.value,
                               set: () => {
-                                  throw createWriteError(`window.${name}.prototype.${propertyName}`);
+                                  throw createWriteError(target);
                               }
                           }
                         : {
@@ -791,10 +793,111 @@ function runMonkeyPatchingPrevention() {
                               set:
                                   pd.set ??
                                   (() => {
-                                      throw createWriteError(`window.${name}.prototype.${propertyName}`);
+                                      throw createWriteError(target);
                                   })
                           })
                 });
+            }
+
+            for (const symbol of Object.getOwnPropertySymbols(original.prototype)) {
+                const pd = Object.getOwnPropertyDescriptor(original.prototype, symbol);
+
+                assert(pd !== undefined);
+
+                if (!pd.configurable) {
+                    continue;
+                }
+
+                const target = `window.${name}.prototype[Symbol.${symbol.toString()}]`;
+
+                Object.defineProperty(original.prototype, symbol, {
+                    enumerable: pd.enumerable,
+                    configurable: false,
+                    ...("value" in pd
+                        ? {
+                              get: () => pd.value,
+                              set: () => {
+                                  throw createWriteError(target);
+                              }
+                          }
+                        : {
+                              get: pd.get,
+                              set:
+                                  pd.set ??
+                                  (() => {
+                                      throw createWriteError(target);
+                                  })
+                          })
+                });
+            }
+
+            for (const propertyName of Object.getOwnPropertyNames(original)) {
+                const pd = Object.getOwnPropertyDescriptor(original, propertyName);
+
+                assert(pd !== undefined);
+
+                if (!pd.configurable) {
+                    continue;
+                }
+
+                const target = `window.${name}.${propertyName}`;
+
+                Object.defineProperty(original, propertyName, {
+                    enumerable: pd.enumerable,
+                    configurable: false,
+                    ...("value" in pd
+                        ? {
+                              get: () => pd.value,
+                              set: () => {
+                                  throw createWriteError(target);
+                              }
+                          }
+                        : {
+                              get: pd.get,
+                              set:
+                                  pd.set ??
+                                  (() => {
+                                      throw createWriteError(target);
+                                  })
+                          })
+                });
+            }
+
+            if (Symbol.iterator in original.prototype) {
+                // @ts-expect-error
+                const iterator_prototype = Object.getPrototypeOf(new original()[Symbol.iterator]());
+
+                for (const propertyName of Object.getOwnPropertyNames(iterator_prototype)) {
+                    const pd = Object.getOwnPropertyDescriptor(iterator_prototype, propertyName);
+
+                    assert(pd !== undefined);
+
+                    if (!pd.configurable) {
+                        continue;
+                    }
+
+                    const target = `new ${name}()[Symbol.iterator]().__proto__.${propertyName}`;
+
+                    Object.defineProperty(iterator_prototype, propertyName, {
+                        enumerable: pd.enumerable,
+                        configurable: false,
+                        ...("value" in pd
+                            ? {
+                                  get: () => pd.value,
+                                  set: () => {
+                                      throw createWriteError(target);
+                                  }
+                              }
+                            : {
+                                  get: pd.get,
+                                  set:
+                                      pd.set ??
+                                      (() => {
+                                          throw createWriteError(target);
+                                      })
+                              })
+                    });
+                }
             }
         }
 
