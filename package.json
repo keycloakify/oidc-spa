@@ -1,6 +1,6 @@
 {
     "name": "oidc-spa",
-    "version": "8.6.7",
+    "version": "8.6.8",
     "description": "OIDC Client for Client Centric Web Applications",
     "repository": {
         "type": "git",
