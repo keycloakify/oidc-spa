@@ -37,8 +37,22 @@ function patchFetchApiToSubstituteTokenPlaceholder(params: {
     window.fetch = async function fetch(input, init) {
         const request = input instanceof Request ? input : new Request(input, init);
 
+        let didSubstitute = false;
+
+        let url: string;
+
+        {
+            const url_before = request.url;
+
+            url = substitutePlaceholderByRealToken(url_before);
+
+            if (url !== url_before) {
+                didSubstitute = true;
+            }
+        }
+
         prevent_fetching_of_hashed_js_assets: {
-            const { pathname } = new URL(request.url, window.location.href);
+            const { pathname } = new URL(url, window.location.href);
 
             if (!viteHashedJsAssetPathRegExp.test(pathname)) {
                 break prevent_fetching_of_hashed_js_assets;
@@ -46,8 +60,6 @@ function patchFetchApiToSubstituteTokenPlaceholder(params: {
 
             throw new Error("oidc-spa: Blocked request to hashed js static asset.");
         }
-
-        let didSubstitute = false;
 
         const headers = new Headers();
         request.headers.forEach((value, key) => {
@@ -152,7 +164,7 @@ function patchFetchApiToSubstituteTokenPlaceholder(params: {
             }
 
             const shouldInspectBody = (() => {
-                let ct = request.headers.get("Content-Type");
+                let ct = headers.get("Content-Type");
 
                 if (ct === null) {
                     return false;
@@ -167,7 +179,7 @@ function patchFetchApiToSubstituteTokenPlaceholder(params: {
                     return false;
                 }
 
-                const len_str = request.headers.get("Content-Length");
+                const len_str = headers.get("Content-Length");
 
                 if (len_str === null) {
                     // NOTE: This will have performance implications for large bodies
@@ -199,24 +211,12 @@ function patchFetchApiToSubstituteTokenPlaceholder(params: {
             body = nextBodyText;
         }
 
-        let url: string;
-
-        {
-            const url_before = request.url;
-
-            url = substitutePlaceholderByRealToken(url_before);
-
-            if (url !== url_before) {
-                didSubstitute = true;
-            }
-        }
-
         block_authed_request_to_unauthorized_hostnames: {
             if (!didSubstitute) {
                 break block_authed_request_to_unauthorized_hostnames;
             }
 
-            const { hostname } = new URL(request.url, window.location.href);
+            const { hostname } = new URL(url, window.location.href);
 
             if (
                 getIsHostnameAuthorized({
@@ -806,10 +806,9 @@ function restrictServiceWorkerRegistration(params: { serviceWorkersAllowedHostna
         scriptURL: Parameters<ServiceWorkerContainer["register"]>[0],
         options?: Parameters<ServiceWorkerContainer["register"]>[1]
     ) {
-        const { hostname, protocol } = new URL(
-            typeof scriptURL === "string" ? scriptURL : scriptURL.href,
-            window.location.href
-        );
+        const url = typeof scriptURL === "string" ? scriptURL : scriptURL.href;
+
+        const { hostname, protocol } = new URL(url, window.location.href);
 
         if (protocol === "blob:") {
             throw new Error(
@@ -837,6 +836,6 @@ function restrictServiceWorkerRegistration(params: { serviceWorkersAllowedHostna
             );
         }
 
-        return register_actual(scriptURL, options);
+        return register_actual(url, options);
     };
 }
