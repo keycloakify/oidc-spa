@@ -134,6 +134,10 @@ export function getTokensPlaceholders(params: { configId: string; tokens: Tokens
 }
 
 export function substitutePlaceholderByRealToken(text: string): string {
+    // NOTE: Extra check to make sure we didn't made an error upstream
+    // we want to know for sure this isn't an attacker crafted object.
+    assert(typeof text === "string", "394833403");
+
     if (!text.includes("_placeholder_")) {
         return text;
     }
