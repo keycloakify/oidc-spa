@@ -33,237 +33,271 @@ function patchFetchApiToSubstituteTokenPlaceholder(params: {
     const { resourceServersAllowedHostnames } = params;
 
     const fetch_actual = window.fetch;
+    //@ts-expect-error
+    const fetchLater_actual: typeof fetch_actual | undefined = window.fetchLater;
 
-    window.fetch = async function fetch(input, init) {
-        const request = input instanceof Request ? input : new Request(input, init);
+    const createFetchOrFetchLater = (params: { isFetchLater: boolean }) => {
+        const { isFetchLater } = params;
 
-        let didSubstitute = false;
+        const fn: typeof fetch_actual = async (input, init) => {
+            const request = input instanceof Request ? input : new Request(input, init);
 
-        let url: string;
+            let didSubstitute = false;
 
-        {
-            const url_before = `${request.url}`;
+            let url: string;
 
-            url = substitutePlaceholderByRealToken(url_before);
+            {
+                const url_before = `${request.url}`;
 
-            if (url !== url_before) {
-                didSubstitute = true;
-            }
-        }
+                url = substitutePlaceholderByRealToken(url_before);
 
-        prevent_fetching_of_hashed_js_assets: {
-            const { pathname } = new URL(url, window.location.href);
-
-            if (!viteHashedJsAssetPathRegExp.test(pathname)) {
-                break prevent_fetching_of_hashed_js_assets;
+                if (url !== url_before) {
+                    didSubstitute = true;
+                }
             }
 
-            throw new Error("oidc-spa: Blocked request to hashed js static asset.");
-        }
+            prevent_fetching_of_hashed_js_assets: {
+                const { pathname } = new URL(url, window.location.href);
 
-        const headers = new Headers();
-        request.headers.forEach((value, key) => {
-            const nextValue = substitutePlaceholderByRealToken(value);
+                if (!viteHashedJsAssetPathRegExp.test(pathname)) {
+                    break prevent_fetching_of_hashed_js_assets;
+                }
 
-            if (nextValue !== value) {
-                didSubstitute = true;
+                throw new Error("oidc-spa: Blocked request to hashed js static asset.");
             }
 
-            headers.set(key, nextValue);
-        });
+            const headers = new Headers();
+            request.headers.forEach((value, key) => {
+                const nextValue = substitutePlaceholderByRealToken(value);
 
-        let body: BodyInit | undefined;
-
-        handle_body: {
-            from_init: {
-                if (!init) {
-                    break from_init;
+                if (nextValue !== value) {
+                    didSubstitute = true;
                 }
 
-                if (!init.body) {
-                    break from_init;
-                }
+                headers.set(key, nextValue);
+            });
 
-                if (input instanceof Request && input.body !== null) {
-                    break from_init;
-                }
+            let body: BodyInit | undefined;
 
-                if (typeof init.body === "string") {
-                    body = substitutePlaceholderByRealToken(init.body);
-
-                    if (init.body !== body) {
-                        didSubstitute = true;
+            handle_body: {
+                from_init: {
+                    if (!init) {
+                        break from_init;
                     }
 
-                    break handle_body;
-                }
+                    if (!init.body) {
+                        break from_init;
+                    }
 
-                if (init.body instanceof URLSearchParams) {
-                    let didUrlSearchParamsSubstitute = false;
-                    const next = new URLSearchParams();
+                    if (input instanceof Request && input.body !== null) {
+                        break from_init;
+                    }
 
-                    init.body.forEach((value, key) => {
-                        const nextValue = substitutePlaceholderByRealToken(value);
+                    if (typeof init.body === "string") {
+                        body = substitutePlaceholderByRealToken(init.body);
 
-                        if (nextValue !== value) {
-                            didUrlSearchParamsSubstitute = true;
+                        if (init.body !== body) {
+                            didSubstitute = true;
                         }
 
-                        next.append(key, nextValue);
-                    });
-
-                    if (didUrlSearchParamsSubstitute) {
-                        didSubstitute = true;
+                        break handle_body;
                     }
 
-                    body = didUrlSearchParamsSubstitute ? next : init.body;
+                    if (init.body instanceof URLSearchParams) {
+                        let didUrlSearchParamsSubstitute = false;
+                        const next = new URLSearchParams();
 
-                    break handle_body;
-                }
-
-                if (init.body instanceof FormData) {
-                    let didFormDataSubstitute = false;
-                    const next = new FormData();
-
-                    init.body.forEach((value, key) => {
-                        if (typeof value === "string") {
+                        init.body.forEach((value, key) => {
                             const nextValue = substitutePlaceholderByRealToken(value);
 
                             if (nextValue !== value) {
-                                didFormDataSubstitute = true;
+                                didUrlSearchParamsSubstitute = true;
                             }
 
                             next.append(key, nextValue);
+                        });
 
-                            return;
+                        if (didUrlSearchParamsSubstitute) {
+                            didSubstitute = true;
                         }
 
-                        next.append(key, value);
-                    });
+                        body = didUrlSearchParamsSubstitute ? next : init.body;
 
-                    if (didFormDataSubstitute) {
-                        didSubstitute = true;
+                        break handle_body;
                     }
 
-                    body = didFormDataSubstitute ? next : init.body;
+                    if (init.body instanceof FormData) {
+                        let didFormDataSubstitute = false;
+                        const next = new FormData();
 
+                        init.body.forEach((value, key) => {
+                            if (typeof value === "string") {
+                                const nextValue = substitutePlaceholderByRealToken(value);
+
+                                if (nextValue !== value) {
+                                    didFormDataSubstitute = true;
+                                }
+
+                                next.append(key, nextValue);
+
+                                return;
+                            }
+
+                            next.append(key, value);
+                        });
+
+                        if (didFormDataSubstitute) {
+                            didSubstitute = true;
+                        }
+
+                        body = didFormDataSubstitute ? next : init.body;
+
+                        break handle_body;
+                    }
+
+                    if (init.body instanceof Blob) {
+                        break from_init;
+                    }
+
+                    body = init.body;
                     break handle_body;
                 }
 
-                if (init.body instanceof Blob) {
-                    break from_init;
+                if (request.body === null) {
+                    body = undefined;
+                    break handle_body;
                 }
 
-                body = init.body;
-                break handle_body;
-            }
+                const shouldInspectBody = (() => {
+                    let ct = headers.get("Content-Type");
 
-            if (request.body === null) {
-                body = undefined;
-                break handle_body;
-            }
+                    if (ct === null) {
+                        return false;
+                    }
 
-            const shouldInspectBody = (() => {
-                let ct = headers.get("Content-Type");
+                    ct = ct.toLocaleLowerCase();
 
-                if (ct === null) {
-                    return false;
+                    if (
+                        !ct.startsWith("application/json") &&
+                        !ct.startsWith("application/x-www-form-urlencoded")
+                    ) {
+                        return false;
+                    }
+
+                    const len_str = headers.get("Content-Length");
+
+                    if (len_str === null) {
+                        // NOTE: This will have performance implications for large bodies
+                        // but we have no other way to know the size
+                        return true;
+                    }
+
+                    const len = parseInt(len_str, 10);
+
+                    if (!Number.isFinite(len) || len > 100_000) {
+                        return false;
+                    }
+
+                    return true;
+                })();
+
+                if (!shouldInspectBody) {
+                    body = request.body;
+                    break handle_body;
                 }
 
-                ct = ct.toLocaleLowerCase();
+                const bodyText = await request.clone().text();
+                const nextBodyText = substitutePlaceholderByRealToken(bodyText);
+
+                if (nextBodyText !== bodyText) {
+                    didSubstitute = true;
+                }
+
+                body = nextBodyText;
+            }
+
+            block_authed_request_to_unauthorized_hostnames: {
+                if (!didSubstitute) {
+                    break block_authed_request_to_unauthorized_hostnames;
+                }
+
+                const { hostname } = new URL(url, window.location.href);
 
                 if (
-                    !ct.startsWith("application/json") &&
-                    !ct.startsWith("application/x-www-form-urlencoded")
+                    getIsHostnameAuthorized({
+                        allowedHostnames: resourceServersAllowedHostnames,
+                        extendAuthorizationToParentDomain: true,
+                        hostname
+                    })
                 ) {
-                    return false;
+                    break block_authed_request_to_unauthorized_hostnames;
                 }
 
-                const len_str = headers.get("Content-Length");
+                throw new Error(
+                    [
+                        `oidc-spa: Blocked authed request to ${hostname}.`,
+                        `To authorize this request add "${hostname}" to`,
+                        "`resourceServersAllowedHostnames`."
+                    ].join(" ")
+                );
+            }
 
-                if (len_str === null) {
-                    // NOTE: This will have performance implications for large bodies
-                    // but we have no other way to know the size
-                    return true;
+            const nextInit: RequestInit = {
+                method: request.method,
+                headers,
+                body,
+                mode: request.mode,
+                credentials: request.credentials,
+                cache: request.cache,
+                redirect: request.redirect,
+                referrer: request.referrer,
+                referrerPolicy: request.referrerPolicy,
+                integrity: request.integrity,
+                keepalive: request.keepalive,
+                signal: request.signal
+            };
+
+            {
+                //@ts-expect-error
+                const duplex = init?.duplex ?? (input instanceof Request ? input.duplex : undefined);
+
+                if (duplex !== undefined) {
+                    //@ts-expect-error
+                    nextInit.duplex = duplex;
+                }
+            }
+
+            fetch_later: {
+                if (!isFetchLater) {
+                    break fetch_later;
                 }
 
-                const len = parseInt(len_str, 10);
+                assert(fetchLater_actual !== undefined);
 
-                if (!Number.isFinite(len) || len > 100_000) {
-                    return false;
+                const activateAfter =
+                    //@ts-expect-error
+                    init?.activateAfter ?? (input instanceof Request ? input.activateAfter : undefined);
+
+                if (activateAfter !== undefined) {
+                    //@ts-expect-error
+                    nextInit.activateAfter = activateAfter;
                 }
 
-                return true;
-            })();
-
-            if (!shouldInspectBody) {
-                body = request.body;
-                break handle_body;
+                return fetchLater_actual(url, nextInit);
             }
 
-            const bodyText = await request.clone().text();
-            const nextBodyText = substitutePlaceholderByRealToken(bodyText);
-
-            if (nextBodyText !== bodyText) {
-                didSubstitute = true;
-            }
-
-            body = nextBodyText;
-        }
-
-        block_authed_request_to_unauthorized_hostnames: {
-            if (!didSubstitute) {
-                break block_authed_request_to_unauthorized_hostnames;
-            }
-
-            const { hostname } = new URL(url, window.location.href);
-
-            if (
-                getIsHostnameAuthorized({
-                    allowedHostnames: resourceServersAllowedHostnames,
-                    extendAuthorizationToParentDomain: true,
-                    hostname
-                })
-            ) {
-                break block_authed_request_to_unauthorized_hostnames;
-            }
-
-            throw new Error(
-                [
-                    `oidc-spa: Blocked authed request to ${hostname}.`,
-                    `To authorize this request add "${hostname}" to`,
-                    "`resourceServersAllowedHostnames`."
-                ].join(" ")
-            );
-        }
-
-        const nextInit: RequestInit = {
-            method: request.method,
-            headers,
-            body,
-            mode: request.mode,
-            credentials: request.credentials,
-            cache: request.cache,
-            redirect: request.redirect,
-            referrer: request.referrer,
-            referrerPolicy: request.referrerPolicy,
-            integrity: request.integrity,
-            keepalive: request.keepalive,
-            signal: request.signal
+            return fetch_actual(url, nextInit);
         };
 
-        {
-            //@ts-expect-error
-            const duplex = init?.duplex ?? (input instanceof Request ? input.duplex : undefined);
-
-            if (duplex !== undefined) {
-                //@ts-expect-error
-                nextInit.duplex = duplex;
-            }
-        }
-
-        return fetch_actual(url, nextInit);
+        return fn;
     };
+
+    window.fetch = createFetchOrFetchLater({ isFetchLater: false });
+    // @ts-expect-error
+    if (window.fetchLater) {
+        // @ts-expect-error
+        window.fetchLater = createFetchOrFetchLater({ isFetchLater: true });
+    }
 }
 
 function patchXMLHttpRequestApiToSubstituteTokenPlaceholder(params: {
