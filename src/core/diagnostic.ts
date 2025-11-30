@@ -2,6 +2,8 @@ import { OidcInitializationError } from "./OidcInitializationError";
 import { isKeycloak, createKeycloakUtils } from "../keycloak";
 import { getIsValidRemoteJson } from "../tools/getIsValidRemoteJson";
 import { WELL_KNOWN_PATH } from "./OidcMetadata";
+import { assert } from "../tools/tsafe/assert";
+import { getDoMatchWildcardsPattern } from "../tools/wildcardsMatch";
 
 export async function createWellKnownOidcConfigurationEndpointUnreachableInitializationError(params: {
     issuerUri: string;
@@ -90,8 +92,9 @@ export async function createIframeTimeoutInitializationError(params: {
     redirectUri: string;
     issuerUri: string;
     clientId: string;
+    authorizationEndpointUrl: string;
 }): Promise<OidcInitializationError> {
-    const { redirectUri, issuerUri, clientId } = params;
+    const { redirectUri, issuerUri, clientId, authorizationEndpointUrl } = params;
 
     check_if_well_known_endpoint_is_reachable: {
         const isValid = await getIsValidRemoteJson(`${issuerUri}${WELL_KNOWN_PATH}`);
@@ -103,7 +106,8 @@ export async function createIframeTimeoutInitializationError(params: {
         return createWellKnownOidcConfigurationEndpointUnreachableInitializationError({ issuerUri });
     }
 
-    iframe_blocked: {
+    // Investigate if framing was prevented by some header defined policies
+    {
         const headersOrError = await fetch(redirectUri).then(
             response => {
                 if (!response.ok) {
@@ -131,62 +135,163 @@ export async function createIframeTimeoutInitializationError(params: {
 
         const headers = headersOrError;
 
-        let key_problem = (() => {
-            block: {
-                const key = "Content-Security-Policy" as const;
+        content_security_policy_issue: {
+            const cspHeaderValue = headers["Content-Security-Policy"];
 
-                const header = headers[key];
-
-                if (header === null) {
-                    break block;
-                }
-
-                const hasFrameAncestorsNone = header
-                    .replace(/["']/g, "")
-                    .replace(/\s+/g, " ")
-                    .toLowerCase()
-                    .includes("frame-ancestors none");
-
-                if (!hasFrameAncestorsNone) {
-                    break block;
-                }
-
-                return key;
+            if (cspHeaderValue === null) {
+                break content_security_policy_issue;
             }
 
-            block: {
-                const key = "X-Frame-Options" as const;
+            const csp_parsed: Record<string, string[] | undefined> = Object.fromEntries(
+                cspHeaderValue
+                    .split(";")
+                    .filter(part => part !== "")
+                    .map(statement => {
+                        const [directive, ...values] = statement.split(" ");
+                        assert(directive !== undefined);
+                        assert(values.length !== 0);
+                        return [directive, values];
+                    })
+            );
 
-                const header = headers[key];
+            frame_src_issue: {
+                const frameSrcValues = csp_parsed["frame-src"];
 
-                if (header === null) {
-                    break block;
+                if (frameSrcValues === undefined) {
+                    break frame_src_issue;
                 }
 
-                const hasFrameAncestorsNone = header.toLowerCase().includes("deny");
+                const hasIssue = (() => {
+                    for (const frameSrcValue of frameSrcValues) {
+                        if (frameSrcValue === "'none'") {
+                            return true;
+                        }
 
-                if (!hasFrameAncestorsNone) {
-                    break block;
+                        const origin_authorizationEndpoint = new URL(authorizationEndpointUrl).origin;
+
+                        if (frameSrcValue === "'self'") {
+                            const origin_app = new URL(location.href).origin;
+
+                            if (origin_app === origin_authorizationEndpoint) {
+                                return false;
+                            }
+                        }
+
+                        if (
+                            getDoMatchWildcardsPattern({
+                                candidate: origin_authorizationEndpoint,
+                                stringWithWildcards: frameSrcValue
+                            })
+                        ) {
+                            return false;
+                        }
+                    }
+
+                    return true;
+                })();
+
+                if (!hasIssue) {
+                    break frame_src_issue;
                 }
 
-                return key;
+                const recommendedValue = (() => {
+                    const hostname_app = new URL(location.href).hostname;
+                    const {
+                        hostname: hostname_authorizationEndpoint,
+                        origin: origin_authorizationEndpoint
+                    } = new URL(authorizationEndpointUrl);
+
+                    if (hostname_app === hostname_authorizationEndpoint) {
+                        return "'self'";
+                    }
+
+                    const [lvl1, lvl2] = hostname_app.split(".").reverse();
+
+                    if (!lvl2) {
+                        return origin_authorizationEndpoint;
+                    }
+
+                    if (hostname_authorizationEndpoint.endsWith(`.${lvl2}.${lvl1}`)) {
+                        return `https://*.${lvl2}.${lvl1}`;
+                    }
+
+                    return origin_authorizationEndpoint;
+                })();
+
+                return new OidcInitializationError({
+                    isAuthServerLikelyDown: false,
+                    messageOrCause: [
+                        `Session restoration via iframe failed du to the following HTTP header on GET ${redirectUri}:`,
+                        `\nContent-Security-Policy frame-src: ${frameSrcValues.join("; ")}`,
+                        `\nThis header prevent opening an iframe to ${authorizationEndpointUrl}.`,
+                        `\nTo fix this:`,
+                        `\n  - Update your CSP as such: frame-src ${[
+                            ...frameSrcValues.filter(v => v !== "'none'"),
+                            recommendedValue
+                        ]}`,
+                        `\n  - OR, remove the frame-src directive from your CSP`,
+                        `\n  - OR, if you can't change your CSP, call bootstrapOidc/createOidc with sessionRestorationMethod: "full page redirect"`,
+                        "\n\nMore info: https://docs.oidc-spa.dev/v/v8/resources/csp-configuration"
+                    ].join(" ")
+                });
             }
 
-            return undefined;
-        })();
+            frame_ancestor_issue: {
+                const frameAncestorsValues = csp_parsed["frame-ancestors"];
 
-        if (key_problem === undefined) {
-            break iframe_blocked;
+                if (frameAncestorsValues === undefined) {
+                    break frame_ancestor_issue;
+                }
+
+                const hasIssue =
+                    frameAncestorsValues.includes("'none'") || !frameAncestorsValues.includes("'self'");
+
+                if (!hasIssue) {
+                    break frame_ancestor_issue;
+                }
+
+                return new OidcInitializationError({
+                    isAuthServerLikelyDown: false,
+                    messageOrCause: [
+                        `Session restoration via iframe failed du to the following HTTP header on GET ${redirectUri}:`,
+                        `\nContent-Security-Policy frame-ancestors: ${frameAncestorsValues.join("; ")}`,
+                        `\nThis header prevent your app to be iframed by itself.`,
+                        `\nTo fix this:`,
+                        `\n  - Update your CSP as such: frame-ancestors 'self'`,
+                        `\n  - OR, remove the frame-ancestors directive from your CSP`,
+                        `\n  - OR, if you can't change your CSP, call bootstrapOidc/createOidc with sessionRestorationMethod: "full page redirect"`,
+                        "\n\nMore info: https://docs.oidc-spa.dev/v/v8/resources/csp-configuration"
+                    ].join(" ")
+                });
+            }
         }
 
-        return new OidcInitializationError({
-            isAuthServerLikelyDown: false,
-            messageOrCause: [
-                `${redirectUri} is currently served by your web server with the HTTP header \`${key_problem}: ${headers[key_problem]}\`.\n`,
-                "This header prevents the silent sign-in process from working.\n",
-                "Refer to this documentation page to fix this issue: https://docs.oidc-spa.dev/v/v8/resources/third-party-cookies-and-session-restoration"
-            ].join(" ")
-        });
+        x_frame_option_header_issue: {
+            const key = "X-Frame-Options" as const;
+
+            const value = headers[key];
+
+            if (value === null) {
+                break x_frame_option_header_issue;
+            }
+
+            const hasFrameAncestorsNone = value.toLowerCase().includes("deny");
+
+            if (!hasFrameAncestorsNone) {
+                break x_frame_option_header_issue;
+            }
+
+            return new OidcInitializationError({
+                isAuthServerLikelyDown: false,
+                messageOrCause: [
+                    `Session restoration via iframe failed du to the following HTTP header on GET ${redirectUri}:`,
+                    `\n${key} ${value}`,
+                    `\nThis header prevent your app to be framed by itself.`,
+                    `\nTo fix this, remove the X-Frame-Option header, use Content-Security-Policy instead if you want to restrict framing.`,
+                    "\n\nMore info: https://docs.oidc-spa.dev/v/v8/resources/csp-configuration"
+                ].join(" ")
+            });
+        }
     }
 
     // Here we know that the server is not down and that the issuer_uri is correct
