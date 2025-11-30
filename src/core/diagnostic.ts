@@ -221,17 +221,17 @@ export async function createIframeTimeoutInitializationError(params: {
                 return new OidcInitializationError({
                     isAuthServerLikelyDown: false,
                     messageOrCause: [
-                        `Session restoration via iframe failed du to the following HTTP header on GET ${redirectUri}:`,
-                        `\nContent-Security-Policy frame-src: ${frameSrcValues.join("; ")}`,
-                        `\nThis header prevent opening an iframe to ${authorizationEndpointUrl}.`,
+                        `Session restoration via iframe failed due to the following HTTP header on GET ${redirectUri}:`,
+                        `\nContent-Security-Policy “frame-src”: ${frameSrcValues.join("; ")}`,
+                        `\nThis header prevents opening an iframe to ${authorizationEndpointUrl}.`,
                         `\nTo fix this:`,
-                        `\n  - Update your CSP as such: frame-src ${[
+                        `\n  - Update your CSP to: frame-src ${[
                             ...frameSrcValues.filter(v => v !== "'none'"),
                             recommendedValue
                         ]}`,
-                        `\n  - OR, remove the frame-src directive from your CSP`,
-                        `\n  - OR, if you can't change your CSP, call bootstrapOidc/createOidc with sessionRestorationMethod: "full page redirect"`,
-                        "\n\nMore info: https://docs.oidc-spa.dev/v/v8/resources/csp-configuration"
+                        `\n  - OR remove the frame-src directive from your CSP`,
+                        `\n  - OR, if you cannot change your CSP, call bootstrapOidc/createOidc with sessionRestorationMethod: "full page redirect"`,
+                        `\n\nMore info: https://docs.oidc-spa.dev/v/v8/resources/csp-configuration`
                     ].join(" ")
                 });
             }
@@ -253,14 +253,16 @@ export async function createIframeTimeoutInitializationError(params: {
                 return new OidcInitializationError({
                     isAuthServerLikelyDown: false,
                     messageOrCause: [
-                        `Session restoration via iframe failed du to the following HTTP header on GET ${redirectUri}:`,
-                        `\nContent-Security-Policy frame-ancestors: ${frameAncestorsValues.join("; ")}`,
-                        `\nThis header prevent your app to be iframed by itself.`,
+                        `Session restoration via iframe failed due to the following HTTP header on GET ${redirectUri}:`,
+                        `\nContent-Security-Policy “frame-ancestors”: ${frameAncestorsValues.join(
+                            "; "
+                        )}`,
+                        `\nThis header prevents your app from being iframed by itself.`,
                         `\nTo fix this:`,
-                        `\n  - Update your CSP as such: frame-ancestors 'self'`,
-                        `\n  - OR, remove the frame-ancestors directive from your CSP`,
-                        `\n  - OR, if you can't change your CSP, call bootstrapOidc/createOidc with sessionRestorationMethod: "full page redirect"`,
-                        "\n\nMore info: https://docs.oidc-spa.dev/v/v8/resources/csp-configuration"
+                        `\n  - Update your CSP to: frame-ancestors 'self'`,
+                        `\n  - OR remove the frame-ancestors directive from your CSP`,
+                        `\n  - OR, if you cannot modify your CSP, call bootstrapOidc/createOidc with sessionRestorationMethod: "full page redirect"`,
+                        `\n\nMore info: https://docs.oidc-spa.dev/v/v8/resources/csp-configuration`
                     ].join(" ")
                 });
             }
@@ -284,11 +286,11 @@ export async function createIframeTimeoutInitializationError(params: {
             return new OidcInitializationError({
                 isAuthServerLikelyDown: false,
                 messageOrCause: [
-                    `Session restoration via iframe failed du to the following HTTP header on GET ${redirectUri}:`,
-                    `\n${key} ${value}`,
-                    `\nThis header prevent your app to be framed by itself.`,
-                    `\nTo fix this, remove the X-Frame-Option header, use Content-Security-Policy instead if you want to restrict framing.`,
-                    "\n\nMore info: https://docs.oidc-spa.dev/v/v8/resources/csp-configuration"
+                    `Session restoration via iframe failed due to the following HTTP header on GET ${redirectUri}:`,
+                    `\n${key}: ${value}`,
+                    `\nThis header prevents your app from being framed by itself.`,
+                    `\nTo fix this, remove the ${key} header and rely on Content-Security-Policy if you need to restrict framing.`,
+                    `\n\nMore info: https://docs.oidc-spa.dev/v/v8/resources/csp-configuration`
                 ].join(" ")
             });
         }
@@ -330,8 +332,8 @@ export async function createIframeTimeoutInitializationError(params: {
                 ];
             })(),
             "\n\n",
-            "If nothing works, you can try disabling the use of iframe: https://docs.oidc-spa.dev/resources/iframe-related-issues\n",
-            "with some OIDC provider it might solve the issue."
+            `If nothing works, or if you see in the console a message mentioning 'refused to frame' there might be a problem with your CSP.`,
+            `Read more: https://docs.oidc-spa.dev/v/v8/resources/csp-configuration`
         ].join(" ")
     });
 }
