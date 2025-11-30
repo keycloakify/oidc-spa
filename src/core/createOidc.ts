@@ -950,10 +950,15 @@ export async function createOidc_nonMemoized<
                 assert(result_loginSilent.outcome !== "token refreshed using refresh token", "876995");
 
                 if (result_loginSilent.outcome === "timeout") {
+                    const { authorization_endpoint } = oidcMetadata;
+
+                    assert(authorization_endpoint !== undefined, "39447394");
+
                     return (await import("./diagnostic")).createIframeTimeoutInitializationError({
                         redirectUri: homeUrlAndRedirectUri,
                         clientId,
-                        issuerUri
+                        issuerUri,
+                        authorizationEndpointUrl: authorization_endpoint
                     });
                 }
 
