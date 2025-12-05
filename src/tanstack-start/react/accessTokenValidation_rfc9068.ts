@@ -1,5 +1,5 @@
 import type { CreateValidateAndGetAccessTokenClaims, ParamsOfBootstrap } from "./types";
-import type { DecodedAccessToken_RFC9068 as AccessTokenClaims_RFC9068 } from "../../backend";
+import type { DecodedAccessToken_RFC9068 as AccessTokenClaims_RFC9068 } from "../../server/types";
 import type { ZodSchemaLike } from "../../tools/ZodSchemaLike";
 import { createObjectThatThrowsIfAccessed } from "../../tools/createObjectThatThrowsIfAccessed";
 import { assert, type Equals, is } from "../../tools/tsafe/assert";
@@ -52,17 +52,6 @@ export function createCreateValidateAndGetAccessTokenClaims_rfc9068<
             };
         }
         assert<Equals<(typeof paramsOfBootstrap)["implementation"], "real">>;
-
-        const prVerifyAndDecodeAccessToken = (async () => {
-            const { createOidcBackend } = await import("../../backend");
-
-            const { verifyAndDecodeAccessToken } = await createOidcBackend({
-                issuerUri: paramsOfBootstrap.issuerUri,
-                decodedAccessTokenSchema: accessTokenClaimsSchema
-            });
-
-            return verifyAndDecodeAccessToken;
-        })();
 
         const expectedAudience = (() => {
             if (expectedAudienceGetter === undefined) {
@@ -117,9 +106,30 @@ export function createCreateValidateAndGetAccessTokenClaims_rfc9068<
             return expectedAudience;
         })();
 
+        const prValidateAndDecodeAccessToken = (async () => {
+            const { oidcSpa: oidcSpa_server } = await import("../../server");
+
+            const { bootstrapAuth, validateAndDecodeAccessToken } =
+                accessTokenClaimsSchema === undefined
+                    ? oidcSpa_server.createUtils()
+                    : oidcSpa_server
+                          .withExpectedDecodedAccessTokenShape({
+                              decodedAccessTokenSchema: accessTokenClaimsSchema
+                          })
+                          .createUtils();
+
+            await bootstrapAuth({
+                implementation: "real",
+                issuerUri: paramsOfBootstrap.issuerUri,
+                expectedAudience
+            });
+
+            return validateAndDecodeAccessToken;
+        })();
+
         return {
             validateAndGetAccessTokenClaims: async ({ accessToken }) => {
-                const verifyAndDecodeAccessToken = await prVerifyAndDecodeAccessToken;
+                const validateAndDecodeAccessToken = await prValidateAndDecodeAccessToken;
 
                 const {
                     isValid,
@@ -127,7 +137,9 @@ export function createCreateValidateAndGetAccessTokenClaims_rfc9068<
                     errorMessage,
                     decodedAccessToken,
                     decodedAccessToken_original
-                } = await verifyAndDecodeAccessToken({ accessToken });
+                } = await validateAndDecodeAccessToken({
+                    request: {}
+                });
 
                 if (!isValid) {
                     return {
