@@ -197,9 +197,28 @@ export async function loginSilent(params: {
                     oidcClientTsUser
                 });
             },
-            () => {
-                // NOTE: Here, except error on our understanding there can't be any other
-                // error than timeout so we fail silently and let the timeout expire.
+            error => {
+                assert(error instanceof Error);
+
+                if (error.message.includes("IFrame timed out without a response")) {
+                    // NOTE: This is the expected successful outcome
+                    // oidc-spa is handling the iframe's response
+                    // oidc-client-ts never sees it. By design.
+                    return;
+                }
+
+                if (error.message.includes("Crypto.subtle is available only in secure contexts")) {
+                    clearTimeouts({ wasSuccess: false });
+                    throw new Error(
+                        [
+                            `oidc-spa: ${error.message}.`,
+                            "\nTo fix this error see:",
+                            "https://docs.oidc-spa.dev/v/v8/resources/fixing-crypto.subtle-is-available-only-in-secure-contexts-https"
+                        ].join(" ")
+                    );
+                }
+
+                assert(false, `This is a bug in oidc-spa, please report: ${error.message}`);
             }
         );
 
