@@ -20,7 +20,8 @@ import { typeGuard } from "../../tools/tsafe/typeGuard";
 import type { GetterOrDirectValue } from "../../tools/GetterOrDirectValue";
 import { createServerFn, createMiddleware } from "@tanstack/react-start";
 // @ts-expect-error: Since our module is not labeled as ESM we don't have the types here.
-import { getRequest, setResponseHeader, setResponseStatus } from "@tanstack/react-start/server";
+//import { getRequest, setResponseHeader, setResponseStatus } from "@tanstack/react-start/server";
+import { getRequest, setResponseHeader, setResponseStatus } from "@tanstack/react-start-server";
 import { toFullyQualifiedUrl } from "../../tools/toFullyQualifiedUrl";
 import { BEFORE_LOAD_FN_BRAND_PROPERTY_NAME } from "./disableSsrIfLoginEnforced";
 import { setDesiredPostLoginRedirectUrl } from "../../core/desiredPostLoginRedirectUrl";
@@ -800,7 +801,7 @@ export function createOidcSpaApi<
                 return new Error(`oidc-spa: ${errorMessage}`);
             };
 
-            const { headers } = getRequest();
+            const { headers, url, method } = getRequest();
 
             const authorizationHeaderValue = headers.get("Authorization");
 

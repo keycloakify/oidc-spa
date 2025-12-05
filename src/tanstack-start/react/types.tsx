@@ -457,7 +457,13 @@ export type OidcSpaApi<AutoLogin, DecodedIdToken, AccessTokenClaims> = {
 export type CreateValidateAndGetAccessTokenClaims<AccessTokenClaims> = (params: {
     paramsOfBootstrap: ParamsOfBootstrap<boolean, Record<string, unknown>, AccessTokenClaims>;
 }) => {
-    validateAndGetAccessTokenClaims: (params: { accessToken: string }) => Promise<
+    validateAndGetAccessTokenClaims: (params: {
+        request: {
+            method: string;
+            url: string;
+            headers: Record<"Authorization" | "DPoP", string | null | undefined>;
+        };
+    }) => Promise<
         | {
               isValid: true;
               accessTokenClaims: AccessTokenClaims;
