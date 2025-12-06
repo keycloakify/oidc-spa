@@ -17,10 +17,7 @@ const config = defineConfig({
         }),
         tailwindcss(),
         tanstackStart(),
-        oidcSpa({
-            // See https://docs.oidc-spa.dev/v/v8/resources/token-exfiltration-defence
-            enableTokenExfiltrationDefense: true
-        }),
+        oidcSpa(),
         viteReact()
     ]
 });
