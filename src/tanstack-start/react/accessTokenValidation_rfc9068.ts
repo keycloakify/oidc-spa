@@ -6,7 +6,7 @@ import type {
 import type { DecodedAccessToken_RFC9068 as AccessTokenClaims_RFC9068 } from "../../server/types";
 import type { ZodSchemaLike } from "../../tools/ZodSchemaLike";
 import { createObjectThatThrowsIfAccessed } from "../../tools/createObjectThatThrowsIfAccessed";
-import { assert, type Equals, is, id } from "../../vendor/backend/tsafe";
+import { assert, type Equals, is, id } from "../../vendor/server/tsafe";
 
 export function createCreateValidateAndGetAccessTokenClaims_rfc9068<
     AccessTokenClaims extends Record<string, unknown>

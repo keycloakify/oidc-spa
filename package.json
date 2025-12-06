@@ -146,6 +146,11 @@
             "import": "./dist/esm/vite-plugin/index.mjs",
             "default": "./dist/esm/vite-plugin/index.mjs"
         },
+        "./server": {
+            "module": "./dist/esm/server/index.mjs",
+            "import": "./dist/esm/server/index.mjs",
+            "default": "./dist/server/index.js"
+        },
         "./core": {
             "module": "./dist/esm/index.mjs",
             "import": "./dist/esm/index.mjs",
