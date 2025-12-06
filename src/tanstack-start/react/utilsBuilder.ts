@@ -1,4 +1,4 @@
-import type { OidcSpaApi, CreateValidateAndGetAccessTokenClaims, ParamsOfBootstrap } from "./types";
+import type { OidcSpaUtils, CreateValidateAndGetAccessTokenClaims, ParamsOfBootstrap } from "./types";
 import type { Oidc as Oidc_core } from "../../core";
 import { assert, type Equals } from "../../tools/tsafe/assert";
 import type { ZodSchemaLike } from "../../tools/ZodSchemaLike";
@@ -6,7 +6,7 @@ import type { DecodedAccessToken_RFC9068 as AccessTokenClaims_RFC9068 } from "..
 import { createCreateValidateAndGetAccessTokenClaims_rfc9068 } from "./accessTokenValidation_rfc9068";
 import { createOidcSpaApi } from "./createOidcSpaApi";
 
-export type OidcSpaApiBuilder<
+export type OidcSpaUtilsBuilder<
     AutoLogin extends boolean = false,
     DecodedIdToken extends Record<string, unknown> = Oidc_core.Tokens.DecodedIdToken_OidcCoreSpec,
     AccessTokenClaims extends Record<string, unknown> | undefined = undefined,
@@ -17,7 +17,7 @@ export type OidcSpaApiBuilder<
         | "createUtils" = never
 > = Omit<
     {
-        withAutoLogin: () => OidcSpaApiBuilder<
+        withAutoLogin: () => OidcSpaUtilsBuilder<
             true,
             DecodedIdToken,
             AccessTokenClaims,
@@ -29,7 +29,7 @@ export type OidcSpaApiBuilder<
                 DecodedIdToken
             >;
             decodedIdToken_mock?: NoInfer<DecodedIdToken>;
-        }) => OidcSpaApiBuilder<
+        }) => OidcSpaUtilsBuilder<
             AutoLogin,
             DecodedIdToken,
             AccessTokenClaims,
@@ -45,7 +45,7 @@ export type OidcSpaApiBuilder<
                     paramsOfBootstrap: ParamsOfBootstrap.Real<boolean>;
                     process: { env: Record<string, string> };
                 }) => string;
-            }): OidcSpaApiBuilder<
+            }): OidcSpaUtilsBuilder<
                 AutoLogin,
                 DecodedIdToken,
                 AccessTokenClaims,
@@ -54,19 +54,19 @@ export type OidcSpaApiBuilder<
             <AccessTokenClaims extends Record<string, unknown>>(params: {
                 type: "custom";
                 createValidateAndGetAccessTokenClaims: CreateValidateAndGetAccessTokenClaims<AccessTokenClaims>;
-            }): OidcSpaApiBuilder<
+            }): OidcSpaUtilsBuilder<
                 AutoLogin,
                 DecodedIdToken,
                 AccessTokenClaims,
                 ExcludedMethod | "withAccessTokenValidation"
             >;
         };
-        createUtils: () => OidcSpaApi<AutoLogin, DecodedIdToken, AccessTokenClaims>;
+        createUtils: () => OidcSpaUtils<AutoLogin, DecodedIdToken, AccessTokenClaims>;
     },
     ExcludedMethod
 >;
 
-function createOidcSpaApiBuilder<
+function createOidcSpaUtilsBuilder<
     AutoLogin extends boolean = false,
     DecodedIdToken extends Record<string, unknown> = Oidc_core.Tokens.DecodedIdToken_OidcCoreSpec,
     AccessTokenClaims extends Record<string, unknown> | undefined = undefined
@@ -79,24 +79,24 @@ function createOidcSpaApiBuilder<
     createValidateAndGetAccessTokenClaims:
         | CreateValidateAndGetAccessTokenClaims<AccessTokenClaims>
         | undefined;
-}): OidcSpaApiBuilder<AutoLogin, DecodedIdToken, AccessTokenClaims> {
+}): OidcSpaUtilsBuilder<AutoLogin, DecodedIdToken, AccessTokenClaims> {
     return {
         withAutoLogin: () =>
-            createOidcSpaApiBuilder({
+            createOidcSpaUtilsBuilder({
                 autoLogin: true,
                 decodedIdTokenSchema: params.decodedIdTokenSchema,
                 decodedIdToken_mock: params.decodedIdToken_mock,
                 createValidateAndGetAccessTokenClaims: params.createValidateAndGetAccessTokenClaims
             }),
         withExpectedDecodedIdTokenShape: ({ decodedIdTokenSchema, decodedIdToken_mock }) =>
-            createOidcSpaApiBuilder({
+            createOidcSpaUtilsBuilder({
                 autoLogin: params.autoLogin,
                 decodedIdTokenSchema,
                 decodedIdToken_mock: decodedIdToken_mock,
                 createValidateAndGetAccessTokenClaims: params.createValidateAndGetAccessTokenClaims
             }),
         withAccessTokenValidation: params_scope =>
-            createOidcSpaApiBuilder({
+            createOidcSpaUtilsBuilder({
                 autoLogin: params.autoLogin,
                 decodedIdTokenSchema: params.decodedIdTokenSchema,
                 decodedIdToken_mock: params.decodedIdToken_mock,
@@ -137,7 +137,7 @@ function createOidcSpaApiBuilder<
     };
 }
 
-export const oidcSpaApiBuilder = createOidcSpaApiBuilder({
+export const oidcSpaUtilsBuilder = createOidcSpaUtilsBuilder({
     autoLogin: false,
     createValidateAndGetAccessTokenClaims: undefined,
     decodedIdToken_mock: undefined,

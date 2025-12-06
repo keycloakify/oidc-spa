@@ -130,7 +130,7 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
             return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
                 isSuccess: false,
                 errorCause: "missing Authorization header",
-                errorDebugMessage: "The request is anonymous, no Authorization header"
+                debugErrorMessage: "The request is anonymous, no Authorization header"
             });
         }
 
@@ -140,7 +140,7 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
             return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
                 isSuccess: false,
                 errorCause: "validation error",
-                errorDebugMessage: "Malformed Authorization header"
+                debugErrorMessage: "Malformed Authorization header"
             });
         }
 
@@ -148,7 +148,7 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
             return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
                 isSuccess: false,
                 errorCause: "validation error",
-                errorDebugMessage: `Unsupported scheme ${scheme}, expected Bearer or DPoP`
+                debugErrorMessage: `Unsupported scheme ${scheme}, expected Bearer or DPoP`
             });
         }
 
@@ -168,7 +168,7 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
                     return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
                         isSuccess: false,
                         errorCause: "validation error",
-                        errorDebugMessage: [
+                        debugErrorMessage: [
                             `The decoded access token does not satisfies`,
                             `the shape mandated by RFC9068: ${error.message}`
                         ].join(" ")
@@ -192,7 +192,7 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
                     return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
                         isSuccess: false,
                         errorCause: "validation error",
-                        errorDebugMessage: "Failed to decode the JWT header"
+                        debugErrorMessage: "Failed to decode the JWT header"
                     });
                 }
 
@@ -202,7 +202,7 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
                     return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
                         isSuccess: false,
                         errorCause: "validation error",
-                        errorDebugMessage: "The decoded JWT header does not have a kid property"
+                        debugErrorMessage: "The decoded JWT header does not have a kid property"
                     });
                 }
 
@@ -210,7 +210,7 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
                     return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
                         isSuccess: false,
                         errorCause: "validation error",
-                        errorDebugMessage: "The decoded JWT header does not specify an algorithm"
+                        debugErrorMessage: "The decoded JWT header does not specify an algorithm"
                     });
                 }
 
@@ -233,7 +233,7 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
                     return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
                         isSuccess: false,
                         errorCause: "validation error",
-                        errorDebugMessage: `Unsupported or too weak algorithm ${algFromHeader}`
+                        debugErrorMessage: `Unsupported or too weak algorithm ${algFromHeader}`
                     });
                 }
 
@@ -249,7 +249,7 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
                 return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
                     isSuccess: false,
                     errorCause: "validation error",
-                    errorDebugMessage: `No public signing key found with kid ${kid}`
+                    debugErrorMessage: `No public signing key found with kid ${kid}`
                 });
             }
 
@@ -266,7 +266,7 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
                     return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
                         isSuccess: false,
                         errorCause: "validation error - access token expired",
-                        errorDebugMessage: error.message
+                        debugErrorMessage: error.message
                     });
                 }
 
@@ -275,7 +275,7 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
                 return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
                     isSuccess: false,
                     errorCause: "validation error - invalid signature",
-                    errorDebugMessage: error.message
+                    debugErrorMessage: error.message
                 });
             }
 
@@ -287,7 +287,7 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
                 return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
                     isSuccess: false,
                     errorCause: "validation error",
-                    errorDebugMessage: [
+                    debugErrorMessage: [
                         `The decoded access token does not satisfies`,
                         `the shape mandated by RFC9068: ${error.message}`
                     ].join(" ")
@@ -312,7 +312,7 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
                     return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
                         isSuccess: false,
                         errorCause: "validation error",
-                        errorDebugMessage: [
+                        debugErrorMessage: [
                             `Not expected audience, got aud claim ${JSON.stringify(
                                 decodedAccessToken_original.aud
                             )}`,
@@ -332,7 +332,7 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
                     return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
                         isSuccess: false,
                         errorCause: "validation error",
-                        errorDebugMessage: "cnf.jkt claim is expected to be a string"
+                        debugErrorMessage: "cnf.jkt claim is expected to be a string"
                     });
                 }
 
@@ -341,7 +341,7 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
                         return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
                             isSuccess: false,
                             errorCause: "validation error",
-                            errorDebugMessage: [
+                            debugErrorMessage: [
                                 "access token is DPoP bound (cnf.jkt claim present)",
                                 "but used with bearer scheme"
                             ].join(" ")
@@ -356,7 +356,7 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
                     return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
                         isSuccess: false,
                         errorCause: "validation error",
-                        errorDebugMessage: [
+                        debugErrorMessage: [
                             "DPoP validation error, missing cnf.jtk claim",
                             "in the access token payload"
                         ].join(" ")
@@ -367,7 +367,7 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
                     return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
                         isSuccess: false,
                         errorCause: "validation error",
-                        errorDebugMessage: "Scheme DPoP was specified but the DPoP header is missing"
+                        debugErrorMessage: "Scheme DPoP was specified but the DPoP header is missing"
                     });
                 }
 
@@ -394,7 +394,7 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
                 return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
                     isSuccess: false,
                     errorCause: "validation error",
-                    errorDebugMessage: [
+                    debugErrorMessage: [
                         `The decoded access token does not satisfies`,
                         `the shape that the application expects: ${error.message}`
                     ].join(" ")
