@@ -3550,6 +3550,11 @@ js-yaml@3.14.1:
     argparse "^1.0.7"
     esprima "^4.0.0"
 
+js2mjs@^1.0.1:
+  version "1.0.1"
+  resolved "https://registry.yarnpkg.com/js2mjs/-/js2mjs-1.0.1.tgz#685a5e98c0767cb77dafdc0841188a36b5037988"
+  integrity sha512-Z6lmRudC9sSnq2XEozP41Arq7DGk6RKzPeA9zF648Zvx1hLI6AfEIYqqDHxI2qTnCP0doksJnL2jVHY/DyeyBA==
+
 jsesc@^2.5.1:
   version "2.5.2"
   resolved "https://registry.yarnpkg.com/jsesc/-/jsesc-2.5.2.tgz#80564d2e483dacf6e8ef209650a67df3f0c283a4"
@@ -4598,6 +4603,13 @@ to-regex-range@^5.0.1:
   dependencies:
     is-number "^7.0.0"
 
+ts-add-js-extension@^1.6.6:
+  version "1.6.6"
+  resolved "https://registry.yarnpkg.com/ts-add-js-extension/-/ts-add-js-extension-1.6.6.tgz#325d5e466f18ab88ebe23ef3638a88c5af135784"
+  integrity sha512-rPOBNrOULi/CjVHraGrDa0vuWDmuMszmIXGNaGe2UGfrBH0/bZWTTsh82uQ+INKp9cJYziKNTCG2knzBlWvW4A==
+  dependencies:
+    typescript "^5.8.2"
+
 ts-node@^10.9.1:
   version "10.9.2"
   resolved "https://registry.yarnpkg.com/ts-node/-/ts-node-10.9.2.tgz#70f021c9e185bccdca820e26dc413805c101c71f"
@@ -4666,6 +4678,11 @@ typescript@5.7.2:
   version "5.7.2"
   resolved "https://registry.yarnpkg.com/typescript/-/typescript-5.7.2.tgz#3169cf8c4c8a828cde53ba9ecb3d2b1d5dd67be6"
   integrity sha512-i5t66RHxDvVN40HfDd1PsEThGNnlMCMT3jMUuoh9/0TaqWevNontacunWyN02LA9/fIbEWlcHZcgTKb9QoaLfg==
+
+typescript@^5.8.2:
+  version "5.9.3"
+  resolved "https://registry.yarnpkg.com/typescript/-/typescript-5.9.3.tgz#5b4f59e15310ab17a216f5d6cf53ee476ede670f"
+  integrity sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==
 
 ufo@^1.5.4:
   version "1.6.1"

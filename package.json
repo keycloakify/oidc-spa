@@ -9,8 +9,6 @@
     "scripts": {
         "prepare": "patch-package",
         "build": "tsx scripts/build.ts",
-        "tsc:cjs": "tsc --module CommonJS --outDir ./dist",
-        "tsc:esm": "tsc --module es2020 --outDir ./dist/esm",
         "_format": "prettier '**/*.{ts,tsx,json,md}'",
         "format": "yarn _format --write",
         "format:check": "yarn _format --list-different",
@@ -120,7 +118,9 @@
         "@babel/types": "^7.28.4",
         "@types/babel__generator": "^7.6.4",
         "@babel/traverse": "^7.28.4",
-        "@types/babel__traverse": "^7.28.0"
+        "@types/babel__traverse": "^7.28.0",
+        "js2mjs": "^1.0.1",
+        "ts-add-js-extension": "^1.6.6"
     },
     "publishConfig": {
         "access": "public"
@@ -128,70 +128,84 @@
     "sideEffects": false,
     "main": "dist/index.js",
     "types": "dist/index.d.ts",
-    "module": "dist/esm/index.js",
+    "module": "dist/esm/index.mjs",
     "exports": {
         ".": {
-            "module": "./dist/esm/index.js",
+            "module": "./dist/esm/index.mjs",
+            "import": "./dist/esm/index.mjs",
             "default": "./dist/index.js"
         },
+        "./entrypoint": {
+            "module": "./dist/esm/entrypoint.mjs",
+            "import": "./dist/esm/entrypoint.mjs",
+            "default": "./dist/entrypoint.js"
+        },
+        "./vite-plugin": {
+            "types": "./dist/esm/vite-plugin/index.d.ts",
+            "module": "./dist/esm/vite-plugin/index.mjs",
+            "import": "./dist/esm/vite-plugin/index.mjs",
+            "default": "./dist/esm/vite-plugin/index.mjs"
+        },
         "./core": {
-            "module": "./dist/esm/index.js",
+            "module": "./dist/esm/index.mjs",
+            "import": "./dist/esm/index.mjs",
             "default": "./dist/index.js"
         },
         "./mock": {
-            "module": "./dist/esm/mock/index.js",
+            "module": "./dist/esm/mock/index.mjs",
+            "import": "./dist/esm/mock/index.mjs",
             "default": "./dist/mock/index.js"
         },
-        "./react": {
-            "module": "./dist/esm/react/index.js",
-            "default": "./dist/react/index.js"
-        },
-        "./angular": {
-            "module": "./dist/esm/angular.js",
-            "types": "./dist/esm/angular.d.ts",
-            "default": "./dist/esm/angular.js"
-        },
-        "./vite-plugin": {
-            "require": "./dist/vite-plugin/index.js",
-            "types": "./dist/vite-plugin/index.d.ts",
-            "default": "./dist/vite-plugin/index.js"
-        },
         "./react-spa": {
-            "module": "./dist/esm/react-spa/index.js",
+            "module": "./dist/esm/react-spa/index.mjs",
+            "import": "./dist/esm/react-spa/index.mjs",
             "default": "./dist/react-spa/index.js"
         },
         "./react-tanstack-start": {
-            "module": "./dist/esm/tanstack-start/react/index.js",
             "types": "./dist/esm/tanstack-start/react/index.d.ts",
-            "default": "./dist/esm/tanstack-start/react/index.js"
+            "module": "./dist/esm/tanstack-start/react/index.mjs",
+            "import": "./dist/esm/tanstack-start/react/index.mjs",
+            "default": "./dist/esm/tanstack-start/react/index.mjs"
         },
-        "./mock/react": {
-            "module": "./dist/esm/mock/react.js",
-            "default": "./dist/mock/react.js"
-        },
-        "./entrypoint": {
-            "module": "./dist/esm/entrypoint.js",
-            "default": "./dist/entrypoint.js"
+        "./angular": {
+            "types": "./dist/esm/angular.d.ts",
+            "module": "./dist/esm/angular.mjs",
+            "import": "./dist/esm/angular.mjs",
+            "default": "./dist/esm/angular.mjs"
         },
         "./backend": {
-            "module": "./dist/esm/backend.js",
+            "module": "./dist/esm/backend.mjs",
+            "import": "./dist/esm/backend.mjs",
             "default": "./dist/backend.js"
         },
         "./keycloak": {
-            "module": "./dist/esm/keycloak/index.js",
+            "module": "./dist/esm/keycloak/index.mjs",
+            "import": "./dist/esm/keycloak/index.mjs",
             "default": "./dist/keycloak/index.js"
         },
         "./keycloak-js": {
-            "module": "./dist/esm/keycloak-js.js",
+            "module": "./dist/esm/keycloak-js.mjs",
+            "import": "./dist/esm/keycloak-js.mjs",
             "default": "./dist/keycloak-js.js"
         },
         "./tools/decodeJwt": {
             "module": "./dist/esm/tools/decodeJwt.js",
+            "import": "./dist/esm/tools/decodeJwt.mjs",
             "default": "./dist/tools/decodeJwt.js"
         },
         "./tools/parseKeycloakIssuerUri": {
-            "module": "./dist/esm/tools/parseKeycloakIssuerUri.js",
+            "module": "./dist/esm/tools/parseKeycloakIssuerUri.mjs",
+            "import": "./dist/esm/tools/parseKeycloakIssuerUri.mjs",
             "default": "./dist/tools/parseKeycloakIssuerUri.js"
+        },
+        "./react": {
+            "module": "./dist/esm/react/index.mjs",
+            "import": "./dist/esm/react/index.mjs",
+            "default": "./dist/react/index.js"
+        },
+        "./mock/react": {
+            "module": "./dist/esm/mock/react.js",
+            "default": "./dist/mock/react.js"
         }
     }
 }

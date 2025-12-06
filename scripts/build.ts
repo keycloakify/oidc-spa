@@ -94,14 +94,13 @@ for (const targetFormat of ["cjs", "esm"] as const) {
                                 return [
                                     "angular.ts",
                                     "tanstack-start",
-                                    pathJoin("tools", "inferIsViteDev.ts")
+                                    pathJoin("tools", "inferIsViteDev.ts"),
+                                    pathJoin("tools", "getThisCodebaseRootDirPath_esm.ts"),
+                                    "vite-plugin",
+                                    pathJoin("vendor", "build-runtime")
                                 ];
                             case "esm":
-                                return [
-                                    "vite-plugin",
-                                    pathJoin("vendor", "build-runtime"),
-                                    pathJoin("tools", "getThisCodebaseRootDirPath_cjs.ts")
-                                ];
+                                return [];
                         }
                     })().map(relativePath => pathJoin(projectDirPath, "src", relativePath))
                 },
@@ -144,7 +143,7 @@ for (const targetFormat of ["cjs", "esm"] as const) {
             .filter(targetRuntime => {
                 switch (targetRuntime) {
                     case "build-runtime":
-                        return targetFormat === "cjs";
+                        return targetFormat === "esm";
                     default:
                         return true;
                 }
@@ -331,6 +330,11 @@ for (const targetFormat of ["cjs", "esm"] as const) {
                     })
             );
     }
+
+    if (targetFormat === "esm") {
+        run(`npx js2mjs "${distDirPath}"`);
+        run(`npx ts-add-js-extension --dir="${distDirPath}"`);
+    }
 }
 
 {
@@ -376,7 +380,7 @@ transformCodebase({
     srcDirPath: distDirPath_root,
     destDirPath: distDirPath_root,
     transformSourceCode: ({ filePath, sourceCode }) => {
-        if (filePath.endsWith(".js.map")) {
+        if (filePath.endsWith(".js.map") || filePath.endsWith(".mjs.map")) {
             const sourceMapObj = JSON.parse(sourceCode.toString("utf8"));
 
             sourceMapObj.sources = sourceMapObj.sources.map((source: string) =>

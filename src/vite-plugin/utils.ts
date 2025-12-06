@@ -2,6 +2,8 @@ import { existsSync } from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { normalizePath } from "vite";
+import { createRequire } from "node:module";
+const require = createRequire(import.meta.url);
 
 export function resolveCandidate({
     root,

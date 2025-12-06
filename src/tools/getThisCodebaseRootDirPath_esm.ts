@@ -1,14 +1,16 @@
 import * as fs from "fs";
 import * as path from "path";
+import { fileURLToPath } from "url";
 
 let result: string | undefined = undefined;
+const thisDirPath = path.dirname(fileURLToPath(import.meta.url));
 
 export function getThisCodebaseRootDirPath(): string {
     if (result !== undefined) {
         return result;
     }
 
-    return (result = getNearestPackageJsonDirPath(__dirname));
+    return (result = getNearestPackageJsonDirPath(thisDirPath));
 }
 
 export function getNearestPackageJsonDirPath(dirPath: string): string {

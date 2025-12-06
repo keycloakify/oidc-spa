@@ -1,9 +1,11 @@
 import type { UserConfig } from "vite";
-import { getThisCodebaseRootDirPath } from "../tools/getThisCodebaseRootDirPath_cjs";
+import { getThisCodebaseRootDirPath } from "../tools/getThisCodebaseRootDirPath_esm";
 import * as fs from "node:fs";
 import { join as pathJoin } from "path";
 import type { ProjectType } from "./projectType";
 import { assert } from "../tools/tsafe/assert";
+import { createRequire } from "node:module";
+const require = createRequire(import.meta.url);
 
 export function manageOptimizedDeps(params: {
     userConfig: UserConfig;

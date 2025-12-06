@@ -1,4 +1,3 @@
-import { Suspense } from "react";
 import { NavLink } from "react-router";
 import { useOidc } from "~/oidc";
 import { isKeycloak, createKeycloakUtils } from "oidc-spa/keycloak";
