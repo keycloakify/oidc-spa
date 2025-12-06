@@ -1,8 +1,12 @@
-import type { CreateValidateAndGetAccessTokenClaims, ParamsOfBootstrap } from "./types";
+import type {
+    CreateValidateAndGetAccessTokenClaims,
+    ParamsOfBootstrap,
+    ValidateAndGetAccessTokenClaims
+} from "./types";
 import type { DecodedAccessToken_RFC9068 as AccessTokenClaims_RFC9068 } from "../../server/types";
 import type { ZodSchemaLike } from "../../tools/ZodSchemaLike";
 import { createObjectThatThrowsIfAccessed } from "../../tools/createObjectThatThrowsIfAccessed";
-import { assert, type Equals, is } from "../../tools/tsafe/assert";
+import { assert, type Equals, is, id } from "../../vendor/backend/tsafe";
 
 export function createCreateValidateAndGetAccessTokenClaims_rfc9068<
     AccessTokenClaims extends Record<string, unknown>
@@ -23,12 +27,84 @@ export function createCreateValidateAndGetAccessTokenClaims_rfc9068<
     const createValidateAndGetAccessTokenClaims: CreateValidateAndGetAccessTokenClaims<
         AccessTokenClaims
     > = ({ paramsOfBootstrap }) => {
-        if (paramsOfBootstrap.implementation === "mock") {
-            return {
-                validateAndGetAccessTokenClaims: async () => {
-                    return {
-                        isValid: true,
-                        accessTokenClaims: (() => {
+        const prValidateAndDecodeAccessToken = (async () => {
+            const { oidcSpa: oidcSpa_server } = await import("../../server");
+
+            const { bootstrapAuth, validateAndDecodeAccessToken } =
+                accessTokenClaimsSchema === undefined
+                    ? (oidcSpa_server.createUtils() as never)
+                    : oidcSpa_server
+                          .withExpectedDecodedAccessTokenShape({
+                              decodedAccessTokenSchema: accessTokenClaimsSchema
+                          })
+                          .createUtils();
+
+            switch (paramsOfBootstrap.implementation) {
+                case "real":
+                    {
+                        const expectedAudience = (() => {
+                            if (expectedAudienceGetter === undefined) {
+                                return undefined;
+                            }
+
+                            const missingEnvNames = new Set<string>();
+
+                            const env_proxy = new Proxy<Record<string, string>>(
+                                {},
+                                {
+                                    get: (...[, envName]) => {
+                                        assert(typeof envName === "string");
+
+                                        const value = process.env[envName];
+
+                                        if (value === undefined) {
+                                            missingEnvNames.add(envName);
+                                            return "";
+                                        }
+
+                                        return value;
+                                    },
+                                    has: (...[, envName]) => {
+                                        assert(typeof envName === "string");
+                                        return true;
+                                    }
+                                }
+                            );
+
+                            const expectedAudience = expectedAudienceGetter?.({
+                                paramsOfBootstrap,
+                                process: { env: env_proxy }
+                            });
+
+                            if (!expectedAudience) {
+                                throw new Error(
+                                    [
+                                        "oidc-spa: The expectedAudience() you provided returned empty.",
+                                        "If you specified the expectedAudience in withAccessTokenValidation",
+                                        "it's probably and error.",
+                                        missingEnvNames.size !== 0 &&
+                                            `Did you forget to set the env var: ${Array.from(
+                                                missingEnvNames
+                                            ).join(", ")} ?`
+                                    ]
+                                        .filter(line => typeof line === "string")
+                                        .join(" ")
+                                );
+                            }
+
+                            return expectedAudience;
+                        })();
+
+                        await bootstrapAuth({
+                            implementation: "real",
+                            issuerUri: paramsOfBootstrap.issuerUri,
+                            expectedAudience
+                        });
+                    }
+                    break;
+                case "mock":
+                    {
+                        const decodedAccessToken_mock = (() => {
                             if (paramsOfBootstrap.accessTokenClaims_mock !== undefined) {
                                 assert(is<AccessTokenClaims>(paramsOfBootstrap.accessTokenClaims_mock));
                                 return paramsOfBootstrap.accessTokenClaims_mock;
@@ -46,143 +122,65 @@ export function createCreateValidateAndGetAccessTokenClaims_rfc9068<
                                     "specify accessTokenClaims_mock when calling bootstrapOidc()"
                                 ].join(" ")
                             });
-                        })()
-                    };
-                }
-            };
-        }
-        assert<Equals<(typeof paramsOfBootstrap)["implementation"], "real">>;
+                        })();
 
-        const expectedAudience = (() => {
-            if (expectedAudienceGetter === undefined) {
-                return undefined;
-            }
-
-            const missingEnvNames = new Set<string>();
-
-            const env_proxy = new Proxy<Record<string, string>>(
-                {},
-                {
-                    get: (...[, envName]) => {
-                        assert(typeof envName === "string");
-
-                        const value = process.env[envName];
-
-                        if (value === undefined) {
-                            missingEnvNames.add(envName);
-                            return "";
-                        }
-
-                        return value;
-                    },
-                    has: (...[, envName]) => {
-                        assert(typeof envName === "string");
-                        return true;
+                        await bootstrapAuth({
+                            implementation: "mock",
+                            behavior: "use static identity",
+                            decodedAccessToken_mock
+                        });
                     }
-                }
-            );
-
-            const expectedAudience = expectedAudienceGetter?.({
-                paramsOfBootstrap,
-                process: { env: env_proxy }
-            });
-
-            if (!expectedAudience) {
-                throw new Error(
-                    [
-                        "oidc-spa: The expectedAudience() you provided returned empty.",
-                        "If you specified the expectedAudience in withAccessTokenValidation",
-                        "it's probably and error.",
-                        missingEnvNames.size !== 0 &&
-                            `Did you forget to set the env var: ${Array.from(missingEnvNames).join(
-                                ", "
-                            )} ?`
-                    ]
-                        .filter(line => typeof line === "string")
-                        .join(" ")
-                );
+                    break;
+                default:
+                    assert<Equals<typeof paramsOfBootstrap, never>>(false);
             }
-
-            return expectedAudience;
-        })();
-
-        const prValidateAndDecodeAccessToken = (async () => {
-            const { oidcSpa: oidcSpa_server } = await import("../../server");
-
-            const { bootstrapAuth, validateAndDecodeAccessToken } =
-                accessTokenClaimsSchema === undefined
-                    ? oidcSpa_server.createUtils()
-                    : oidcSpa_server
-                          .withExpectedDecodedAccessTokenShape({
-                              decodedAccessTokenSchema: accessTokenClaimsSchema
-                          })
-                          .createUtils();
-
-            await bootstrapAuth({
-                implementation: "real",
-                issuerUri: paramsOfBootstrap.issuerUri,
-                expectedAudience
-            });
 
             return validateAndDecodeAccessToken;
         })();
 
-        return {
-            validateAndGetAccessTokenClaims: async ({ accessToken }) => {
-                const validateAndDecodeAccessToken = await prValidateAndDecodeAccessToken;
+        const validateAndGetAccessTokenClaims: ValidateAndGetAccessTokenClaims<
+            AccessTokenClaims
+        > = async ({ request }) => {
+            const validateAndDecodeAccessToken = await prValidateAndDecodeAccessToken;
 
-                const {
-                    isValid,
-                    errorCase,
-                    errorMessage,
-                    decodedAccessToken,
-                    decodedAccessToken_original
-                } = await validateAndDecodeAccessToken({
-                    request: {}
+            const { isSuccess, errorCause, debugErrorMessage, decodedAccessToken, accessToken } =
+                await validateAndDecodeAccessToken({
+                    request
                 });
 
-                if (!isValid) {
-                    return {
-                        isValid: false,
-                        errorMessage: `${errorCase}: ${errorMessage}`,
-                        wwwAuthenticateHeaderErrorDescription: (() => {
-                            switch (errorCase) {
-                                case "does not respect schema":
-                                    return "The access token is malformed or missing required claims";
-                                case "expired":
-                                    return "The access token expired";
-                                case "invalid signature":
-                                    return "The access token signature is invalid";
-                            }
-                        })()
-                    };
+            if (!isSuccess) {
+                if (errorCause === "missing Authorization header") {
+                    return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored.AnonymousRequest>({
+                        isSuccess: false,
+                        isAnonymousRequest: true
+                    });
                 }
 
-                if (expectedAudience !== undefined) {
-                    const aud_array =
-                        typeof decodedAccessToken_original.aud === "string"
-                            ? [decodedAccessToken_original.aud]
-                            : decodedAccessToken_original.aud;
-
-                    if (!aud_array.includes(expectedAudience)) {
-                        return {
-                            isValid: false,
-                            errorMessage: [
-                                "Access token is not for the expected audience.",
-                                `Got aud claim: ${JSON.stringify(decodedAccessToken_original.aud)}`,
-                                `Expected: ${expectedAudience}`
-                            ].join(" "),
-                            wwwAuthenticateHeaderErrorDescription: "The access token audience is invalid"
-                        };
-                    }
-                }
-
-                return {
-                    isValid: true,
-                    accessTokenClaims: decodedAccessToken
-                };
+                return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored.ValidationFailed>({
+                    isSuccess: false,
+                    isAnonymousRequest: false,
+                    debugErrorMessage: `${errorCause}: ${debugErrorMessage}`,
+                    wwwAuthenticateResponseHeaderValue: `Bearer error="invalid_token", error_description="${(() => {
+                        switch (errorCause) {
+                            case "validation error":
+                            case "validation error - invalid signature":
+                            case "validation error - access token expired":
+                                return "Validation Failed";
+                            default:
+                                assert<Equals<typeof errorCause, never>>(false);
+                        }
+                    })()}"`
+                });
             }
+
+            return id<ValidateAndGetAccessTokenClaims.ReturnType.Success<AccessTokenClaims>>({
+                isSuccess: true,
+                accessTokenClaims: decodedAccessToken,
+                accessToken
+            });
         };
+
+        return { validateAndGetAccessTokenClaims };
     };
 
     return { createValidateAndGetAccessTokenClaims };

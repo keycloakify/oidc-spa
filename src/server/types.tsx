@@ -34,7 +34,7 @@ export type ValidateAndDecodeAccessToken<DecodedAccessToken> = (params: {
 
 export namespace ValidateAndDecodeAccessToken {
     export type ReturnType<DecodedAccessToken> =
-        | (ReturnType.Success<DecodedAccessToken> & { errorCause?: never; errorDebugMessage?: never })
+        | (ReturnType.Success<DecodedAccessToken> & { errorCause?: never; debugErrorMessage?: never })
         | (ReturnType.Errored & {
               decodedAccessToken?: never;
               decodedAccessToken_original?: never;
@@ -56,7 +56,7 @@ export namespace ValidateAndDecodeAccessToken {
                 | "validation error"
                 | "validation error - access token expired"
                 | "validation error - invalid signature";
-            errorDebugMessage: string;
+            debugErrorMessage: string;
         };
     }
 }

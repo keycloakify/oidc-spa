@@ -63,7 +63,7 @@ export async function createOidcBackend<
             const {
                 isSuccess,
                 errorCause,
-                errorDebugMessage,
+                debugErrorMessage,
                 decodedAccessToken,
                 decodedAccessToken_original
             } = await validateAndDecodeAccessToken({
@@ -82,22 +82,34 @@ export async function createOidcBackend<
                     case "missing Authorization header":
                         assert(false, "29330204");
                     case "validation error":
+                        if (
+                            debugErrorMessage.includes("shape") ||
+                            debugErrorMessage.includes("schema")
+                        ) {
+                            return {
+                                isValid: false,
+                                errorCase: "does not respect schema",
+                                errorMessage: debugErrorMessage
+                            };
+                        }
+
                         return {
                             isValid: false,
                             errorCase: "invalid signature",
-                            errorMessage: errorDebugMessage
+                            errorMessage: debugErrorMessage
                         };
+
                     case "validation error - access token expired":
                         return {
                             isValid: false,
                             errorCase: "expired",
-                            errorMessage: errorDebugMessage
+                            errorMessage: debugErrorMessage
                         };
                     case "validation error - invalid signature":
                         return {
                             isValid: false,
                             errorCase: "invalid signature",
-                            errorMessage: errorDebugMessage
+                            errorMessage: debugErrorMessage
                         };
                 }
             }
