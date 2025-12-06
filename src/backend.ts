@@ -1,4 +1,4 @@
-import { assert, id } from "./vendor/backend/tsafe";
+import { assert, id } from "./vendor/server/tsafe";
 import type { ZodSchemaLike } from "./tools/ZodSchemaLike";
 import { DecodedAccessToken_RFC9068 } from "./server/types";
 import { oidcSpa } from "./server";

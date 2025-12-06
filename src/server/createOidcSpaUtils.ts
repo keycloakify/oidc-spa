@@ -6,10 +6,10 @@ import type {
     ValidateAndDecodeAccessToken
 } from "./types";
 import { Deferred } from "../tools/Deferred";
-import { decodeProtectedHeader, jwtVerify, createLocalJWKSet, errors } from "../vendor/backend/jose";
-import { assert, isAmong, id, type Equals, is, Reflect } from "../vendor/backend/tsafe";
-import { z } from "../vendor/backend/zod";
-import { Evt, throttleTime } from "../vendor/backend/evt";
+import { decodeProtectedHeader, jwtVerify, createLocalJWKSet, errors } from "../vendor/server/jose";
+import { assert, isAmong, id, type Equals, is, Reflect } from "../vendor/server/tsafe";
+import { z } from "../vendor/server/zod";
+import { Evt, throttleTime } from "../vendor/server/evt";
 import { decodeJwt } from "../tools/decodeJwt";
 
 export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unknown>>(params: {
