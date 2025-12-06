@@ -945,6 +945,11 @@ function restrictServiceWorkerRegistration(params: { serviceWorkersAllowedHostna
 
     const { serviceWorker } = navigator;
 
+    if (serviceWorker === undefined) {
+        // NOTE: Non HTTPS context
+        return;
+    }
+
     const register_actual = serviceWorker.register.bind(serviceWorker);
 
     serviceWorker.register = function register(
