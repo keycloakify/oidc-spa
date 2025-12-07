@@ -333,7 +333,33 @@ for (const targetFormat of ["cjs", "esm"] as const) {
 
     if (targetFormat === "esm") {
         run(`npx js2mjs "${distDirPath}"`);
+
+        const esmTypeDefDir = pathJoin(cacheDirPath, "esm-types");
+
+        if (fs.existsSync(esmTypeDefDir)) {
+            fs.rmSync(esmTypeDefDir, { recursive: true });
+        }
+
+        transformCodebase({
+            srcDirPath: distDirPath,
+            destDirPath: esmTypeDefDir,
+            transformSourceCode: ({ fileRelativePath, sourceCode }) => {
+                if (!fileRelativePath.endsWith(".d.ts")) {
+                    return undefined;
+                }
+
+                return {
+                    modifiedSourceCode: sourceCode
+                };
+            }
+        });
+
         run(`npx ts-add-js-extension --dir="${distDirPath}"`);
+
+        transformCodebase({
+            srcDirPath: esmTypeDefDir,
+            destDirPath: distDirPath
+        });
     }
 }
 
