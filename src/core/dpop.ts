@@ -276,7 +276,164 @@ export function implementFetchAndXhrDPoPInterceptor() {
         }
     }
     {
-        //TODO: Write a similar interceptor for XMLHttpRequest.
+        const open_actual = XMLHttpRequest.prototype.open;
+        const send_actual = XMLHttpRequest.prototype.send;
+        const setRequestHeader_actual = XMLHttpRequest.prototype.setRequestHeader;
+
+        const stateByInstance = new WeakMap<
+            XMLHttpRequest,
+            {
+                method: string;
+                url: string;
+                authorizationHeaderValue: string | undefined;
+                dpopHeaderValue: string | undefined;
+            }
+        >();
+
+        const readNonceFromResponseHeader = (params: {
+            getResponseHeader: (name: string) => string | null;
+        }) => {
+            const { getResponseHeader } = params;
+
+            dpop_nonce_header: {
+                const value = getResponseHeader("DPoP-Nonce");
+                if (value === null) {
+                    break dpop_nonce_header;
+                }
+                return value;
+            }
+
+            www_authenticate_header: {
+                const value = getResponseHeader("WWW-Authenticate");
+
+                if (value === null) {
+                    break www_authenticate_header;
+                }
+
+                {
+                    const value_lower = value.toLowerCase();
+
+                    if (!value_lower.includes("dpop") || !value_lower.includes("use_dpop_nonce")) {
+                        break www_authenticate_header;
+                    }
+                }
+
+                const match = value.match(/nonce="([^"]+)"/i);
+
+                if (match === null) {
+                    break www_authenticate_header;
+                }
+
+                return match[1];
+            }
+
+            return undefined;
+        };
+
+        XMLHttpRequest.prototype.open = function open(
+            method: string,
+            url: string | URL,
+            async?: boolean,
+            username?: string | null,
+            password?: string | null
+        ) {
+            const url_str = `${typeof url === "string" ? url : url.href}`;
+
+            stateByInstance.set(this, {
+                method: method.toUpperCase(),
+                url: new URL(url_str, window.location.href).href,
+                authorizationHeaderValue: undefined,
+                dpopHeaderValue: undefined
+            });
+
+            if (async === undefined) {
+                return open_actual.bind(this)(method, url);
+            } else {
+                return open_actual.call(this, method, url, async, username, password);
+            }
+        };
+
+        XMLHttpRequest.prototype.setRequestHeader = function setRequestHeader(name, value) {
+            const state = stateByInstance.get(this);
+
+            assert(state !== undefined, "93200293");
+
+            const name_lower = name.toLowerCase();
+
+            if (name_lower === "authorization") {
+                state.authorizationHeaderValue = value;
+                return;
+            }
+
+            if (name_lower === "dpop") {
+                state.dpopHeaderValue = value;
+                return;
+            }
+
+            return setRequestHeader_actual.call(this, name, value);
+        };
+
+        XMLHttpRequest.prototype.send = function send(body) {
+            const state = stateByInstance.get(this);
+
+            assert(state !== undefined, "49920802");
+
+            const sendWithStoredHeaders = () => {
+                if (state.authorizationHeaderValue !== undefined) {
+                    setRequestHeader_actual.call(this, "Authorization", state.authorizationHeaderValue);
+                }
+
+                if (state.dpopHeaderValue !== undefined) {
+                    setRequestHeader_actual.call(this, "DPoP", state.dpopHeaderValue);
+                }
+
+                return send_actual.call(this, body as Parameters<XMLHttpRequest["send"]>[0]);
+            };
+
+            if (accessTokenConfigIdEntries.length === 0) {
+                return sendWithStoredHeaders();
+            }
+
+            (async () => {
+                const result = await generateMaterialToUpgradeBearerRequestToDPoP({
+                    httpMethod: state.method,
+                    url: state.url,
+                    authorizationHeaderValue: state.authorizationHeaderValue
+                });
+
+                if (!result.isHandled) {
+                    sendWithStoredHeaders();
+                    return;
+                }
+
+                const onReadyStateChange = () => {
+                    if (this.readyState !== XMLHttpRequest.DONE) {
+                        return;
+                    }
+
+                    const nonce = readNonceFromResponseHeader({
+                        getResponseHeader: name => this.getResponseHeader(name)
+                    });
+
+                    if (nonce !== undefined) {
+                        result.registerNonce({ nonce });
+                    }
+
+                    this.removeEventListener("readystatechange", onReadyStateChange);
+                };
+
+                this.addEventListener("readystatechange", onReadyStateChange);
+
+                setRequestHeader_actual.call(this, "Authorization", `DPoP ${result.accessToken}`);
+                setRequestHeader_actual.call(this, "DPoP", result.dpopProof);
+
+                send_actual.call(this, body as Parameters<XMLHttpRequest["send"]>[0]);
+            })().catch(error => {
+                setTimeout(() => {
+                    throw error;
+                });
+            });
+        };
     }
 }
 
