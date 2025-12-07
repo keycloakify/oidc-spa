@@ -81,7 +81,7 @@ export function createCreateValidateAndGetAccessTokenClaims_rfc9068<
                                     [
                                         "oidc-spa: The expectedAudience() you provided returned empty.",
                                         "If you specified the expectedAudience in withAccessTokenValidation",
-                                        "it's probably and error.",
+                                        "it's probably an error.",
                                         missingEnvNames.size !== 0 &&
                                             `Did you forget to set the env var: ${Array.from(
                                                 missingEnvNames

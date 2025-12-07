@@ -10,7 +10,10 @@ export async function generateES256DPoPProof(params: {
     const payload: Record<string, string | number> = {
         jti: window.crypto.randomUUID(),
         htm: httpMethod,
-        htu: url,
+        htu: (() => {
+            const urlObj = new URL(url);
+            return `${urlObj.origin}${urlObj.pathname}`;
+        })(),
         iat: Math.floor(Date.now() / 1000)
     };
 

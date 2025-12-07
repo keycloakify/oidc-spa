@@ -40,8 +40,8 @@ export function createInMemoryDPoPStore(params: { configId: string }): DPoPStore
             assert(value !== undefined, "943023493");
             return Promise.resolve(value);
         },
-        remove: key => {
-            const value = store.get(key);
+        remove: async key => {
+            const value = await store.get(key);
             delete dpopStateByConfigId[configId];
             return value;
         },
@@ -276,7 +276,7 @@ export function implementFetchAndXhrDPoPInterceptor() {
         }
     }
     {
-        //TODO: Same with XHR
+        //TODO: Write a similar interceptor for XMLHttpRequest.
     }
 }
 
