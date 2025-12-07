@@ -134,15 +134,17 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
             });
         }
 
-        const [scheme, accessToken, ...rest] = request.headers.Authorization.split(" ");
+        const match = request.headers.Authorization.trim().match(/^((?:Bearer)|(?:DPoP))\s+(.+)$/i);
 
-        if (!accessToken || rest.length !== 0) {
+        if (match === null) {
             return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
                 isSuccess: false,
                 errorCause: "validation error",
                 debugErrorMessage: "Malformed Authorization header"
             });
         }
+
+        const [, scheme, accessToken] = match;
 
         if (!isAmong(["Bearer", "DPoP"], scheme)) {
             return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({

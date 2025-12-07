@@ -6,6 +6,7 @@ import { decodeJwt } from "../tools/decodeJwt";
 import type { Oidc } from "./Oidc";
 import { INFINITY_TIME } from "../tools/INFINITY_TIME";
 import { getIsTokenSubstitutionEnabled, getTokensPlaceholders } from "./tokenPlaceholderSubstitution";
+import { registerAccessTokenForDPoP } from "./dpop";
 
 export function oidcClientTsUserToTokens<DecodedIdToken extends Record<string, unknown>>(params: {
     configId: string;
@@ -15,6 +16,7 @@ export function oidcClientTsUserToTokens<DecodedIdToken extends Record<string, u
     };
     __unsafe_useIdTokenAsAccessToken: boolean;
     decodedIdToken_previous: DecodedIdToken | undefined;
+    isDPoPEnabled: boolean;
     log: typeof console.log | undefined;
 }): Oidc.Tokens<DecodedIdToken> {
     const {
@@ -23,6 +25,7 @@ export function oidcClientTsUserToTokens<DecodedIdToken extends Record<string, u
         decodedIdTokenSchema,
         __unsafe_useIdTokenAsAccessToken,
         decodedIdToken_previous,
+        isDPoPEnabled,
         log
     } = params;
 
@@ -228,6 +231,13 @@ export function oidcClientTsUserToTokens<DecodedIdToken extends Record<string, u
                       return undefined;
                   })()
               });
+
+    if (isDPoPEnabled) {
+        registerAccessTokenForDPoP({
+            configId,
+            accessToken: tokens.accessToken
+        });
+    }
 
     if (getIsTokenSubstitutionEnabled()) {
         const placeholders = getTokensPlaceholders({

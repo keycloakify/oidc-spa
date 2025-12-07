@@ -169,6 +169,9 @@ export type ParamsOfProvide = {
      * Default is 60 seconds.
      */
     warnUserSecondsBeforeAutoLogout?: number;
+
+    /** Default: false */
+    enableDPoP?: boolean;
 };
 
 assert<

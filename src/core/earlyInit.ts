@@ -10,6 +10,7 @@ import {
     type Params as Params_handleTokenExfiltrationDefense_legacy
 } from "./tokenExfiltrationDefense_legacy";
 import { enableTokenExfiltrationDefense } from "./tokenExfiltrationDefense";
+import { implementFetchAndXhrDPoPInterceptor } from "./dpop";
 
 let hasEarlyInitBeenCalled = false;
 
@@ -77,6 +78,8 @@ export function oidcEarlyInit(params: ParamsOfEarlyInit | ParamsOfEarlyInit_lega
     const { shouldLoadApp } = handleOidcCallback();
 
     if (shouldLoadApp) {
+        implementFetchAndXhrDPoPInterceptor();
+
         token_exfiltration_defense: {
             if (!("enableTokenExfiltrationDefense" in params)) {
                 handleTokenExfiltrationDefense_legacy({

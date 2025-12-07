@@ -911,6 +911,58 @@ function runMonkeyPatchingPrevention() {
         });
     }
 
+    crypto_subtle: {
+        const { crypto } = window;
+
+        if (!crypto?.subtle) {
+            break crypto_subtle;
+        }
+
+        const subtle = crypto.subtle;
+        const prototype = Object.getPrototypeOf(subtle);
+
+        for (const propertyName of Object.getOwnPropertyNames(prototype)) {
+            const pd = Object.getOwnPropertyDescriptor(prototype, propertyName);
+
+            assert(pd !== undefined);
+
+            if (!pd.configurable) {
+                continue;
+            }
+
+            const target = `window.crypto.subtle.${propertyName}`;
+
+            Object.defineProperty(prototype, propertyName, {
+                enumerable: pd.enumerable,
+                configurable: false,
+                ...("value" in pd
+                    ? {
+                          get: () => pd.value,
+                          set: () => {
+                              throw createWriteError(target);
+                          }
+                      }
+                    : {
+                          get: pd.get,
+                          set:
+                              pd.set ??
+                              (() => {
+                                  throw createWriteError(target);
+                              })
+                      })
+            });
+        }
+
+        Object.defineProperty(crypto, "subtle", {
+            configurable: false,
+            enumerable: true,
+            get: () => subtle,
+            set: () => {
+                throw createWriteError("window.crypto.subtle");
+            }
+        });
+    }
+
     {
         const name = "serviceWorker";
 

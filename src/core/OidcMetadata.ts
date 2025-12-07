@@ -267,9 +267,11 @@ export type OidcMetadata = {
      * @see https://datatracker.ietf.org/doc/html/rfc8414
      */
     code_challenge_methods_supported: string[];
+
+    dpop_signing_alg_values_supported: string[];
 };
 
-assert<Equals<OidcMetadata, OidcClientTsOidcMetadata>>;
+assert<Equals<Omit<OidcMetadata, "dpop_signing_alg_values_supported">, OidcClientTsOidcMetadata>>;
 
 export const WELL_KNOWN_PATH = "/.well-known/openid-configuration";
 
@@ -288,7 +290,7 @@ function readSessionStorage(params: { issuerUri: string }) {
         return undefined;
     }
 
-    return JSON.parse(value) as Partial<OidcClientTsOidcMetadata>;
+    return JSON.parse(value) as Partial<OidcMetadata>;
 }
 
 function setSessionStorage(params: { issuerUri: string; oidcMetadata: Partial<OidcMetadata> }): void {
