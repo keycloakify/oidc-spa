@@ -204,7 +204,8 @@
             "default": "./dist/react/index.js"
         },
         "./mock/react": {
-            "module": "./dist/esm/mock/react.js",
+            "module": "./dist/esm/mock/react.mjs",
+            "import": "./dist/esm/mock/react.mjs",
             "default": "./dist/mock/react.js"
         }
     }
