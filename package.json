@@ -189,7 +189,7 @@
             "default": "./dist/keycloak-js.js"
         },
         "./tools/decodeJwt": {
-            "module": "./dist/esm/tools/decodeJwt.js",
+            "module": "./dist/esm/tools/decodeJwt.mjs",
             "import": "./dist/esm/tools/decodeJwt.mjs",
             "default": "./dist/tools/decodeJwt.js"
         },
