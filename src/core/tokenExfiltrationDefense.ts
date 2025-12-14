@@ -341,11 +341,7 @@ function patchXMLHttpRequestApiToSubstituteTokenPlaceholder(params: {
             throw new Error("oidc-spa: Blocked request to hashed static asset.");
         }
 
-        if (async === undefined) {
-            return open_actual.bind(this)(method, state.url);
-        } else {
-            return open_actual.call(this, method, state.url, async, username, password);
-        }
+        return open_actual.call(this, method, state.url, async as true, username, password);
     };
 
     XMLHttpRequest.prototype.setRequestHeader = function setRequestHeader(name, value) {
