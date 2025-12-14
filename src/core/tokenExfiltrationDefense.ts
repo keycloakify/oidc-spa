@@ -953,6 +953,13 @@ function runMonkeyPatchingPrevention() {
             });
         }
 
+        {
+            const subtlePd = Object.getOwnPropertyDescriptor(crypto, "subtle");
+            if (subtlePd !== undefined && !subtlePd.configurable) {
+                break crypto_subtle;
+            }
+        }
+
         Object.defineProperty(crypto, "subtle", {
             configurable: false,
             enumerable: true,
