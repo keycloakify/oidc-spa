@@ -101,8 +101,10 @@ export function registerAccessTokenForDPoP(params: {
 
 export function implementFetchAndXhrDPoPInterceptor() {
     {
-        const createFetchProxy = (params: { fetch: typeof window.fetch }) => {
-            const { fetch } = params;
+        const createFetchProxy = (params: { fetch: typeof window.fetch; isFetchLater: boolean }) => {
+            const { fetch, isFetchLater } = params;
+
+            let hasLoggedFetchLaterWarning = false;
 
             const fetchProxy: typeof fetch = async (input, init) => {
                 if (accessTokenConfigIdEntries.length === 0) {
@@ -167,6 +169,18 @@ export function implementFetchAndXhrDPoPInterceptor() {
 
                 if (!dpopStatus.isHandled) {
                     return fetch_ctx(request);
+                }
+
+                if (isFetchLater && !hasLoggedFetchLaterWarning) {
+                    console.warn(
+                        [
+                            "oidc-spa: Detected an authenticated fetchLater() request while DPoP is enabled.",
+                            "Support for fetchLater + DPoP is not fully implemented yet.",
+                            "If you rely on this, please open an issue and we will implement support:",
+                            "https://github.com/keycloakify/oidc-spa"
+                        ].join(" ")
+                    );
+                    hasLoggedFetchLaterWarning = true;
                 }
 
                 let request_cloneForReplay = (() => {
@@ -274,12 +288,12 @@ export function implementFetchAndXhrDPoPInterceptor() {
             return fetchProxy;
         };
 
-        window.fetch = createFetchProxy({ fetch: window.fetch });
+        window.fetch = createFetchProxy({ fetch: window.fetch, isFetchLater: false });
 
         // @ts-expect-error
         if (window.fetchLater) {
             // @ts-expect-error
-            window.fetchLater = createFetchProxy({ fetch: window.fetchLater });
+            window.fetchLater = createFetchProxy({ fetch: window.fetchLater, isFetchLater: true });
         }
     }
     {
