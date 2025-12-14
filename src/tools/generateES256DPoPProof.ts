@@ -24,7 +24,7 @@ export async function generateES256DPoPProof(params: {
         payload.nonce = nonce;
     }
 
-    const publicJwk = await crypto.subtle.exportKey("jwk", keyPair.publicKey);
+    const publicJwk = await window.crypto.subtle.exportKey("jwk", keyPair.publicKey);
     const header = {
         alg: "ES256",
         typ: "dpop+jwt",
@@ -68,6 +68,6 @@ const encodeBase64Url = (input: Uint8Array) =>
 
 const hash = async (alg: string, message: string): Promise<Uint8Array> => {
     const msgUint8 = new TextEncoder().encode(message);
-    const hashBuffer = await crypto.subtle.digest(alg, msgUint8);
+    const hashBuffer = await window.crypto.subtle.digest(alg, msgUint8);
     return new Uint8Array(hashBuffer);
 };
