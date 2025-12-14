@@ -668,7 +668,8 @@ export function createOidcSpaApi<
                                 __metadata: paramsOfBootstrap.__metadata,
                                 __unsafe_useIdTokenAsAccessToken:
                                     paramsOfBootstrap.__unsafe_useIdTokenAsAccessToken,
-                                autoLogoutParams: paramsOfBootstrap.autoLogoutParams
+                                autoLogoutParams: paramsOfBootstrap.autoLogoutParams,
+                                enableDPoP: paramsOfBootstrap.enableDPoP
                             });
                         } catch (error) {
                             if (!(error instanceof OidcInitializationError)) {

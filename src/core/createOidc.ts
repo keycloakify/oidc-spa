@@ -384,7 +384,7 @@ export async function createOidc_nonMemoized<
         __unsafe_useIdTokenAsAccessToken = false,
         __metadata,
         sessionRestorationMethod = params.autoLogin === true ? "full page redirect" : "auto",
-        enableDPoP = false
+        enableDPoP
     } = params;
 
     const scopes = Array.from(new Set(["openid", ...(params.scopes ?? ["profile"])]));
@@ -454,7 +454,14 @@ export async function createOidc_nonMemoized<
     const oidcMetadata = __metadata ?? (await fetchOidcMetadata({ issuerUri }));
 
     const isDPoPEnabled = (() => {
+        if (enableDPoP === undefined) {
+            log?.(
+                "DPoP disabled because it wasn't explicitly enabled when calling createOidc/bootstrapOidc"
+            );
+        }
+
         if (!enableDPoP) {
+            log?.("DPoP explicitly disabled in createOidc/bootstrapOidc params");
             return false;
         }
 
@@ -466,13 +473,23 @@ export async function createOidc_nonMemoized<
             return false;
         }
 
-        const { dpop_signing_alg_values_supported } = oidcMetadata;
+        const isSupported = (() => {
+            const { dpop_signing_alg_values_supported } = oidcMetadata;
 
-        if (dpop_signing_alg_values_supported === undefined) {
-            return false;
+            if (dpop_signing_alg_values_supported === undefined) {
+                return false;
+            }
+
+            return dpop_signing_alg_values_supported.includes("ES256");
+        })();
+
+        if (!isSupported) {
+            log?.("DPoP disabled because it's not supported by your IdP");
+        } else {
+            log?.("DPoP enabled");
         }
 
-        return dpop_signing_alg_values_supported.includes("ES256");
+        return isSupported;
     })();
 
     const canUseIframe = (() => {

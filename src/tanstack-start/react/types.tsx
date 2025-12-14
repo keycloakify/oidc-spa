@@ -403,6 +403,9 @@ export namespace ParamsOfBootstrap {
          * Default: { redirectTo: "current page" }
          */
         autoLogoutParams?: Parameters<Oidc_core.LoggedIn<any>["logout"]>[0];
+
+        /** Default: false */
+        enableDPoP?: boolean;
     } & (AutoLogin extends true ? {} : {});
 
     export type Mock<AutoLogin, DecodedIdToken, AccessTokenClaims> = {
