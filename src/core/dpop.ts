@@ -100,6 +100,46 @@ export function registerAccessTokenForDPoP(params: {
 }
 
 export function implementFetchAndXhrDPoPInterceptor() {
+    function readNonceFromResponseHeader(params: {
+        getResponseHeader: (headerName: string) => string | null;
+    }) {
+        const { getResponseHeader } = params;
+
+        dpop_nonce_header: {
+            const value = getResponseHeader("DPoP-Nonce");
+            if (value === null) {
+                break dpop_nonce_header;
+            }
+            return value;
+        }
+
+        www_authenticate_header: {
+            const value = getResponseHeader("WWW-Authenticate");
+
+            if (value === null) {
+                break www_authenticate_header;
+            }
+
+            {
+                const value_lower = value.toLowerCase();
+
+                if (!value_lower.includes("dpop") || !value_lower.includes("use_dpop_nonce")) {
+                    break www_authenticate_header;
+                }
+            }
+
+            const match = value.match(/nonce="([^"]+)"/i);
+
+            if (match === null) {
+                break www_authenticate_header;
+            }
+
+            return match[1];
+        }
+
+        return undefined;
+    }
+
     {
         const createFetchProxy = (params: { fetch: typeof window.fetch; isFetchLater: boolean }) => {
             const { fetch, isFetchLater } = params;
@@ -199,54 +239,13 @@ export function implementFetchAndXhrDPoPInterceptor() {
 
                 let response = await fetch_ctx(request);
 
-                const readNonceFromResponseHeader = (params: { responseHeaders: Headers }) => {
-                    const { responseHeaders } = params;
-
-                    dpop_nonce_header: {
-                        const value = responseHeaders.get("DPoP-Nonce");
-                        if (value === null) {
-                            break dpop_nonce_header;
-                        }
-                        return value;
-                    }
-
-                    www_authenticate_header: {
-                        const value = responseHeaders.get("WWW-Authenticate");
-
-                        if (value === null) {
-                            break www_authenticate_header;
-                        }
-
-                        {
-                            const value_lower = value.toLowerCase();
-
-                            if (
-                                !value_lower.includes("dpop") ||
-                                !value_lower.includes("use_dpop_nonce")
-                            ) {
-                                break www_authenticate_header;
-                            }
-                        }
-
-                        const match = value.match(/nonce="([^"]+)"/i);
-
-                        if (match === null) {
-                            break www_authenticate_header;
-                        }
-
-                        return match[1];
-                    }
-
-                    return undefined;
-                };
-
                 re_send_with_DPoP_nonce: {
                     if (response.status !== 401) {
                         break re_send_with_DPoP_nonce;
                     }
 
                     const nonce = readNonceFromResponseHeader({
-                        responseHeaders: response.headers
+                        getResponseHeader: headerName => response.headers.get(headerName)
                     });
 
                     if (nonce === undefined) {
@@ -274,7 +273,7 @@ export function implementFetchAndXhrDPoPInterceptor() {
 
                 {
                     const nonce = readNonceFromResponseHeader({
-                        responseHeaders: response.headers
+                        getResponseHeader: headerName => response.headers.get(headerName)
                     });
 
                     if (nonce !== undefined) {
@@ -311,46 +310,6 @@ export function implementFetchAndXhrDPoPInterceptor() {
             }
         >();
 
-        const readNonceFromResponseHeader = (params: {
-            getResponseHeader: (name: string) => string | null;
-        }) => {
-            const { getResponseHeader } = params;
-
-            dpop_nonce_header: {
-                const value = getResponseHeader("DPoP-Nonce");
-                if (value === null) {
-                    break dpop_nonce_header;
-                }
-                return value;
-            }
-
-            www_authenticate_header: {
-                const value = getResponseHeader("WWW-Authenticate");
-
-                if (value === null) {
-                    break www_authenticate_header;
-                }
-
-                {
-                    const value_lower = value.toLowerCase();
-
-                    if (!value_lower.includes("dpop") || !value_lower.includes("use_dpop_nonce")) {
-                        break www_authenticate_header;
-                    }
-                }
-
-                const match = value.match(/nonce="([^"]+)"/i);
-
-                if (match === null) {
-                    break www_authenticate_header;
-                }
-
-                return match[1];
-            }
-
-            return undefined;
-        };
-
         XMLHttpRequest.prototype.open = function open(
             method: string,
             url: string | URL,
@@ -367,11 +326,7 @@ export function implementFetchAndXhrDPoPInterceptor() {
                 dpopHeaderValue: undefined
             });
 
-            if (async === undefined) {
-                return open_actual.bind(this)(method, url);
-            } else {
-                return open_actual.call(this, method, url, async, username, password);
-            }
+            return open_actual.call(this, method, url, async as true, username, password);
         };
 
         XMLHttpRequest.prototype.setRequestHeader = function setRequestHeader(name, value) {
