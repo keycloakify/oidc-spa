@@ -7,6 +7,7 @@ import type { Oidc } from "./Oidc";
 import { INFINITY_TIME } from "../tools/INFINITY_TIME";
 import { getIsTokenSubstitutionEnabled, getTokensPlaceholders } from "./tokenPlaceholderSubstitution";
 import { registerAccessTokenForDPoP } from "./dpop";
+import { createGetServerDateNow, type ParamsOfCreateGetServerDateNow } from "../tools/getServerDateNow";
 
 export function oidcClientTsUserToTokens<DecodedIdToken extends Record<string, unknown>>(params: {
     configId: string;
@@ -110,6 +111,11 @@ export function oidcClientTsUserToTokens<DecodedIdToken extends Record<string, u
         return id_token_iat * 1000;
     })();
 
+    const paramsOfCreateGetServerDateNow: ParamsOfCreateGetServerDateNow = {
+        issuedAtTime_local: oidcClientTsUser.__oidc_spa_localTimeWhenTokenIssued,
+        issuedAtTime
+    };
+
     const tokens_common: Oidc.Tokens.Common<DecodedIdToken> = {
         ...(__unsafe_useIdTokenAsAccessToken
             ? {
@@ -169,10 +175,7 @@ export function oidcClientTsUserToTokens<DecodedIdToken extends Record<string, u
         decodedIdToken,
         decodedIdToken_original,
         issuedAtTime,
-        getServerDateNow: (() => {
-            const issuedAtTime_local = oidcClientTsUser.__oidc_spa_localTimeWhenTokenIssued;
-            return () => Date.now() + (issuedAtTime - issuedAtTime_local);
-        })()
+        getServerDateNow: createGetServerDateNow(paramsOfCreateGetServerDateNow)
     };
 
     const tokens: Oidc.Tokens<DecodedIdToken> =
@@ -235,7 +238,8 @@ export function oidcClientTsUserToTokens<DecodedIdToken extends Record<string, u
     if (isDPoPEnabled) {
         registerAccessTokenForDPoP({
             configId,
-            accessToken: tokens.accessToken
+            accessToken: tokens.accessToken,
+            paramsOfCreateGetServerDateNow
         });
     }
 

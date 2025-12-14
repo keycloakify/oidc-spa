@@ -4,8 +4,9 @@ export async function generateES256DPoPProof(params: {
     accessToken: string;
     httpMethod: string;
     nonce: string | undefined;
+    getServerDateNow: () => number;
 }): Promise<string> {
-    const { keyPair, url, accessToken, httpMethod, nonce } = params;
+    const { keyPair, url, accessToken, httpMethod, nonce, getServerDateNow } = params;
 
     const payload: Record<string, string | number> = {
         jti: window.crypto.randomUUID(),
@@ -14,7 +15,7 @@ export async function generateES256DPoPProof(params: {
             const urlObj = new URL(url);
             return `${urlObj.origin}${urlObj.pathname}`;
         })(),
-        iat: Math.floor(Date.now() / 1000)
+        iat: Math.floor(getServerDateNow() / 1000)
     };
 
     const hashedToken = await hash("SHA-256", accessToken);

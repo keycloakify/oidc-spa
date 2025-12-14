@@ -1,5 +1,6 @@
 import { assert } from "../tools/tsafe/assert";
 import { generateES256DPoPProof } from "../tools/generateES256DPoPProof";
+import { createGetServerDateNow, type ParamsOfCreateGetServerDateNow } from "../tools/getServerDateNow";
 
 export type DPoPStore = {
     set: (key: string, value: DPoPState) => Promise<void>;
@@ -61,11 +62,16 @@ export function createInMemoryDPoPStore(params: { configId: string }): DPoPStore
 const accessTokenConfigIdEntries: {
     configId: string;
     accessToken: string;
+    paramsOfCreateGetServerDateNow: ParamsOfCreateGetServerDateNow;
     nonceEntries: { origin: string; nonce: string }[];
 }[] = [];
 
-export function registerAccessTokenForDPoP(params: { configId: string; accessToken: string }) {
-    const { configId, accessToken } = params;
+export function registerAccessTokenForDPoP(params: {
+    configId: string;
+    accessToken: string;
+    paramsOfCreateGetServerDateNow: ParamsOfCreateGetServerDateNow;
+}) {
+    const { configId, accessToken, paramsOfCreateGetServerDateNow } = params;
 
     for (const entry of accessTokenConfigIdEntries) {
         if (entry.configId !== configId) {
@@ -86,6 +92,7 @@ export function registerAccessTokenForDPoP(params: { configId: string; accessTok
     const entry_new: (typeof accessTokenConfigIdEntries)[number] = {
         configId,
         accessToken,
+        paramsOfCreateGetServerDateNow,
         nonceEntries: []
     };
 
@@ -485,7 +492,7 @@ async function generateMaterialToUpgradeBearerRequestToDPoP(params: {
         };
     }
 
-    const { configId, nonceEntries } = entry;
+    const { configId, nonceEntries, paramsOfCreateGetServerDateNow } = entry;
 
     const dpopState = dpopStateByConfigId[configId];
 
@@ -512,7 +519,8 @@ async function generateMaterialToUpgradeBearerRequestToDPoP(params: {
             url,
             accessToken,
             httpMethod,
-            nonce
+            nonce,
+            getServerDateNow: createGetServerDateNow(paramsOfCreateGetServerDateNow)
         }),
         reGenerateDpopProof: async () => {
             const result = await generateMaterialToUpgradeBearerRequestToDPoP(params);
