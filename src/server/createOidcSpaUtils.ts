@@ -6,11 +6,19 @@ import type {
     ValidateAndDecodeAccessToken
 } from "./types";
 import { Deferred } from "../tools/Deferred";
-import { decodeProtectedHeader, jwtVerify, createLocalJWKSet, errors } from "../vendor/server/jose";
+import {
+    decodeProtectedHeader,
+    jwtVerify,
+    createLocalJWKSet,
+    errors,
+    importJWK,
+    calculateJwkThumbprint
+} from "../vendor/server/jose";
 import { assert, isAmong, id, type Equals, is, Reflect } from "../vendor/server/tsafe";
 import { z } from "../vendor/server/zod";
 import { Evt, throttleTime } from "../vendor/server/evt";
 import { decodeJwt } from "../tools/decodeJwt";
+import { createHash } from "crypto";
 
 export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unknown>>(params: {
     decodedAccessTokenSchema: ZodSchemaLike<DecodedAccessToken_RFC9068, DecodedAccessToken> | undefined;
@@ -373,12 +381,152 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
                     });
                 }
 
-                // TODO: Validate DPoP
-                request.method;
-                request.url;
-                request.headers.DPoP;
-                decodedAccessToken_original;
-                cnf_jkt;
+                const dpopHeaderValue = request.headers.DPoP.trim();
+
+                let dpopHeader: ReturnType<typeof decodeProtectedHeader>;
+
+                try {
+                    dpopHeader = decodeProtectedHeader(dpopHeaderValue);
+                } catch {
+                    return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
+                        isSuccess: false,
+                        errorCause: "validation error",
+                        debugErrorMessage: "Failed to decode DPoP proof header"
+                    });
+                }
+
+                const { jwk, alg: dpopAlg, typ: dpopTyp } = dpopHeader;
+
+                if (dpopAlg === undefined) {
+                    return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
+                        isSuccess: false,
+                        errorCause: "validation error",
+                        debugErrorMessage: "DPoP proof header missing alg"
+                    });
+                }
+
+                if (
+                    !isAmong(
+                        [
+                            "RS256",
+                            "RS384",
+                            "RS512",
+                            "ES256",
+                            "ES384",
+                            "ES512",
+                            "PS256",
+                            "PS384",
+                            "PS512"
+                        ],
+                        dpopAlg
+                    )
+                ) {
+                    return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
+                        isSuccess: false,
+                        errorCause: "validation error",
+                        debugErrorMessage: `Unsupported or too weak DPoP algorithm ${dpopAlg}`
+                    });
+                }
+
+                if (dpopTyp === undefined || dpopTyp.toLowerCase() !== "dpop+jwt") {
+                    return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
+                        isSuccess: false,
+                        errorCause: "validation error",
+                        debugErrorMessage: "DPoP proof header typ must be dpop+jwt"
+                    });
+                }
+
+                if (jwk === undefined) {
+                    return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
+                        isSuccess: false,
+                        errorCause: "validation error",
+                        debugErrorMessage: "DPoP proof header missing jwk"
+                    });
+                }
+
+                let jkt_calculated: string;
+
+                try {
+                    jkt_calculated = await calculateJwkThumbprint(jwk);
+                } catch (error) {
+                    return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
+                        isSuccess: false,
+                        errorCause: "validation error",
+                        debugErrorMessage: `Failed to calculate DPoP jwk thumbprint: ${String(error)}`
+                    });
+                }
+
+                if (jkt_calculated !== cnf_jkt) {
+                    return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
+                        isSuccess: false,
+                        errorCause: "validation error",
+                        debugErrorMessage: "DPoP jwk thumbprint does not match cnf.jkt claim"
+                    });
+                }
+
+                let dpopPayload: Awaited<ReturnType<typeof jwtVerify>>["payload"];
+
+                try {
+                    const key = await importJWK(jwk, dpopAlg);
+                    const verification = await jwtVerify(dpopHeaderValue, key, {
+                        algorithms: [dpopAlg],
+                        typ: "dpop+jwt"
+                    });
+                    dpopPayload = verification.payload;
+                } catch (error) {
+                    assert(error instanceof Error);
+
+                    return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
+                        isSuccess: false,
+                        errorCause: "validation error",
+                        debugErrorMessage: `DPoP proof signature/structure invalid: ${error.message}`
+                    });
+                }
+
+                const { htm, htu, ath } = dpopPayload;
+
+                if (typeof htm !== "string" || htm.toUpperCase() !== request.method.toUpperCase()) {
+                    return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
+                        isSuccess: false,
+                        errorCause: "validation error",
+                        debugErrorMessage: "DPoP proof htm claim does not match request method"
+                    });
+                }
+
+                const expectedHtu = (() => {
+                    try {
+                        const url = new URL(request.url);
+                        return `${url.origin}${url.pathname}`;
+                    } catch {
+                        return undefined;
+                    }
+                })();
+
+                if (expectedHtu === undefined || typeof htu !== "string" || htu !== expectedHtu) {
+                    return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
+                        isSuccess: false,
+                        errorCause: "validation error",
+                        debugErrorMessage: "DPoP proof htu claim does not match request url"
+                    });
+                }
+
+                if (typeof ath !== "string") {
+                    return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
+                        isSuccess: false,
+                        errorCause: "validation error",
+                        debugErrorMessage: "DPoP proof missing ath claim"
+                    });
+                }
+
+                const expectedAth = createHash("sha256").update(accessToken).digest("base64url");
+
+                if (ath !== expectedAth) {
+                    return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
+                        isSuccess: false,
+                        errorCause: "validation error",
+                        debugErrorMessage: "DPoP proof ath claim does not match access token"
+                    });
+                }
             }
         }
 
