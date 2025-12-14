@@ -97,6 +97,56 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
         })());
     };
 
+    const { getIsDpopPoofSeenRecordIfNotSeen } = (() => {
+        const timeSeenByDpopProofId = new Map<string, number>();
+
+        const evtDpopProofAdded = Evt.create<void>();
+
+        evtDpopProofAdded.pipe(throttleTime(40_000)).attach(async () => {
+            await Promise.resolve();
+
+            const now = Date.now();
+
+            for (const [dpopProofId, timeSeen] of timeSeenByDpopProofId) {
+                if (now - timeSeen > 40_000) {
+                    timeSeenByDpopProofId.delete(dpopProofId);
+                } else {
+                    // NOTE: All entries added after are more recent.
+                    break;
+                }
+            }
+        });
+
+        function getIsDpopPoofSeenRecordIfNotSeen(params: { jkt: string; jti: string }): boolean {
+            const { jkt, jti } = params;
+            const dpopProofId = `${jkt}:${jti}`;
+
+            if (timeSeenByDpopProofId.has(dpopProofId)) {
+                return true;
+            }
+
+            {
+                timeSeenByDpopProofId.set(dpopProofId, Date.now());
+
+                if (timeSeenByDpopProofId.size > 50_000) {
+                    const firstEntry = timeSeenByDpopProofId[Symbol.iterator]().next().value;
+
+                    assert(firstEntry !== undefined);
+
+                    const [key] = firstEntry;
+
+                    timeSeenByDpopProofId.delete(key);
+                }
+
+                evtDpopProofAdded.post();
+            }
+
+            return false;
+        }
+
+        return { getIsDpopPoofSeenRecordIfNotSeen };
+    })();
+
     const validateAndDecodeAccessToken: Out["validateAndDecodeAccessToken"] = async ({ request }) => {
         const paramsOfBootstrap = await dParamsOfBootstrap.pr;
 
@@ -483,7 +533,7 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
                     });
                 }
 
-                const { htm, htu, ath, iat } = dpopPayload;
+                const { htm, htu, ath, iat, jti } = dpopPayload;
 
                 {
                     if (iat === undefined) {
@@ -555,6 +605,22 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
                         isSuccess: false,
                         errorCause: "validation error",
                         debugErrorMessage: "DPoP proof ath claim does not match access token"
+                    });
+                }
+
+                if (jti === undefined) {
+                    return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
+                        isSuccess: false,
+                        errorCause: "validation error",
+                        debugErrorMessage: "DPoP proof missing jti claim"
+                    });
+                }
+
+                if (getIsDpopPoofSeenRecordIfNotSeen({ jkt: cnf_jkt, jti })) {
+                    return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
+                        isSuccess: false,
+                        errorCause: "validation error",
+                        debugErrorMessage: "DPoP proof replayed"
                     });
                 }
             }
