@@ -483,7 +483,37 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
                     });
                 }
 
-                const { htm, htu, ath } = dpopPayload;
+                const { htm, htu, ath, iat } = dpopPayload;
+
+                {
+                    if (iat === undefined) {
+                        return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
+                            isSuccess: false,
+                            errorCause: "validation error",
+                            debugErrorMessage: "DPoP proof missing or invalid iat claim"
+                        });
+                    }
+
+                    const now = Math.floor(Date.now() / 1000);
+                    const maxAgeSeconds = 40;
+                    const maxFutureSkewSeconds = 3;
+
+                    if (iat - now > maxFutureSkewSeconds) {
+                        return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
+                            isSuccess: false,
+                            errorCause: "validation error",
+                            debugErrorMessage: "DPoP proof iat is in the future"
+                        });
+                    }
+
+                    if (now - iat > maxAgeSeconds) {
+                        return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
+                            isSuccess: false,
+                            errorCause: "validation error",
+                            debugErrorMessage: "DPoP proof iat too old"
+                        });
+                    }
+                }
 
                 if (typeof htm !== "string" || htm.toUpperCase() !== request.method.toUpperCase()) {
                     return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
