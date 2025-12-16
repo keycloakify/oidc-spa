@@ -312,7 +312,7 @@ export function implementFetchAndXhrDPoPInterceptor() {
         XMLHttpRequest.prototype.open = function open(method, url) {
             stateByInstance.set(this, {
                 method: method.toUpperCase(),
-                url: typeof url === "string" ? new URL(url).href : url.href,
+                url: typeof url === "string" ? new URL(url, window.location.href).href : url.href,
                 authorizationHeaderValue: undefined
             });
 
@@ -323,24 +323,20 @@ export function implementFetchAndXhrDPoPInterceptor() {
             );
         };
 
-        XMLHttpRequest.prototype.setRequestHeader = function setRequestHeader(name, value) {
+        XMLHttpRequest.prototype.setRequestHeader = function setRequestHeader(name_, value) {
+            const name = name_.toLowerCase() === "authorization" ? "Authorization" : name_;
+
             {
                 const state = stateByInstance.get(this);
 
                 assert(state !== undefined, "93200293");
 
-                const name_lower = name.toLowerCase();
-
-                if (name_lower === "authorization") {
+                if (name === "Authorization") {
                     state.authorizationHeaderValue = value;
                 }
             }
 
-            return setRequestHeader_actual.apply(
-                this,
-                // @ts-expect-error
-                arguments
-            );
+            return setRequestHeader_actual.call(this, name, value);
         };
 
         XMLHttpRequest.prototype.send = function send() {
