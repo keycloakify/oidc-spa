@@ -306,14 +306,18 @@ export function implementFetchAndXhrDPoPInterceptor() {
                 method: string;
                 url: string;
                 authorizationHeaderValue: string | undefined;
+                isSynchronous: boolean;
             }
         >();
 
-        XMLHttpRequest.prototype.open = function open(method, url) {
+        XMLHttpRequest.prototype.open = function open() {
+            const [method, url, async] = arguments as any as [string, string | URL, boolean | undefined];
+
             stateByInstance.set(this, {
                 method: method.toUpperCase(),
                 url: typeof url === "string" ? new URL(url, window.location.href).href : url.href,
-                authorizationHeaderValue: undefined
+                authorizationHeaderValue: undefined,
+                isSynchronous: async === false
             });
 
             return open_actual.apply(
@@ -366,6 +370,15 @@ export function implementFetchAndXhrDPoPInterceptor() {
                         arguments
                     );
                     return;
+                }
+
+                if (state.isSynchronous) {
+                    throw new Error(
+                        [
+                            "oidc-spa: Cannot perform synchronous authenticated XMLHttpRequest",
+                            "requests when DPoP is enabled."
+                        ].join(" ")
+                    );
                 }
 
                 const onReadyStateChange = () => {
