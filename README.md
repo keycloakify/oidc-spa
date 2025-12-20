@@ -29,8 +29,8 @@
 The Framework Agnostic Adapter:
 
 ```ts
-import { createOidc } from "oidc-spa/core"; // 32 KB min+gzip (bundlephobia.com, Import Cost and NPM overestimate by counting polyfills that are only loaded when needed.)
-import { z } from "zod"; // 59kb min+zip, but it's optional.
+import { createOidc } from "oidc-spa/core"; // 32 KB min+gzip (Import Cost overestimate by counting polyfills that are only loaded when needed.)
+import { z } from "zod"; // 59 KB min+zip, but it's optional.
 
 const oidc = await createOidc({
     issuerUri: "https://auth.my-domain.net/realms/myrealm",
