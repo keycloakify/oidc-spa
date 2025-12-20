@@ -133,10 +133,6 @@ export type ParamsOfCreateOidc<
     idleSessionLifetimeInSeconds?: number;
 
     /**
-     * Usage discouraged, this parameter exists because we don't want to assume
-     * too much about your usecase but I can't think of a scenario where you would
-     * want anything other than the current page.
-     *
      * Default: { redirectTo: "current page" }
      */
     autoLogoutParams?: Parameters<Oidc.LoggedIn<any>["logout"]>[0];
