@@ -29,8 +29,8 @@
 The Framework Agnostic Adapter:
 
 ```ts
-import { createOidc } from "oidc-spa/core";
-import { z } from "zod";
+import { createOidc } from "oidc-spa/core"; // 32 KB min+gzip (bundlephobia.com, Import Cost and NPM overestimate by counting polyfills that are only loaded when needed.)
+import { z } from "zod"; // 59kb min+zip, but it's optional.
 
 const oidc = await createOidc({
     issuerUri: "https://auth.my-domain.net/realms/myrealm",
@@ -38,20 +38,23 @@ const oidc = await createOidc({
     //issuerUri: "https://xxx.us.auth0.com/..."
     //issuerUri: "https://accounts.google.com/o/oauth2/v2/auth"
     clientId: "myclient",
-    // Optional, for type safety.
+    // Optional, you can write a validator by hand, or give up some type-safety, your call.
     decodedIdTokenSchema: z.object({
         name: z.string(),
         picture: z.string().optional(),
         email: z.string(),
         realm_access: z.object({ roles: z.array(z.string()) })
     })
-    // Yes really, it's that simple no other params to provide.
-    // The Redirect URI (callback url) is the root url of your app.
+    // Yes really, it's that simple, there's no other params to provide.
+    // The Redirect URI (callback url) is the root url of your app (no public/callback.html involved).
 });
 
+// In oidc-spa the user is either logged in or they aren't.
+// The state will never mutate without a full app reload.
+// This makes reasoning about auth much, much, easier.
 if (!oidc.isUserLoggedIn) {
-    oidc.login();
-    return;
+    await oidc.login();
+    // Never here
 }
 
 const { name, realm_access } = oidc.getDecodedIdToken();
@@ -75,7 +78,7 @@ Higher level adapters, example with React but we also feature similar Angular ad
 
 <img width="1835" height="942" alt="Image" src="https://github.com/user-attachments/assets/a7a18bbc-998a-459c-8cfa-93b599a45524" />
 
-Full Stack Auth solution with [TanStack Start]():
+Full Stack Auth solution with [TanStack Start](https://tanstack.com/start):
 
 ```tsx
 import { createServerFn } from "@tanstack/react-start";

@@ -59,6 +59,7 @@ import {
     getIsStateDataCookieEnabled
 } from "./StateDataCookie";
 import { getIsTokenSubstitutionEnabled } from "./tokenPlaceholderSubstitution";
+import { loadWebcryptoLinerShim } from "../tools/loadWebcryptoLinerShim";
 
 // NOTE: Replaced at build time
 const VERSION = "{{OIDC_SPA_VERSION}}";
@@ -387,6 +388,11 @@ export async function createOidc_nonMemoized<
     const BASE_URL_params = params.BASE_URL ?? params.homeUrl;
 
     const { issuerUri, clientId, configId, log } = preProcessedParams;
+
+    if (window.crypto.subtle === undefined) {
+        log?.("window.crypto.subtle not present, lazily loading polyfills.");
+        await loadWebcryptoLinerShim();
+    }
 
     const getExtraQueryParams = (() => {
         if (extraQueryParamsOrGetter === undefined) {
