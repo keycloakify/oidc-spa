@@ -6,10 +6,15 @@ export function createStartCountdown(params: {
     function startCountdown(params: { countDownFromSeconds: number }) {
         const { countDownFromSeconds } = params;
 
-        let timer: ReturnType<typeof setTimeout>;
+        let timer: ReturnType<typeof setTimeout> | undefined = undefined;
 
         (async () => {
-            let secondsLeft = Math.floor(countDownFromSeconds);
+            let secondsLeft = Math.max(0, Math.floor(countDownFromSeconds));
+
+            if (secondsLeft === 0) {
+                tickCallback({ secondsLeft: 0 });
+                return;
+            }
 
             while (true) {
                 const start = performance.now();
@@ -35,7 +40,9 @@ export function createStartCountdown(params: {
         })();
 
         const stopCountdown = () => {
-            clearTimeout(timer);
+            if (timer !== undefined) {
+                clearTimeout(timer);
+            }
             tickCallback({ secondsLeft: undefined });
         };
 

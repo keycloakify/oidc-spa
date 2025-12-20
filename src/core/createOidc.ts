@@ -2059,8 +2059,8 @@ export async function createOidc_nonMemoized<
             sessionId
         });
 
-        const { unsubscribe: unsubscribeFromIsUserActive } = evtIsUserActive.subscribe(isUserActive => {
-            if (isUserActive) {
+        const { unsubscribe: unsubscribeFromIsUserActive } = evtIsUserActive.subscribe(eventData => {
+            if (eventData.isUserActive) {
                 if (stopCountdown !== undefined) {
                     stopCountdown();
                     stopCountdown = undefined;
@@ -2073,7 +2073,11 @@ export async function createOidc_nonMemoized<
                 assert(currentRefreshTokenTtlInSeconds !== undefined, "902992326");
 
                 stopCountdown = startCountdown({
-                    countDownFromSeconds: currentRefreshTokenTtlInSeconds
+                    countDownFromSeconds: Math.floor(
+                        (currentRefreshTokenTtlInSeconds * 1_000 -
+                            eventData.hasBeenInactiveForHowLongMs) /
+                            1_000
+                    )
                 }).stopCountdown;
             }
         });
