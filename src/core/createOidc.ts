@@ -62,7 +62,6 @@ import { getIsTokenSubstitutionEnabled } from "./tokenPlaceholderSubstitution";
 import { createInMemoryDPoPStore } from "./dpop";
 import { loadWebcryptoLinerShim } from "../tools/loadWebcryptoLinerShim";
 
-
 // NOTE: Replaced at build time
 const VERSION = "{{OIDC_SPA_VERSION}}";
 
