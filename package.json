@@ -1,6 +1,6 @@
 {
     "name": "oidc-spa",
-    "version": "8.6.17",
+    "version": "8.6.19",
     "description": "OpenID Connect / OAuth2 solution for Centric Web Applications",
     "repository": {
         "type": "git",
@@ -120,7 +120,8 @@
         "@babel/traverse": "^7.28.4",
         "@types/babel__traverse": "^7.28.0",
         "js2mjs": "^1.0.1",
-        "ts-add-js-extension": "^1.6.6"
+        "ts-add-js-extension": "^1.6.6",
+        "webcrypto-liner-shim": "1.4.8"
     },
     "publishConfig": {
         "access": "public"

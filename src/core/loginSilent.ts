@@ -207,17 +207,6 @@ export async function loginSilent(params: {
                     return;
                 }
 
-                if (error.message.includes("Crypto.subtle is available only in secure contexts")) {
-                    clearTimeouts({ wasSuccess: false });
-                    throw new Error(
-                        [
-                            `oidc-spa: ${error.message}.`,
-                            "\nTo fix this error see:",
-                            "https://docs.oidc-spa.dev/v/v8/resources/fixing-crypto.subtle-is-available-only-in-secure-contexts-https"
-                        ].join(" ")
-                    );
-                }
-
                 assert(false, `This is a bug in oidc-spa, please report: ${error.message}`);
             }
         );

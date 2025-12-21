@@ -213,6 +213,10 @@ for (const targetFormat of ["cjs", "esm"] as const) {
                             }
 
                             const bundledFilePath = pathJoin(cacheDirPath, "bundle.js");
+                            const esbuildExternalNodeBuiltins =
+                                targetRuntime === "frontend"
+                                    ? ["--external:crypto", "--external:buffer", "--external:util"]
+                                    : [];
 
                             run(
                                 [
@@ -223,6 +227,8 @@ for (const targetFormat of ["cjs", "esm"] as const) {
                                     "--platform=browser",
                                     "--main-fields=browser,module,main",
                                     "--conditions=browser",
+                                    // Do not pull node polyfills for vendor bundles that only run in browsers.
+                                    ...esbuildExternalNodeBuiltins,
                                     `--outfile='${bundledFilePath}'`
                                 ].join(" ")
                             );
@@ -265,6 +271,20 @@ for (const targetFormat of ["cjs", "esm"] as const) {
                                                     return "node";
                                             }
                                         })()}",`,
+                                        (() => {
+                                            switch (targetRuntime) {
+                                                case "frontend":
+                                                    return [
+                                                        `  resolve: {`,
+                                                        `    // Do not inject polyfills for optional Node builtins referenced by vendor bundles.`,
+                                                        `    fallback: { crypto: false, buffer: false, util: false }`,
+                                                        `  },`
+                                                    ].join("\n");
+                                                case "backend":
+                                                case "build-runtime":
+                                                    return "";
+                                            }
+                                        })(),
                                         `  module: {`,
                                         `    rules: [`,
                                         `      {`,

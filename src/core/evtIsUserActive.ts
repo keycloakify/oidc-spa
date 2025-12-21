@@ -5,13 +5,15 @@ import { id } from "../tools/tsafe/id";
 
 const globalContext = {
     appInstanceId: Math.random().toString(36).slice(2),
-    evtIsUserActiveBySessionId: new Map<string, NonPostableEvt<boolean>>()
+    evtIsUserActiveBySessionId: new Map<string, NonPostableEvt<EventData>>()
 };
+
+type EventData = { isUserActive: true } | { isUserActive: false; hasBeenInactiveForHowLongMs: number };
 
 export function createEvtIsUserActive(params: {
     configId: string;
     sessionId: string | undefined;
-}): NonPostableEvt<boolean> {
+}): NonPostableEvt<EventData> {
     const { configId, sessionId } = params;
 
     use_existing_instance: {
@@ -60,15 +62,19 @@ export function createEvtIsUserActive(params: {
         return { notifyOtherTabsOfUserInteraction, subscribeToUserInteractionOnOtherTabs };
     })();
 
-    const evtIsUserActive = createEvt<boolean>();
+    const evtIsUserActive = createEvt<EventData>();
     let isUserActive = true;
 
     const scheduleSetInactive = () => {
+        const start = performance.now();
+
         const timer = setTimeout(() => {
+            const elapsed = performance.now() - start;
             assert(isUserActive, "011507");
             isUserActive = false;
-            evtIsUserActive.post(isUserActive);
+            evtIsUserActive.post({ isUserActive, hasBeenInactiveForHowLongMs: elapsed });
         }, 5_000);
+
         return () => {
             clearTimeout(timer);
             clearScheduledSetInactive = undefined;
@@ -89,7 +95,7 @@ export function createEvtIsUserActive(params: {
 
         if (!isUserActive) {
             isUserActive = true;
-            evtIsUserActive.post(isUserActive);
+            evtIsUserActive.post({ isUserActive });
         }
     };
 

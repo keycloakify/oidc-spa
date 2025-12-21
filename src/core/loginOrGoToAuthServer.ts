@@ -356,16 +356,6 @@ export function createLoginOrGoToAuthServer(params: {
                 error => {
                     assert(error instanceof Error, "393430");
 
-                    if (error.message.includes("Crypto.subtle is available only in secure contexts")) {
-                        throw new Error(
-                            [
-                                `oidc-spa: ${error.message}.`,
-                                "\nTo fix this error see:",
-                                "https://docs.oidc-spa.dev/v/v8/resources/fixing-crypto.subtle-is-available-only-in-secure-contexts-https"
-                            ].join(" ")
-                        );
-                    }
-
                     assert(false, `This is a bug in oidc-spa, please report: ${error.message}`);
                 }
             );
