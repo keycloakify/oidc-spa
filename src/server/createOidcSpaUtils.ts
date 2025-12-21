@@ -818,7 +818,7 @@ const zDecodedAccessToken_RFC9068 = (() => {
             jti: z.string().optional(),
             nbf: z.number().optional(),
             auth_time: z.number().optional(),
-            cnf: z.record(z.unknown()).optional()
+            cnf: z.record(z.string(), z.unknown()).optional()
         })
         .catchall(z.unknown());
 
