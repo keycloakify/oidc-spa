@@ -249,7 +249,7 @@ export type ParamsOfCreateOidc<
     postLoginRedirectUrl?: string;
 
     /** Default: false */
-    enableDPoP?: boolean;
+    dpop?: boolean;
 };
 
 const globalContext = {
@@ -384,7 +384,7 @@ export async function createOidc_nonMemoized<
         __unsafe_useIdTokenAsAccessToken = false,
         __metadata,
         sessionRestorationMethod = params.autoLogin === true ? "full page redirect" : "auto",
-        enableDPoP
+        dpop
     } = params;
 
     const scopes = Array.from(new Set(["openid", ...(params.scopes ?? ["profile"])]));
@@ -454,13 +454,13 @@ export async function createOidc_nonMemoized<
     const oidcMetadata = __metadata ?? (await fetchOidcMetadata({ issuerUri }));
 
     const isDPoPEnabled = (() => {
-        if (enableDPoP === undefined) {
+        if (dpop === undefined) {
             log?.(
                 "DPoP disabled because it wasn't explicitly enabled when calling createOidc/bootstrapOidc"
             );
         }
 
-        if (!enableDPoP) {
+        if (!dpop) {
             log?.("DPoP explicitly disabled in createOidc/bootstrapOidc params");
             return false;
         }

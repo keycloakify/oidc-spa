@@ -291,7 +291,7 @@ export namespace ParamsOfBootstrap {
         BASE_URL?: string;
 
         /** Default: false */
-        enableDPoP?: boolean;
+        dpop?: boolean;
     } & (AutoLogin extends true ? {} : {});
 
     export type Mock<AutoLogin, DecodedIdToken> = {

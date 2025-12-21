@@ -171,7 +171,7 @@ export type ParamsOfProvide = {
     warnUserSecondsBeforeAutoLogout?: number;
 
     /** Default: false */
-    enableDPoP?: boolean;
+    dpop?: boolean;
 };
 
 assert<
