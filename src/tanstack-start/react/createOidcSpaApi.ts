@@ -809,7 +809,11 @@ export function createOidcSpaApi<
                     })()
                 );
 
-                return new Error(`oidc-spa: ${debugErrorMessage}`);
+                if (process.env.NODE_ENV === "development") {
+                    console.error(`oidc-spa: ${debugErrorMessage}`);
+                }
+
+                return new Error(`oidc-spa: ${wwwAuthenticateResponseHeaderValue}`);
             };
 
             assert(prValidateAndGetAccessTokenClaims !== undefined);
