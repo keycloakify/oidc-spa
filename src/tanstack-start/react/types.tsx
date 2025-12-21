@@ -403,6 +403,9 @@ export namespace ParamsOfBootstrap {
          * Default: { redirectTo: "current page" }
          */
         autoLogoutParams?: Parameters<Oidc_core.LoggedIn<any>["logout"]>[0];
+
+        /** Default: false */
+        dpop?: boolean;
     } & (AutoLogin extends true ? {} : {});
 
     export type Mock<AutoLogin, DecodedIdToken, AccessTokenClaims> = {
@@ -424,7 +427,7 @@ export namespace ParamsOfBootstrap {
               });
 }
 
-export type OidcSpaApi<AutoLogin, DecodedIdToken, AccessTokenClaims> = {
+export type OidcSpaUtils<AutoLogin, DecodedIdToken, AccessTokenClaims> = {
     bootstrapOidc: (
         params: GetterOrDirectValue<
             { process: { env: Record<string, string> } },
@@ -457,15 +460,44 @@ export type OidcSpaApi<AutoLogin, DecodedIdToken, AccessTokenClaims> = {
 export type CreateValidateAndGetAccessTokenClaims<AccessTokenClaims> = (params: {
     paramsOfBootstrap: ParamsOfBootstrap<boolean, Record<string, unknown>, AccessTokenClaims>;
 }) => {
-    validateAndGetAccessTokenClaims: (params: { accessToken: string }) => Promise<
-        | {
-              isValid: true;
-              accessTokenClaims: AccessTokenClaims;
-          }
-        | {
-              isValid: false;
-              errorMessage: string;
-              wwwAuthenticateHeaderErrorDescription: string;
-          }
-    >;
+    validateAndGetAccessTokenClaims: ValidateAndGetAccessTokenClaims<AccessTokenClaims>;
 };
+
+export type ValidateAndGetAccessTokenClaims<AccessTokenClaims> = (params: {
+    request: {
+        method: string;
+        url: string;
+        headers: Record<"Authorization" | "DPoP", string | null | undefined>;
+    };
+}) => Promise<ValidateAndGetAccessTokenClaims.ReturnType<AccessTokenClaims>>;
+
+export namespace ValidateAndGetAccessTokenClaims {
+    export type ReturnType<AccessTokenClaims> =
+        | ReturnType.Success<AccessTokenClaims>
+        | ReturnType.Errored;
+
+    export namespace ReturnType {
+        export type Success<AccessTokenClaims> = {
+            isSuccess: true;
+            accessTokenClaims: AccessTokenClaims;
+            accessToken: string;
+        };
+
+        export type Errored = Errored.AnonymousRequest | Errored.ValidationFailed;
+        export namespace Errored {
+            type Common = {
+                isSuccess: false;
+            };
+
+            export type AnonymousRequest = Common & {
+                isAnonymousRequest: true;
+            };
+
+            export type ValidationFailed = Common & {
+                isAnonymousRequest: false;
+                debugErrorMessage: string;
+                wwwAuthenticateResponseHeaderValue: string;
+            };
+        }
+    }
+}

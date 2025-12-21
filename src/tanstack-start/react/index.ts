@@ -1,6 +1,6 @@
 export { __disableSsrIfLoginEnforced } from "./disableSsrIfLoginEnforced";
 export { __withOidcSpaServerEntry } from "./withOidcSpaServerEntry";
 export type * from "./types";
-import { oidcSpaApiBuilder } from "./apiBuilder";
+import { oidcSpaUtilsBuilder } from "./utilsBuilder";
 
-export const oidcSpa = oidcSpaApiBuilder;
+export const oidcSpa = oidcSpaUtilsBuilder;

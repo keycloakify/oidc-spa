@@ -139,7 +139,7 @@ for (const targetFormat of ["cjs", "esm"] as const) {
 
         const extraBundleFileBasenames = new Set<string>();
 
-        (["frontend", "backend", "build-runtime"] as const)
+        (["frontend", "server", "build-runtime"] as const)
             .filter(targetRuntime => {
                 switch (targetRuntime) {
                     case "build-runtime":
@@ -266,7 +266,7 @@ for (const targetFormat of ["cjs", "esm"] as const) {
                                             switch (targetRuntime) {
                                                 case "frontend":
                                                     return "web";
-                                                case "backend":
+                                                case "server":
                                                 case "build-runtime":
                                                     return "node";
                                             }

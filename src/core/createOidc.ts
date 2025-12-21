@@ -59,7 +59,9 @@ import {
     getIsStateDataCookieEnabled
 } from "./StateDataCookie";
 import { getIsTokenSubstitutionEnabled } from "./tokenPlaceholderSubstitution";
+import { createInMemoryDPoPStore } from "./dpop";
 import { loadWebcryptoLinerShim } from "../tools/loadWebcryptoLinerShim";
+
 
 // NOTE: Replaced at build time
 const VERSION = "{{OIDC_SPA_VERSION}}";
@@ -243,6 +245,9 @@ export type ParamsOfCreateOidc<
      * API and no iframe capabilities.
      */
     postLoginRedirectUrl?: string;
+
+    /** Default: false */
+    dpop?: boolean;
 };
 
 const globalContext = {
@@ -376,7 +381,8 @@ export async function createOidc_nonMemoized<
         __unsafe_clientSecret,
         __unsafe_useIdTokenAsAccessToken = false,
         __metadata,
-        sessionRestorationMethod = params.autoLogin === true ? "full page redirect" : "auto"
+        sessionRestorationMethod = params.autoLogin === true ? "full page redirect" : "auto",
+        dpop
     } = params;
 
     const scopes = Array.from(new Set(["openid", ...(params.scopes ?? ["profile"])]));
@@ -449,6 +455,45 @@ export async function createOidc_nonMemoized<
     const stateUrlParamValue_instance = generateStateUrlParamValue();
 
     const oidcMetadata = __metadata ?? (await fetchOidcMetadata({ issuerUri }));
+
+    const isDPoPEnabled = (() => {
+        if (dpop === undefined) {
+            log?.(
+                "DPoP disabled because it wasn't explicitly enabled when calling createOidc/bootstrapOidc"
+            );
+        }
+
+        if (!dpop) {
+            log?.("DPoP explicitly disabled in createOidc/bootstrapOidc params");
+            return false;
+        }
+
+        if (oidcMetadata === undefined) {
+            return false;
+        }
+
+        if (__unsafe_useIdTokenAsAccessToken) {
+            return false;
+        }
+
+        const isSupported = (() => {
+            const { dpop_signing_alg_values_supported } = oidcMetadata;
+
+            if (dpop_signing_alg_values_supported === undefined) {
+                return false;
+            }
+
+            return dpop_signing_alg_values_supported.includes("ES256");
+        })();
+
+        if (!isSupported) {
+            log?.("DPoP disabled because it's not supported by your IdP");
+        } else {
+            log?.("DPoP enabled");
+        }
+
+        return isSupported;
+    })();
 
     const canUseIframe = (() => {
         switch (sessionRestorationMethod) {
@@ -662,7 +707,13 @@ export async function createOidc_nonMemoized<
                       prefix: STATE_STORE_KEY_PREFIX
                   }),
                   client_secret: __unsafe_clientSecret,
-                  metadata: oidcMetadata
+                  metadata: oidcMetadata,
+                  dpop: !isDPoPEnabled
+                      ? undefined
+                      : {
+                            bind_authorization_code: false,
+                            store: createInMemoryDPoPStore({ configId })
+                        }
               });
 
     const evtInitializationOutcomeUserNotLoggedIn = createEvt<void>();
@@ -1241,6 +1292,7 @@ export async function createOidc_nonMemoized<
         decodedIdTokenSchema,
         __unsafe_useIdTokenAsAccessToken,
         decodedIdToken_previous: undefined,
+        isDPoPEnabled,
         log
     });
 
@@ -1568,6 +1620,7 @@ export async function createOidc_nonMemoized<
                     decodedIdTokenSchema,
                     __unsafe_useIdTokenAsAccessToken,
                     decodedIdToken_previous: currentTokens.decodedIdToken,
+                    isDPoPEnabled,
                     log
                 });
 

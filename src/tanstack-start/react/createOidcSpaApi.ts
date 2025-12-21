@@ -1,7 +1,7 @@
 import { useState, useEffect, useReducer } from "react";
 import type {
     CreateValidateAndGetAccessTokenClaims,
-    OidcSpaApi,
+    OidcSpaUtils,
     UseOidc,
     GetOidc,
     ParamsOfBootstrap,
@@ -21,6 +21,7 @@ import type { GetterOrDirectValue } from "../../tools/GetterOrDirectValue";
 import { createServerFn, createMiddleware } from "@tanstack/react-start";
 // @ts-expect-error: Since our module is not labeled as ESM we don't have the types here.
 import { getRequest, setResponseHeader, setResponseStatus } from "@tanstack/react-start/server";
+//import { getRequest, setResponseHeader, setResponseStatus } from "@tanstack/react-start-server";
 import { toFullyQualifiedUrl } from "../../tools/toFullyQualifiedUrl";
 import { BEFORE_LOAD_FN_BRAND_PROPERTY_NAME } from "./disableSsrIfLoginEnforced";
 import { setDesiredPostLoginRedirectUrl } from "../../core/desiredPostLoginRedirectUrl";
@@ -40,7 +41,7 @@ export function createOidcSpaApi<
     createValidateAndGetAccessTokenClaims:
         | CreateValidateAndGetAccessTokenClaims<AccessTokenClaims>
         | undefined;
-}): OidcSpaApi<AutoLogin, DecodedIdToken, AccessTokenClaims> {
+}): OidcSpaUtils<AutoLogin, DecodedIdToken, AccessTokenClaims> {
     const {
         autoLogin,
         decodedIdTokenSchema,
@@ -667,7 +668,8 @@ export function createOidcSpaApi<
                                 __metadata: paramsOfBootstrap.__metadata,
                                 __unsafe_useIdTokenAsAccessToken:
                                     paramsOfBootstrap.__unsafe_useIdTokenAsAccessToken,
-                                autoLogoutParams: paramsOfBootstrap.autoLogoutParams
+                                autoLogoutParams: paramsOfBootstrap.autoLogoutParams,
+                                dpop: paramsOfBootstrap.dpop
                             });
                         } catch (error) {
                             if (!(error instanceof OidcInitializationError)) {
@@ -786,84 +788,86 @@ export function createOidcSpaApi<
             const { next } = options;
 
             const unauthorized = (params: {
-                errorMessage: string;
-                wwwAuthenticateHeaderErrorDescription: string;
+                code: 401 | 403;
+                wwwAuthenticateResponseHeaderValue: string;
+                debugErrorMessage: string;
             }) => {
-                const { errorMessage, wwwAuthenticateHeaderErrorDescription } = params;
+                const { code, wwwAuthenticateResponseHeaderValue, debugErrorMessage } = params;
 
-                setResponseHeader(
-                    "WWW-Authenticate",
-                    `Bearer error="invalid_token", error_description="${wwwAuthenticateHeaderErrorDescription}"`
+                setResponseHeader("WWW-Authenticate", wwwAuthenticateResponseHeaderValue);
+                setResponseStatus(
+                    code,
+                    (() => {
+                        switch (code) {
+                            case 401:
+                                return "Unauthorized";
+                            case 403:
+                                return "Forbidden";
+                            default:
+                                assert<Equals<typeof code, never>>(false);
+                        }
+                    })()
                 );
-                setResponseStatus(401, "Unauthorized");
 
-                return new Error(`oidc-spa: ${errorMessage}`);
+                if (process.env.NODE_ENV === "development") {
+                    console.error(`oidc-spa: ${debugErrorMessage}`);
+                }
+
+                return new Error(`oidc-spa: ${wwwAuthenticateResponseHeaderValue}`);
             };
-
-            const { headers } = getRequest();
-
-            const authorizationHeaderValue = headers.get("Authorization");
-
-            if (authorizationHeaderValue === null) {
-                if (params?.assert === "user logged in") {
-                    const errorMessage = [
-                        "Asserted user logged in for that serverFn request",
-                        "but no access token was attached to the request"
-                    ].join(" ");
-
-                    throw unauthorized({
-                        errorMessage,
-                        wwwAuthenticateHeaderErrorDescription: errorMessage
-                    });
-                }
-
-                return next({
-                    context: {
-                        oidc: id<OidcServerContext<AccessTokenClaims>>(
-                            id<OidcServerContext.NotLoggedIn>({
-                                isUserLoggedIn: false
-                            })
-                        )
-                    }
-                });
-            }
-
-            const accessToken = (() => {
-                const prefix = "Bearer ";
-
-                if (!authorizationHeaderValue.startsWith(prefix)) {
-                    return undefined;
-                }
-
-                return authorizationHeaderValue.slice(prefix.length);
-            })();
-
-            if (accessToken === undefined) {
-                const errorMessage =
-                    "Missing well formed Authorization header with Bearer <access_token>";
-
-                throw unauthorized({
-                    errorMessage,
-                    wwwAuthenticateHeaderErrorDescription: errorMessage
-                });
-            }
 
             assert(prValidateAndGetAccessTokenClaims !== undefined);
 
             const { validateAndGetAccessTokenClaims } = await prValidateAndGetAccessTokenClaims;
 
-            const resultOfValidate = await validateAndGetAccessTokenClaims({ accessToken });
+            const { headers, url, method } = getRequest();
 
-            if (!resultOfValidate.isValid) {
-                const { errorMessage, wwwAuthenticateHeaderErrorDescription } = resultOfValidate;
+            const resultOfValidate = await validateAndGetAccessTokenClaims({
+                request: {
+                    url,
+                    method,
+                    headers: {
+                        Authorization: headers.get("Authorization"),
+                        DPoP: headers.get("DPoP")
+                    }
+                }
+            });
+
+            if (!resultOfValidate.isSuccess) {
+                if (resultOfValidate.isAnonymousRequest) {
+                    if (params?.assert === "user logged in") {
+                        throw unauthorized({
+                            code: 401,
+                            wwwAuthenticateResponseHeaderValue:
+                                'Bearer error="invalid_request", error_description="Missing access token"',
+                            debugErrorMessage: [
+                                "Asserted user logged in for that serverFn request",
+                                "but no access token was attached to the request"
+                            ].join(" ")
+                        });
+                    }
+
+                    return next({
+                        context: {
+                            oidc: id<OidcServerContext<AccessTokenClaims>>(
+                                id<OidcServerContext.NotLoggedIn>({
+                                    isUserLoggedIn: false
+                                })
+                            )
+                        }
+                    });
+                }
+
+                const { debugErrorMessage, wwwAuthenticateResponseHeaderValue } = resultOfValidate;
 
                 throw unauthorized({
-                    errorMessage,
-                    wwwAuthenticateHeaderErrorDescription
+                    code: 401,
+                    wwwAuthenticateResponseHeaderValue,
+                    debugErrorMessage
                 });
             }
 
-            const { accessTokenClaims } = resultOfValidate;
+            const { accessTokenClaims, accessToken } = resultOfValidate;
 
             assert(is<Exclude<AccessTokenClaims, undefined>>(accessTokenClaims));
 
@@ -900,14 +904,14 @@ export function createOidcSpaApi<
                     break check_required_claims;
                 }
 
-                const errorMessage = [
-                    "Missing or invalid required access token claim.",
-                    `Related to claims: ${Array.from(accessedClaimNames).join(" and/or ")}`
-                ].join(" ");
-
                 throw unauthorized({
-                    errorMessage,
-                    wwwAuthenticateHeaderErrorDescription: errorMessage
+                    code: 403,
+                    wwwAuthenticateResponseHeaderValue:
+                        'Bearer error="insufficient_scope", error_description="Insufficient privileges"',
+                    debugErrorMessage: [
+                        "Missing or invalid required access token claim.",
+                        `Related to claims: ${Array.from(accessedClaimNames).join(" and/or ")}`
+                    ].join(" ")
                 });
             }
 
