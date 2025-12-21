@@ -1,8 +1,8 @@
 import type { OidcSpaUtils, CreateValidateAndGetAccessTokenClaims, ParamsOfBootstrap } from "./types";
+import type { DecodedAccessToken_RFC9068 as AccessTokenClaims_RFC9068 } from "../../server";
 import type { Oidc as Oidc_core } from "../../core";
 import { assert, type Equals } from "../../tools/tsafe/assert";
 import type { ZodSchemaLike } from "../../tools/ZodSchemaLike";
-import type { DecodedAccessToken_RFC9068 as AccessTokenClaims_RFC9068 } from "../../backend";
 import { createCreateValidateAndGetAccessTokenClaims_rfc9068 } from "./accessTokenValidation_rfc9068";
 import { createOidcSpaApi } from "./createOidcSpaApi";
 
