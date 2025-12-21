@@ -356,6 +356,24 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
 
             assert(is<DecodedAccessToken_RFC9068>(decodedAccessToken_original));
 
+            // Validate issuer
+            {
+                const { issuerUri } = paramsOfBootstrap;
+
+                const normalize = (url: string) => url.replace(/\/$/, "");
+
+                if (normalize(decodedAccessToken_original.iss) !== normalize(issuerUri)) {
+                    return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
+                        isSuccess: false,
+                        errorCause: "validation error",
+                        debugErrorMessage: [
+                            `iss claim in access token payload "${decodedAccessToken_original.iss}"`,
+                            `does not match the issuerUri "${issuerUri}".`
+                        ].join(" ")
+                    });
+                }
+            }
+
             validate_audience: {
                 const { expectedAudience } = paramsOfBootstrap;
 
