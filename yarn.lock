@@ -2941,9 +2941,9 @@ electron-to-chromium@^1.5.4:
   resolved "https://registry.yarnpkg.com/electron-to-chromium/-/electron-to-chromium-1.5.4.tgz#cd477c830dd6fca41fbd5465c1ff6ce08ac22343"
   integrity sha512-orzA81VqLyIGUEA77YkVA1D+N+nNfl2isJVjjmOyrlxuooZ19ynb+dOlaDTqd/idKRS9lDCSBmtzM+kyCsMnkA==
 
-"elliptic@git+https://github.com/mahrud/elliptic.git":
+"elliptic@https://github.com/mahrud/elliptic":
   version "6.5.0"
-  resolved "git+https://github.com/mahrud/elliptic.git#75637c76678e83c31682fd967c2fa9ff4761b3fc"
+  resolved "https://github.com/mahrud/elliptic#75637c76678e83c31682fd967c2fa9ff4761b3fc"
   dependencies:
     bn.js "^4.4.0"
     brorand "^1.0.1"
