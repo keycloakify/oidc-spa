@@ -299,6 +299,7 @@ export function implementFetchAndXhrDPoPInterceptor() {
         const open_actual = XMLHttpRequest.prototype.open;
         const send_actual = XMLHttpRequest.prototype.send;
         const setRequestHeader_actual = XMLHttpRequest.prototype.setRequestHeader;
+        const abort_actual = XMLHttpRequest.prototype.abort;
 
         const stateByInstance = new WeakMap<
             XMLHttpRequest,
@@ -307,6 +308,8 @@ export function implementFetchAndXhrDPoPInterceptor() {
                 url: string;
                 authorizationHeaderValue: string | undefined;
                 isSynchronous: boolean;
+                isAborted: boolean;
+                hasSendBeenCalled: boolean;
             }
         >();
 
@@ -317,7 +320,9 @@ export function implementFetchAndXhrDPoPInterceptor() {
                 method: method.toUpperCase(),
                 url: typeof url === "string" ? new URL(url, window.location.href).href : url.href,
                 authorizationHeaderValue: undefined,
-                isSynchronous: async === false
+                isSynchronous: async === false,
+                isAborted: false,
+                hasSendBeenCalled: false
             });
 
             return open_actual.apply(
@@ -327,27 +332,55 @@ export function implementFetchAndXhrDPoPInterceptor() {
             );
         };
 
-        XMLHttpRequest.prototype.setRequestHeader = function setRequestHeader(name_, value) {
-            const name = name_.toLowerCase() === "authorization" ? "Authorization" : name_;
+        XMLHttpRequest.prototype.setRequestHeader = function setRequestHeader(name, value) {
+            const state = stateByInstance.get(this);
 
+            assert(state !== undefined, "93200293");
+
+            if (state.hasSendBeenCalled) {
+                throw new DOMException(
+                    "Failed to execute 'setRequestHeader' on 'XMLHttpRequest': The object's state must be OPENED.",
+                    "InvalidStateError"
+                );
+            }
+
+            if (accessTokenConfigIdEntries.length !== 0 && name.toLowerCase() === "authorization") {
+                if (state.authorizationHeaderValue !== undefined) {
+                    setRequestHeader_actual.call(this, "Authorization", state.authorizationHeaderValue);
+                    const out = setRequestHeader_actual.call(this, "Authorization", value);
+                    state.authorizationHeaderValue = undefined;
+                    return out;
+                }
+
+                state.authorizationHeaderValue = value;
+
+                return;
+            }
+
+            return setRequestHeader_actual.apply(
+                this,
+                // @ts-expect-error
+                arguments
+            );
+        };
+
+        XMLHttpRequest.prototype.abort = function abort() {
             {
                 const state = stateByInstance.get(this);
 
-                assert(state !== undefined, "93200293");
+                assert(state !== undefined, "393402483");
 
-                if (name === "Authorization") {
-                    state.authorizationHeaderValue = value;
-                }
+                state.isAborted = true;
             }
 
-            return setRequestHeader_actual.call(this, name, value);
+            return abort_actual.apply(
+                this,
+                // @ts-expect-error
+                arguments
+            );
         };
 
         XMLHttpRequest.prototype.send = function send() {
-            const state = stateByInstance.get(this);
-
-            assert(state !== undefined, "49920802");
-
             if (accessTokenConfigIdEntries.length === 0) {
                 return send_actual.apply(
                     this,
@@ -356,29 +389,56 @@ export function implementFetchAndXhrDPoPInterceptor() {
                 );
             }
 
+            const state = stateByInstance.get(this);
+            assert(state !== undefined, "49920802");
+
+            const { authorizationHeaderValue } = state;
+
+            if (authorizationHeaderValue === undefined) {
+                return send_actual.apply(
+                    this,
+                    // @ts-expect-error
+                    arguments
+                );
+            }
+
+            if (state.hasSendBeenCalled) {
+                throw new DOMException(
+                    "Failed to execute 'send' on 'XMLHttpRequest': The object's state must be OPENED.",
+                    "InvalidStateError"
+                );
+            }
+
+            state.hasSendBeenCalled = true;
+
+            if (state.isSynchronous) {
+                throw new Error(
+                    [
+                        "oidc-spa: Cannot perform synchronous authenticated XMLHttpRequest",
+                        "requests when DPoP is enabled."
+                    ].join(" ")
+                );
+            }
+
             (async () => {
                 const result = await generateMaterialToUpgradeBearerRequestToDPoP({
                     httpMethod: state.method,
                     url: state.url,
-                    authorizationHeaderValue: state.authorizationHeaderValue
+                    authorizationHeaderValue
                 });
 
+                if (state.isAborted) {
+                    return;
+                }
+
                 if (!result.isHandled) {
+                    setRequestHeader_actual.call(this, "Authorization", authorizationHeaderValue);
                     send_actual.apply(
                         this,
                         // @ts-expect-error
                         arguments
                     );
                     return;
-                }
-
-                if (state.isSynchronous) {
-                    throw new Error(
-                        [
-                            "oidc-spa: Cannot perform synchronous authenticated XMLHttpRequest",
-                            "requests when DPoP is enabled."
-                        ].join(" ")
-                    );
                 }
 
                 const onReadyStateChange = () => {
