@@ -175,12 +175,12 @@ export function implementFetchAndXhrDPoPInterceptor() {
                     | { isHandled: false }
                     | {
                           isHandled: true;
-                          registerNonce: (params: { nonce: string }) => void;
+                          registerDPoPNonce: (params: { nonce: string }) => void;
                           reGenerateDpopProof: () => Promise<string>;
                       };
 
                 update_headers: {
-                    const result = await generateMaterialToUpgradeBearerRequestToDPoP({
+                    const result = generateMaterialToUpgradeBearerRequestToDPoP({
                         authorizationHeaderValue: request.headers.get("Authorization") ?? undefined,
                         url: request.url,
                         httpMethod: request.method
@@ -191,19 +191,24 @@ export function implementFetchAndXhrDPoPInterceptor() {
                         break update_headers;
                     }
 
+                    const { accessToken, generateDPoPProof } = result;
+
+                    const { dpopProof, reGenerateDpopProof, registerDPoPNonce } =
+                        await generateDPoPProof();
+
                     request = new Request(request, {
                         headers: (() => {
                             const h = new Headers(request.headers);
-                            h.set("Authorization", `DPoP ${result.accessToken}`);
-                            h.set("DPoP", result.dpopProof);
+                            h.set("Authorization", `DPoP ${accessToken}`);
+                            h.set("DPoP", dpopProof);
                             return h;
                         })()
                     });
 
                     dpopStatus = {
                         isHandled: true,
-                        registerNonce: result.registerNonce,
-                        reGenerateDpopProof: result.reGenerateDpopProof
+                        registerDPoPNonce,
+                        reGenerateDpopProof
                     };
                 }
 
@@ -252,7 +257,7 @@ export function implementFetchAndXhrDPoPInterceptor() {
                         break re_send_with_DPoP_nonce;
                     }
 
-                    dpopStatus.registerNonce({ nonce });
+                    dpopStatus.registerDPoPNonce({ nonce });
 
                     if (request_cloneForReplay === undefined) {
                         break re_send_with_DPoP_nonce;
@@ -277,7 +282,7 @@ export function implementFetchAndXhrDPoPInterceptor() {
                     });
 
                     if (nonce !== undefined) {
-                        dpopStatus.registerNonce({ nonce });
+                        dpopStatus.registerDPoPNonce({ nonce });
                     }
                 }
 
@@ -296,10 +301,11 @@ export function implementFetchAndXhrDPoPInterceptor() {
         }
     }
     {
-        const open_actual = XMLHttpRequest.prototype.open;
-        const send_actual = XMLHttpRequest.prototype.send;
-        const setRequestHeader_actual = XMLHttpRequest.prototype.setRequestHeader;
-        const abort_actual = XMLHttpRequest.prototype.abort;
+        const XMLHttpRequest_prototype_actual = {
+            open: XMLHttpRequest.prototype.open,
+            send: XMLHttpRequest.prototype.send,
+            setRequestHeader: XMLHttpRequest.prototype.setRequestHeader
+        };
 
         const stateByInstance = new WeakMap<
             XMLHttpRequest,
@@ -308,108 +314,106 @@ export function implementFetchAndXhrDPoPInterceptor() {
                 url: string;
                 authorizationHeaderValue: string | undefined;
                 isSynchronous: boolean;
-                isAborted: boolean;
-                hasSendBeenCalled: boolean;
+                isSendCalledAndRequestHandled: boolean;
             }
         >();
 
-        XMLHttpRequest.prototype.open = function open() {
+        XMLHttpRequest.prototype.open = function () {
             const [method, url, async] = arguments as any as [string, string | URL, boolean | undefined];
+
+            if (stateByInstance.get(this)?.isSendCalledAndRequestHandled === true) {
+                throw new Error(
+                    [
+                        "oidc-spa: Cannot reuse XMLHttpRequest instances",
+                        "that have been DPoP upgraded"
+                    ].join(" ")
+                );
+            }
 
             stateByInstance.set(this, {
                 method: method.toUpperCase(),
                 url: typeof url === "string" ? new URL(url, window.location.href).href : url.href,
                 authorizationHeaderValue: undefined,
                 isSynchronous: async === false,
-                isAborted: false,
-                hasSendBeenCalled: false
+                isSendCalledAndRequestHandled: false
             });
 
-            return open_actual.apply(
+            return XMLHttpRequest_prototype_actual.open.apply(
                 this,
                 // @ts-expect-error
                 arguments
             );
         };
 
-        XMLHttpRequest.prototype.setRequestHeader = function setRequestHeader(name, value) {
+        XMLHttpRequest.prototype.setRequestHeader = function (name, value) {
             const state = stateByInstance.get(this);
 
-            assert(state !== undefined, "93200293");
-
-            if (state.hasSendBeenCalled) {
+            if (state?.isSendCalledAndRequestHandled === true) {
                 throw new DOMException(
                     "Failed to execute 'setRequestHeader' on 'XMLHttpRequest': The object's state must be OPENED.",
                     "InvalidStateError"
                 );
             }
 
-            if (accessTokenConfigIdEntries.length !== 0 && name.toLowerCase() === "authorization") {
-                if (state.authorizationHeaderValue !== undefined) {
-                    setRequestHeader_actual.call(this, "Authorization", state.authorizationHeaderValue);
-                    const out = setRequestHeader_actual.call(this, "Authorization", value);
-                    state.authorizationHeaderValue = undefined;
-                    return out;
-                }
+            if (
+                this.status === XMLHttpRequest.OPENED &&
+                accessTokenConfigIdEntries.length !== 0 &&
+                name.toLowerCase() === "authorization"
+            ) {
+                assert(state !== undefined, "34308330");
 
                 state.authorizationHeaderValue = value;
 
                 return;
             }
 
-            return setRequestHeader_actual.apply(
+            return XMLHttpRequest_prototype_actual.setRequestHeader.apply(
                 this,
                 // @ts-expect-error
                 arguments
             );
         };
 
-        XMLHttpRequest.prototype.abort = function abort() {
-            {
-                const state = stateByInstance.get(this);
-
-                assert(state !== undefined, "393402483");
-
-                state.isAborted = true;
-            }
-
-            return abort_actual.apply(
-                this,
-                // @ts-expect-error
-                arguments
-            );
-        };
-
-        XMLHttpRequest.prototype.send = function send() {
-            if (accessTokenConfigIdEntries.length === 0) {
-                return send_actual.apply(
-                    this,
-                    // @ts-expect-error
-                    arguments
-                );
-            }
-
+        XMLHttpRequest.prototype.send = function () {
             const state = stateByInstance.get(this);
-            assert(state !== undefined, "49920802");
 
-            const { authorizationHeaderValue } = state;
-
-            if (authorizationHeaderValue === undefined) {
-                return send_actual.apply(
+            if (state === undefined || state.authorizationHeaderValue === undefined) {
+                return XMLHttpRequest_prototype_actual.send.apply(
                     this,
                     // @ts-expect-error
                     arguments
                 );
             }
 
-            if (state.hasSendBeenCalled) {
+            if (state.isSendCalledAndRequestHandled) {
                 throw new DOMException(
                     "Failed to execute 'send' on 'XMLHttpRequest': The object's state must be OPENED.",
                     "InvalidStateError"
                 );
             }
 
-            state.hasSendBeenCalled = true;
+            const result = generateMaterialToUpgradeBearerRequestToDPoP({
+                httpMethod: state.method,
+                url: state.url,
+                authorizationHeaderValue: state.authorizationHeaderValue
+            });
+
+            if (!result.isHandled) {
+                XMLHttpRequest_prototype_actual.setRequestHeader.call(
+                    this,
+                    "Authorization",
+                    state.authorizationHeaderValue
+                );
+                return XMLHttpRequest_prototype_actual.send.apply(
+                    this,
+                    // @ts-expect-error
+                    arguments
+                );
+            }
+
+            state.isSendCalledAndRequestHandled = true;
+
+            const { accessToken, generateDPoPProof } = result;
 
             if (state.isSynchronous) {
                 throw new Error(
@@ -421,23 +425,10 @@ export function implementFetchAndXhrDPoPInterceptor() {
             }
 
             (async () => {
-                const result = await generateMaterialToUpgradeBearerRequestToDPoP({
-                    httpMethod: state.method,
-                    url: state.url,
-                    authorizationHeaderValue
-                });
+                const { dpopProof, registerDPoPNonce } = await generateDPoPProof();
 
-                if (state.isAborted) {
-                    return;
-                }
-
-                if (!result.isHandled) {
-                    setRequestHeader_actual.call(this, "Authorization", authorizationHeaderValue);
-                    send_actual.apply(
-                        this,
-                        // @ts-expect-error
-                        arguments
-                    );
+                if (this.status !== XMLHttpRequest.OPENED) {
+                    // abort() has been called.
                     return;
                 }
 
@@ -451,7 +442,7 @@ export function implementFetchAndXhrDPoPInterceptor() {
                     });
 
                     if (nonce !== undefined) {
-                        result.registerNonce({ nonce });
+                        registerDPoPNonce({ nonce });
                     }
 
                     this.removeEventListener("readystatechange", onReadyStateChange);
@@ -459,10 +450,14 @@ export function implementFetchAndXhrDPoPInterceptor() {
 
                 this.addEventListener("readystatechange", onReadyStateChange);
 
-                setRequestHeader_actual.call(this, "Authorization", `DPoP ${result.accessToken}`);
-                setRequestHeader_actual.call(this, "DPoP", result.dpopProof);
+                XMLHttpRequest_prototype_actual.setRequestHeader.call(
+                    this,
+                    "Authorization",
+                    `DPoP ${accessToken}`
+                );
+                XMLHttpRequest_prototype_actual.setRequestHeader.call(this, "DPoP", dpopProof);
 
-                send_actual.apply(
+                XMLHttpRequest_prototype_actual.send.apply(
                     this,
                     // @ts-expect-error
                     arguments
@@ -472,22 +467,23 @@ export function implementFetchAndXhrDPoPInterceptor() {
     }
 }
 
-async function generateMaterialToUpgradeBearerRequestToDPoP(params: {
+function generateMaterialToUpgradeBearerRequestToDPoP(params: {
     httpMethod: string;
     url: string;
     authorizationHeaderValue: string | undefined;
-}): Promise<
+}):
     | {
           isHandled: false;
       }
     | {
           isHandled: true;
           accessToken: string;
-          dpopProof: string;
-          registerNonce: (params: { nonce: string }) => void;
-          reGenerateDpopProof: () => Promise<string>;
-      }
-> {
+          generateDPoPProof: () => Promise<{
+              dpopProof: string;
+              registerDPoPNonce: (params: { nonce: string }) => void;
+              reGenerateDpopProof: () => Promise<string>;
+          }>;
+      } {
     const { httpMethod, url, authorizationHeaderValue } = params;
 
     if (authorizationHeaderValue === undefined) {
@@ -533,27 +529,30 @@ async function generateMaterialToUpgradeBearerRequestToDPoP(params: {
     return {
         isHandled: true,
         accessToken,
-        registerNonce: ({ nonce }) => {
-            const nonceEntry = nonceEntries.find(entry => entry.origin === origin);
+        generateDPoPProof: async () => ({
+            dpopProof: await generateES256DPoPProof({
+                keyPair: dpopState.keys,
+                url,
+                accessToken,
+                httpMethod,
+                nonce,
+                getServerDateNow: createGetServerDateNow(paramsOfCreateGetServerDateNow)
+            }),
+            registerDPoPNonce: ({ nonce }) => {
+                const nonceEntry = nonceEntries.find(entry => entry.origin === origin);
 
-            if (nonceEntry !== undefined) {
-                nonceEntry.nonce = nonce;
-            } else {
-                nonceEntries.push({ origin, nonce });
+                if (nonceEntry !== undefined) {
+                    nonceEntry.nonce = nonce;
+                } else {
+                    nonceEntries.push({ origin, nonce });
+                }
+            },
+            reGenerateDpopProof: async () => {
+                const result = generateMaterialToUpgradeBearerRequestToDPoP(params);
+                assert(result.isHandled, "4043840339");
+                const { dpopProof } = await result.generateDPoPProof();
+                return dpopProof;
             }
-        },
-        dpopProof: await generateES256DPoPProof({
-            keyPair: dpopState.keys,
-            url,
-            accessToken,
-            httpMethod,
-            nonce,
-            getServerDateNow: createGetServerDateNow(paramsOfCreateGetServerDateNow)
-        }),
-        reGenerateDpopProof: async () => {
-            const result = await generateMaterialToUpgradeBearerRequestToDPoP(params);
-            assert(result.isHandled, "4043840339");
-            return result.dpopProof;
-        }
+        })
     };
 }
