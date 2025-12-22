@@ -332,14 +332,24 @@ export function implementFetchAndXhrDPoPInterceptor() {
 
                 let response = await fetch_ctx(request);
 
+                // NOTE: We avoid headers.get to dodge CORS warnings
+                const getResponseHeader = (headerName: string) => {
+                    const headerName_normalized = headerName.toLowerCase();
+                    for (const [headerName_i, value] of response.headers) {
+                        if (headerName_i.toLowerCase() !== headerName_normalized) {
+                            continue;
+                        }
+                        return value;
+                    }
+                    return null;
+                };
+
                 re_send_with_DPoP_nonce: {
                     if (response.status !== 401) {
                         break re_send_with_DPoP_nonce;
                     }
 
-                    const nonce = readNonceFromResponseHeader({
-                        getResponseHeader: headerName => response.headers.get(headerName)
-                    });
+                    const nonce = readNonceFromResponseHeader({ getResponseHeader });
 
                     if (nonce === undefined) {
                         break re_send_with_DPoP_nonce;
@@ -365,9 +375,7 @@ export function implementFetchAndXhrDPoPInterceptor() {
                 }
 
                 {
-                    const nonce = readNonceFromResponseHeader({
-                        getResponseHeader: headerName => response.headers.get(headerName)
-                    });
+                    const nonce = readNonceFromResponseHeader({ getResponseHeader });
 
                     if (nonce !== undefined) {
                         dpopStatus.registerDPoPNonce({ nonce });
@@ -544,7 +552,34 @@ export function implementFetchAndXhrDPoPInterceptor() {
                         }
 
                         const nonce = readNonceFromResponseHeader({
-                            getResponseHeader: headerName => this.getResponseHeader(headerName)
+                            // NOTE: We avoid this.getResponseHeader(headerName) to dodge CORS warnings
+                            getResponseHeader: headerName => {
+                                const headers = this.getAllResponseHeaders();
+
+                                if (!headers) {
+                                    return null;
+                                }
+
+                                const targetHeaderName = headerName.toLowerCase();
+
+                                for (const line of headers.split(/\r?\n/)) {
+                                    const idx = line.indexOf(":");
+
+                                    if (idx === -1) {
+                                        continue;
+                                    }
+
+                                    const name = line.slice(0, idx).trim().toLowerCase();
+
+                                    if (name !== targetHeaderName) {
+                                        continue;
+                                    }
+
+                                    return line.slice(idx + 1).trim();
+                                }
+
+                                return null;
+                            }
                         });
 
                         if (nonce !== undefined) {
