@@ -245,8 +245,8 @@ export type ParamsOfCreateOidc<
      */
     postLoginRedirectUrl?: string;
 
-    /** Default: false */
-    dpop?: boolean;
+    /** See: https://docs.oidc-spa.dev/v/v8/features/dpop */
+    dpop?: "disabled" | "enabled" | "auto";
 };
 
 const globalContext = {
@@ -457,13 +457,12 @@ export async function createOidc_nonMemoized<
 
     const isDPoPEnabled = (() => {
         if (dpop === undefined) {
-            log?.(
-                "DPoP disabled because it wasn't explicitly enabled when calling createOidc/bootstrapOidc"
-            );
+            log?.("DPoP disabled, to enable it see: https://docs.oidc-spa.dev/features/dpop");
+            return false;
         }
 
-        if (!dpop) {
-            log?.("DPoP explicitly disabled in createOidc/bootstrapOidc params");
+        if (dpop === "disabled") {
+            log?.("DPoP explicitly disabled");
             return false;
         }
 
@@ -472,6 +471,15 @@ export async function createOidc_nonMemoized<
         }
 
         if (__unsafe_useIdTokenAsAccessToken) {
+            if (dpop === "enabled") {
+                throw new Error(
+                    [
+                        "oidc-spa: Cannot enable DPoP when",
+                        "__unsafe_useIdTokenAsAccessToken is set to true"
+                    ].join(" ")
+                );
+            }
+            log?.("DPoP Disabled due to __unsafe_useIdTokenAsAccessToken: true");
             return false;
         }
 

@@ -290,8 +290,8 @@ export namespace ParamsOfBootstrap {
          */
         BASE_URL?: string;
 
-        /** Default: false */
-        dpop?: boolean;
+        /** See: https://docs.oidc-spa.dev/v/v8/features/dpop */
+        dpop?: "disabled" | "enabled" | "auto";
     } & (AutoLogin extends true ? {} : {});
 
     export type Mock<AutoLogin, DecodedIdToken> = {

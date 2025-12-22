@@ -404,8 +404,8 @@ export namespace ParamsOfBootstrap {
          */
         autoLogoutParams?: Parameters<Oidc_core.LoggedIn<any>["logout"]>[0];
 
-        /** Default: false */
-        dpop?: boolean;
+        /** See: https://docs.oidc-spa.dev/v/v8/features/dpop */
+        dpop?: "disabled" | "enabled" | "auto";
     } & (AutoLogin extends true ? {} : {});
 
     export type Mock<AutoLogin, DecodedIdToken, AccessTokenClaims> = {
