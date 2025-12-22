@@ -467,7 +467,9 @@ export type ValidateAndGetAccessTokenClaims<AccessTokenClaims> = (params: {
     request: {
         method: string;
         url: string;
-        headers: Record<"Authorization" | "DPoP", string | null | undefined>;
+        getHeaderValue: (
+            headerName: "Authorization" | "DPoP" | "Forwarded" | "X-Forwarded-Proto" | "X-Forwarded-Host"
+        ) => string | null | undefined;
     };
 }) => Promise<ValidateAndGetAccessTokenClaims.ReturnType<AccessTokenClaims>>;
 

@@ -826,10 +826,7 @@ export function createOidcSpaApi<
                 request: {
                     url,
                     method,
-                    headers: {
-                        Authorization: headers.get("Authorization"),
-                        DPoP: headers.get("DPoP")
-                    }
+                    getHeaderValue: headerName => headers.get(headerName)
                 }
             });
 

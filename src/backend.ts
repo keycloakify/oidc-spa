@@ -70,9 +70,13 @@ export async function createOidcBackend<
                 request: {
                     method: "GET",
                     url: "https://dummy.com",
-                    headers: {
-                        Authorization: `Bearer ${accessToken}`,
-                        DPoP: undefined
+                    getHeaderValue: headerName => {
+                        switch (headerName) {
+                            case "Authorization":
+                                return `Bearer ${accessToken}`;
+                            default:
+                                return null;
+                        }
                     }
                 }
             });

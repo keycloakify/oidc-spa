@@ -184,7 +184,9 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
             });
         }
 
-        if (!request.headers.Authorization) {
+        const authorizationHeaderValue = request.getHeaderValue("Authorization");
+
+        if (!authorizationHeaderValue) {
             return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
                 isSuccess: false,
                 errorCause: "missing Authorization header",
@@ -192,7 +194,7 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
             });
         }
 
-        const match = request.headers.Authorization.trim().match(/^((?:Bearer)|(?:DPoP))\s+(.+)$/i);
+        const match = authorizationHeaderValue.trim().match(/^((?:Bearer)|(?:DPoP))\s+(.+)$/i);
 
         if (match === null) {
             return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
@@ -441,15 +443,15 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
                     });
                 }
 
-                if (!request.headers.DPoP) {
+                const dpopHeaderValue = request.getHeaderValue("DPoP")?.trim();
+
+                if (!dpopHeaderValue) {
                     return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
                         isSuccess: false,
                         errorCause: "validation error",
                         debugErrorMessage: "Scheme DPoP was specified but the DPoP header is missing"
                     });
                 }
-
-                const dpopHeaderValue = request.headers.DPoP.trim();
 
                 let dpopHeader: ReturnType<typeof decodeProtectedHeader>;
 
@@ -592,19 +594,107 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
                 }
 
                 const expectedHtu = (() => {
+                    let url: URL;
+
                     try {
-                        const url = new URL(request.url);
-                        return `${url.origin}${url.pathname}`;
+                        url = new URL(request.url);
                     } catch {
                         return undefined;
                     }
+
+                    const forwardedParams: { proto: string | undefined; host: string | undefined } =
+                        (() => {
+                            // Reverse proxies may terminate TLS; honor forwarded headers to rebuild the externally visible URL.
+                            const forwardedHeader = request.getHeaderValue("Forwarded");
+
+                            if (typeof forwardedHeader !== "string") {
+                                return { proto: undefined, host: undefined };
+                            }
+
+                            const [firstEntry] = forwardedHeader.split(",");
+                            const tokens = firstEntry.trim().split(";");
+
+                            const getTokenValue = (name: string) => {
+                                const token = tokens.find(token =>
+                                    token.trim().toLowerCase().startsWith(`${name.toLowerCase()}=`)
+                                );
+
+                                if (token === undefined) {
+                                    return undefined;
+                                }
+
+                                const [, rawValue] = token.split("=");
+
+                                return rawValue?.replace(/^"|"$/g, "").trim();
+                            };
+
+                            return {
+                                proto: getTokenValue("proto"),
+                                host: getTokenValue("host")
+                            };
+                        })();
+
+                    {
+                        const forwardedProto = (() => {
+                            if (forwardedParams.proto) {
+                                return forwardedParams.proto;
+                            }
+
+                            const value = request.getHeaderValue("X-Forwarded-Proto");
+
+                            if (!value) {
+                                return undefined;
+                            }
+
+                            return value.split(",")[0]?.trim();
+                        })();
+
+                        const forwardedProto_normalized = (() => {
+                            if (forwardedProto === undefined) {
+                                return undefined;
+                            }
+
+                            const proto = forwardedProto.replace(/:$/, "").toLowerCase();
+
+                            return proto === "http" || proto === "https" ? proto : undefined;
+                        })();
+
+                        if (forwardedProto_normalized !== undefined) {
+                            url.protocol = `${forwardedProto_normalized}:`;
+                        }
+                    }
+
+                    {
+                        const forwardedHost = (() => {
+                            if (forwardedParams.host) {
+                                return forwardedParams.host;
+                            }
+
+                            const value = request.getHeaderValue("X-Forwarded-Host");
+
+                            if (!value) {
+                                return undefined;
+                            }
+
+                            return value.split(",")[0]?.trim();
+                        })();
+
+                        if (forwardedHost) {
+                            url.host = forwardedHost;
+                        }
+                    }
+
+                    return `${url.origin}${url.pathname}`;
                 })();
 
                 if (expectedHtu === undefined || typeof htu !== "string" || htu !== expectedHtu) {
                     return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
                         isSuccess: false,
                         errorCause: "validation error",
-                        debugErrorMessage: `DPoP proof htu claim does not match request url htu: ${htu}, expected htu: ${expectedHtu}`
+                        debugErrorMessage: [
+                            `DPoP proof htu claim does not match request url.",
+                            "htu: ${htu}, expected htu: ${expectedHtu}`
+                        ].join(" ")
                     });
                 }
 
