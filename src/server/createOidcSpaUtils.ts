@@ -604,7 +604,7 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
                     return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
                         isSuccess: false,
                         errorCause: "validation error",
-                        debugErrorMessage: "DPoP proof htu claim does not match request url"
+                        debugErrorMessage: `DPoP proof htu claim does not match request url htu: ${htu}, expected htu: ${expectedHtu}`
                     });
                 }
 
