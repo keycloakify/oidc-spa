@@ -37,7 +37,7 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
         ): Promise<PublicSigningKeys | undefined> {
             const paramsOfBootstrap = await dParamsOfBootstrap.pr;
 
-            assert(paramsOfBootstrap.implementation === "real");
+            assert(paramsOfBootstrap.implementation === "real", "22933023");
 
             const { issuerUri } = paramsOfBootstrap;
 
@@ -131,7 +131,7 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
                 if (timeSeenByDpopProofId.size > 50_000) {
                     const firstEntry = timeSeenByDpopProofId[Symbol.iterator]().next().value;
 
-                    assert(firstEntry !== undefined);
+                    assert(firstEntry !== undefined, "3922304");
 
                     const [key] = firstEntry;
 
@@ -305,7 +305,7 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
 
             const publicSigningKeys = evtPublicSigningKeys.state;
 
-            assert(publicSigningKeys !== undefined);
+            assert(publicSigningKeys !== undefined, "3304483302");
 
             if (!publicSigningKeys.kidSet.has(kid)) {
                 return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
@@ -544,7 +544,7 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
                     });
                     dpopPayload = verification.payload;
                 } catch (error) {
-                    assert(error instanceof Error);
+                    assert(error instanceof Error, "34022849313");
 
                     return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
                         isSuccess: false,
@@ -743,7 +743,7 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
             try {
                 decodedAccessToken = decodedAccessTokenSchema.parse(decodedAccessToken_original);
             } catch (error) {
-                assert(error instanceof Error);
+                assert(error instanceof Error, "887302013");
 
                 return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
                     isSuccess: false,
@@ -807,7 +807,7 @@ async function fetchPublicSigningKeys(params: { issuerUri: string }): Promise<Pu
                 jwks_uri: z.string()
             });
 
-            assert<Equals<WellKnownConfiguration, z.infer<typeof zWellKnownConfiguration>>>();
+            assert<Equals<WellKnownConfiguration, z.infer<typeof zWellKnownConfiguration>>>;
 
             try {
                 zWellKnownConfiguration.parse(data);
@@ -861,7 +861,7 @@ async function fetchPublicSigningKeys(params: { issuerUri: string }): Promise<Pu
                 )
             });
 
-            assert<Equals<Jwks, z.infer<typeof zJwks>>>();
+            assert<Equals<Jwks, z.infer<typeof zJwks>>>;
 
             try {
                 zJwks.parse(jwks);
