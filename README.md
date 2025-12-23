@@ -29,8 +29,10 @@
 The Framework Agnostic Adapter:
 
 ```ts
-import { createOidc } from "oidc-spa/core"; // 32 KB min+gzip (Import Cost overestimate by counting polyfills that are only loaded when needed.)
+import { createOidc, oidcEarlyInit } from "oidc-spa/core"; // 32 KB min+gzip (Import Cost overestimate by counting polyfills that are only loaded when needed.)
 import { z } from "zod"; // 59 KB min+zip, but it's optional.
+
+oidcEarlyInit({ BASE_URL: "/" });
 
 const oidc = await createOidc({
     issuerUri: "https://auth.my-domain.net/realms/myrealm",
@@ -55,6 +57,7 @@ const oidc = await createOidc({
 if (!oidc.isUserLoggedIn) {
     await oidc.login();
     // Never here
+    return;
 }
 
 const { name, realm_access } = oidc.getDecodedIdToken();
