@@ -1222,11 +1222,11 @@ export async function createOidc_nonMemoized<
                     ...oidc_common,
                     isUserLoggedIn: false,
                     login: async ({
-                        doesCurrentHrefRequiresAuth,
+                        doesCurrentHrefRequiresAuth = false,
                         extraQueryParams,
                         redirectUrl,
                         transformUrlBeforeRedirect
-                    }) => {
+                    } = {}) => {
                         await waitForAllOtherOngoingLoginOrRefreshProcessesToComplete({
                             prUnlock:
                                 getPrSafelyRestoredFromBfCacheAfterLoginBackNavigationOrInitializationError()

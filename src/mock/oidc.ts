@@ -131,7 +131,7 @@ export async function createMockOidc<
         const oidc = id<Oidc.NotLoggedIn>({
             ...common,
             isUserLoggedIn: false,
-            login: ({ redirectUrl }) => loginOrGoToAuthServer({ redirectUrl }),
+            login: ({ redirectUrl } = {}) => loginOrGoToAuthServer({ redirectUrl }),
             initializationError: undefined
         });
         if (autoLogin) {

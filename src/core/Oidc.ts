@@ -15,8 +15,8 @@ export declare namespace Oidc {
 
     export type NotLoggedIn = Common & {
         isUserLoggedIn: false;
-        login: (params: {
-            doesCurrentHrefRequiresAuth: boolean;
+        login: (params?: {
+            doesCurrentHrefRequiresAuth?: boolean;
             /**
              * Add extra query parameters to the url before redirecting to the login pages.
              */

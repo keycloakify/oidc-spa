@@ -127,19 +127,24 @@
         "access": "public"
     },
     "sideEffects": false,
-    "main": "dist/index.js",
-    "types": "dist/index.d.ts",
-    "module": "dist/esm/index.mjs",
+    "main": "dist/core/index.js",
+    "types": "dist/core/index.d.ts",
+    "module": "dist/esm/core/index.mjs",
     "exports": {
         ".": {
-            "module": "./dist/esm/index.mjs",
-            "import": "./dist/esm/index.mjs",
-            "default": "./dist/index.js"
+            "module": "./dist/esm/core/index.mjs",
+            "import": "./dist/esm/core/index.mjs",
+            "default": "./dist/core/index.js"
         },
         "./entrypoint": {
             "module": "./dist/esm/entrypoint.mjs",
             "import": "./dist/esm/entrypoint.mjs",
             "default": "./dist/entrypoint.js"
+        },
+        "./core": {
+            "module": "./dist/esm/core/index.mjs",
+            "import": "./dist/esm/core/index.mjs",
+            "default": "./dist/core/index.js"
         },
         "./vite-plugin": {
             "types": "./dist/esm/vite-plugin/index.d.ts",
@@ -151,11 +156,6 @@
             "module": "./dist/esm/server/index.mjs",
             "import": "./dist/esm/server/index.mjs",
             "default": "./dist/server/index.js"
-        },
-        "./core": {
-            "module": "./dist/esm/index.mjs",
-            "import": "./dist/esm/index.mjs",
-            "default": "./dist/index.js"
         },
         "./mock": {
             "module": "./dist/esm/mock/index.mjs",
