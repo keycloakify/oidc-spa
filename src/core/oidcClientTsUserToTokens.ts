@@ -5,7 +5,6 @@ import { readExpirationTimeInJwt } from "../tools/readExpirationTimeInJwt";
 import { decodeJwt } from "../tools/decodeJwt";
 import type { Oidc } from "./Oidc";
 import { INFINITY_TIME } from "../tools/INFINITY_TIME";
-import { getIsTokenSubstitutionEnabled, getTokensPlaceholders } from "./tokenPlaceholderSubstitution";
 import { registerAccessTokenForDPoP } from "./dpop";
 import { createGetServerDateNow, type ParamsOfCreateGetServerDateNow } from "../tools/getServerDateNow";
 
@@ -241,17 +240,6 @@ export function oidcClientTsUserToTokens<DecodedIdToken extends Record<string, u
             accessToken: tokens.accessToken,
             paramsOfCreateGetServerDateNow
         });
-    }
-
-    if (getIsTokenSubstitutionEnabled()) {
-        const placeholders = getTokensPlaceholders({
-            configId,
-            tokens
-        });
-
-        tokens.accessToken = placeholders.accessToken;
-        tokens.idToken = placeholders.idToken;
-        tokens.refreshToken = placeholders.refreshToken;
     }
 
     if (

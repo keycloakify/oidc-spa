@@ -5,13 +5,5 @@ import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import { oidcSpa } from "oidc-spa/vite-plugin";
 
 export default defineConfig({
-    plugins: [
-        tanstackRouter(),
-        oidcSpa({
-            // See https://docs.oidc-spa.dev/v/v8/resources/token-exfiltration-defence
-            enableTokenExfiltrationDefense: false
-        }),
-        tsconfigPaths(),
-        react()
-    ]
+    plugins: [tanstackRouter(), oidcSpa(), tsconfigPaths(), react()]
 });

@@ -71,52 +71,8 @@ export function createHandleClientEntrypoint(params: {
             `import { oidcEarlyInit } from "oidc-spa/entrypoint";`,
             `const { shouldLoadApp } = oidcEarlyInit({`,
             ...(() => {
-                if ("enableTokenExfiltrationDefense" in oidcSpaVitePluginParams) {
-                    const {
-                        enableTokenExfiltrationDefense,
-                        serviceWorkersAllowedHostnames,
-                        resourceServersAllowedHostnames,
-                        ...rest
-                    } = oidcSpaVitePluginParams ?? {};
-
-                    assert<Equals<typeof rest, {}>>;
-
-                    return [
-                        `   enableTokenExfiltrationDefense: ${enableTokenExfiltrationDefense},`,
-                        `   resourceServersAllowedHostnames: ${JSON.stringify(
-                            resourceServersAllowedHostnames
-                        )},`,
-                        `   serviceWorkersAllowedHostnames: ${JSON.stringify(
-                            serviceWorkersAllowedHostnames
-                        )},`,
-                        `   BASE_URL: ${(() => {
-                            switch (projectType) {
-                                case "nuxt":
-                                    return "__NUXT__.config.app.baseURL";
-                                default:
-                                    return `"${resolvedConfig.base}"`;
-                            }
-                        })()}`
-                    ];
-                }
-
-                const {
-                    freezeFetch,
-                    freezeXMLHttpRequest,
-                    freezeWebSocket,
-                    freezePromise,
-                    safeMode,
-                    ...rest
-                } = oidcSpaVitePluginParams ?? {};
-
-                assert<Equals<typeof rest, {}>>;
-
+                assert<Equals<typeof oidcSpaVitePluginParams, {}>>;
                 return [
-                    `   freezeFetch: ${freezeFetch},`,
-                    `   freezeXMLHttpRequest: ${freezeXMLHttpRequest},`,
-                    `   freezeWebSocket: ${freezeWebSocket},`,
-                    `   freezePromise: ${freezePromise},`,
-                    `   safeMode: ${safeMode},`,
                     `   BASE_URL: ${(() => {
                         switch (projectType) {
                             case "nuxt":
