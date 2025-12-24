@@ -32,6 +32,7 @@ The Framework Agnostic Adapter:
 import { createOidc, oidcEarlyInit } from "oidc-spa/core"; // 32 KB min+gzip (Import Cost overestimate by counting polyfills that are only loaded when needed.)
 import { z } from "zod"; // 59 KB min+zip, but it's optional.
 
+// This is to call only if you don't use oidc-spa's Vite plugin.
 oidcEarlyInit({ BASE_URL: "/" });
 
 const oidc = await createOidc({
@@ -118,6 +119,8 @@ function RouteComponent() {
     );
 }
 ```
+
+[Try the Examples](https://docs.oidc-spa.dev/integration-guides)
 
 ## What this is
 
