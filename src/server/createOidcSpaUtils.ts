@@ -87,13 +87,13 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
         }
 
         return (bootstrapAuth_prResolved = (async () => {
-            dParamsOfBootstrap.resolve(paramsOfBootstrap);
-
             if (paramsOfBootstrap.implementation === "real") {
                 evtPublicSigningKeys.state = await fetchPublicSigningKeys({
                     issuerUri: paramsOfBootstrap.issuerUri
                 });
             }
+
+            dParamsOfBootstrap.resolve(paramsOfBootstrap);
         })());
     };
 
