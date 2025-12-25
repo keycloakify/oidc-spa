@@ -66,20 +66,7 @@ export async function createOidcBackend<
                 debugErrorMessage,
                 decodedAccessToken,
                 decodedAccessToken_original
-            } = await validateAndDecodeAccessToken({
-                request: {
-                    method: "GET",
-                    url: "https://dummy.com",
-                    getHeaderValue: headerName => {
-                        switch (headerName) {
-                            case "Authorization":
-                                return `Bearer ${accessToken}`;
-                            default:
-                                return null;
-                        }
-                    }
-                }
-            });
+            } = await validateAndDecodeAccessToken({ accessToken });
 
             if (!isSuccess) {
                 switch (errorCause) {

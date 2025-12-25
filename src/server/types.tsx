@@ -24,15 +24,26 @@ export type DecodedAccessToken_RFC9068 = {
     [key: string]: unknown; // Allow custom claims (e.g. roles, groups)
 };
 
-export type ValidateAndDecodeAccessToken<DecodedAccessToken> = (params: {
-    request: {
-        method: string;
-        url: string;
-        getHeaderValue: (
-            headerName: "Authorization" | "DPoP" | "Forwarded" | "X-Forwarded-Proto" | "X-Forwarded-Host"
-        ) => string | null | undefined;
-    };
-}) => Promise<ValidateAndDecodeAccessToken.ReturnType<DecodedAccessToken>>;
+export type ValidateAndDecodeAccessToken<DecodedAccessToken> = (
+    params:
+        | {
+              request: {
+                  method: string;
+                  url: string;
+                  getHeaderValue: (
+                      headerName:
+                          | "Authorization"
+                          | "DPoP"
+                          | "Forwarded"
+                          | "X-Forwarded-Proto"
+                          | "X-Forwarded-Host"
+                  ) => string | null | undefined;
+              };
+          }
+        | {
+              accessToken: string;
+          }
+) => Promise<ValidateAndDecodeAccessToken.ReturnType<DecodedAccessToken>>;
 
 export namespace ValidateAndDecodeAccessToken {
     export type ReturnType<DecodedAccessToken> =

@@ -147,7 +147,33 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
         return { getIsDpopPoofSeenRecordIfNotSeen };
     })();
 
-    const validateAndDecodeAccessToken: Out["validateAndDecodeAccessToken"] = async ({ request }) => {
+    const validateAndDecodeAccessToken: Out["validateAndDecodeAccessToken"] = async params => {
+        if ("accessToken" in params) {
+            const { accessToken } = params;
+            return validateAndDecodeAccessToken({
+                request: {
+                    get url() {
+                        assert(false, "339430");
+                        return "";
+                    },
+                    get method() {
+                        assert(false, "339403044");
+                        return "";
+                    },
+                    getHeaderValue: headerName => {
+                        switch (headerName) {
+                            case "Authorization":
+                                return `Bearer ${accessToken}`;
+                            default:
+                                return null;
+                        }
+                    }
+                }
+            });
+        }
+
+        const { request } = params;
+
         const paramsOfBootstrap = await dParamsOfBootstrap.pr;
 
         if (
