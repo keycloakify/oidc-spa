@@ -140,25 +140,15 @@ export function createCreateValidateAndGetAccessTokenClaims_rfc9068<
 
         const validateAndGetAccessTokenClaims: ValidateAndGetAccessTokenClaims<
             AccessTokenClaims
-        > = async ({ request }) => {
+        > = async params => {
             const validateAndDecodeAccessToken = await prValidateAndDecodeAccessToken;
 
             const { isSuccess, errorCause, debugErrorMessage, decodedAccessToken, accessToken } =
-                await validateAndDecodeAccessToken({
-                    request
-                });
+                await validateAndDecodeAccessToken(params);
 
             if (!isSuccess) {
-                if (errorCause === "missing Authorization header") {
-                    return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored.AnonymousRequest>({
-                        isSuccess: false,
-                        isAnonymousRequest: true
-                    });
-                }
-
-                return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored.ValidationFailed>({
+                return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
                     isSuccess: false,
-                    isAnonymousRequest: false,
                     debugErrorMessage: `${errorCause}: ${debugErrorMessage}`,
                     wwwAuthenticateResponseHeaderValue: `Bearer error="invalid_token", error_description="${(() => {
                         switch (errorCause) {

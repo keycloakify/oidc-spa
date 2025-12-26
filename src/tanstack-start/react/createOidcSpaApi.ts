@@ -787,8 +787,8 @@ export function createOidcSpaApi<
         }): Promise<any> => {
             const { next } = options;
 
-            const unauthorized = (params: {
-                code: 401 | 403;
+            const createError = (params: {
+                code: 400 | 401 | 403;
                 wwwAuthenticateResponseHeaderValue: string;
                 debugErrorMessage: string;
             }) => {
@@ -799,6 +799,8 @@ export function createOidcSpaApi<
                     code,
                     (() => {
                         switch (code) {
+                            case 400:
+                                return "Bad Request";
                             case 401:
                                 return "Unauthorized";
                             case 403:
@@ -818,22 +820,17 @@ export function createOidcSpaApi<
 
             assert(prValidateAndGetAccessTokenClaims !== undefined);
 
-            const { validateAndGetAccessTokenClaims } = await prValidateAndGetAccessTokenClaims;
+            const { parseRequest } = await import("../../server/parseRequest");
 
-            const { headers, url, method } = getRequest();
-
-            const resultOfValidate = await validateAndGetAccessTokenClaims({
-                request: {
-                    url,
-                    method,
-                    getHeaderValue: headerName => headers.get(headerName)
-                }
+            const request_parsed = parseRequest({
+                request: getRequest() as Request,
+                trustProxy: true
             });
 
-            if (!resultOfValidate.isSuccess) {
-                if (resultOfValidate.isAnonymousRequest) {
+            if (!request_parsed.isSuccess) {
+                if (request_parsed.isAnonymousRequest) {
                     if (params?.assert === "user logged in") {
-                        throw unauthorized({
+                        throw createError({
                             code: 401,
                             wwwAuthenticateResponseHeaderValue:
                                 'Bearer error="invalid_request", error_description="Missing access token"',
@@ -843,21 +840,26 @@ export function createOidcSpaApi<
                             ].join(" ")
                         });
                     }
-
-                    return next({
-                        context: {
-                            oidc: id<OidcServerContext<AccessTokenClaims>>(
-                                id<OidcServerContext.NotLoggedIn>({
-                                    isUserLoggedIn: false
-                                })
-                            )
-                        }
-                    });
                 }
 
+                throw createError({
+                    code: 400,
+                    wwwAuthenticateResponseHeaderValue:
+                        'Bearer error="invalid_request", error_description="Malformed or unsupported request"',
+                    debugErrorMessage: request_parsed.debugErrorMessage
+                });
+            }
+
+            const { validateAndGetAccessTokenClaims } = await prValidateAndGetAccessTokenClaims;
+
+            const resultOfValidate = await validateAndGetAccessTokenClaims(
+                request_parsed.paramsOfValidateAndDecodeAccessToken
+            );
+
+            if (!resultOfValidate.isSuccess) {
                 const { debugErrorMessage, wwwAuthenticateResponseHeaderValue } = resultOfValidate;
 
-                throw unauthorized({
+                throw createError({
                     code: 401,
                     wwwAuthenticateResponseHeaderValue,
                     debugErrorMessage
@@ -901,7 +903,7 @@ export function createOidcSpaApi<
                     break check_required_claims;
                 }
 
-                throw unauthorized({
+                throw createError({
                     code: 403,
                     wwwAuthenticateResponseHeaderValue:
                         'Bearer error="insufficient_scope", error_description="Insufficient privileges"',
