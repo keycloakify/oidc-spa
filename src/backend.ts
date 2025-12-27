@@ -1,4 +1,4 @@
-import { assert, id } from "./vendor/server/tsafe";
+import { id } from "./vendor/server/tsafe";
 import type { ZodSchemaLike } from "./tools/ZodSchemaLike";
 import { DecodedAccessToken_RFC9068 } from "./server/types";
 import { oidcSpa } from "./server";
@@ -66,12 +66,14 @@ export async function createOidcBackend<
                 debugErrorMessage,
                 decodedAccessToken,
                 decodedAccessToken_original
-            } = await validateAndDecodeAccessToken({ accessToken });
+            } = await validateAndDecodeAccessToken({
+                scheme: "Bearer",
+                accessToken,
+                rejectIfAccessTokenDPoPBound: true
+            });
 
             if (!isSuccess) {
                 switch (errorCause) {
-                    case "missing Authorization header":
-                        assert(false, "29330204");
                     case "validation error":
                         if (
                             debugErrorMessage.includes("shape") ||

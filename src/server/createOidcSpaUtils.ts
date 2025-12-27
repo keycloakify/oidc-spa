@@ -148,32 +148,6 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
     })();
 
     const validateAndDecodeAccessToken: Out["validateAndDecodeAccessToken"] = async params => {
-        if ("accessToken" in params) {
-            const { accessToken } = params;
-            return validateAndDecodeAccessToken({
-                request: {
-                    get url() {
-                        assert(false, "339430");
-                        return "";
-                    },
-                    get method() {
-                        assert(false, "339403044");
-                        return "";
-                    },
-                    getHeaderValue: headerName => {
-                        switch (headerName) {
-                            case "Authorization":
-                                return `Bearer ${accessToken}`;
-                            default:
-                                return null;
-                        }
-                    }
-                }
-            });
-        }
-
-        const { request } = params;
-
         const paramsOfBootstrap = await dParamsOfBootstrap.pr;
 
         if (
@@ -210,43 +184,13 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
             });
         }
 
-        const authorizationHeaderValue = request.getHeaderValue("Authorization");
-
-        if (!authorizationHeaderValue) {
-            return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
-                isSuccess: false,
-                errorCause: "missing Authorization header",
-                debugErrorMessage: "The request is anonymous, no Authorization header"
-            });
-        }
-
-        const match = authorizationHeaderValue.trim().match(/^((?:Bearer)|(?:DPoP))\s+(.+)$/i);
-
-        if (match === null) {
-            return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
-                isSuccess: false,
-                errorCause: "validation error",
-                debugErrorMessage: "Malformed Authorization header"
-            });
-        }
-
-        const [, scheme, accessToken] = match;
-
-        if (!isAmong(["Bearer", "DPoP"], scheme)) {
-            return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
-                isSuccess: false,
-                errorCause: "validation error",
-                debugErrorMessage: `Unsupported scheme ${scheme}, expected Bearer or DPoP`
-            });
-        }
-
         let decodedAccessToken_original: unknown;
 
         validation: {
             if (paramsOfBootstrap.implementation === "mock") {
                 assert<Equals<typeof paramsOfBootstrap.behavior, "decode only">>;
 
-                decodedAccessToken_original = decodeJwt(accessToken);
+                decodedAccessToken_original = decodeJwt(params.accessToken);
 
                 try {
                     zDecodedAccessToken_RFC9068.parse(decodedAccessToken_original);
@@ -275,7 +219,7 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
                 let header: ReturnType<typeof decodeProtectedHeader>;
 
                 try {
-                    header = decodeProtectedHeader(accessToken);
+                    header = decodeProtectedHeader(params.accessToken);
                 } catch {
                     return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
                         isSuccess: false,
@@ -342,7 +286,7 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
             }
 
             try {
-                const verification = await jwtVerify(accessToken, publicSigningKeys.keyResolver, {
+                const verification = await jwtVerify(params.accessToken, publicSigningKeys.keyResolver, {
                     algorithms: [alg]
                 });
 
@@ -442,7 +386,21 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
                     });
                 }
 
-                if (scheme === "Bearer") {
+                if (params.scheme === "Bearer") {
+                    if (!params.rejectIfAccessTokenDPoPBound) {
+                        if (process.env.NODE_ENV === "development") {
+                            console.warn(
+                                [
+                                    "oidc-spa: Accepting a DPoP bound token without",
+                                    "validating the DPoP proof because rejectIfAccessTokenDPoPBound was explicitly",
+                                    "set to false"
+                                ].join(" ")
+                            );
+                        }
+
+                        break validate_DPoP;
+                    }
+
                     if (cnf_jkt !== undefined) {
                         return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
                             isSuccess: false,
@@ -456,7 +414,7 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
 
                     break validate_DPoP;
                 }
-                assert<Equals<typeof scheme, "DPoP">>;
+                assert<Equals<typeof params.scheme, "DPoP">>;
 
                 if (cnf_jkt === undefined) {
                     return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
@@ -469,20 +427,10 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
                     });
                 }
 
-                const dpopHeaderValue = request.getHeaderValue("DPoP")?.trim();
-
-                if (!dpopHeaderValue) {
-                    return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
-                        isSuccess: false,
-                        errorCause: "validation error",
-                        debugErrorMessage: "Scheme DPoP was specified but the DPoP header is missing"
-                    });
-                }
-
                 let dpopHeader: ReturnType<typeof decodeProtectedHeader>;
 
                 try {
-                    dpopHeader = decodeProtectedHeader(dpopHeaderValue);
+                    dpopHeader = decodeProtectedHeader(params.dpopProof);
                 } catch {
                     return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
                         isSuccess: false,
@@ -564,7 +512,7 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
 
                 try {
                     const key = await importJWK(jwk, dpopAlg);
-                    const verification = await jwtVerify(dpopHeaderValue, key, {
+                    const verification = await jwtVerify(params.dpopProof, key, {
                         algorithms: [dpopAlg],
                         typ: "dpop+jwt"
                     });
@@ -611,117 +559,56 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
                     }
                 }
 
-                if (typeof htm !== "string" || htm.toUpperCase() !== request.method.toUpperCase()) {
-                    return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
-                        isSuccess: false,
-                        errorCause: "validation error",
-                        debugErrorMessage: "DPoP proof htm claim does not match request method"
-                    });
-                }
-
-                const expectedHtu = (() => {
-                    let url: URL;
-
-                    try {
-                        url = new URL(request.url);
-                    } catch {
-                        return undefined;
-                    }
-
-                    const forwardedParams: { proto: string | undefined; host: string | undefined } =
-                        (() => {
-                            // Reverse proxies may terminate TLS; honor forwarded headers to rebuild the externally visible URL.
-                            const forwardedHeader = request.getHeaderValue("Forwarded");
-
-                            if (typeof forwardedHeader !== "string") {
-                                return { proto: undefined, host: undefined };
-                            }
-
-                            const [firstEntry] = forwardedHeader.split(",");
-                            const tokens = firstEntry.trim().split(";");
-
-                            const getTokenValue = (name: string) => {
-                                const token = tokens.find(token =>
-                                    token.trim().toLowerCase().startsWith(`${name.toLowerCase()}=`)
-                                );
-
-                                if (token === undefined) {
-                                    return undefined;
-                                }
-
-                                const [, rawValue] = token.split("=");
-
-                                return rawValue?.replace(/^"|"$/g, "").trim();
-                            };
-
-                            return {
-                                proto: getTokenValue("proto"),
-                                host: getTokenValue("host")
-                            };
-                        })();
-
-                    {
-                        const forwardedProto = (() => {
-                            if (forwardedParams.proto) {
-                                return forwardedParams.proto;
-                            }
-
-                            const value = request.getHeaderValue("X-Forwarded-Proto");
-
-                            if (!value) {
-                                return undefined;
-                            }
-
-                            return value.split(",")[0]?.trim();
-                        })();
-
-                        const forwardedProto_normalized = (() => {
-                            if (forwardedProto === undefined) {
-                                return undefined;
-                            }
-
-                            const proto = forwardedProto.replace(/:$/, "").toLowerCase();
-
-                            return proto === "http" || proto === "https" ? proto : undefined;
-                        })();
-
-                        if (forwardedProto_normalized !== undefined) {
-                            url.protocol = `${forwardedProto_normalized}:`;
-                        }
-                    }
-
-                    {
-                        const forwardedHost = (() => {
-                            if (forwardedParams.host) {
-                                return forwardedParams.host;
-                            }
-
-                            const value = request.getHeaderValue("X-Forwarded-Host");
-
-                            if (!value) {
-                                return undefined;
-                            }
-
-                            return value.split(",")[0]?.trim();
-                        })();
-
-                        if (forwardedHost) {
-                            url.host = forwardedHost;
-                        }
-                    }
-
-                    return `${url.origin}${url.pathname}`;
-                })();
-
-                if (expectedHtu === undefined || typeof htu !== "string" || htu !== expectedHtu) {
-                    return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
+                check_htm: {
+                    const errored = id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
                         isSuccess: false,
                         errorCause: "validation error",
                         debugErrorMessage: [
-                            `DPoP proof htu claim does not match request url.",
-                            "htu: ${htu}, expected htu: ${expectedHtu}`
+                            "DPoP proof htm claim does not match request method.",
+                            `htm: ${htm}, expected htm: ${params.expectedHtm}`
                         ].join(" ")
                     });
+
+                    if (typeof htm !== "string") {
+                        if (!htm && params.expectedHtm === undefined) {
+                            break check_htm;
+                        }
+                        return errored;
+                    }
+
+                    if (params.expectedHtm === undefined) {
+                        return errored;
+                    }
+
+                    if (htm.toUpperCase() !== params.expectedHtm.toUpperCase()) {
+                        return errored;
+                    }
+                }
+
+                check_htu: {
+                    const errored = id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
+                        isSuccess: false,
+                        errorCause: "validation error",
+                        debugErrorMessage: [
+                            "DPoP proof htu claim does not match request url.",
+                            `htu: ${htu}, expected htu: ${params.expectedHtu}`
+                        ].join(" ")
+                    });
+
+                    if (typeof htu !== "string") {
+                        if (!htu && params.expectedHtu === undefined) {
+                            break check_htu;
+                        }
+                        return errored;
+                    }
+
+                    if (params.expectedHtu === undefined) {
+                        return errored;
+                    }
+
+                    if (htu !== params.expectedHtu) {
+                        return errored;
+                    }
                 }
 
                 if (typeof ath !== "string") {
@@ -732,7 +619,7 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
                     });
                 }
 
-                const expectedAth = createHash("sha256").update(accessToken).digest("base64url");
+                const expectedAth = createHash("sha256").update(params.accessToken).digest("base64url");
 
                 if (ath !== expectedAth) {
                     return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
@@ -786,7 +673,7 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
             isSuccess: true,
             decodedAccessToken,
             decodedAccessToken_original,
-            accessToken
+            accessToken: params.accessToken
         });
     };
 

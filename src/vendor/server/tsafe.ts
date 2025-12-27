@@ -4,3 +4,4 @@ export { isAmong } from "tsafe/isAmong";
 export type { Equals } from "tsafe";
 export { exclude } from "tsafe/exclude";
 export { Reflect } from "tsafe/Reflect";
+export { objectFromEntries } from "tsafe/objectFromEntries";

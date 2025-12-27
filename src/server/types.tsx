@@ -25,27 +25,30 @@ export type DecodedAccessToken_RFC9068 = {
 };
 
 export type ValidateAndDecodeAccessToken<DecodedAccessToken> = (
-    params:
-        | {
-              request: {
-                  method: string;
-                  url: string;
-                  getHeaderValue: (
-                      headerName:
-                          | "Authorization"
-                          | "DPoP"
-                          | "Forwarded"
-                          | "X-Forwarded-Proto"
-                          | "X-Forwarded-Host"
-                  ) => string | null | undefined;
-              };
-          }
-        | {
-              accessToken: string;
-          }
+    params: ValidateAndDecodeAccessToken.Params
 ) => Promise<ValidateAndDecodeAccessToken.ReturnType<DecodedAccessToken>>;
 
 export namespace ValidateAndDecodeAccessToken {
+    export type Params = Params.Bearer | Params.DPoP;
+
+    export namespace Params {
+        type Common = {
+            accessToken: string;
+        };
+
+        export type Bearer = Common & {
+            scheme: "Bearer";
+            rejectIfAccessTokenDPoPBound: boolean;
+        };
+
+        export type DPoP = Common & {
+            scheme: "DPoP";
+            dpopProof: string;
+            expectedHtu: string | undefined;
+            expectedHtm: string | undefined;
+        };
+    }
+
     export type ReturnType<DecodedAccessToken> =
         | (ReturnType.Success<DecodedAccessToken> & { errorCause?: never; debugErrorMessage?: never })
         | (ReturnType.Errored & {
@@ -65,7 +68,6 @@ export namespace ValidateAndDecodeAccessToken {
         export type Errored = {
             isSuccess: false;
             errorCause:
-                | "missing Authorization header"
                 | "validation error"
                 | "validation error - access token expired"
                 | "validation error - invalid signature";

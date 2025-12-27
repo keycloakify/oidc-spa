@@ -463,15 +463,9 @@ export type CreateValidateAndGetAccessTokenClaims<AccessTokenClaims> = (params: 
     validateAndGetAccessTokenClaims: ValidateAndGetAccessTokenClaims<AccessTokenClaims>;
 };
 
-export type ValidateAndGetAccessTokenClaims<AccessTokenClaims> = (params: {
-    request: {
-        method: string;
-        url: string;
-        getHeaderValue: (
-            headerName: "Authorization" | "DPoP" | "Forwarded" | "X-Forwarded-Proto" | "X-Forwarded-Host"
-        ) => string | null | undefined;
-    };
-}) => Promise<ValidateAndGetAccessTokenClaims.ReturnType<AccessTokenClaims>>;
+export type ValidateAndGetAccessTokenClaims<AccessTokenClaims> = (
+    params: import("../../server/types").ValidateAndDecodeAccessToken.Params
+) => Promise<ValidateAndGetAccessTokenClaims.ReturnType<AccessTokenClaims>>;
 
 export namespace ValidateAndGetAccessTokenClaims {
     export type ReturnType<AccessTokenClaims> =
@@ -485,21 +479,10 @@ export namespace ValidateAndGetAccessTokenClaims {
             accessToken: string;
         };
 
-        export type Errored = Errored.AnonymousRequest | Errored.ValidationFailed;
-        export namespace Errored {
-            type Common = {
-                isSuccess: false;
-            };
-
-            export type AnonymousRequest = Common & {
-                isAnonymousRequest: true;
-            };
-
-            export type ValidationFailed = Common & {
-                isAnonymousRequest: false;
-                debugErrorMessage: string;
-                wwwAuthenticateResponseHeaderValue: string;
-            };
-        }
+        export type Errored = {
+            isSuccess: false;
+            debugErrorMessage: string;
+            wwwAuthenticateResponseHeaderValue: string;
+        };
     }
 }
