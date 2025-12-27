@@ -178,43 +178,37 @@ function anyRequestToUnified(req: AnyRequest): AnyRequest.Unified {
     );
 }
 
-export type ParseAnyRequestResult = ParseAnyRequestResult.Success | ParseAnyRequestResult.Errored;
+export type RequestAuthContext = RequestAuthContext.Success | RequestAuthContext.Errored;
 
-export namespace ParseAnyRequestResult {
+export namespace RequestAuthContext {
     export type Success = {
-        isSuccess: true;
-        paramsOfValidateAndDecodeAccessToken: ValidateAndDecodeAccessToken.Params;
+        isWellFormed: true;
+        accessTokenAndMetadata: ValidateAndDecodeAccessToken.Params;
     };
 
     export type Errored = {
-        isSuccess: false;
-        isAnonymousRequest: boolean;
+        isWellFormed: false;
         debugErrorMessage: string;
     };
 }
 
-export function parseRequest(params: {
+export function extractRequestAuthContext(params: {
     request: AnyRequest;
     trustProxy: boolean;
-}): ParseAnyRequestResult {
+}): RequestAuthContext | undefined {
     const { request, trustProxy } = params;
 
     const request_unified = anyRequestToUnified(request);
 
     if (request_unified.headers.Authorization === undefined) {
-        return id<ParseAnyRequestResult.Errored>({
-            isSuccess: false,
-            isAnonymousRequest: true,
-            debugErrorMessage: "The request is anonymous, no Authorization header"
-        });
+        return undefined;
     }
 
     const match = request_unified.headers.Authorization.trim().match(/^((?:Bearer)|(?:DPoP))\s+(.+)$/);
 
     if (match === null) {
-        return id<ParseAnyRequestResult.Errored>({
-            isSuccess: false,
-            isAnonymousRequest: false,
+        return id<RequestAuthContext.Errored>({
+            isWellFormed: false,
             debugErrorMessage: "Malformed Authorization header"
         });
     }
@@ -222,17 +216,16 @@ export function parseRequest(params: {
     const [, scheme, accessToken] = match;
 
     if (!isAmong(["Bearer", "DPoP"], scheme)) {
-        return id<ParseAnyRequestResult.Errored>({
-            isSuccess: false,
-            isAnonymousRequest: false,
+        return id<RequestAuthContext.Errored>({
+            isWellFormed: false,
             debugErrorMessage: `Unsupported scheme ${scheme}, expected Bearer or DPoP`
         });
     }
 
     if (scheme === "Bearer") {
-        return id<ParseAnyRequestResult.Success>({
-            isSuccess: true,
-            paramsOfValidateAndDecodeAccessToken: id<ValidateAndDecodeAccessToken.Params.Bearer>({
+        return id<RequestAuthContext.Success>({
+            isWellFormed: true,
+            accessTokenAndMetadata: id<ValidateAndDecodeAccessToken.Params.Bearer>({
                 scheme: "Bearer",
                 accessToken,
                 rejectIfAccessTokenDPoPBound: true
@@ -243,9 +236,8 @@ export function parseRequest(params: {
     assert<Equals<typeof scheme, "DPoP">>;
 
     if (request_unified.headers.DPoP === undefined) {
-        return id<ParseAnyRequestResult.Errored>({
-            isSuccess: false,
-            isAnonymousRequest: false,
+        return id<RequestAuthContext.Errored>({
+            isWellFormed: false,
             debugErrorMessage: "Scheme DPoP was specified but the DPoP header is missing"
         });
     }
@@ -345,9 +337,9 @@ export function parseRequest(params: {
         return `${url.origin}${url.pathname}`;
     })();
 
-    return id<ParseAnyRequestResult.Success>({
-        isSuccess: true,
-        paramsOfValidateAndDecodeAccessToken: id<ValidateAndDecodeAccessToken.Params.DPoP>({
+    return id<RequestAuthContext.Success>({
+        isWellFormed: true,
+        accessTokenAndMetadata: id<ValidateAndDecodeAccessToken.Params.DPoP>({
             scheme: "DPoP",
             accessToken,
             dpopProof: request_unified.headers.DPoP,

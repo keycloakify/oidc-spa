@@ -1,5 +1,9 @@
 export type * from "./types";
 import { oidcSpaUtilsBuilder } from "./utilsBuilder";
-export { parseRequest, type AnyRequest, type ParseAnyRequestResult } from "./parseRequest";
+export {
+    extractRequestAuthContext,
+    type AnyRequest,
+    type RequestAuthContext as ParseAnyRequestResult
+} from "./extractRequestAuthContext";
 
 export const oidcSpa = oidcSpaUtilsBuilder;

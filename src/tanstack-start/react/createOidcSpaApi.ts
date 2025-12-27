@@ -820,40 +820,50 @@ export function createOidcSpaApi<
 
             assert(prValidateAndGetAccessTokenClaims !== undefined);
 
-            const { parseRequest } = await import("../../server/parseRequest");
+            const { extractRequestAuthContext } = await import("../../server/extractRequestAuthContext");
 
-            const request_parsed = parseRequest({
+            const requestAuthContext = extractRequestAuthContext({
                 request: getRequest() as Request,
                 trustProxy: true
             });
 
-            if (!request_parsed.isSuccess) {
-                if (request_parsed.isAnonymousRequest) {
-                    if (params?.assert === "user logged in") {
-                        throw createError({
-                            code: 401,
-                            wwwAuthenticateResponseHeaderValue:
-                                'Bearer error="invalid_request", error_description="Missing access token"',
-                            debugErrorMessage: [
-                                "Asserted user logged in for that serverFn request",
-                                "but no access token was attached to the request"
-                            ].join(" ")
-                        });
-                    }
+            if (requestAuthContext === undefined) {
+                if (params?.assert === "user logged in") {
+                    throw createError({
+                        code: 401,
+                        wwwAuthenticateResponseHeaderValue:
+                            'Bearer error="invalid_request", error_description="Missing access token"',
+                        debugErrorMessage: [
+                            "Asserted user logged in for that serverFn request",
+                            "but no access token was attached to the request"
+                        ].join(" ")
+                    });
                 }
 
+                return next({
+                    context: {
+                        oidc: id<OidcServerContext<AccessTokenClaims>>(
+                            id<OidcServerContext.NotLoggedIn>({
+                                isUserLoggedIn: false
+                            })
+                        )
+                    }
+                });
+            }
+
+            if (!requestAuthContext.isWellFormed) {
                 throw createError({
                     code: 400,
                     wwwAuthenticateResponseHeaderValue:
                         'Bearer error="invalid_request", error_description="Malformed or unsupported request"',
-                    debugErrorMessage: request_parsed.debugErrorMessage
+                    debugErrorMessage: requestAuthContext.debugErrorMessage
                 });
             }
 
             const { validateAndGetAccessTokenClaims } = await prValidateAndGetAccessTokenClaims;
 
             const resultOfValidate = await validateAndGetAccessTokenClaims(
-                request_parsed.paramsOfValidateAndDecodeAccessToken
+                requestAuthContext.accessTokenAndMetadata
             );
 
             if (!resultOfValidate.isSuccess) {
