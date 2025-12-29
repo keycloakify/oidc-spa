@@ -69,10 +69,11 @@ function isUnified(req: AnyRequest): req is AnyRequest.Unified {
 }
 
 function isRequest(req: AnyRequest): req is AnyRequest.RequestLike {
-    // TODO: I would prefer discriminating without instanceof in case the
-    // Request object actually match the expected shape but is not an instance
-    // of the builtin
-    return req instanceof Request;
+    if ("type" in req || "raw" in req || "socket" in req) {
+        return false;
+    }
+    assert<Equals<typeof req, AnyRequest.RequestLike>>;
+    return true;
 }
 
 function isIncomingMessage(req: AnyRequest): req is AnyRequest.IncomingMessageLike {
