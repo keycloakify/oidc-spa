@@ -5,8 +5,8 @@ import { readExpirationTimeInJwt } from "../tools/readExpirationTimeInJwt";
 import { decodeJwt } from "../tools/decodeJwt";
 import type { Oidc } from "./Oidc";
 import { INFINITY_TIME } from "../tools/INFINITY_TIME";
-import { getIsTokenSubstitutionEnabled, getTokensPlaceholders } from "./tokenPlaceholderSubstitution";
-import { registerAccessTokenForDPoP } from "./dpop";
+import { getIsTokenSubstitutionEnabled, getTokensPlaceholders } from "./earlyInit_tokenSubstitution";
+import { registerAccessTokenForDPoP } from "./earlyInit_DPoP";
 import { createGetServerDateNow, type ParamsOfCreateGetServerDateNow } from "../tools/getServerDateNow";
 
 export function oidcClientTsUserToTokens<DecodedIdToken extends Record<string, unknown>>(params: {

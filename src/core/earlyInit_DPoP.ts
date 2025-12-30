@@ -67,18 +67,25 @@ export function createInMemoryDPoPStore(params: { configId: string }): DPoPStore
 
             return Promise.resolve(value_proxy);
         },
-        remove: async key => {
-            const value = await store.get(key);
+        remove: async () => {
+            assert(configId in dpopStateByConfigId, "30438443");
             delete dpopStateByConfigId[configId];
+
+            const value: DPoPState = {
+                get nonce() {
+                    assert(false, "304339");
+                    return null as any;
+                },
+                get keys() {
+                    assert(false, "235533");
+                    return null as any;
+                }
+            };
             return value;
         },
         getAllKeys: () => {
-            if (configId in dpopStateByConfigId) {
-                assert(key_singleton !== undefined, "39430338");
-                return Promise.resolve([key_singleton]);
-            } else {
-                return Promise.resolve([]);
-            }
+            assert(!(configId in dpopStateByConfigId), "304384");
+            return Promise.resolve([]);
         }
     };
 

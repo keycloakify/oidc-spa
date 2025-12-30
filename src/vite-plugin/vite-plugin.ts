@@ -1,15 +1,57 @@
 import type { Plugin, TransformResult } from "vite";
 import { assert } from "../tools/tsafe/assert";
-import type { ParamsOfEarlyInit, ParamsOfEarlyInit_legacy } from "../core/earlyInit";
+import type { ApiName } from "../core/earlyInit_freezeBrowserRuntime";
 import { createHandleClientEntrypoint } from "./handleClientEntrypoint";
 import { createHandleServerEntrypoint } from "./handleServerEntrypoint";
 import { manageOptimizedDeps } from "./manageOptimizedDeps";
 import { transformCreateFileRoute } from "./transformTanstackRouterCreateFileRoute";
 import { getProjectType, type ProjectType } from "./projectType";
 
-export type OidcSpaVitePluginParams =
-    | Omit<ParamsOfEarlyInit, "BASE_URL">
-    | Omit<ParamsOfEarlyInit_legacy, "BASE_URL">;
+export type OidcSpaVitePluginParams = {
+    browserRuntimeFreeze?:
+        | false
+        | {
+              enabled: true;
+              exclude?: ApiName[];
+          };
+    /**
+     * resourceServersAllowedHostnames:
+     *
+     * Example ["vault.domain2.net", "minio.domain2.net", "*.lab.domain3.net"]
+     * Note that any domains first party relative to where your app
+     * is deployed will be automatically allowed.
+     *
+     * So for example if your app is deployed under:
+     * dashboard.my-company.com
+     * Authed request to the following domains will automatically be allowed (examples):
+     * - minio.my-company.com
+     * - minio.dashboard.my-company.com
+     * - my-company.com
+     *
+     * BUT there is an exception to the rule. If your app is deployed under free default domain
+     * provided by known hosting platform like
+     * - xxx.vercel.com
+     * - xxx.netlify.com
+     * - xxx.github.com
+     * - xxx.pages.dev (firebase)
+     * - xxx.web.app (firebase)
+     * - ...
+     *
+     * We we won't allow request to parent domain since those are multi tenant.
+     *
+     * Also, all filtering will be disabled when the app is ran with the dev server, so under:
+     * - localhost
+     * - 127.0.0.1
+     * - [::]
+     * */
+    tokenSubstitution?:
+        | false
+        | {
+              enabled: true;
+              resourceServersAllowedHostnames?: string[];
+              serviceWorkersAllowedHostnames?: string[];
+          };
+};
 
 export function oidcSpa(params: OidcSpaVitePluginParams = {}) {
     let load_handleClientEntrypoint:

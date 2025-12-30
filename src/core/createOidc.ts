@@ -58,8 +58,8 @@ import {
     clearStateDataCookie,
     getIsStateDataCookieEnabled
 } from "./StateDataCookie";
-import { getIsTokenSubstitutionEnabled } from "./tokenPlaceholderSubstitution";
-import { createInMemoryDPoPStore } from "./dpop";
+import { getIsTokenSubstitutionEnabled } from "./earlyInit_tokenSubstitution";
+import { createInMemoryDPoPStore } from "./earlyInit_DPoP";
 import { loadWebcryptoLinerShim } from "../tools/loadWebcryptoLinerShim";
 
 // NOTE: Replaced at build time

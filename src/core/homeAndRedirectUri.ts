@@ -1,5 +1,5 @@
 import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";
-import { getBASE_URL } from "./BASE_URL";
+import { getBASE_URL_earlyInit } from "./earlyInit_BASE_URL";
 
 export function getHomeAndRedirectUri(params: { BASE_URL_params: string | undefined }) {
     const { BASE_URL_params } = params;
@@ -10,7 +10,7 @@ export function getHomeAndRedirectUri(params: { BASE_URL_params: string | undefi
                 return BASE_URL_params;
             }
 
-            const BASE_URL = getBASE_URL();
+            const BASE_URL = getBASE_URL_earlyInit();
 
             if (BASE_URL === undefined) {
                 throw new Error(
