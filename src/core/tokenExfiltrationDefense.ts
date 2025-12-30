@@ -427,6 +427,42 @@ function patchWebSocketApiToSubstituteTokenPlaceholder(params: {
         const nextUrl = substitutePlaceholderByRealToken(urlStr);
         let didSubstitute = nextUrl !== urlStr;
 
+        const nextProtocols = (() => {
+            if (protocols === undefined) {
+                return undefined;
+            }
+
+            if (typeof protocols === "string") {
+                const next = substitutePlaceholderByRealToken(protocols);
+
+                if (next !== protocols) {
+                    didSubstitute = true;
+                }
+
+                return next;
+            }
+
+            let didProtocolSubstitute = false;
+            const next: string[] = [];
+
+            for (const p of protocols) {
+                const pNext = substitutePlaceholderByRealToken(p);
+
+                if (pNext !== p) {
+                    didProtocolSubstitute = true;
+                }
+
+                next.push(pNext);
+            }
+
+            if (didProtocolSubstitute) {
+                didSubstitute = true;
+                return next;
+            }
+
+            return protocols;
+        })();
+
         const { hostname, pathname } = new URL(nextUrl, window.location.href);
 
         block_authed_request_to_unauthorized_hostnames: {
@@ -453,7 +489,7 @@ function patchWebSocketApiToSubstituteTokenPlaceholder(params: {
             );
         }
 
-        const instance = new WebSocket_actual(nextUrl, protocols as Parameters<typeof WebSocket>[1]);
+        const instance = new WebSocket_actual(nextUrl, nextProtocols as Parameters<typeof WebSocket>[1]);
 
         stateByInstance.set(instance, {
             url: nextUrl,
