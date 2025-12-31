@@ -32,6 +32,13 @@ export function createInMemoryDPoPStore(params: { configId: string }): DPoPStore
 
             dpopStateByConfigId[configId] = value;
 
+            Object.assign(value.keys, {
+                toJSON: () => ({
+                    __brand: "CryptoKeyPair Alias",
+                    configId
+                })
+            });
+
             return Promise.resolve();
         },
         get: key => {
@@ -39,7 +46,26 @@ export function createInMemoryDPoPStore(params: { configId: string }): DPoPStore
             assert(key_singleton === key, "34023493");
             const value = dpopStateByConfigId[configId];
             assert(value !== undefined, "943023493");
-            return Promise.resolve(value);
+            assert("toJSON" in value.keys, "43553434");
+
+            const value_proxy = {
+                get nonce() {
+                    return value.nonce;
+                },
+                keys: {
+                    get publicKey() {
+                        assert(false, "40384439");
+                        return null as any;
+                    },
+                    get privateKey() {
+                        assert(false, "4939433");
+                        return null as any;
+                    },
+                    toJSON: value.keys.toJSON
+                }
+            };
+
+            return Promise.resolve(value_proxy);
         },
         remove: async key => {
             const value = await store.get(key);
@@ -396,6 +422,92 @@ export function implementFetchAndXhrDPoPInterceptor() {
             window.fetchLater = createFetchProxy({ fetch: window.fetchLater, isFetchLater: true });
         }
     }
+
+    // NOTE: Intercept internal DPoP signed auth request made internally by
+    // our fork of oidc-client-ts.
+    {
+        const fetch_before = window.fetch;
+
+        window.fetch = async (input, init) => {
+            handle: {
+                if (init === undefined) {
+                    break handle;
+                }
+
+                if (init.headers === undefined) {
+                    break handle;
+                }
+
+                if (init.headers instanceof Headers) {
+                    break handle;
+                }
+
+                if (init.headers instanceof Array) {
+                    break handle;
+                }
+
+                let dpopHeaderValue: string | undefined = undefined;
+
+                try {
+                    dpopHeaderValue = init.headers["DPoP"];
+                } catch {}
+
+                if (typeof dpopHeaderValue !== "string") {
+                    break handle;
+                }
+
+                const match = dpopHeaderValue.match(/^generateDPoPProof\((.+)\)$/);
+
+                if (match === null) {
+                    break handle;
+                }
+
+                const {
+                    url,
+                    accessToken,
+                    httpMethod,
+                    keyPair: { configId },
+                    nonce
+                } = JSON.parse(match[1]) as {
+                    url: string;
+                    accessToken?: string;
+                    httpMethod?: string;
+                    keyPair: {
+                        __brand: "CryptoKeyPair Alias";
+                        configId: string;
+                    };
+                    nonce?: string;
+                };
+
+                const dpopState = dpopStateByConfigId[configId];
+
+                assert(dpopState !== undefined, "304922047");
+
+                const { paramsOfCreateGetServerDateNow } =
+                    accessTokenConfigIdEntries
+                        .filter(entry => entry.configId === configId)
+                        .reverse()
+                        .find(() => true) ?? {};
+
+                const dpopProof = await generateES256DPoPProof({
+                    keyPair: dpopState.keys,
+                    url,
+                    accessToken,
+                    httpMethod,
+                    nonce,
+                    getServerDateNow:
+                        paramsOfCreateGetServerDateNow === undefined
+                            ? () => Date.now()
+                            : createGetServerDateNow(paramsOfCreateGetServerDateNow)
+                });
+
+                init.headers["DPoP"] = dpopProof;
+            }
+
+            return fetch_before(input, init);
+        };
+    }
+
     {
         const XMLHttpRequest_prototype_actual = {
             open: XMLHttpRequest.prototype.open,
