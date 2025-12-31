@@ -437,7 +437,7 @@ export async function createOidc_nonMemoized<
     if (getIsTokenSubstitutionEnabled()) {
         log?.(
             [
-                "Token exfiltration defense successfully enabled.",
+                "Token substitution successfully enabled.",
                 "",
                 "→ Tokens exposed to the application layer are unusable for resource server calls.",
                 "→ They remain structurally valid JWTs, but their signature segment is replaced.",

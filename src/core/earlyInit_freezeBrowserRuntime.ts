@@ -36,15 +36,19 @@ export type ApiName =
 export function freezeBrowserRuntime(params: { excludedApiNames: ApiName[] }) {
     const { excludedApiNames } = params;
 
-    const createWriteError = (target: string) =>
-        new Error(
+    const createWriteError = (params: { target: string; apiName: ApiName }) => {
+        const { target, apiName } = params;
+        return new Error(
             [
-                `oidc-spa: Monkey patching of ${target} has been blocked.`,
-                `Read: https://docs.oidc-spa.dev/v/v8/resources/blocked-monkey-patching`
+                `oidc-spa: Blocked alteration of ${target}.`,
+                `\nThis runtime is frozen to prevent monkey patching.`,
+                `If it is monkey patched for legitimate reason add "${apiName}" to browserRuntimeFreeze.exclude.`,
+                `\nDocs: https://docs.oidc-spa.dev/v/v8/resources/blocked-monkey-patching`
             ].join(" ")
         );
+    };
 
-    for (const name of [
+    for (const apiName of [
         "fetch",
         "XMLHttpRequest",
         "WebSocket",
@@ -77,14 +81,14 @@ export function freezeBrowserRuntime(params: { excludedApiNames: ApiName[] }) {
         "crypto.subtle",
         "Function"
     ] as const) {
-        assert<Equals<typeof name, ApiName>>;
+        assert<Equals<typeof apiName, ApiName>>;
 
-        if (excludedApiNames.includes(name)) {
+        if (excludedApiNames.includes(apiName)) {
             continue;
         }
 
         crypto_subtle: {
-            if (name !== "crypto.subtle") {
+            if (apiName !== "crypto.subtle") {
                 break crypto_subtle;
             }
 
@@ -115,7 +119,7 @@ export function freezeBrowserRuntime(params: { excludedApiNames: ApiName[] }) {
                         ? {
                               get: () => pd.value,
                               set: () => {
-                                  throw createWriteError(target);
+                                  throw createWriteError({ target, apiName });
                               }
                           }
                         : {
@@ -123,7 +127,7 @@ export function freezeBrowserRuntime(params: { excludedApiNames: ApiName[] }) {
                               set:
                                   pd.set ??
                                   (() => {
-                                      throw createWriteError(target);
+                                      throw createWriteError({ target, apiName });
                                   })
                           })
                 });
@@ -141,7 +145,7 @@ export function freezeBrowserRuntime(params: { excludedApiNames: ApiName[] }) {
                 enumerable: true,
                 get: () => subtle,
                 set: () => {
-                    throw createWriteError("window.crypto.subtle");
+                    throw createWriteError({ target: "window.crypto.subtle", apiName });
                 }
             });
 
@@ -149,7 +153,7 @@ export function freezeBrowserRuntime(params: { excludedApiNames: ApiName[] }) {
         }
 
         service_worker: {
-            if (name !== "ServiceWorker") {
+            if (apiName !== "ServiceWorker") {
                 break service_worker;
             }
 
@@ -157,12 +161,12 @@ export function freezeBrowserRuntime(params: { excludedApiNames: ApiName[] }) {
 
             const original = navigator[name_];
 
-            Object.defineProperty(navigator, name, {
+            Object.defineProperty(navigator, apiName, {
                 configurable: false,
                 enumerable: true,
                 get: () => original,
                 set: () => {
-                    throw createWriteError(`window.navigator.${name_}`);
+                    throw createWriteError({ target: `window.navigator.${name_}`, apiName });
                 }
             });
 
@@ -170,7 +174,7 @@ export function freezeBrowserRuntime(params: { excludedApiNames: ApiName[] }) {
         }
 
         Function: {
-            if (name !== "Function") {
+            if (apiName !== "Function") {
                 break Function;
             }
 
@@ -182,7 +186,10 @@ export function freezeBrowserRuntime(params: { excludedApiNames: ApiName[] }) {
                     enumerable: true,
                     get: () => original,
                     set: () => {
-                        throw createWriteError(`window.Function.prototype.${name})`);
+                        throw createWriteError({
+                            target: `window.Function.prototype.${name})`,
+                            apiName
+                        });
                     }
                 });
             }
@@ -190,7 +197,7 @@ export function freezeBrowserRuntime(params: { excludedApiNames: ApiName[] }) {
             continue;
         }
 
-        const original = window[name];
+        const original = window[apiName];
 
         if (!original) {
             continue;
@@ -198,7 +205,7 @@ export function freezeBrowserRuntime(params: { excludedApiNames: ApiName[] }) {
 
         if ("prototype" in original) {
             for (const propertyName of Object.getOwnPropertyNames(original.prototype)) {
-                if (name === "Object") {
+                if (apiName === "Object") {
                     if (
                         propertyName === "toString" ||
                         propertyName === "constructor" ||
@@ -208,7 +215,7 @@ export function freezeBrowserRuntime(params: { excludedApiNames: ApiName[] }) {
                     }
                 }
 
-                if (name === "Array") {
+                if (apiName === "Array") {
                     if (propertyName === "constructor" || propertyName === "concat") {
                         continue;
                     }
@@ -222,7 +229,7 @@ export function freezeBrowserRuntime(params: { excludedApiNames: ApiName[] }) {
                     continue;
                 }
 
-                const target = `window.${name}.prototype.${propertyName}`;
+                const target = `window.${apiName}.prototype.${propertyName}`;
 
                 Object.defineProperty(original.prototype, propertyName, {
                     enumerable: pd.enumerable,
@@ -231,7 +238,7 @@ export function freezeBrowserRuntime(params: { excludedApiNames: ApiName[] }) {
                         ? {
                               get: () => pd.value,
                               set: () => {
-                                  throw createWriteError(target);
+                                  throw createWriteError({ target, apiName });
                               }
                           }
                         : {
@@ -239,7 +246,7 @@ export function freezeBrowserRuntime(params: { excludedApiNames: ApiName[] }) {
                               set:
                                   pd.set ??
                                   (() => {
-                                      throw createWriteError(target);
+                                      throw createWriteError({ target, apiName });
                                   })
                           })
                 });
@@ -254,7 +261,7 @@ export function freezeBrowserRuntime(params: { excludedApiNames: ApiName[] }) {
                     continue;
                 }
 
-                const target = `window.${name}.prototype[Symbol.${symbol.toString()}]`;
+                const target = `window.${apiName}.prototype[Symbol.${symbol.toString()}]`;
 
                 Object.defineProperty(original.prototype, symbol, {
                     enumerable: pd.enumerable,
@@ -263,7 +270,7 @@ export function freezeBrowserRuntime(params: { excludedApiNames: ApiName[] }) {
                         ? {
                               get: () => pd.value,
                               set: () => {
-                                  throw createWriteError(target);
+                                  throw createWriteError({ target, apiName });
                               }
                           }
                         : {
@@ -271,7 +278,7 @@ export function freezeBrowserRuntime(params: { excludedApiNames: ApiName[] }) {
                               set:
                                   pd.set ??
                                   (() => {
-                                      throw createWriteError(target);
+                                      throw createWriteError({ target, apiName });
                                   })
                           })
                 });
@@ -286,7 +293,7 @@ export function freezeBrowserRuntime(params: { excludedApiNames: ApiName[] }) {
                     continue;
                 }
 
-                const target = `window.${name}.${propertyName}`;
+                const target = `window.${apiName}.${propertyName}`;
 
                 Object.defineProperty(original, propertyName, {
                     enumerable: pd.enumerable,
@@ -295,7 +302,7 @@ export function freezeBrowserRuntime(params: { excludedApiNames: ApiName[] }) {
                         ? {
                               get: () => pd.value,
                               set: () => {
-                                  throw createWriteError(target);
+                                  throw createWriteError({ target, apiName });
                               }
                           }
                         : {
@@ -303,7 +310,7 @@ export function freezeBrowserRuntime(params: { excludedApiNames: ApiName[] }) {
                               set:
                                   pd.set ??
                                   (() => {
-                                      throw createWriteError(target);
+                                      throw createWriteError({ target, apiName });
                                   })
                           })
                 });
@@ -322,7 +329,7 @@ export function freezeBrowserRuntime(params: { excludedApiNames: ApiName[] }) {
                         continue;
                     }
 
-                    const target = `new ${name}()[Symbol.iterator]().__proto__.${propertyName}`;
+                    const target = `new ${apiName}()[Symbol.iterator]().__proto__.${propertyName}`;
 
                     Object.defineProperty(iterator_prototype, propertyName, {
                         enumerable: pd.enumerable,
@@ -331,7 +338,7 @@ export function freezeBrowserRuntime(params: { excludedApiNames: ApiName[] }) {
                             ? {
                                   get: () => pd.value,
                                   set: () => {
-                                      throw createWriteError(target);
+                                      throw createWriteError({ target, apiName });
                                   }
                               }
                             : {
@@ -339,7 +346,7 @@ export function freezeBrowserRuntime(params: { excludedApiNames: ApiName[] }) {
                                   set:
                                       pd.set ??
                                       (() => {
-                                          throw createWriteError(target);
+                                          throw createWriteError({ target, apiName });
                                       })
                               })
                     });
@@ -347,12 +354,12 @@ export function freezeBrowserRuntime(params: { excludedApiNames: ApiName[] }) {
             }
         }
 
-        Object.defineProperty(window, name, {
+        Object.defineProperty(window, apiName, {
             configurable: false,
             enumerable: true,
             get: () => original,
             set: () => {
-                throw createWriteError(`window.${name}`);
+                throw createWriteError({ target: `window.${apiName}`, apiName });
             }
         });
     }

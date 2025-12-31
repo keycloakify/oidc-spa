@@ -17,10 +17,7 @@ const config = defineConfig({
         }),
         tailwindcss(),
         tanstackStart(),
-        oidcSpa({
-            browserRuntimeFreeze: { enabled: true },
-            tokenSubstitution: { enabled: true }
-        }),
+        oidcSpa(),
         viteReact()
     ]
 });
