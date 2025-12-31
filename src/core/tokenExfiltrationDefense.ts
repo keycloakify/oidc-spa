@@ -243,10 +243,13 @@ function patchFetchApiToSubstituteTokenPlaceholder(params: {
                 );
             }
 
+            const method = request.method.toUpperCase();
+
             const nextInit: RequestInit = {
                 method: request.method,
                 headers,
-                body,
+                // NOTE: Firefox strictly enforces HTTP spec - GET/HEAD requests cannot have a body
+                ...(method !== "GET" && method !== "HEAD" && body !== undefined ? { body } : {}),
                 mode: request.mode,
                 credentials: request.credentials,
                 cache: request.cache,
