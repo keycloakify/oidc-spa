@@ -171,55 +171,25 @@ function substitutePlaceholderByRealToken(text: string): string {
 const viteHashedJsAssetPathRegExp = /\/assets\/[^/]+-[a-zA-Z0-9_-]{8}\.js$/;
 
 export function enableTokenSubstitution(params?: {
-    /**
-     * Only when enableTokenExfiltrationDefense: true
-     *
-     * Example ["vault.domain2.net", "minio.domain2.net", "*.lab.domain3.net"]
-     * Note that any domains first party relative to where your app
-     * is deployed will be automatically allowed.
-     *
-     * So for example if your app is deployed under:
-     * dashboard.my-company.com
-     * Authed request to the following domains will automatically be allowed (examples):
-     * - minio.my-company.com
-     * - minio.dashboard.my-company.com
-     * - my-company.com
-     *
-     * BUT there is an exception to the rule. If your app is deployed under free default domain
-     * provided by known hosting platform like
-     * - xxx.vercel.com
-     * - xxx.netlify.com
-     * - xxx.github.com
-     * - xxx.pages.dev (firebase)
-     * - xxx.web.app (firebase)
-     * - ...
-     *
-     * We we won't allow request to parent domain since those are multi tenant.
-     *
-     * Also, all filtering will be disabled when the app is ran with the dev server, so under:
-     * - localhost
-     * - 127.0.0.1
-     * - [::]
-     * */
-    resourceServersAllowedHostnames?: string[];
-    serviceWorkersAllowedHostnames?: string[];
+    trustedThirdPartyResourceServers?: string[];
+    trustedServiceWorkerSources?: string[];
 }) {
-    const { resourceServersAllowedHostnames = [], serviceWorkersAllowedHostnames = [] } = params ?? {};
+    const { trustedThirdPartyResourceServers = [], trustedServiceWorkerSources = [] } = params ?? {};
 
     isTokenSubstitutionEnabled = true;
 
-    patchFetchApiToSubstituteTokenPlaceholder({ resourceServersAllowedHostnames });
-    patchXMLHttpRequestApiToSubstituteTokenPlaceholder({ resourceServersAllowedHostnames });
-    patchWebSocketApiToSubstituteTokenPlaceholder({ resourceServersAllowedHostnames });
-    patchEventSourceApiToSubstituteTokenPlaceholder({ resourceServersAllowedHostnames });
-    patchNavigatorSendBeaconApiToSubstituteTokenPlaceholder({ resourceServersAllowedHostnames });
-    restrictServiceWorkerRegistration({ serviceWorkersAllowedHostnames });
+    patchFetchApiToSubstituteTokenPlaceholder({ trustedThirdPartyResourceServers });
+    patchXMLHttpRequestApiToSubstituteTokenPlaceholder({ trustedThirdPartyResourceServers });
+    patchWebSocketApiToSubstituteTokenPlaceholder({ trustedThirdPartyResourceServers });
+    patchEventSourceApiToSubstituteTokenPlaceholder({ trustedThirdPartyResourceServers });
+    patchNavigatorSendBeaconApiToSubstituteTokenPlaceholder({ trustedThirdPartyResourceServers });
+    restrictServiceWorkerRegistration({ trustedServiceWorkerSources });
 }
 
 function patchFetchApiToSubstituteTokenPlaceholder(params: {
-    resourceServersAllowedHostnames: string[];
+    trustedThirdPartyResourceServers: string[];
 }) {
-    const { resourceServersAllowedHostnames } = params;
+    const { trustedThirdPartyResourceServers } = params;
 
     const fetch_actual = window.fetch;
     //@ts-expect-error
@@ -414,7 +384,7 @@ function patchFetchApiToSubstituteTokenPlaceholder(params: {
 
                 if (
                     getIsHostnameAuthorized({
-                        allowedHostnames: resourceServersAllowedHostnames,
+                        allowedHostnames: trustedThirdPartyResourceServers,
                         extendAuthorizationToParentDomain: true,
                         hostname
                     })
@@ -426,7 +396,7 @@ function patchFetchApiToSubstituteTokenPlaceholder(params: {
                     [
                         `oidc-spa: Blocked authed request to ${hostname}.`,
                         `To authorize this request add "${hostname}" to`,
-                        "`resourceServersAllowedHostnames`."
+                        "`trustedThirdPartyResourceServers`."
                     ].join(" ")
                 );
             }
@@ -490,9 +460,9 @@ function patchFetchApiToSubstituteTokenPlaceholder(params: {
 }
 
 function patchXMLHttpRequestApiToSubstituteTokenPlaceholder(params: {
-    resourceServersAllowedHostnames: string[];
+    trustedThirdPartyResourceServers: string[];
 }) {
-    const { resourceServersAllowedHostnames } = params;
+    const { trustedThirdPartyResourceServers } = params;
 
     const open_actual = XMLHttpRequest.prototype.open;
     const send_actual = XMLHttpRequest.prototype.send;
@@ -572,7 +542,7 @@ function patchXMLHttpRequestApiToSubstituteTokenPlaceholder(params: {
 
             if (
                 getIsHostnameAuthorized({
-                    allowedHostnames: resourceServersAllowedHostnames,
+                    allowedHostnames: trustedThirdPartyResourceServers,
                     extendAuthorizationToParentDomain: true,
                     hostname
                 })
@@ -584,7 +554,7 @@ function patchXMLHttpRequestApiToSubstituteTokenPlaceholder(params: {
                 [
                     `oidc-spa: Blocked authed request to ${hostname}.`,
                     `To authorize this request add "${hostname}" to`,
-                    "`resourceServersAllowedHostnames`."
+                    "`trustedThirdPartyResourceServers`."
                 ].join(" ")
             );
         }
@@ -594,9 +564,9 @@ function patchXMLHttpRequestApiToSubstituteTokenPlaceholder(params: {
 }
 
 function patchWebSocketApiToSubstituteTokenPlaceholder(params: {
-    resourceServersAllowedHostnames: string[];
+    trustedThirdPartyResourceServers: string[];
 }) {
-    const { resourceServersAllowedHostnames } = params;
+    const { trustedThirdPartyResourceServers } = params;
 
     const WebSocket_actual = window.WebSocket;
     const send_actual = WebSocket_actual.prototype.send;
@@ -660,7 +630,7 @@ function patchWebSocketApiToSubstituteTokenPlaceholder(params: {
 
             if (
                 getIsHostnameAuthorized({
-                    allowedHostnames: resourceServersAllowedHostnames,
+                    allowedHostnames: trustedThirdPartyResourceServers,
                     extendAuthorizationToParentDomain: true,
                     hostname
                 })
@@ -672,7 +642,7 @@ function patchWebSocketApiToSubstituteTokenPlaceholder(params: {
                 [
                     `oidc-spa: Blocked authed request to ${hostname}.`,
                     `To authorize this request add "${hostname}" to`,
-                    "`resourceServersAllowedHostnames`."
+                    "`trustedThirdPartyResourceServers`."
                 ].join(" ")
             );
         }
@@ -731,7 +701,7 @@ function patchWebSocketApiToSubstituteTokenPlaceholder(params: {
 
             if (
                 getIsHostnameAuthorized({
-                    allowedHostnames: resourceServersAllowedHostnames,
+                    allowedHostnames: trustedThirdPartyResourceServers,
                     extendAuthorizationToParentDomain: true,
                     hostname: state.hostname
                 })
@@ -743,7 +713,7 @@ function patchWebSocketApiToSubstituteTokenPlaceholder(params: {
                 [
                     `oidc-spa: Blocked authed request to ${state.hostname}.`,
                     `To authorize this request add "${state.hostname}" to`,
-                    "`resourceServersAllowedHostnames`."
+                    "`trustedThirdPartyResourceServers`."
                 ].join(" ")
             );
         }
@@ -761,9 +731,9 @@ function patchWebSocketApiToSubstituteTokenPlaceholder(params: {
 }
 
 function patchEventSourceApiToSubstituteTokenPlaceholder(params: {
-    resourceServersAllowedHostnames: string[];
+    trustedThirdPartyResourceServers: string[];
 }) {
-    const { resourceServersAllowedHostnames } = params;
+    const { trustedThirdPartyResourceServers } = params;
 
     const EventSource_actual = window.EventSource;
 
@@ -788,7 +758,7 @@ function patchEventSourceApiToSubstituteTokenPlaceholder(params: {
 
             if (
                 getIsHostnameAuthorized({
-                    allowedHostnames: resourceServersAllowedHostnames,
+                    allowedHostnames: trustedThirdPartyResourceServers,
                     extendAuthorizationToParentDomain: true,
                     hostname
                 })
@@ -800,7 +770,7 @@ function patchEventSourceApiToSubstituteTokenPlaceholder(params: {
                 [
                     `oidc-spa: Blocked authed request to ${hostname}.`,
                     `To authorize this request add "${hostname}" to`,
-                    "`resourceServersAllowedHostnames`."
+                    "`trustedThirdPartyResourceServers`."
                 ].join(" ")
             );
         }
@@ -825,9 +795,9 @@ function patchEventSourceApiToSubstituteTokenPlaceholder(params: {
 }
 
 function patchNavigatorSendBeaconApiToSubstituteTokenPlaceholder(params: {
-    resourceServersAllowedHostnames: string[];
+    trustedThirdPartyResourceServers: string[];
 }) {
-    const { resourceServersAllowedHostnames } = params;
+    const { trustedThirdPartyResourceServers } = params;
 
     const sendBeacon_actual = navigator.sendBeacon?.bind(navigator);
 
@@ -903,7 +873,7 @@ function patchNavigatorSendBeaconApiToSubstituteTokenPlaceholder(params: {
 
             if (
                 getIsHostnameAuthorized({
-                    allowedHostnames: resourceServersAllowedHostnames,
+                    allowedHostnames: trustedThirdPartyResourceServers,
                     extendAuthorizationToParentDomain: true,
                     hostname
                 })
@@ -915,7 +885,7 @@ function patchNavigatorSendBeaconApiToSubstituteTokenPlaceholder(params: {
                 [
                     `oidc-spa: Blocked authed request to ${hostname}.`,
                     `To authorize this request add "${hostname}" to`,
-                    "`resourceServersAllowedHostnames`."
+                    "`trustedThirdPartyResourceServers`."
                 ].join(" ")
             );
         }
@@ -924,8 +894,8 @@ function patchNavigatorSendBeaconApiToSubstituteTokenPlaceholder(params: {
     };
 }
 
-function restrictServiceWorkerRegistration(params: { serviceWorkersAllowedHostnames: string[] }) {
-    const { serviceWorkersAllowedHostnames } = params;
+function restrictServiceWorkerRegistration(params: { trustedServiceWorkerSources: string[] }) {
+    const { trustedServiceWorkerSources } = params;
 
     const { serviceWorker } = navigator;
 
@@ -956,7 +926,7 @@ function restrictServiceWorkerRegistration(params: { serviceWorkersAllowedHostna
 
         if (
             !getIsHostnameAuthorized({
-                allowedHostnames: serviceWorkersAllowedHostnames,
+                allowedHostnames: trustedServiceWorkerSources,
                 extendAuthorizationToParentDomain: false,
                 hostname
             })
@@ -965,7 +935,7 @@ function restrictServiceWorkerRegistration(params: { serviceWorkersAllowedHostna
                 [
                     `oidc-spa: Blocked service worker registration to ${hostname}.`,
                     `To authorize this registration add "${hostname}" to`,
-                    "`serviceWorkersAllowedHostnames`."
+                    "`trustedServiceWorkerSources`."
                 ].join(" ")
             );
         }

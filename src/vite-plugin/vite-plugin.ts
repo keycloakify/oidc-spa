@@ -14,42 +14,12 @@ export type OidcSpaVitePluginParams = {
               enabled: true;
               exclude?: ApiName[];
           };
-    /**
-     * resourceServersAllowedHostnames:
-     *
-     * Example ["vault.domain2.net", "minio.domain2.net", "*.lab.domain3.net"]
-     * Note that any domains first party relative to where your app
-     * is deployed will be automatically allowed.
-     *
-     * So for example if your app is deployed under:
-     * dashboard.my-company.com
-     * Authed request to the following domains will automatically be allowed (examples):
-     * - minio.my-company.com
-     * - minio.dashboard.my-company.com
-     * - my-company.com
-     *
-     * BUT there is an exception to the rule. If your app is deployed under free default domain
-     * provided by known hosting platform like
-     * - xxx.vercel.com
-     * - xxx.netlify.com
-     * - xxx.github.com
-     * - xxx.pages.dev (firebase)
-     * - xxx.web.app (firebase)
-     * - ...
-     *
-     * We we won't allow request to parent domain since those are multi tenant.
-     *
-     * Also, all filtering will be disabled when the app is ran with the dev server, so under:
-     * - localhost
-     * - 127.0.0.1
-     * - [::]
-     * */
     tokenSubstitution?:
         | false
         | {
               enabled: true;
-              resourceServersAllowedHostnames?: string[];
-              serviceWorkersAllowedHostnames?: string[];
+              trustedThirdPartyResourceServers?: string[];
+              trustedServiceWorkerSources?: string[];
           };
 };
 
