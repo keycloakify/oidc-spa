@@ -8,7 +8,12 @@ export default defineConfig({
         reactRouter(),
         // To improve the security of your app see:
         // https://docs.oidc-spa.dev/security-features/overview
-        oidcSpa(),
+        oidcSpa({
+            browserRuntimeFreeze: {
+                enabled: true
+                //exclude: [ "fetch", "XMLHttpRequest"]
+            }
+        }),
         tsconfigPaths()
     ]
 });

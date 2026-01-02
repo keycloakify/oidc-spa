@@ -17,8 +17,6 @@ const config = defineConfig({
         }),
         tailwindcss(),
         tanstackStart(),
-        // To improve the security of your app see:
-        // https://docs.oidc-spa.dev/security-features/overview
         oidcSpa({
             browserRuntimeFreeze: {
                 enabled: true

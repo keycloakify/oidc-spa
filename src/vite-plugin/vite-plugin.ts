@@ -8,12 +8,14 @@ import { transformCreateFileRoute } from "./transformTanstackRouterCreateFileRou
 import { getProjectType, type ProjectType } from "./projectType";
 
 export type OidcSpaVitePluginParams = {
+    /** See: https://docs.oidc-spa.dev/v/v8/security-features/browser-runtime-freeze */
     browserRuntimeFreeze?:
         | false
         | {
               enabled: true;
               exclude?: ApiName[];
           };
+    /** See: https://docs.oidc-spa.dev/security-features/token-substitution */
     tokenSubstitution?:
         | false
         | {

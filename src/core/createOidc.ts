@@ -245,7 +245,7 @@ export type ParamsOfCreateOidc<
      */
     postLoginRedirectUrl?: string;
 
-    /** See: https://docs.oidc-spa.dev/v/v8/features/dpop */
+    /** See: https://docs.oidc-spa.dev/v/v8/security-features/dpop */
     dpop?: "disabled" | "enabled" | "auto";
 };
 

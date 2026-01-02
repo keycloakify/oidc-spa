@@ -290,7 +290,7 @@ export namespace ParamsOfBootstrap {
          */
         BASE_URL?: string;
 
-        /** See: https://docs.oidc-spa.dev/v/v8/features/dpop */
+        /** See: https://docs.oidc-spa.dev/v/v8/security-features/dpop */
         dpop?: "disabled" | "enabled" | "auto";
     } & (AutoLogin extends true ? {} : {});
 

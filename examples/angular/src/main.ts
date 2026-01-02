@@ -1,8 +1,10 @@
 import { oidcEarlyInit } from 'oidc-spa/entrypoint';
 
 const { shouldLoadApp } = oidcEarlyInit({
-  // To improve the security of your app see:
-  // https://docs.oidc-spa.dev/security-features/overview
+  browserRuntimeFreeze: {
+    enabled: true,
+    //exclude: [ "fetch", "XMLHttpRequest", "Promise"]
+  },
 });
 
 if (shouldLoadApp) {

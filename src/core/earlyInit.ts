@@ -20,6 +20,7 @@ export type ParamsOfEarlyInit = {
      */
     BASE_URL?: string;
 
+    /** See: https://docs.oidc-spa.dev/security-features/browser-runtime-freeze */
     browserRuntimeFreeze?:
         | false
         | {
@@ -27,6 +28,7 @@ export type ParamsOfEarlyInit = {
               exclude?: ApiName[];
           };
 
+    /** See: https://docs.oidc-spa.dev/v/v8/security-features/token-substitution */
     extraDefenseHook?: () => void;
 };
 
