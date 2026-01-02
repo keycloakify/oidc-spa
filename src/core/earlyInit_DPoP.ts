@@ -84,8 +84,12 @@ export function createInMemoryDPoPStore(params: { configId: string }): DPoPStore
             return value;
         },
         getAllKeys: () => {
-            assert(!(configId in dpopStateByConfigId), "304384");
-            return Promise.resolve([]);
+            if (configId in dpopStateByConfigId) {
+                assert(key_singleton !== undefined, "39430338");
+                return Promise.resolve([key_singleton]);
+            } else {
+                return Promise.resolve([]);
+            }
         }
     };
 
