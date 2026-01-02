@@ -17,7 +17,14 @@ const config = defineConfig({
         }),
         tailwindcss(),
         tanstackStart(),
-        oidcSpa(),
+        // To improve the security of your app see:
+        // https://docs.oidc-spa.dev/security-features/overview
+        oidcSpa({
+            browserRuntimeFreeze: {
+                enabled: true
+                //exclude: [ "fetch", "XMLHttpRequest"]
+            }
+        }),
         viteReact()
     ]
 });
