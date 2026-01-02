@@ -28,7 +28,7 @@ export type ParamsOfEarlyInit = {
               exclude?: ApiName[];
           };
 
-    /** See: https://docs.oidc-spa.dev/v/v8/security-features/token-substitution */
+    /** See: https://docs.oidc-spa.dev/v/v9/security-features/token-substitution */
     extraDefenseHook?: () => void;
 };
 

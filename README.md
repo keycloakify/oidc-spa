@@ -132,7 +132,7 @@ It’s a single library that can replace platform-specific SDKs like keycloak-js
 and [jsonwebtoken](https://www.npmjs.com/package/jsonwebtoken), [jose](https://www.npmjs.com/package/jose) or [express-jwt](https://www.npmjs.com/package/express-jwt) on your backend.
 
 oidc-spa provides a level of protection in case of a successful supply-chain or XSS attack that goes
-far beyond the current best practices for client-side auth, and what other solutions provide. [Learn more](https://docs.oidc-spa.dev/v/v8/security-features/overview).
+far beyond the current best practices for client-side auth, and what other solutions provide. [Learn more](https://docs.oidc-spa.dev/v/v9/security-features/overview).
 
 **Is it a good fit for my stack?**
 

@@ -7,7 +7,7 @@ export const {
     getOidc,
     enforceLogin,
     // Wrap your whole application inside this component in src/main.tsx
-    // Non blocking rendering is possible, see: https://docs.oidc-spa.dev/v/v8/features/non-blocking-rendering#react-spas
+    // Non blocking rendering is possible, see: https://docs.oidc-spa.dev/v/v9/features/non-blocking-rendering#react-spas
     OidcInitializationGate
 } = oidcSpa
     .withExpectedDecodedIdTokenShape({
@@ -33,7 +33,7 @@ export const {
             }
         }
     })
-    // See: https://docs.oidc-spa.dev/v/v8/features/auto-login#react-spa
+    // See: https://docs.oidc-spa.dev/v/v9/features/auto-login#react-spa
     //.withAutoLogin()
     .createUtils();
 
@@ -67,7 +67,7 @@ bootstrapOidc(
  *   const response = await fetchWithAuth("/api/data");
  *
  * If you need to talk to more than one resource server read this:
- * https://docs.oidc-spa.dev/v/v8/talking-to-multiple-apis-with-different-access-tokens
+ * https://docs.oidc-spa.dev/v/v9/talking-to-multiple-apis-with-different-access-tokens
  */
 export const fetchWithAuth: typeof fetch = async (input, init) => {
     const oidc = await getOidc();

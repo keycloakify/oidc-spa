@@ -43,7 +43,7 @@ export function freezeBrowserRuntime(params: { excludedApiNames: ApiName[] }) {
                 `oidc-spa: Blocked alteration of ${target}.`,
                 `\nThis runtime is frozen to prevent monkey patching.`,
                 `If it is monkey patched for legitimate reason add "${apiName}" to browserRuntimeFreeze.exclude.`,
-                `\nDocs: https://docs.oidc-spa.dev/v/v8/security-features/browser-runtime-freeze`
+                `\nDocs: https://docs.oidc-spa.dev/v/v9/security-features/browser-runtime-freeze`
             ].join(" ")
         );
     };

@@ -170,7 +170,7 @@ function App() {
                                 purposes, the session is short (~6 minutes of inactivity). When the
                                 countdown appears, any activity dismisses it.
                                 <a
-                                    href="https://docs.oidc-spa.dev/v/v8/features/auto-logout"
+                                    href="https://docs.oidc-spa.dev/v/v9/features/auto-logout"
                                     target="_blank"
                                     rel="noreferrer"
                                     className="inline-flex items-center gap-1 ml-2 text-cyan-300 hover:text-cyan-200"
