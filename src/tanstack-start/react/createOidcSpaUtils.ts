@@ -28,7 +28,7 @@ import { setDesiredPostLoginRedirectUrl } from "../../core/desiredPostLoginRedir
 import type { MaybeAsync } from "../../tools/MaybeAsync";
 import { enableStateDataCookie } from "../../core/StateDataCookie";
 
-export function createOidcSpaApi<
+export function createOidcSpaUtils<
     AutoLogin extends boolean,
     DecodedIdToken extends Record<string, unknown>,
     AccessTokenClaims extends Record<string, unknown> | undefined

@@ -4,7 +4,7 @@ import type { Oidc as Oidc_core } from "../../core";
 import { assert, type Equals } from "../../tools/tsafe/assert";
 import type { ZodSchemaLike } from "../../tools/ZodSchemaLike";
 import { createCreateValidateAndGetAccessTokenClaims_rfc9068 } from "./accessTokenValidation_rfc9068";
-import { createOidcSpaApi } from "./createOidcSpaApi";
+import { createOidcSpaUtils } from "./createOidcSpaUtils";
 
 export type OidcSpaUtilsBuilder<
     AutoLogin extends boolean = false,
@@ -128,7 +128,7 @@ function createOidcSpaUtilsBuilder<
                 })()
             }),
         createUtils: () =>
-            createOidcSpaApi<AutoLogin, DecodedIdToken, AccessTokenClaims>({
+            createOidcSpaUtils<AutoLogin, DecodedIdToken, AccessTokenClaims>({
                 autoLogin: params.autoLogin,
                 decodedIdTokenSchema: params.decodedIdTokenSchema,
                 decodedIdToken_mock: params.decodedIdToken_mock,

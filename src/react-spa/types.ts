@@ -314,7 +314,7 @@ export namespace ParamsOfBootstrap {
           });
 }
 
-export type OidcSpaApi<AutoLogin, DecodedIdToken> = {
+export type OidcSpaUtils<AutoLogin, DecodedIdToken> = {
     bootstrapOidc: (params: ParamsOfBootstrap<AutoLogin, DecodedIdToken>) => Promise<void>;
     useOidc: AutoLogin extends true ? UseOidc.WithAutoLogin<DecodedIdToken> : UseOidc<DecodedIdToken>;
     getOidc: AutoLogin extends true ? GetOidc.WithAutoLogin<DecodedIdToken> : GetOidc<DecodedIdToken>;
