@@ -161,7 +161,7 @@ export function freezeBrowserRuntime(params: { excludedApiNames: ApiName[] }) {
 
             const original = navigator[name_];
 
-            Object.defineProperty(navigator, apiName, {
+            Object.defineProperty(navigator, name_, {
                 configurable: false,
                 enumerable: true,
                 get: () => original,
@@ -187,7 +187,7 @@ export function freezeBrowserRuntime(params: { excludedApiNames: ApiName[] }) {
                     get: () => original,
                     set: () => {
                         throw createWriteError({
-                            target: `window.Function.prototype.${name})`,
+                            target: `window.Function.prototype.${name}`,
                             apiName
                         });
                     }
