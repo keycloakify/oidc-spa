@@ -611,7 +611,7 @@ export function createOidcSpaApi<
             switch (paramsOfBootstrap.implementation) {
                 case "mock":
                     {
-                        const { createMockOidc } = await import("../../mock/oidc");
+                        const { createMockOidc } = await import("../../core/createMockOidc");
 
                         const oidcCore = await createMockOidc({
                             // NOTE: The `as false` is lying here, it's just to preserve some level of type-safety.

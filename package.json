@@ -129,14 +129,14 @@
         "access": "public"
     },
     "sideEffects": false,
-    "main": "dist/core/index.js",
-    "types": "dist/core/index.d.ts",
-    "module": "dist/esm/core/index.mjs",
+    "main": "dist/entrypoint.js",
+    "types": "dist/entrypoint.d.ts",
+    "module": "dist/esm/entrypoint.mjs",
     "exports": {
         ".": {
-            "module": "./dist/esm/core/index.mjs",
-            "import": "./dist/esm/core/index.mjs",
-            "default": "./dist/core/index.js"
+            "module": "./dist/esm/entrypoint.mjs",
+            "import": "./dist/esm/entrypoint.mjs",
+            "default": "./dist/entrypoint.js"
         },
         "./entrypoint": {
             "module": "./dist/esm/entrypoint.mjs",
@@ -148,6 +148,11 @@
             "import": "./dist/esm/core/index.mjs",
             "default": "./dist/core/index.js"
         },
+        "./core-mock": {
+            "module": "./dist/esm/core-mock.mjs",
+            "import": "./dist/esm/core-mock.mjs",
+            "default": "./dist/core-mock.js"
+        },
         "./vite-plugin": {
             "types": "./dist/esm/vite-plugin/index.d.ts",
             "module": "./dist/esm/vite-plugin/index.mjs",
@@ -158,11 +163,6 @@
             "module": "./dist/esm/server/index.mjs",
             "import": "./dist/esm/server/index.mjs",
             "default": "./dist/server/index.js"
-        },
-        "./mock": {
-            "module": "./dist/esm/mock/index.mjs",
-            "import": "./dist/esm/mock/index.mjs",
-            "default": "./dist/mock/index.js"
         },
         "./react-spa": {
             "module": "./dist/esm/react-spa/index.mjs",
@@ -200,26 +200,6 @@
             "module": "./dist/esm/tools/decodeJwt.mjs",
             "import": "./dist/esm/tools/decodeJwt.mjs",
             "default": "./dist/tools/decodeJwt.js"
-        },
-        "./tools/parseKeycloakIssuerUri": {
-            "module": "./dist/esm/tools/parseKeycloakIssuerUri.mjs",
-            "import": "./dist/esm/tools/parseKeycloakIssuerUri.mjs",
-            "default": "./dist/tools/parseKeycloakIssuerUri.js"
-        },
-        "./react": {
-            "module": "./dist/esm/react/index.mjs",
-            "import": "./dist/esm/react/index.mjs",
-            "default": "./dist/react/index.js"
-        },
-        "./mock/react": {
-            "module": "./dist/esm/mock/react.mjs",
-            "import": "./dist/esm/mock/react.mjs",
-            "default": "./dist/mock/react.js"
-        },
-        "./backend": {
-            "module": "./dist/esm/backend.mjs",
-            "import": "./dist/esm/backend.mjs",
-            "default": "./dist/backend.js"
         }
     }
 }

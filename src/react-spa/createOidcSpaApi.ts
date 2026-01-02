@@ -357,7 +357,7 @@ export function createOidcSpaApi<
             switch (paramsOfBootstrap.implementation) {
                 case "mock":
                     {
-                        const { createMockOidc } = await import("../mock/oidc");
+                        const { createMockOidc } = await import("../core/createMockOidc");
 
                         const oidcCore = await createMockOidc({
                             BASE_URL: paramsOfBootstrap.BASE_URL,

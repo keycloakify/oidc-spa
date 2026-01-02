@@ -272,7 +272,7 @@ export abstract class AbstractOidcService<
 
                 instance.#initialize({
                     prOidcOrInitializationError: (async () => {
-                        const { createMockOidc } = await import("./mock");
+                        const { createMockOidc } = await import("./core/createMockOidc");
 
                         return createMockOidc<Record<string, unknown>, boolean>({
                             homeUrl: getBaseHref(),
