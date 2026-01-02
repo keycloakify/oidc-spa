@@ -280,7 +280,7 @@ for (const targetFormat of ["cjs", "esm"] as const) {
                                                         `    fallback: { crypto: false, buffer: false, util: false }`,
                                                         `  },`
                                                     ].join("\n");
-                                                case "backend":
+                                                case "server":
                                                 case "build-runtime":
                                                     return "";
                                             }
