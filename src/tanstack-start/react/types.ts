@@ -404,7 +404,7 @@ export namespace ParamsOfBootstrap {
          */
         autoLogoutParams?: Parameters<Oidc_core.LoggedIn<any>["logout"]>[0];
 
-        /** See: https://docs.oidc-spa.dev/v/v8/features/dpop */
+        /** See: https://docs.oidc-spa.dev/v/v8/security-features/dpop */
         dpop?: "disabled" | "enabled" | "auto";
     } & (AutoLogin extends true ? {} : {});
 

@@ -181,11 +181,6 @@
             "import": "./dist/esm/angular.mjs",
             "default": "./dist/esm/angular.mjs"
         },
-        "./backend": {
-            "module": "./dist/esm/backend.mjs",
-            "import": "./dist/esm/backend.mjs",
-            "default": "./dist/backend.js"
-        },
         "./keycloak": {
             "module": "./dist/esm/keycloak/index.mjs",
             "import": "./dist/esm/keycloak/index.mjs",
@@ -195,6 +190,11 @@
             "module": "./dist/esm/keycloak-js.mjs",
             "import": "./dist/esm/keycloak-js.mjs",
             "default": "./dist/keycloak-js.js"
+        },
+        "./token-substitution": {
+            "module": "./dist/esm/token-substitution.mjs",
+            "import": "./dist/esm/token-substitution.mjs",
+            "default": "./dist/token-substitution.js"
         },
         "./tools/decodeJwt": {
             "module": "./dist/esm/tools/decodeJwt.mjs",
@@ -215,6 +215,11 @@
             "module": "./dist/esm/mock/react.mjs",
             "import": "./dist/esm/mock/react.mjs",
             "default": "./dist/mock/react.js"
+        },
+        "./backend": {
+            "module": "./dist/esm/backend.mjs",
+            "import": "./dist/esm/backend.mjs",
+            "default": "./dist/backend.js"
         }
     }
 }

@@ -58,8 +58,8 @@ import {
     clearStateDataCookie,
     getIsStateDataCookieEnabled
 } from "./StateDataCookie";
-import { getIsTokenSubstitutionEnabled } from "./tokenPlaceholderSubstitution";
-import { createInMemoryDPoPStore } from "./dpop";
+import { getIsTokenSubstitutionEnabled } from "./earlyInit_tokenSubstitution";
+import { createInMemoryDPoPStore } from "./earlyInit_DPoP";
 import { loadWebcryptoLinerShim } from "../tools/loadWebcryptoLinerShim";
 
 // NOTE: Replaced at build time
@@ -245,7 +245,7 @@ export type ParamsOfCreateOidc<
      */
     postLoginRedirectUrl?: string;
 
-    /** See: https://docs.oidc-spa.dev/v/v8/features/dpop */
+    /** See: https://docs.oidc-spa.dev/v/v8/security-features/dpop */
     dpop?: "disabled" | "enabled" | "auto";
 };
 
@@ -437,7 +437,7 @@ export async function createOidc_nonMemoized<
     if (getIsTokenSubstitutionEnabled()) {
         log?.(
             [
-                "Token exfiltration defense successfully enabled.",
+                "Token substitution successfully enabled.",
                 "",
                 "→ Tokens exposed to the application layer are unusable for resource server calls.",
                 "→ They remain structurally valid JWTs, but their signature segment is replaced.",

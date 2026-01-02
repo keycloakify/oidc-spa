@@ -67,9 +67,20 @@ export function createInMemoryDPoPStore(params: { configId: string }): DPoPStore
 
             return Promise.resolve(value_proxy);
         },
-        remove: async key => {
-            const value = await store.get(key);
+        remove: async () => {
+            assert(configId in dpopStateByConfigId, "30438443");
             delete dpopStateByConfigId[configId];
+
+            const value: DPoPState = {
+                get nonce() {
+                    assert(false, "304339");
+                    return null as any;
+                },
+                get keys() {
+                    assert(false, "235533");
+                    return null as any;
+                }
+            };
             return value;
         },
         getAllKeys: () => {
@@ -438,19 +449,19 @@ export function implementFetchAndXhrDPoPInterceptor() {
                     break handle;
                 }
 
-                if (init.headers instanceof Headers) {
-                    break handle;
-                }
-
                 if (init.headers instanceof Array) {
                     break handle;
                 }
 
                 let dpopHeaderValue: string | undefined = undefined;
 
-                try {
-                    dpopHeaderValue = init.headers["DPoP"];
-                } catch {}
+                if (init.headers instanceof Headers) {
+                    dpopHeaderValue = init.headers.get("DPoP") ?? undefined;
+                } else {
+                    try {
+                        dpopHeaderValue = init.headers["DPoP"];
+                    } catch {}
+                }
 
                 if (typeof dpopHeaderValue !== "string") {
                     break handle;
@@ -501,7 +512,11 @@ export function implementFetchAndXhrDPoPInterceptor() {
                             : createGetServerDateNow(paramsOfCreateGetServerDateNow)
                 });
 
-                init.headers["DPoP"] = dpopProof;
+                if (init.headers instanceof Headers) {
+                    init.headers.set("DPoP", dpopProof);
+                } else {
+                    init.headers["DPoP"] = dpopProof;
+                }
             }
 
             return fetch_before(input, init);

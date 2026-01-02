@@ -1,24 +1,16 @@
 import { getStateData, getIsStatQueryParamValue } from "./StateData";
 import { assert, type Equals } from "../tools/tsafe/assert";
 import type { AuthResponse } from "./AuthResponse";
-import { setBASE_URL } from "./BASE_URL";
+import { setBASE_URL_earlyInit } from "./earlyInit_BASE_URL";
 import { resolvePrShouldLoadApp } from "./prShouldLoadApp";
 import { isBrowser } from "../tools/isBrowser";
 import { createEvt, type Evt } from "../tools/Evt";
-import {
-    handleTokenExfiltrationDefense_legacy,
-    type Params as Params_handleTokenExfiltrationDefense_legacy
-} from "./tokenExfiltrationDefense_legacy";
-import { enableTokenExfiltrationDefense } from "./tokenExfiltrationDefense";
-import { implementFetchAndXhrDPoPInterceptor } from "./dpop";
+import { implementFetchAndXhrDPoPInterceptor } from "./earlyInit_DPoP";
+import { freezeBrowserRuntime, type ApiName } from "./earlyInit_freezeBrowserRuntime";
 
 let hasEarlyInitBeenCalled = false;
 
 const IFRAME_MESSAGE_PREFIX = "oidc-spa:cross-window-messaging:";
-
-export type ParamsOfEarlyInit_legacy = Params_handleTokenExfiltrationDefense_legacy & {
-    BASE_URL?: string;
-};
 
 export type ParamsOfEarlyInit = {
     /**
@@ -28,48 +20,26 @@ export type ParamsOfEarlyInit = {
      */
     BASE_URL?: string;
 
-    enableTokenExfiltrationDefense: boolean;
-    /**
-     * Only when enableTokenExfiltrationDefense: true
-     *
-     * Example ["vault.domain2.net", "minio.domain2.net", "*.lab.domain3.net"]
-     * Note that any domains first party relative to where your app
-     * is deployed will be automatically allowed.
-     *
-     * So for example if your app is deployed under:
-     * dashboard.my-company.com
-     * Authed request to the following domains will automatically be allowed (examples):
-     * - minio.my-company.com
-     * - minio.dashboard.my-company.com
-     * - my-company.com
-     *
-     * BUT there is an exception to the rule. If your app is deployed under free default domain
-     * provided by known hosting platform like
-     * - xxx.vercel.com
-     * - xxx.netlify.com
-     * - xxx.github.com
-     * - xxx.pages.dev (firebase)
-     * - xxx.web.app (firebase)
-     * - ...
-     *
-     * We we won't allow request to parent domain since those are multi tenant.
-     *
-     * Also, all filtering will be disabled when the app is ran with the dev server, so under:
-     * - localhost
-     * - 127.0.0.1
-     * - [::]
-     * */
-    resourceServersAllowedHostnames?: string[];
+    /** See: https://docs.oidc-spa.dev/security-features/browser-runtime-freeze */
+    browserRuntimeFreeze?:
+        | false
+        | {
+              enabled: true;
+              exclude?: ApiName[];
+          };
 
-    serviceWorkersAllowedHostnames?: string[];
+    /** See: https://docs.oidc-spa.dev/v/v8/security-features/token-substitution */
+    extraDefenseHook?: () => void;
 };
 
-export function oidcEarlyInit(params: ParamsOfEarlyInit | ParamsOfEarlyInit_legacy) {
+export function oidcEarlyInit(params: ParamsOfEarlyInit) {
     if (hasEarlyInitBeenCalled) {
         throw new Error("oidc-spa: oidcEarlyInit() Should be called only once");
     }
 
     hasEarlyInitBeenCalled = true;
+
+    const { BASE_URL, browserRuntimeFreeze, extraDefenseHook } = params;
 
     if (!isBrowser) {
         return { shouldLoadApp: true };
@@ -79,52 +49,6 @@ export function oidcEarlyInit(params: ParamsOfEarlyInit | ParamsOfEarlyInit_lega
 
     if (shouldLoadApp) {
         implementFetchAndXhrDPoPInterceptor();
-
-        token_exfiltration_defense: {
-            if (!("enableTokenExfiltrationDefense" in params)) {
-                handleTokenExfiltrationDefense_legacy({
-                    freezeFetch: params.freezeFetch,
-                    freezeXMLHttpRequest: params.freezeXMLHttpRequest,
-                    freezeWebSocket: params.freezeWebSocket,
-                    freezePromise: params.freezePromise,
-                    safeMode: params.safeMode
-                });
-                break token_exfiltration_defense;
-            }
-
-            const {
-                enableTokenExfiltrationDefense: doEnableTokenExfiltrationDefense,
-                resourceServersAllowedHostnames,
-                serviceWorkersAllowedHostnames
-            } = params;
-
-            if (!doEnableTokenExfiltrationDefense) {
-                if (resourceServersAllowedHostnames !== undefined) {
-                    console.warn(
-                        [
-                            "oidc-spa: resourceServersAllowedHostnames is ignored when",
-                            "enableTokenExfiltrationDefense is set to false."
-                        ].join(" ")
-                    );
-                }
-
-                if (serviceWorkersAllowedHostnames !== undefined) {
-                    console.warn(
-                        [
-                            "oidc-spa: serviceWorkersAllowedHostnames is ignored when",
-                            "enableTokenExfiltrationDefense is set to false."
-                        ].join(" ")
-                    );
-                }
-
-                break token_exfiltration_defense;
-            }
-
-            enableTokenExfiltrationDefense({
-                resourceServersAllowedHostnames,
-                serviceWorkersAllowedHostnames
-            });
-        }
 
         {
             const _MessageEvent_prototype_data_get = (() => {
@@ -189,12 +113,16 @@ export function oidcEarlyInit(params: ParamsOfEarlyInit | ParamsOfEarlyInit_lega
             );
         }
 
-        {
-            const { BASE_URL } = params;
+        if (BASE_URL !== undefined) {
+            setBASE_URL_earlyInit({ BASE_URL });
+        }
 
-            if (BASE_URL !== undefined) {
-                setBASE_URL({ BASE_URL });
-            }
+        extraDefenseHook?.();
+
+        if (!!browserRuntimeFreeze) {
+            freezeBrowserRuntime({
+                excludedApiNames: browserRuntimeFreeze.exclude ?? []
+            });
         }
     }
 

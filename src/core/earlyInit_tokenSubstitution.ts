@@ -1,37 +1,195 @@
 import { assert } from "../tools/tsafe/assert";
-import {
-    markTokenSubstitutionAsEnabled,
-    substitutePlaceholderByRealToken
-} from "./tokenPlaceholderSubstitution";
 import { getIsHostnameAuthorized } from "../tools/isHostnameAuthorized";
 import { getIsLikelyDevServer } from "../tools/isLikelyDevServer";
 
-type Params = {
-    resourceServersAllowedHostnames: string[] | undefined;
-    serviceWorkersAllowedHostnames: string[] | undefined;
+let isTokenSubstitutionEnabled = false;
+
+export function getIsTokenSubstitutionEnabled() {
+    return isTokenSubstitutionEnabled;
+}
+
+type Tokens = {
+    accessToken: string;
+    idToken: string;
+    refreshToken?: string;
 };
+
+const entries: {
+    configId: string;
+    id: number;
+    tokens: Tokens;
+    tokens_placeholder: Tokens;
+}[] = [];
+
+function generatePlaceholderForToken(params: {
+    tokenType: "id_token" | "access_token" | "refresh_token";
+    token_real: string;
+    id: number;
+}): string {
+    const { tokenType, token_real, id } = params;
+
+    const match = token_real.match(/^([A-Za-z0-9\-_]+)\.([A-Za-z0-9\-_]+)\.([A-Za-z0-9\-_]+)$/);
+
+    if (match === null) {
+        assert(tokenType !== "id_token", "39232932927");
+        return `${tokenType}_placeholder_${id}`;
+    }
+
+    const [, header_b64, payload_b64, signature_b64] = match;
+
+    const signatureByteLength = (() => {
+        const b64 = signature_b64
+            .replace(/-/g, "+")
+            .replace(/_/g, "/")
+            .padEnd(Math.ceil(signature_b64.length / 4) * 4, "=");
+
+        const padding = b64.endsWith("==") ? 2 : b64.endsWith("=") ? 1 : 0;
+        return (b64.length * 3) / 4 - padding;
+    })();
+
+    const targetSigB64Length = Math.ceil((signatureByteLength * 4) / 3);
+
+    const sig_placeholder = (function makeZeroPaddedBase64UrlString(
+        targetLength: number,
+        seed: string
+    ): string {
+        const PAD = "A";
+
+        let out = seed.slice(0, targetLength);
+
+        if (out.length < targetLength) {
+            out = out + PAD.repeat(targetLength - out.length);
+        }
+
+        if (out.length % 4 === 1) {
+            out = out.slice(0, -1) + PAD;
+        }
+
+        return out;
+    })(targetSigB64Length, `sig_placeholder_${id}_`);
+
+    return `${header_b64}.${payload_b64}.${sig_placeholder}`;
+}
+
+let counter = Math.floor(Math.random() * 1_000_000) + 1_000_000;
+
+export function getTokensPlaceholders(params: { configId: string; tokens: Tokens }): Tokens {
+    const { configId, tokens } = params;
+
+    assert(isTokenSubstitutionEnabled, "2934482");
+
+    for (const entry of entries) {
+        if (entry.configId !== configId) {
+            continue;
+        }
+
+        setTimeout(() => {
+            const index = entries.indexOf(entry);
+
+            if (index === -1) {
+                return;
+            }
+
+            entries.splice(index, 1);
+        }, 30_000);
+    }
+
+    const id = counter++;
+
+    const entry_new: (typeof entries)[number] = {
+        configId,
+        id,
+        tokens: {
+            idToken: tokens.idToken,
+            accessToken: tokens.accessToken,
+            refreshToken: tokens.refreshToken
+        },
+        tokens_placeholder: {
+            idToken: generatePlaceholderForToken({
+                tokenType: "id_token",
+                id,
+                token_real: tokens.idToken
+            }),
+            accessToken: generatePlaceholderForToken({
+                tokenType: "access_token",
+                id,
+                token_real: tokens.accessToken
+            }),
+            refreshToken:
+                tokens.refreshToken === undefined
+                    ? undefined
+                    : generatePlaceholderForToken({
+                          tokenType: "refresh_token",
+                          id,
+                          token_real: tokens.refreshToken
+                      })
+        }
+    };
+
+    entries.push(entry_new);
+
+    return entry_new.tokens_placeholder;
+}
+
+function substitutePlaceholderByRealToken(text: string): string {
+    // NOTE: Extra check to make sure we didn't made an error upstream
+    // we want to know for sure this isn't an attacker crafted object.
+    assert(typeof text === "string", "394833403");
+
+    if (!text.includes("_placeholder_")) {
+        return text;
+    }
+
+    let text_modified = text;
+
+    for (const entry of entries) {
+        if (!text.includes(`${entry.id}`)) {
+            continue;
+        }
+
+        for (const tokenType of ["idToken", "accessToken", "refreshToken"] as const) {
+            const placeholder = entry.tokens_placeholder[tokenType];
+
+            if (tokenType === "refreshToken") {
+                if (placeholder === undefined) {
+                    continue;
+                }
+            }
+            assert(placeholder !== undefined, "023948092393");
+
+            const realToken = entry.tokens[tokenType];
+
+            assert(realToken !== undefined, "02394809239328");
+
+            text_modified = text_modified.split(placeholder).join(realToken);
+        }
+    }
+
+    return text_modified;
+}
 
 const viteHashedJsAssetPathRegExp = /\/assets\/[^/]+-[a-zA-Z0-9_-]{8}\.js$/;
 
-export function enableTokenExfiltrationDefense(params: Params) {
-    const { resourceServersAllowedHostnames = [], serviceWorkersAllowedHostnames = [] } = params;
+export function enableTokenSubstitution(params?: {
+    trustedThirdPartyResourceServers?: string[];
+    trustedServiceWorkerSources?: string[];
+}) {
+    const { trustedThirdPartyResourceServers = [], trustedServiceWorkerSources = [] } = params ?? {};
 
-    markTokenSubstitutionAsEnabled();
+    isTokenSubstitutionEnabled = true;
 
-    patchFetchApiToSubstituteTokenPlaceholder({ resourceServersAllowedHostnames });
-    patchXMLHttpRequestApiToSubstituteTokenPlaceholder({ resourceServersAllowedHostnames });
-    patchWebSocketApiToSubstituteTokenPlaceholder({ resourceServersAllowedHostnames });
-    patchEventSourceApiToSubstituteTokenPlaceholder({ resourceServersAllowedHostnames });
-    patchNavigatorSendBeaconApiToSubstituteTokenPlaceholder({ resourceServersAllowedHostnames });
-    restrictServiceWorkerRegistration({ serviceWorkersAllowedHostnames });
-
-    runMonkeyPatchingPrevention();
+    patchFetchApiToSubstituteTokenPlaceholder({ trustedThirdPartyResourceServers });
+    patchXMLHttpRequestApiToSubstituteTokenPlaceholder({ trustedThirdPartyResourceServers });
+    patchWebSocketApiToSubstituteTokenPlaceholder({ trustedThirdPartyResourceServers });
+    patchEventSourceApiToSubstituteTokenPlaceholder({ trustedThirdPartyResourceServers });
+    patchNavigatorSendBeaconApiToSubstituteTokenPlaceholder({ trustedThirdPartyResourceServers });
+    restrictServiceWorkerRegistration({ trustedServiceWorkerSources });
 }
 
 function patchFetchApiToSubstituteTokenPlaceholder(params: {
-    resourceServersAllowedHostnames: string[];
+    trustedThirdPartyResourceServers: string[];
 }) {
-    const { resourceServersAllowedHostnames } = params;
+    const { trustedThirdPartyResourceServers } = params;
 
     const fetch_actual = window.fetch;
     //@ts-expect-error
@@ -226,7 +384,7 @@ function patchFetchApiToSubstituteTokenPlaceholder(params: {
 
                 if (
                     getIsHostnameAuthorized({
-                        allowedHostnames: resourceServersAllowedHostnames,
+                        allowedHostnames: trustedThirdPartyResourceServers,
                         extendAuthorizationToParentDomain: true,
                         hostname
                     })
@@ -238,7 +396,7 @@ function patchFetchApiToSubstituteTokenPlaceholder(params: {
                     [
                         `oidc-spa: Blocked authed request to ${hostname}.`,
                         `To authorize this request add "${hostname}" to`,
-                        "`resourceServersAllowedHostnames`."
+                        "`trustedThirdPartyResourceServers`."
                     ].join(" ")
                 );
             }
@@ -302,9 +460,9 @@ function patchFetchApiToSubstituteTokenPlaceholder(params: {
 }
 
 function patchXMLHttpRequestApiToSubstituteTokenPlaceholder(params: {
-    resourceServersAllowedHostnames: string[];
+    trustedThirdPartyResourceServers: string[];
 }) {
-    const { resourceServersAllowedHostnames } = params;
+    const { trustedThirdPartyResourceServers } = params;
 
     const open_actual = XMLHttpRequest.prototype.open;
     const send_actual = XMLHttpRequest.prototype.send;
@@ -384,7 +542,7 @@ function patchXMLHttpRequestApiToSubstituteTokenPlaceholder(params: {
 
             if (
                 getIsHostnameAuthorized({
-                    allowedHostnames: resourceServersAllowedHostnames,
+                    allowedHostnames: trustedThirdPartyResourceServers,
                     extendAuthorizationToParentDomain: true,
                     hostname
                 })
@@ -396,7 +554,7 @@ function patchXMLHttpRequestApiToSubstituteTokenPlaceholder(params: {
                 [
                     `oidc-spa: Blocked authed request to ${hostname}.`,
                     `To authorize this request add "${hostname}" to`,
-                    "`resourceServersAllowedHostnames`."
+                    "`trustedThirdPartyResourceServers`."
                 ].join(" ")
             );
         }
@@ -406,9 +564,9 @@ function patchXMLHttpRequestApiToSubstituteTokenPlaceholder(params: {
 }
 
 function patchWebSocketApiToSubstituteTokenPlaceholder(params: {
-    resourceServersAllowedHostnames: string[];
+    trustedThirdPartyResourceServers: string[];
 }) {
-    const { resourceServersAllowedHostnames } = params;
+    const { trustedThirdPartyResourceServers } = params;
 
     const WebSocket_actual = window.WebSocket;
     const send_actual = WebSocket_actual.prototype.send;
@@ -472,7 +630,7 @@ function patchWebSocketApiToSubstituteTokenPlaceholder(params: {
 
             if (
                 getIsHostnameAuthorized({
-                    allowedHostnames: resourceServersAllowedHostnames,
+                    allowedHostnames: trustedThirdPartyResourceServers,
                     extendAuthorizationToParentDomain: true,
                     hostname
                 })
@@ -484,7 +642,7 @@ function patchWebSocketApiToSubstituteTokenPlaceholder(params: {
                 [
                     `oidc-spa: Blocked authed request to ${hostname}.`,
                     `To authorize this request add "${hostname}" to`,
-                    "`resourceServersAllowedHostnames`."
+                    "`trustedThirdPartyResourceServers`."
                 ].join(" ")
             );
         }
@@ -543,7 +701,7 @@ function patchWebSocketApiToSubstituteTokenPlaceholder(params: {
 
             if (
                 getIsHostnameAuthorized({
-                    allowedHostnames: resourceServersAllowedHostnames,
+                    allowedHostnames: trustedThirdPartyResourceServers,
                     extendAuthorizationToParentDomain: true,
                     hostname: state.hostname
                 })
@@ -555,7 +713,7 @@ function patchWebSocketApiToSubstituteTokenPlaceholder(params: {
                 [
                     `oidc-spa: Blocked authed request to ${state.hostname}.`,
                     `To authorize this request add "${state.hostname}" to`,
-                    "`resourceServersAllowedHostnames`."
+                    "`trustedThirdPartyResourceServers`."
                 ].join(" ")
             );
         }
@@ -573,9 +731,9 @@ function patchWebSocketApiToSubstituteTokenPlaceholder(params: {
 }
 
 function patchEventSourceApiToSubstituteTokenPlaceholder(params: {
-    resourceServersAllowedHostnames: string[];
+    trustedThirdPartyResourceServers: string[];
 }) {
-    const { resourceServersAllowedHostnames } = params;
+    const { trustedThirdPartyResourceServers } = params;
 
     const EventSource_actual = window.EventSource;
 
@@ -600,7 +758,7 @@ function patchEventSourceApiToSubstituteTokenPlaceholder(params: {
 
             if (
                 getIsHostnameAuthorized({
-                    allowedHostnames: resourceServersAllowedHostnames,
+                    allowedHostnames: trustedThirdPartyResourceServers,
                     extendAuthorizationToParentDomain: true,
                     hostname
                 })
@@ -612,7 +770,7 @@ function patchEventSourceApiToSubstituteTokenPlaceholder(params: {
                 [
                     `oidc-spa: Blocked authed request to ${hostname}.`,
                     `To authorize this request add "${hostname}" to`,
-                    "`resourceServersAllowedHostnames`."
+                    "`trustedThirdPartyResourceServers`."
                 ].join(" ")
             );
         }
@@ -637,9 +795,9 @@ function patchEventSourceApiToSubstituteTokenPlaceholder(params: {
 }
 
 function patchNavigatorSendBeaconApiToSubstituteTokenPlaceholder(params: {
-    resourceServersAllowedHostnames: string[];
+    trustedThirdPartyResourceServers: string[];
 }) {
-    const { resourceServersAllowedHostnames } = params;
+    const { trustedThirdPartyResourceServers } = params;
 
     const sendBeacon_actual = navigator.sendBeacon?.bind(navigator);
 
@@ -715,7 +873,7 @@ function patchNavigatorSendBeaconApiToSubstituteTokenPlaceholder(params: {
 
             if (
                 getIsHostnameAuthorized({
-                    allowedHostnames: resourceServersAllowedHostnames,
+                    allowedHostnames: trustedThirdPartyResourceServers,
                     extendAuthorizationToParentDomain: true,
                     hostname
                 })
@@ -727,7 +885,7 @@ function patchNavigatorSendBeaconApiToSubstituteTokenPlaceholder(params: {
                 [
                     `oidc-spa: Blocked authed request to ${hostname}.`,
                     `To authorize this request add "${hostname}" to`,
-                    "`resourceServersAllowedHostnames`."
+                    "`trustedThirdPartyResourceServers`."
                 ].join(" ")
             );
         }
@@ -736,303 +894,8 @@ function patchNavigatorSendBeaconApiToSubstituteTokenPlaceholder(params: {
     };
 }
 
-function runMonkeyPatchingPrevention() {
-    const createWriteError = (target: string) =>
-        new Error(
-            [
-                `oidc-spa: Monkey patching of ${target} has been blocked.`,
-                `Read: https://docs.oidc-spa.dev/v/v8/resources/blocked-monkey-patching`
-            ].join(" ")
-        );
-
-    for (const name of [
-        "fetch",
-        "XMLHttpRequest",
-        "WebSocket",
-        "Headers",
-        "URLSearchParams",
-        "EventSource",
-        "ServiceWorkerContainer",
-        "ServiceWorkerRegistration",
-        "ServiceWorker",
-        "FormData",
-        "URL",
-        "Request",
-        "WeakMap",
-        "Blob",
-        "String",
-        "Object",
-        "Promise",
-        "Array",
-        "RegExp",
-        "TextEncoder",
-        "Uint8Array",
-        "Uint32Array",
-        "Response",
-        "Reflect",
-        "JSON",
-        "encodeURIComponent",
-        "decodeURIComponent",
-        "atob",
-        "btoa"
-    ] as const) {
-        const original = window[name];
-
-        if (!original) {
-            continue;
-        }
-
-        if ("prototype" in original) {
-            for (const propertyName of Object.getOwnPropertyNames(original.prototype)) {
-                if (name === "Object") {
-                    if (
-                        propertyName === "toString" ||
-                        propertyName === "constructor" ||
-                        propertyName === "valueOf"
-                    ) {
-                        continue;
-                    }
-                }
-
-                if (name === "Array") {
-                    if (propertyName === "constructor" || propertyName === "concat") {
-                        continue;
-                    }
-                }
-
-                const pd = Object.getOwnPropertyDescriptor(original.prototype, propertyName);
-
-                assert(pd !== undefined);
-
-                if (!pd.configurable) {
-                    continue;
-                }
-
-                const target = `window.${name}.prototype.${propertyName}`;
-
-                Object.defineProperty(original.prototype, propertyName, {
-                    enumerable: pd.enumerable,
-                    configurable: false,
-                    ...("value" in pd
-                        ? {
-                              get: () => pd.value,
-                              set: () => {
-                                  throw createWriteError(target);
-                              }
-                          }
-                        : {
-                              get: pd.get,
-                              set:
-                                  pd.set ??
-                                  (() => {
-                                      throw createWriteError(target);
-                                  })
-                          })
-                });
-            }
-
-            for (const symbol of Object.getOwnPropertySymbols(original.prototype)) {
-                const pd = Object.getOwnPropertyDescriptor(original.prototype, symbol);
-
-                assert(pd !== undefined);
-
-                if (!pd.configurable) {
-                    continue;
-                }
-
-                const target = `window.${name}.prototype[Symbol.${symbol.toString()}]`;
-
-                Object.defineProperty(original.prototype, symbol, {
-                    enumerable: pd.enumerable,
-                    configurable: false,
-                    ...("value" in pd
-                        ? {
-                              get: () => pd.value,
-                              set: () => {
-                                  throw createWriteError(target);
-                              }
-                          }
-                        : {
-                              get: pd.get,
-                              set:
-                                  pd.set ??
-                                  (() => {
-                                      throw createWriteError(target);
-                                  })
-                          })
-                });
-            }
-
-            for (const propertyName of Object.getOwnPropertyNames(original)) {
-                const pd = Object.getOwnPropertyDescriptor(original, propertyName);
-
-                assert(pd !== undefined);
-
-                if (!pd.configurable) {
-                    continue;
-                }
-
-                const target = `window.${name}.${propertyName}`;
-
-                Object.defineProperty(original, propertyName, {
-                    enumerable: pd.enumerable,
-                    configurable: false,
-                    ...("value" in pd
-                        ? {
-                              get: () => pd.value,
-                              set: () => {
-                                  throw createWriteError(target);
-                              }
-                          }
-                        : {
-                              get: pd.get,
-                              set:
-                                  pd.set ??
-                                  (() => {
-                                      throw createWriteError(target);
-                                  })
-                          })
-                });
-            }
-
-            if (Symbol.iterator in original.prototype) {
-                // @ts-expect-error
-                const iterator_prototype = Object.getPrototypeOf(new original()[Symbol.iterator]());
-
-                for (const propertyName of Object.getOwnPropertyNames(iterator_prototype)) {
-                    const pd = Object.getOwnPropertyDescriptor(iterator_prototype, propertyName);
-
-                    assert(pd !== undefined);
-
-                    if (!pd.configurable) {
-                        continue;
-                    }
-
-                    const target = `new ${name}()[Symbol.iterator]().__proto__.${propertyName}`;
-
-                    Object.defineProperty(iterator_prototype, propertyName, {
-                        enumerable: pd.enumerable,
-                        configurable: false,
-                        ...("value" in pd
-                            ? {
-                                  get: () => pd.value,
-                                  set: () => {
-                                      throw createWriteError(target);
-                                  }
-                              }
-                            : {
-                                  get: pd.get,
-                                  set:
-                                      pd.set ??
-                                      (() => {
-                                          throw createWriteError(target);
-                                      })
-                              })
-                    });
-                }
-            }
-        }
-
-        Object.defineProperty(window, name, {
-            configurable: false,
-            enumerable: true,
-            get: () => original,
-            set: () => {
-                throw createWriteError(`window.${name}`);
-            }
-        });
-    }
-
-    crypto_subtle: {
-        const { crypto } = window;
-
-        if (!crypto?.subtle) {
-            break crypto_subtle;
-        }
-
-        const subtle = crypto.subtle;
-        const prototype = Object.getPrototypeOf(subtle);
-
-        for (const propertyName of Object.getOwnPropertyNames(prototype)) {
-            const pd = Object.getOwnPropertyDescriptor(prototype, propertyName);
-
-            assert(pd !== undefined);
-
-            if (!pd.configurable) {
-                continue;
-            }
-
-            const target = `window.crypto.subtle.${propertyName}`;
-
-            Object.defineProperty(prototype, propertyName, {
-                enumerable: pd.enumerable,
-                configurable: false,
-                ...("value" in pd
-                    ? {
-                          get: () => pd.value,
-                          set: () => {
-                              throw createWriteError(target);
-                          }
-                      }
-                    : {
-                          get: pd.get,
-                          set:
-                              pd.set ??
-                              (() => {
-                                  throw createWriteError(target);
-                              })
-                      })
-            });
-        }
-
-        {
-            const subtlePd = Object.getOwnPropertyDescriptor(crypto, "subtle");
-            if (subtlePd !== undefined && !subtlePd.configurable) {
-                break crypto_subtle;
-            }
-        }
-
-        Object.defineProperty(crypto, "subtle", {
-            configurable: false,
-            enumerable: true,
-            get: () => subtle,
-            set: () => {
-                throw createWriteError("window.crypto.subtle");
-            }
-        });
-    }
-
-    {
-        const name = "serviceWorker";
-
-        const original = navigator[name];
-
-        Object.defineProperty(navigator, name, {
-            configurable: false,
-            enumerable: true,
-            get: () => original,
-            set: () => {
-                throw createWriteError(`window.navigator.${name}`);
-            }
-        });
-    }
-
-    for (const name of ["call", "apply", "bind"] as const) {
-        const original = Function.prototype[name];
-
-        Object.defineProperty(Function.prototype, name, {
-            configurable: false,
-            enumerable: true,
-            get: () => original,
-            set: () => {
-                throw createWriteError(`window.Function.prototype.${name})`);
-            }
-        });
-    }
-}
-
-function restrictServiceWorkerRegistration(params: { serviceWorkersAllowedHostnames: string[] }) {
-    const { serviceWorkersAllowedHostnames } = params;
+function restrictServiceWorkerRegistration(params: { trustedServiceWorkerSources: string[] }) {
+    const { trustedServiceWorkerSources } = params;
 
     const { serviceWorker } = navigator;
 
@@ -1063,7 +926,7 @@ function restrictServiceWorkerRegistration(params: { serviceWorkersAllowedHostna
 
         if (
             !getIsHostnameAuthorized({
-                allowedHostnames: serviceWorkersAllowedHostnames,
+                allowedHostnames: trustedServiceWorkerSources,
                 extendAuthorizationToParentDomain: false,
                 hostname
             })
@@ -1072,7 +935,7 @@ function restrictServiceWorkerRegistration(params: { serviceWorkersAllowedHostna
                 [
                     `oidc-spa: Blocked service worker registration to ${hostname}.`,
                     `To authorize this registration add "${hostname}" to`,
-                    "`serviceWorkersAllowedHostnames`."
+                    "`trustedServiceWorkerSources`."
                 ].join(" ")
             );
         }

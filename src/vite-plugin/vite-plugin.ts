@@ -1,15 +1,29 @@
 import type { Plugin, TransformResult } from "vite";
 import { assert } from "../tools/tsafe/assert";
-import type { ParamsOfEarlyInit, ParamsOfEarlyInit_legacy } from "../core/earlyInit";
+import type { ApiName } from "../core/earlyInit_freezeBrowserRuntime";
 import { createHandleClientEntrypoint } from "./handleClientEntrypoint";
 import { createHandleServerEntrypoint } from "./handleServerEntrypoint";
 import { manageOptimizedDeps } from "./manageOptimizedDeps";
 import { transformCreateFileRoute } from "./transformTanstackRouterCreateFileRoute";
 import { getProjectType, type ProjectType } from "./projectType";
 
-export type OidcSpaVitePluginParams =
-    | Omit<ParamsOfEarlyInit, "BASE_URL">
-    | Omit<ParamsOfEarlyInit_legacy, "BASE_URL">;
+export type OidcSpaVitePluginParams = {
+    /** See: https://docs.oidc-spa.dev/v/v8/security-features/browser-runtime-freeze */
+    browserRuntimeFreeze?:
+        | false
+        | {
+              enabled: true;
+              exclude?: ApiName[];
+          };
+    /** See: https://docs.oidc-spa.dev/security-features/token-substitution */
+    tokenSubstitution?:
+        | false
+        | {
+              enabled: true;
+              trustedThirdPartyResourceServers?: string[];
+              trustedServiceWorkerSources?: string[];
+          };
+};
 
 export function oidcSpa(params: OidcSpaVitePluginParams = {}) {
     let load_handleClientEntrypoint:

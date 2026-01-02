@@ -5,7 +5,7 @@ import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";
 import { getSearchParam, addOrUpdateSearchParam } from "../tools/urlSearchParams";
 import { getRootRelativeOriginalLocationHref } from "../core/earlyInit";
 import { INFINITY_TIME } from "../tools/INFINITY_TIME";
-import { getBASE_URL } from "../core/BASE_URL";
+import { getBASE_URL_earlyInit } from "../core/earlyInit_BASE_URL";
 
 export type ParamsOfCreateMockOidc<
     DecodedIdToken extends Record<string, unknown> = Record<string, unknown>,
@@ -88,7 +88,7 @@ export async function createMockOidc<
     })();
 
     const homeUrl = toFullyQualifiedUrl({
-        urlish: BASE_URL_params ?? getBASE_URL() ?? "/",
+        urlish: BASE_URL_params ?? getBASE_URL_earlyInit() ?? "/",
         doAssertNoQueryParams: true,
         doOutputWithTrailingSlash: true
     });
