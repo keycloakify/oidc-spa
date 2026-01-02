@@ -445,19 +445,19 @@ export function implementFetchAndXhrDPoPInterceptor() {
                     break handle;
                 }
 
-                if (init.headers instanceof Headers) {
-                    break handle;
-                }
-
                 if (init.headers instanceof Array) {
                     break handle;
                 }
 
                 let dpopHeaderValue: string | undefined = undefined;
 
-                try {
-                    dpopHeaderValue = init.headers["DPoP"];
-                } catch {}
+                if (init.headers instanceof Headers) {
+                    dpopHeaderValue = init.headers.get("DPoP") ?? undefined;
+                } else {
+                    try {
+                        dpopHeaderValue = init.headers["DPoP"];
+                    } catch {}
+                }
 
                 if (typeof dpopHeaderValue !== "string") {
                     break handle;
@@ -508,7 +508,11 @@ export function implementFetchAndXhrDPoPInterceptor() {
                             : createGetServerDateNow(paramsOfCreateGetServerDateNow)
                 });
 
-                init.headers["DPoP"] = dpopProof;
+                if (init.headers instanceof Headers) {
+                    init.headers.set("DPoP", dpopProof);
+                } else {
+                    init.headers["DPoP"] = dpopProof;
+                }
             }
 
             return fetch_before(input, init);
