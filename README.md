@@ -26,13 +26,13 @@
 
 ## At a glance
 
-The Framework Agnostic Adapter:
+The Framework-Agnostic Adapter:
 
 ```ts
 import { createOidc, oidcEarlyInit } from "oidc-spa/core"; // 32 KB min+gzip (Import Cost overestimate by counting polyfills that are only loaded when needed.)
-import { z } from "zod"; // 59 KB min+zip, but it's optional.
+import { z } from "zod"; // 59 KB min+gzip, but it's optional.
 
-// This is to call only if you don't use oidc-spa's Vite plugin.
+// Call this only if you don't use oidc-spa's Vite plugin.
 oidcEarlyInit({ BASE_URL: "/" });
 
 const oidc = await createOidc({
@@ -41,20 +41,20 @@ const oidc = await createOidc({
     //issuerUri: "https://xxx.us.auth0.com/..."
     //issuerUri: "https://accounts.google.com/o/oauth2/v2/auth"
     clientId: "myclient",
-    // Optional, you can write a validator by hand, or give up some type-safety, your call.
+    // Optional; you can write a validator by hand, or give up some type-safety, your call.
     decodedIdTokenSchema: z.object({
         name: z.string(),
         picture: z.string().optional(),
         email: z.string(),
         realm_access: z.object({ roles: z.array(z.string()) })
     })
-    // Yes really, it's that simple, there's no other params to provide.
-    // The Redirect URI (callback url) is the root url of your app (no public/callback.html involved).
+    // Yes, really, it's that simple; there are no other parameters to provide.
+    // The Redirect URI (callback URL) is the root URL of your app (no public/callback.html involved).
 });
 
 // In oidc-spa the user is either logged in or they aren't.
 // The state will never mutate without a full app reload.
-// This makes reasoning about auth much, much, easier.
+// This makes reasoning about auth much, much easier.
 if (!oidc.isUserLoggedIn) {
     await oidc.login();
     // Never here
@@ -78,11 +78,11 @@ if (realm_access.roles.includes("realm-admin")) {
 }
 ```
 
-Higher level adapters, example with React but we also feature similar Angular adapter:
+Higher-level adapters, example with React but we also feature a similar Angular adapter:
 
 <img width="1835" height="942" alt="Image" src="https://github.com/user-attachments/assets/a7a18bbc-998a-459c-8cfa-93b599a45524" />
 
-Full Stack Auth solution with [TanStack Start](https://tanstack.com/start):
+Full-stack auth solution with [TanStack Start](https://tanstack.com/start):
 
 ```tsx
 import { createServerFn } from "@tanstack/react-start";
@@ -124,101 +124,21 @@ function RouteComponent() {
 
 ## What this is
 
-oidc-spa is a framework-agnostic OpenID Connect client for browser-centric web applications implementing the [Authorization Code Flow with PKCE](https://docs.oidc-spa.dev/resources/why-no-client-secret).
+oidc-spa is an OpenID Connect client for browser-centric web apps.  
+It implements the [Authorization Code Flow with PKCE](https://docs.oidc-spa.dev/resources/why-no-client-secret) + [DPoP](https://docs.oidc-spa.dev/security-features/dpop) and
+also provides [token validation utilities for JavaScript backends](https://docs.oidc-spa.dev/integration-guides/backend-token-validation).
 
-It work with any spec compliant OIDC provider like [Keycloak](https://www.keycloak.org/), [Auth0](https://auth0.com/) or [Microsoft EntraID](https://www.microsoft.com/fr-fr/security/business/identity-access/microsoft-entra-id) and replace provider-specific SDKs like [keycloak-js](https://www.npmjs.com/package/keycloak-js), [auth0-spa-js](https://www.npmjs.com/package/@auth0/auth0-spa-js), or [@azure/msal-browser](https://www.npmjs.com/package/@azure/msal-browser) with one unified API, freeing your app from vendor lock-in and making it deployable in any IT system.  
-Concretely this mean that it let you build an app and sell it to different companies ensuring they will be able to deploy it in their environment regardless of what auth platform they use internally. &#x20;
+It’s a single library that can replace platform-specific SDKs like keycloak-js, MSAL.js, @auth0/auth0-spa-js, etc. on the frontend,
+and [jsonwebtoken](https://www.npmjs.com/package/jsonwebtoken), [jose](https://www.npmjs.com/package/jose) or [express-jwt](https://www.npmjs.com/package/express-jwt) on your backend.
 
-oidc-spa provides strong guarantees regarding token exfiltration prevention [**even in case of successful XSS or supply chain attacks**](https://docs.oidc-spa.dev/v/v8/resources/token-exfiltration-defence). No other implementation can currently claim that. &#x20;
+oidc-spa provides a level of protection in case of a successful supply-chain or XSS attack that goes
+far beyond the current best practices for client-side auth, and what other solutions provide. [Learn more](https://docs.oidc-spa.dev/v/v8/security-features/overview).
 
-It is uncompromising in terms of performance, security, DX, and UX. You get a state-of-the-art authentication and authorization system out of the box with zero glue code to write and no knobs to adjust.
+**Is it a good fit for my stack?**
 
-Unlike server-centric solutions such as [Auth.js](https://authjs.dev/), oidc-spa makes the frontend the OIDC client in your IdP model's representation.
+oidc-spa shines in apps where logic and state live primarily in the browser. Think single-page applications (SPAs) and frontend-oriented frameworks like TanStack Start.
 
-Your backend becomes a simple OAuth2 resource server that you frontend query with the access token attached as Authorization header. oidc-spa also provides the tools for token validation on the server side:
-
--   As an unified solution for [TanStack Start](https://tanstack.com/router/latest)&#x20;
--   Or, as [a separate adapter](integration-guides/tanstack-router-+-node-rest-api.md) for creating authed APIs with [tRCP](https://trpc.io/), [Express](https://expressjs.com/), [Hono](https://hono.dev/), [Nest.js](https://nestjs.com/), ect.
-
-That means **no database,** no session store, and **enterprise-grade UX** out of the box, while scaling naturally to edge runtimes.
-
-oidc-spa exposes real OIDC primitives, decoded ID tokens, access tokens, and claims, instead of hiding them behind a “user” object, helping you understand and control your security posture.
-
-It’s infra-light, open-standard, transparent, and ready to work in minutes.
-
-<details>
-
-<summary>But in details? I want to understand the tradeoffs.</summary>  
-<br />
-  
-In the modern tech ecosystem, no one “rolls their own auth” anymore, not even OpenAI or Vercel.\
-Authentication has become a **platform concern**. Whether you host your own identity provider like **Keycloak**, or use a service such as **Auth0** or **Microsoft Entra ID**, authentication today means **redirecting users to your auth provider**.
-
----
-
-**Why not** [**BetterAuth**](https://www.better-auth.com/) **or** [**Auth.js**](https://authjs.dev/)
-
-These are great for what they are, but they’re “roll your own auth” solutions.\
-With oidc-spa, you delegate authentication to a specialized identity provider such as Keycloak, Auth0, Okta, or Clerk.
-
-With BetterAuth, your backend _is_ the authorization server, even if you can integrate third party identity providers id doesn't change that fact.\
-That’s very battery-included, but also far heavier infrastructure-wise.\
-Today, very few companies still roll their own auth, not even OpenAI or Vercel.
-
-Another big difference: oidc-spa is **browser-centric**. The token exchange happens on the client,\
-and the backend server is merely an OAuth2 resource server in the OIDC model.
-
-If you use BetterAuth to provide login via Keycloak, your backend becomes the OIDC client application,\
-which has some security benefits over browser token exchange, but at the cost of centralization and requiring backend infrastructure.
-
-One clear advantage BetterAuth has over oidc-spa is more natural SSR support. In the oidc-spa model, the server doesn’t know the authentication state of the user at all time, which makes it difficult to integrate with traditional full-stack frameworks that rely on server-side rendering.
-
----
-
-**Server Side Rendering**
-
-The only SSR-capable framework we currently support is [TanStack Start](https://tanstack.com/start/latest), because it provides the low-level primitives needed to render as much as possible on the server while deferring rendering of auth aware components to the client.
-
-This approach achieves a similar UX and performance to server-centric frameworks, but it’s inherently less transparent than streaming fully authenticated components to the client.
-
-Try the TansStack Start example deployment with JavaScript disabled to get a feel of what can and can't be SSR'd: [https://example-tanstack-start.oidc-spa.dev/](https://example-tanstack-start.oidc-spa.dev/)
-
----
-
-**Security and XSS resilience**
-
-Yes; client-side authentication raises valid security concerns.\
-But this isn’t a fatal flaw; it’s an **engineering challenge**, and oidc-spa addresses it head-on.
-
-It treats the browser as a **hostile environment**, going to great lengths to protect tokens even under **XSS or supply-chain attacks**.\
-These mitigations [are documented here](resources/why-no-client-secret.md).
-
----
-
-**Limitations regarding backend delegation**
-
-The main limitation is with **long-running background operations**.\
-If your backend must call third-party APIs **on behalf of the user** while they’re offline, you’ll need **service accounts** for those APIs or take charge of rotating tokens yourself which [can be tricky](https://authjs.dev/guides/refresh-token-rotation).\
-Beyond that, everything else scalability, DX, performance, works in your favor.
-
----
-
-If that all sounds good to you…\
-**Let’s get started.**
-
-</details>
-
-## Integration
-
--   Full Stack - all in one auth solution:
-    -   [TanStack Start](https://docs.oidc-spa.dev/integration-guides/tanstack-start)
--   Single Page Apps (SPAs):
-    -   [Framework Agnostic](https://docs.oidc-spa.dev/integration-guides/usage)
-    -   [React Router](https://docs.oidc-spa.dev/integration-guides/react-router)
-    -   [Tanstack Router](https://docs.oidc-spa.dev/integration-guides/tanstack-router-start/react-router)
-    -   [Angular](https://docs.oidc-spa.dev/integration-guides/angular)
-    -   ...More to come...
--   Backend: [Express, Hono, tRPC, Nest.js ...](https://docs.oidc-spa.dev/integration-guides/tanstack-router-+-node-rest-api)
+It’s not a good fit for Next.js, Nuxt, or Astro. These meta-frameworks try to involve the client as little as possible. In oidc-spa, auth is driven by the browser, so there’s a philosophy mismatch.
 
 ## Comparison with Existing Libraries
 
@@ -226,17 +146,17 @@ With other OIDC clients, you'll get something that works in the happy path.
 But then you will face issues like:
 
 -   The user cannot navigate back from the login page to your app.
--   User get hit with "your session has expired please login again" after spending an hours filling your form.
--   User logged out or logged in on one tabe but the state is not propagated to the other tabs.
+-   Users get hit with "your session has expired, please log in again" after spending an hour filling out your form.
+-   Users log out or log in on one tab but the state is not propagated to the other tabs.
 -   Random 401 from your API with "token expired"
--   You can't run E2E test without having to actually connect to a real server.
+-   You can't run E2E tests without having to actually connect to a real server.
 
-Plus you'll realize that your configuration works with one provider in one devloppement configuration,
-try to switch IdP and the all thing fall appart, you'll be met with criptic errors and have to spend
-days tweeking knobs again.
+Plus you'll realize that your configuration works with one provider in one development configuration.
+Try to switch IdPs and the whole thing falls apart; you'll be met with cryptic errors and have to spend
+days tweaking knobs again.
 
-With oidc-spa, there's no knobs to adjust, things just work out of the box.  
-And you get XSS and suply chain attack protection, unlike with any other client side solution.
+With oidc-spa, there's no knobs to adjust; things just work out of the box.  
+And you get XSS and supply-chain attack protection, unlike with any other client-side solution.
 
 ### [oidc-client-ts](https://github.com/authts/oidc-client-ts)
 
@@ -250,11 +170,11 @@ Example of what you get out of the box with oidc-spa:
 -   **Login/logout propagation** across tabs
 -   **SSO that just works**, regardless of the deployment configuration.
 -   **Seamless browser back/forward cache (bfcache) management**
--   **Auto logout**: avoid "your session has expired please login again" after the used just spend an hour filling your form.
+-   **Auto logout**: avoid "your session has expired, please log in again" after the user just spent an hour filling out your form.
 -   **Never getting an expired access token error**, even after waking from sleep
 -   **Graceful handling when the provider lacks refresh tokens or a logout endpoint** (e.g. Google OAuth)
 -   **Mock support**, run with a mock identity without contacting a server
--   **Helpfull debug logs** important if you sell your solution, to streamline deployment.
+-   **Helpful debug logs** to streamline deployment, especially if you sell your solution.
 
 oidc-spa just works. You provide the few parameters required to talk to your IdP, and that’s it.
 
@@ -285,7 +205,7 @@ The official OIDC client for Keycloak has several issues:
 -   Does not handle session expiration; users aren’t automatically logged out or warned before expiration.
 -   Lacks mock implementations for testing against mock identities.
 
-oidc-spa exports `oidc-spa/keycloak` providing all the keycloak specific feature that keycloak-js offers.
+oidc-spa exports `oidc-spa/keycloak`, providing all the Keycloak-specific features that keycloak-js offers.
 
 oidc-spa even comes with a polyfill implementation of the keycloak-js API.
 
@@ -312,8 +232,8 @@ However, `oidc-spa/angular` still has several advantages:
 These are great for what they are, but they’re “roll your own auth” solutions.  
 With oidc-spa, you delegate authentication to a specialized identity provider such as Keycloak, Auth0, Okta, or Clerk.
 
-With BetterAuth, your backend _is_ the authorization server. (even if you can integrate third party provider).  
-That’s very battery-included, but also far heavier infrastructure-wise.  
+With BetterAuth, your backend _is_ the authorization server (even if you can integrate a third-party provider).  
+That’s very batteries-included, but also far heavier infrastructure-wise.  
 Today, very few companies still roll their own auth—including OpenAI and Vercel.
 
 Another big difference: oidc-spa is **browser-centric**. The token exchange happens on the client,  
@@ -324,20 +244,20 @@ which has some security benefits over browser token exchange, but at the cost of
 
 And with the [advanced exfiltration model enabled](https://docs.oidc-spa.dev/resources/token-exfiltration-defence), the security guarantees of a frontend-based approach become _theoretically equivalent_ to backend-based token exchange.
 
-I say “theoretically” not because users might misconfigure oidc-spa, the library refuses to start unless all requirements are met, but because this equivalence ultimately depends on the correctness of oidc-spa’s own hardening implementation. Backend flows avoid this concern entirely since tokens never enter the execution environment in the first place.
+I say “theoretically” not because users might misconfigure oidc-spa (the library refuses to start unless all requirements are met), but because this equivalence ultimately depends on the correctness of oidc-spa’s own hardening implementation. Backend flows avoid this concern entirely since tokens never enter the execution environment in the first place.
 
 One clear advantage BetterAuth has over oidc-spa is better SSR (Server-Side Rendering) support.
 In the oidc-spa model, authentication is handled entirely on the client, which makes it challenging to integrate with traditional full-stack frameworks that depend on server-side rendering.
 
 Currently, the only SSR-capable framework we support is TanStack Start, which provides the low-level primitives required to render as much as possible on the server while deferring user-specific components to the client.
-We won’t pretend this is a small limitation, it significantly restricts what can actually be SSR’d. In practice, you can only server render content that’s identical for every user (such as the marketing pages and layout), while everything user-dependent must be rendered client-side.
+We won’t pretend this is a small limitation; it significantly restricts what can actually be SSR’d. In practice, you can only server-render content that’s identical for every user (such as the marketing pages and layout), while everything user-dependent must be rendered client-side.
 
 This doesn’t hurt UX or performance, but it’s inherently less flexible than streaming fully authenticated server components to the client.
-That said, with TanStack Start, the abstractions are elegant enough that this separation is mostly transparent, it just works.
+That said, with TanStack Start, the abstractions are elegant enough that this separation is mostly transparent; it just works.
 
 When it comes to Next.js or React Router frameworks with server features, however, we currently can’t offer a convincing solution.
 
-The strength of oidc-spa lies elsewhere: it’s extremely lightweight, requiring no backend, no extra infrastructure, and scaling effortlessly at the edge. It’s fast, secure, and keeps your deployments simple. The trade-off is that SSR becomes more difficult, though, as shown in [the TanStack Start example](https://example-tanstack-start.oidc-spa.dev/), not impossible.
+The strength of oidc-spa lies elsewhere: it’s extremely lightweight, requiring no backend, no extra infrastructure, and scaling effortlessly at the edge. It’s fast, secure, and keeps your deployments simple. The trade-off is that SSR becomes more difficult, though, as shown in [the TanStack Start example](https://example-tanstack-start.oidc-spa.dev/), but not impossible.
 
 ## Acknowledgment
 
