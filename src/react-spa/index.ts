@@ -1,4 +1,4 @@
 export type * from "./types";
-import { oidcSpaApiBuilder } from "./apiBuilder";
+import { oidcSpaUtilsBuilder } from "./utilsBuilder";
 
-export const oidcSpa = oidcSpaApiBuilder;
+export const oidcSpa = oidcSpaUtilsBuilder;

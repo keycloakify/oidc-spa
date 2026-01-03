@@ -6,7 +6,7 @@ import {
     type ReactNode,
     type ComponentType
 } from "react";
-import type { UseOidc, OidcSpaApi, GetOidc, ParamsOfBootstrap } from "./types";
+import type { UseOidc, OidcSpaUtils, GetOidc, ParamsOfBootstrap } from "./types";
 import type { ZodSchemaLike } from "../tools/ZodSchemaLike";
 import type { Oidc as Oidc_core } from "../core";
 import { OidcInitializationError } from "../core/OidcInitializationError";
@@ -19,7 +19,7 @@ import { id } from "../tools/tsafe/id";
 import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";
 import { setDesiredPostLoginRedirectUrl } from "../core/desiredPostLoginRedirectUrl";
 
-export function createOidcSpaApi<
+export function createOidcSpaUtils<
     AutoLogin extends boolean,
     DecodedIdToken extends Record<string, unknown>
 >(params: {
@@ -28,7 +28,7 @@ export function createOidcSpaApi<
         | ZodSchemaLike<Oidc_core.Tokens.DecodedIdToken_OidcCoreSpec, DecodedIdToken>
         | undefined;
     decodedIdToken_mock: DecodedIdToken | undefined;
-}): OidcSpaApi<AutoLogin, DecodedIdToken> {
+}): OidcSpaUtils<AutoLogin, DecodedIdToken> {
     const { autoLogin, decodedIdTokenSchema, decodedIdToken_mock } = params;
 
     const dParamsOfBootstrap = new Deferred<ParamsOfBootstrap<AutoLogin, DecodedIdToken>>();
@@ -357,7 +357,7 @@ export function createOidcSpaApi<
             switch (paramsOfBootstrap.implementation) {
                 case "mock":
                     {
-                        const { createMockOidc } = await import("../mock/oidc");
+                        const { createMockOidc } = await import("../core/createMockOidc");
 
                         const oidcCore = await createMockOidc({
                             BASE_URL: paramsOfBootstrap.BASE_URL,

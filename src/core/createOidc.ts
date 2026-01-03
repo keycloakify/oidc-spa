@@ -70,11 +70,11 @@ export type ParamsOfCreateOidc<
     AutoLogin extends boolean = false
 > = {
     /**
-     * See: https://docs.oidc-spa.dev/v/v8/providers-configuration/provider-configuration
+     * See: https://docs.oidc-spa.dev/v/v9/providers-configuration/provider-configuration
      */
     issuerUri: string;
     /**
-     * See: https://docs.oidc-spa.dev/v/v8/providers-configuration/provider-configuration
+     * See: https://docs.oidc-spa.dev/v/v9/providers-configuration/provider-configuration
      */
     clientId: string;
     /**
@@ -167,7 +167,7 @@ export type ParamsOfCreateOidc<
      *   to set third-party cookies this value will let you test your app
      *   with the local dev server as it will behave in production.
      *
-     *  See: https://docs.oidc-spa.dev/v/v8/resources/third-party-cookies-and-session-restoration
+     *  See: https://docs.oidc-spa.dev/v/v9/resources/third-party-cookies-and-session-restoration
      */
     sessionRestorationMethod?: "iframe" | "full page redirect" | "auto";
 
@@ -176,7 +176,7 @@ export type ParamsOfCreateOidc<
      *
      * Default: false
      *
-     * See: https://docs.oidc-spa.dev/v/v8/resources/third-party-cookies-and-session-restoration
+     * See: https://docs.oidc-spa.dev/v/v9/resources/third-party-cookies-and-session-restoration
      */
     noIframe?: boolean;
 
@@ -245,7 +245,7 @@ export type ParamsOfCreateOidc<
      */
     postLoginRedirectUrl?: string;
 
-    /** See: https://docs.oidc-spa.dev/v/v8/security-features/dpop */
+    /** See: https://docs.oidc-spa.dev/v/v9/security-features/dpop */
     dpop?: "disabled" | "enabled" | "auto";
 };
 
@@ -254,7 +254,7 @@ const globalContext = {
     hasLogoutBeenCalled: id<boolean>(false)
 };
 
-/** @see: https://docs.oidc-spa.dev/v/v8/usage */
+/** @see: https://docs.oidc-spa.dev/v/v9/usage */
 export async function createOidc<
     DecodedIdToken extends Record<string, unknown> = Oidc.Tokens.DecodedIdToken_OidcCoreSpec,
     AutoLogin extends boolean = false
@@ -619,7 +619,7 @@ export async function createOidc_nonMemoized<
                             ];
                         })(),
                         "\n\nMore info:",
-                        "https://docs.oidc-spa.dev/v/v8/resources/third-party-cookies-and-session-restoration"
+                        "https://docs.oidc-spa.dev/v/v9/resources/third-party-cookies-and-session-restoration"
                     ].join(" ")
                 );
             } else {
@@ -649,7 +649,7 @@ export async function createOidc_nonMemoized<
                             ];
                         })(),
                         "\nMore info:",
-                        "https://docs.oidc-spa.dev/v/v8/resources/third-party-cookies-and-session-restoration"
+                        "https://docs.oidc-spa.dev/v/v9/resources/third-party-cookies-and-session-restoration"
                     ].join(" ")
                 );
             }
@@ -1319,7 +1319,7 @@ export async function createOidc_nonMemoized<
                 "idleSessionLifetimeInSeconds should only be used as a fallback",
                 "for auth servers that don't specify when an inactive session expires.",
                 "The auth server, not your code, is the source of truth.",
-                "See: https://docs.oidc-spa.dev/v/v8/auto-logout"
+                "See: https://docs.oidc-spa.dev/v/v9/auto-logout"
             ].join(" ")
         );
     }

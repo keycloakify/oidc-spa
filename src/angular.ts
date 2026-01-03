@@ -170,7 +170,7 @@ export type ParamsOfProvide = {
      */
     warnUserSecondsBeforeAutoLogout?: number;
 
-    /** See: https://docs.oidc-spa.dev/v/v8/security-features/dpop */
+    /** See: https://docs.oidc-spa.dev/v/v9/security-features/dpop */
     dpop?: "disabled" | "enabled" | "auto";
 };
 
@@ -272,7 +272,7 @@ export abstract class AbstractOidcService<
 
                 instance.#initialize({
                     prOidcOrInitializationError: (async () => {
-                        const { createMockOidc } = await import("./mock");
+                        const { createMockOidc } = await import("./core/createMockOidc");
 
                         return createMockOidc<Record<string, unknown>, boolean>({
                             homeUrl: getBaseHref(),

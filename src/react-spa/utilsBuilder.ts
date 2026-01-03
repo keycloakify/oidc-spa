@@ -1,9 +1,9 @@
-import type { OidcSpaApi } from "./types";
+import type { OidcSpaUtils } from "./types";
 import type { Oidc as Oidc_core } from "../core";
 import type { ZodSchemaLike } from "../tools/ZodSchemaLike";
-import { createOidcSpaApi } from "./createOidcSpaApi";
+import { createOidcSpaUtils } from "./createOidcSpaUtils";
 
-export type OidcSpaApiBuilder<
+export type OidcSpaUtilsBuilder<
     AutoLogin extends boolean = false,
     DecodedIdToken extends Record<string, unknown> = Oidc_core.Tokens.DecodedIdToken_OidcCoreSpec,
     ExcludedMethod extends
@@ -13,25 +13,25 @@ export type OidcSpaApiBuilder<
         | "createUtils" = never
 > = Omit<
     {
-        withAutoLogin: () => OidcSpaApiBuilder<true, DecodedIdToken, ExcludedMethod | "withAutoLogin">;
+        withAutoLogin: () => OidcSpaUtilsBuilder<true, DecodedIdToken, ExcludedMethod | "withAutoLogin">;
         withExpectedDecodedIdTokenShape: <DecodedIdToken extends Record<string, unknown>>(params: {
             decodedIdTokenSchema: ZodSchemaLike<
                 Oidc_core.Tokens.DecodedIdToken_OidcCoreSpec,
                 DecodedIdToken
             >;
             decodedIdToken_mock?: NoInfer<DecodedIdToken>;
-        }) => OidcSpaApiBuilder<
+        }) => OidcSpaUtilsBuilder<
             AutoLogin,
             DecodedIdToken,
             ExcludedMethod | "withExpectedDecodedIdTokenShape"
         >;
 
-        createUtils: () => OidcSpaApi<AutoLogin, DecodedIdToken>;
+        createUtils: () => OidcSpaUtils<AutoLogin, DecodedIdToken>;
     },
     ExcludedMethod
 >;
 
-function createOidcSpaApiBuilder<
+function createOidcSpaUtilsBuilder<
     AutoLogin extends boolean = false,
     DecodedIdToken extends Record<string, unknown> = Oidc_core.Tokens.DecodedIdToken_OidcCoreSpec
 >(params: {
@@ -40,22 +40,22 @@ function createOidcSpaApiBuilder<
         | ZodSchemaLike<Oidc_core.Tokens.DecodedIdToken_OidcCoreSpec, DecodedIdToken>
         | undefined;
     decodedIdToken_mock: DecodedIdToken | undefined;
-}): OidcSpaApiBuilder<AutoLogin, DecodedIdToken> {
+}): OidcSpaUtilsBuilder<AutoLogin, DecodedIdToken> {
     return {
         withAutoLogin: () =>
-            createOidcSpaApiBuilder({
+            createOidcSpaUtilsBuilder({
                 autoLogin: true,
                 decodedIdTokenSchema: params.decodedIdTokenSchema,
                 decodedIdToken_mock: params.decodedIdToken_mock
             }),
         withExpectedDecodedIdTokenShape: ({ decodedIdTokenSchema, decodedIdToken_mock }) =>
-            createOidcSpaApiBuilder({
+            createOidcSpaUtilsBuilder({
                 autoLogin: params.autoLogin,
                 decodedIdTokenSchema,
                 decodedIdToken_mock: decodedIdToken_mock
             }),
         createUtils: () =>
-            createOidcSpaApi<AutoLogin, DecodedIdToken>({
+            createOidcSpaUtils<AutoLogin, DecodedIdToken>({
                 autoLogin: params.autoLogin,
                 decodedIdTokenSchema: params.decodedIdTokenSchema,
                 decodedIdToken_mock: params.decodedIdToken_mock
@@ -63,7 +63,7 @@ function createOidcSpaApiBuilder<
     };
 }
 
-export const oidcSpaApiBuilder = createOidcSpaApiBuilder({
+export const oidcSpaUtilsBuilder = createOidcSpaUtilsBuilder({
     autoLogin: false,
     decodedIdToken_mock: undefined,
     decodedIdTokenSchema: undefined
