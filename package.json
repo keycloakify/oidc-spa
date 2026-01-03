@@ -196,10 +196,10 @@
             "import": "./dist/esm/token-substitution.mjs",
             "default": "./dist/token-substitution.js"
         },
-        "./tools/decodeJwt": {
-            "module": "./dist/esm/tools/decodeJwt.mjs",
-            "import": "./dist/esm/tools/decodeJwt.mjs",
-            "default": "./dist/tools/decodeJwt.js"
+        "./decode-jwt": {
+            "module": "./dist/esm/decode-jwt.mjs",
+            "import": "./dist/esm/decode-jwt.mjs",
+            "default": "./dist/decode-jwt.js"
         }
     }
 }
