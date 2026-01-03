@@ -24,15 +24,17 @@
   <a href="https://docs.oidc-spa.dev">Documentation</a>
 </p>
 
-oidc-spa is an OpenID Connect client built for browser-first apps. It wraps the full Authorization Code + PKCE flow in a high-level API so you can ship secure SPA auth without stitching together multiple SDKs and ad-hoc glue.
+oidc-spa is an OpenID Connect client built for browser-first apps.  
+It wraps the full Authorization Code + PKCE flow in a high-level API so you can ship secure app auth without stitching together multiple SDKs and ad-hoc glue.
 
--   🔒 Security-first defaults: in-memory tokens, strict redirect handling, and opt-in defenses like DPoP and token substitution to reduce token exposure risk.
+-   🔒 Security-first defaults: in-memory tokens, strict redirect handling, and opt-in defenses like [DPoP](https://docs.oidc-spa.dev/v/v9/security-features/dpop)
+    and [token substitution](https://docs.oidc-spa.dev/docs/v9/security-features/token-substitution) to reduce token exposure risk.
 -   🧭 Battle-tested auth UX: token renewal, idle timeout, auto login/logout, multi-tab session sync, and reliable session restore on reload.
 -   🧩 Full-stack ready: backend token validation utilities and first-class TanStack Start integration in the same library.
 -   🧰 Provider-aware: handles real-world quirks across Keycloak, Entra ID, Auth0, Google, and more.
 -   ✨ Developer experience: types flow from config into the API, minimal knobs, and easy-to-mock auth for tests.
 
-Get started in the docs: https://docs.oidc-spa.dev
+[Get Started](https://docs.oidc-spa.dev)
 
 ## At a glance
 
