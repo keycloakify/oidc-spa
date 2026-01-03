@@ -24,8 +24,6 @@
   <a href="https://docs.oidc-spa.dev">Documentation</a>
 </p>
 
-## Why oidc-spa
-
 oidc-spa is an OpenID Connect client built for browser-first apps. It wraps the full Authorization Code + PKCE flow in a high-level API so you can ship secure SPA auth without stitching together multiple SDKs and ad-hoc glue.
 
 -   🔒 Security-first defaults: in-memory tokens, strict redirect handling, and opt-in defenses like DPoP and token substitution to reduce token exposure risk.
