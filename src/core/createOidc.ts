@@ -689,7 +689,6 @@ export async function createOidc_nonMemoized<
                       isKeycloak({ issuerUri }) && !getIsStateDataCookieEnabled() ? "fragment" : "query",
                   response_type: "code",
                   scope: scopes.join(" "),
-                  automaticSilentRenew: false,
                   userStore: new WebStorageStateStore({
                       store: (() => {
                           if (canUseIframe) {
@@ -718,7 +717,6 @@ export async function createOidc_nonMemoized<
                   dpop: !isDPoPEnabled
                       ? undefined
                       : {
-                            bind_authorization_code: false,
                             store: createInMemoryDPoPStore({ configId })
                         }
               });
