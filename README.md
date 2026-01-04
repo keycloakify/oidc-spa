@@ -41,7 +41,7 @@ It wraps the full Authorization Code + PKCE flow in a high-level API so you can 
 The Framework-Agnostic Adapter:
 
 ```ts
-import { createOidc, oidcEarlyInit } from "oidc-spa/core"; // 32 KB min+gzip (Import Cost overestimate by counting polyfills that are only loaded when needed.)
+import { createOidc, oidcEarlyInit } from "oidc-spa/core"; // ~33 KB min+gzip (See: https://docs.oidc-spa.dev/resources/bundle-size)
 import { z } from "zod"; // 59 KB min+gzip, but it's optional.
 
 // Call this only if you don't use oidc-spa's Vite plugin.
