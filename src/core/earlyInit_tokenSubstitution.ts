@@ -1,10 +1,12 @@
 import { assert } from "../tools/tsafe/assert";
 import { getIsHostnameAuthorized } from "../tools/isHostnameAuthorized";
 import { getIsLikelyDevServer } from "../tools/isLikelyDevServer";
-import {
-    markTokenSubstitutionAsEnabled,
-    getIsTokenSubstitutionEnabled
-} from "./earlyInit_tokenSubstitution_isEnabled";
+
+let isTokenSubstitutionEnabled = false;
+
+export function getIsTokenSubstitutionEnabled() {
+    return isTokenSubstitutionEnabled;
+}
 
 type Tokens = {
     accessToken: string;
@@ -74,7 +76,7 @@ let counter = Math.floor(Math.random() * 1_000_000) + 1_000_000;
 export function getTokensPlaceholders(params: { configId: string; tokens: Tokens }): Tokens {
     const { configId, tokens } = params;
 
-    assert(getIsTokenSubstitutionEnabled(), "2934482");
+    assert(isTokenSubstitutionEnabled, "2934482");
 
     for (const entry of entries) {
         if (entry.configId !== configId) {
@@ -174,7 +176,7 @@ export function enableTokenSubstitution(params?: {
 }) {
     const { trustedThirdPartyResourceServers = [], trustedServiceWorkerSources = [] } = params ?? {};
 
-    markTokenSubstitutionAsEnabled();
+    isTokenSubstitutionEnabled = true;
 
     patchFetchApiToSubstituteTokenPlaceholder({ trustedThirdPartyResourceServers });
     patchXMLHttpRequestApiToSubstituteTokenPlaceholder({ trustedThirdPartyResourceServers });

@@ -22,7 +22,7 @@ import {
 import { notifyOtherTabsOfLogout, getPrOtherTabLogout } from "./logoutPropagationToOtherTabs";
 import { notifyOtherTabsOfLogin, getPrOtherTabLogin } from "./loginPropagationToOtherTabs";
 import { getConfigId } from "./configId";
-import { getIsTokenSubstitutionEnabled } from "./earlyInit_tokenSubstitution_isEnabled";
+import { getIsTokenSubstitutionEnabled } from "./earlyInit_tokenSubstitution";
 import { createOidcClientTsUserToTokens } from "./oidcClientTsUserToTokens";
 import { loginSilent } from "./loginSilent";
 import { authResponseToUrl, type AuthResponse } from "./AuthResponse";
@@ -1296,10 +1296,7 @@ export async function createOidc_nonMemoized<
         decodedIdTokenSchema,
         __unsafe_useIdTokenAsAccessToken,
         isDPoPEnabled,
-        log,
-        tokenSubstitution_getTokensPlaceholders: !getIsTokenSubstitutionEnabled()
-            ? undefined
-            : (await import("./earlyInit_tokenSubstitution")).getTokensPlaceholders
+        log
     });
 
     let currentTokens = oidcClientTsUserToTokens({
