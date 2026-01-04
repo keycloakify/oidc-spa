@@ -134,7 +134,7 @@ function RouteComponent() {
 
 ## Sponsors
 
-Project backers — we trust and recommend their services.
+Project backers, we trust and recommend their services.
 
 <br/>
 
