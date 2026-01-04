@@ -22,7 +22,8 @@ import {
 import { notifyOtherTabsOfLogout, getPrOtherTabLogout } from "./logoutPropagationToOtherTabs";
 import { notifyOtherTabsOfLogin, getPrOtherTabLogin } from "./loginPropagationToOtherTabs";
 import { getConfigId } from "./configId";
-import { oidcClientTsUserToTokens } from "./oidcClientTsUserToTokens";
+import { getIsTokenSubstitutionEnabled } from "./earlyInit_tokenSubstitution";
+import { createOidcClientTsUserToTokens } from "./oidcClientTsUserToTokens";
 import { loginSilent } from "./loginSilent";
 import { authResponseToUrl, type AuthResponse } from "./AuthResponse";
 import { getRootRelativeOriginalLocationHref, getRedirectAuthResponse } from "./earlyInit";
@@ -58,7 +59,6 @@ import {
     clearStateDataCookie,
     getIsStateDataCookieEnabled
 } from "./StateDataCookie";
-import { getIsTokenSubstitutionEnabled } from "./earlyInit_tokenSubstitution";
 import { createInMemoryDPoPStore } from "./earlyInit_DPoP";
 import { loadWebcryptoLinerShim } from "../tools/loadWebcryptoLinerShim";
 
@@ -689,7 +689,6 @@ export async function createOidc_nonMemoized<
                       isKeycloak({ issuerUri }) && !getIsStateDataCookieEnabled() ? "fragment" : "query",
                   response_type: "code",
                   scope: scopes.join(" "),
-                  automaticSilentRenew: false,
                   userStore: new WebStorageStateStore({
                       store: (() => {
                           if (canUseIframe) {
@@ -718,7 +717,6 @@ export async function createOidc_nonMemoized<
                   dpop: !isDPoPEnabled
                       ? undefined
                       : {
-                            bind_authorization_code: false,
                             store: createInMemoryDPoPStore({ configId })
                         }
               });
@@ -1293,14 +1291,17 @@ export async function createOidc_nonMemoized<
 
     assert(oidcMetadata !== undefined, "30483403");
 
-    let currentTokens = oidcClientTsUserToTokens({
+    const { oidcClientTsUserToTokens } = createOidcClientTsUserToTokens({
         configId,
-        oidcClientTsUser: resultOfLoginProcess.oidcClientTsUser,
         decodedIdTokenSchema,
         __unsafe_useIdTokenAsAccessToken,
-        decodedIdToken_previous: undefined,
         isDPoPEnabled,
         log
+    });
+
+    let currentTokens = oidcClientTsUserToTokens({
+        oidcClientTsUser: resultOfLoginProcess.oidcClientTsUser,
+        decodedIdToken_previous: undefined
     });
 
     detect_useless_idleSessionLifetimeInSeconds: {
@@ -1622,13 +1623,8 @@ export async function createOidc_nonMemoized<
                 }
 
                 currentTokens = oidcClientTsUserToTokens({
-                    configId,
                     oidcClientTsUser,
-                    decodedIdTokenSchema,
-                    __unsafe_useIdTokenAsAccessToken,
-                    decodedIdToken_previous: currentTokens.decodedIdToken,
-                    isDPoPEnabled,
-                    log
+                    decodedIdToken_previous: currentTokens.decodedIdToken
                 });
 
                 if (getPersistedAuthState({ configId }) !== undefined) {
