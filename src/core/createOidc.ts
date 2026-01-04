@@ -26,7 +26,6 @@ import { getIsTokenSubstitutionEnabled } from "./earlyInit_tokenSubstitution";
 import { createOidcClientTsUserToTokens } from "./oidcClientTsUserToTokens";
 import { loginSilent } from "./loginSilent";
 import { authResponseToUrl, type AuthResponse } from "./AuthResponse";
-import { getRootRelativeOriginalLocationHref, getRedirectAuthResponse } from "./earlyInit";
 import { getPersistedAuthState, persistAuthState } from "./persistedAuthState";
 import type { Oidc } from "./Oidc";
 import { createEvt } from "../tools/Evt";
@@ -44,7 +43,8 @@ import { createGetIsNewBrowserSession } from "./isNewBrowserSession";
 import { getIsOnline } from "../tools/getIsOnline";
 import { isKeycloak } from "../keycloak/isKeycloak";
 import { INFINITY_TIME } from "../tools/INFINITY_TIME";
-import { prShouldLoadApp } from "./prShouldLoadApp";
+import { prShouldLoadApp } from "./earlyInit_prShouldLoadApp";
+import { getRootRelativeOriginalLocationHref_earlyInit } from "./earlyInit_rootRelativeOriginalLocationHref";
 import { getIsLikelyDevServer } from "../tools/isLikelyDevServer";
 import { createObjectThatThrowsIfAccessed } from "../tools/createObjectThatThrowsIfAccessed";
 import {
@@ -61,6 +61,7 @@ import {
 } from "./StateDataCookie";
 import { createInMemoryDPoPStore } from "./earlyInit_DPoP";
 import { loadWebcryptoLinerShim } from "../tools/loadWebcryptoLinerShim";
+import type { Evt } from "../tools/Evt";
 
 // NOTE: Replaced at build time
 const VERSION = "{{OIDC_SPA_VERSION}}";
@@ -249,9 +250,21 @@ export type ParamsOfCreateOidc<
     dpop?: "disabled" | "enabled" | "auto";
 };
 
+type SensitiveBindings = {
+    getEvtIframeAuthResponse: () => Evt<AuthResponse>;
+    getRedirectAuthResponse: () =>
+        | { authResponse: AuthResponse; clearAuthResponse: () => void }
+        | { authResponse: undefined; clearAuthResponse?: never };
+};
+
+export function registerEarlyInitSensitiveBindings(sensitiveBindings: SensitiveBindings) {
+    globalContext.dSensitiveBindings.resolve(sensitiveBindings);
+}
+
 const globalContext = {
     prOidcByConfigId: new Map<string, Promise<Oidc<any>>>(),
-    hasLogoutBeenCalled: id<boolean>(false)
+    hasLogoutBeenCalled: id<boolean>(false),
+    dSensitiveBindings: new Deferred<SensitiveBindings>()
 };
 
 /** @see: https://docs.oidc-spa.dev/v/v9/usage */
@@ -367,6 +380,9 @@ export async function createOidc_nonMemoized<
             return new Promise<never>(() => {});
         }
     }
+
+    const { getRedirectAuthResponse, getEvtIframeAuthResponse } = await globalContext.dSensitiveBindings
+        .pr;
 
     const {
         transformUrlBeforeRedirect,
@@ -995,6 +1011,7 @@ export async function createOidc_nonMemoized<
                 );
 
                 const result_loginSilent = await loginSilent({
+                    getEvtIframeAuthResponse,
                     oidcClientTsUserManager,
                     stateUrlParamValue_instance,
                     configId,
@@ -1099,7 +1116,7 @@ export async function createOidc_nonMemoized<
                             }
 
                             if (!evtIsThereMoreThanOneInstanceThatCantUserIframes.current) {
-                                return getRootRelativeOriginalLocationHref();
+                                return getRootRelativeOriginalLocationHref_earlyInit();
                             }
 
                             return getDesiredPostLoginRedirectUrl() ?? window.location.href;
@@ -1538,6 +1555,7 @@ export async function createOidc_nonMemoized<
                 const { completeLoginOrRefreshProcess } = await startLoginOrRefreshProcess();
 
                 const result_loginSilent = await loginSilent({
+                    getEvtIframeAuthResponse,
                     oidcClientTsUserManager,
                     stateUrlParamValue_instance,
                     configId,

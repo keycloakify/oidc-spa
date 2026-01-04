@@ -12,7 +12,7 @@ import { getIsDev } from "../tools/isDev";
 import { type AuthResponse } from "./AuthResponse";
 import { addOrUpdateSearchParam } from "../tools/urlSearchParams";
 import { getIsOnline } from "../tools/getIsOnline";
-import { getEvtIframeAuthResponse } from "./earlyInit";
+import type { Evt } from "../tools/Evt";
 
 type ResultOfLoginSilent =
     | {
@@ -28,6 +28,7 @@ type ResultOfLoginSilent =
       };
 
 export async function loginSilent(params: {
+    getEvtIframeAuthResponse: () => Evt<AuthResponse>;
     oidcClientTsUserManager: OidcClientTsUserManager;
     stateUrlParamValue_instance: string;
     configId: string;
@@ -45,6 +46,7 @@ export async function loginSilent(params: {
     log: typeof console.log | undefined;
 }): Promise<ResultOfLoginSilent> {
     const {
+        getEvtIframeAuthResponse,
         oidcClientTsUserManager,
         stateUrlParamValue_instance,
         configId,
