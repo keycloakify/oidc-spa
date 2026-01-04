@@ -2,11 +2,15 @@ import { getStateData, getIsStatQueryParamValue } from "./StateData";
 import { assert, type Equals } from "../tools/tsafe/assert";
 import type { AuthResponse } from "./AuthResponse";
 import { setBASE_URL_earlyInit } from "./earlyInit_BASE_URL";
-import { resolvePrShouldLoadApp } from "./prShouldLoadApp";
+import { resolvePrShouldLoadApp } from "./earlyInit_prShouldLoadApp";
 import { isBrowser } from "../tools/isBrowser";
 import { createEvt, type Evt } from "../tools/Evt";
 import { implementFetchAndXhrDPoPInterceptor } from "./earlyInit_DPoP";
 import { freezeBrowserRuntime, type ApiName } from "./earlyInit_freezeBrowserRuntime";
+import {
+    setGetRootRelativeOriginalLocationHref_earlyInit,
+    getRootRelativeOriginalLocationHref_earlyInit
+} from "./earlyInit_rootRelativeOriginalLocationHref";
 
 let hasEarlyInitBeenCalled = false;
 
@@ -49,6 +53,8 @@ export function oidcEarlyInit(params: ParamsOfEarlyInit) {
 
     if (shouldLoadApp) {
         implementFetchAndXhrDPoPInterceptor();
+
+        let evtIframeAuthResponse: Evt<AuthResponse> | undefined = undefined;
 
         {
             const _MessageEvent_prototype_data_get = (() => {
@@ -124,6 +130,24 @@ export function oidcEarlyInit(params: ParamsOfEarlyInit) {
                 excludedApiNames: browserRuntimeFreeze.exclude ?? []
             });
         }
+
+        import("./createOidc").then(({ registerEarlyInitSensitiveBindings }) => {
+            registerEarlyInitSensitiveBindings({
+                getEvtIframeAuthResponse: () => {
+                    return (evtIframeAuthResponse ??= createEvt());
+                },
+                getRedirectAuthResponse: () => {
+                    return redirectAuthResponse === undefined
+                        ? { authResponse: undefined }
+                        : {
+                              authResponse: redirectAuthResponse,
+                              clearAuthResponse: () => {
+                                  redirectAuthResponse = undefined;
+                              }
+                          };
+                }
+            });
+        });
     }
 
     resolvePrShouldLoadApp({ shouldLoadApp });
@@ -131,35 +155,7 @@ export function oidcEarlyInit(params: ParamsOfEarlyInit) {
     return { shouldLoadApp };
 }
 
-let evtIframeAuthResponse: Evt<AuthResponse> | undefined = undefined;
-
-export function getEvtIframeAuthResponse() {
-    return (evtIframeAuthResponse ??= createEvt());
-}
-
 let redirectAuthResponse: AuthResponse | undefined = undefined;
-
-export function getRedirectAuthResponse():
-    | { authResponse: AuthResponse; clearAuthResponse: () => void }
-    | { authResponse: undefined; clearAuthResponse?: never } {
-    assert(hasEarlyInitBeenCalled, "34933395");
-
-    return redirectAuthResponse === undefined
-        ? { authResponse: undefined }
-        : {
-              authResponse: redirectAuthResponse,
-              clearAuthResponse: () => {
-                  redirectAuthResponse = undefined;
-              }
-          };
-}
-
-let rootRelativeOriginalLocationHref: string | undefined = undefined;
-
-export function getRootRelativeOriginalLocationHref() {
-    assert(rootRelativeOriginalLocationHref !== undefined, "033292");
-    return rootRelativeOriginalLocationHref;
-}
 
 function handleOidcCallback(): {
     shouldLoadApp: boolean;
@@ -210,11 +206,15 @@ function handleOidcCallback(): {
     })();
 
     if (!locationHrefAssessment.hasAuthResponseInUrl) {
-        rootRelativeOriginalLocationHref = location_urlObj.href.slice(location_urlObj.origin.length);
+        setGetRootRelativeOriginalLocationHref_earlyInit({
+            rootRelativeOriginalLocationHref: location_urlObj.href.slice(location_urlObj.origin.length)
+        });
         return { shouldLoadApp: true };
     }
 
-    rootRelativeOriginalLocationHref = location_urlObj.pathname;
+    setGetRootRelativeOriginalLocationHref_earlyInit({
+        rootRelativeOriginalLocationHref: location_urlObj.pathname
+    });
 
     const { authResponse } = (() => {
         const authResponse: AuthResponse = { state: "" };
@@ -242,7 +242,7 @@ function handleOidcCallback(): {
     const stateData = getStateData({ stateUrlParamValue: authResponse.state });
 
     if (stateData === undefined) {
-        history.replaceState({}, "", rootRelativeOriginalLocationHref);
+        history.replaceState({}, "", getRootRelativeOriginalLocationHref_earlyInit());
         return { shouldLoadApp: true };
     }
 

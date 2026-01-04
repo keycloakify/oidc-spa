@@ -3,7 +3,7 @@ import { createObjectThatThrowsIfAccessed } from "../tools/createObjectThatThrow
 import { id } from "../tools/tsafe/id";
 import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";
 import { getSearchParam, addOrUpdateSearchParam } from "../tools/urlSearchParams";
-import { getRootRelativeOriginalLocationHref } from "../core/earlyInit";
+import { getRootRelativeOriginalLocationHref_earlyInit } from "../core/earlyInit_rootRelativeOriginalLocationHref";
 import { INFINITY_TIME } from "../tools/INFINITY_TIME";
 import { getBASE_URL_earlyInit } from "../core/earlyInit_BASE_URL";
 
@@ -57,7 +57,7 @@ export async function createMockOidc<
             url: toFullyQualifiedUrl({
                 urlish: (() => {
                     try {
-                        return getRootRelativeOriginalLocationHref();
+                        return getRootRelativeOriginalLocationHref_earlyInit();
                     } catch {
                         return locationHref_moduleEvalTime;
                     }
