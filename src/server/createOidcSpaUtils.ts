@@ -12,13 +12,13 @@ import {
     createLocalJWKSet,
     errors,
     importJWK,
-    calculateJwkThumbprint
+    calculateJwkThumbprint,
+    base64url
 } from "../vendor/server/jose";
 import { assert, isAmong, id, type Equals, is, Reflect } from "../vendor/server/tsafe";
 import { z } from "../vendor/server/zod";
 import { Evt, throttleTime } from "../vendor/server/evt";
 import { decodeJwt } from "../tools/decodeJwt";
-import { createHash } from "crypto";
 
 export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unknown>>(params: {
     decodedAccessTokenSchema: ZodSchemaLike<DecodedAccessToken_RFC9068, DecodedAccessToken> | undefined;
@@ -619,7 +619,14 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
                     });
                 }
 
-                const expectedAth = createHash("sha256").update(params.accessToken).digest("base64url");
+                const expectedAth = base64url.encode(
+                    new Uint8Array(
+                        await globalThis.crypto.subtle.digest(
+                            "SHA-256",
+                            new TextEncoder().encode(params.accessToken)
+                        )
+                    )
+                );
 
                 if (ath !== expectedAth) {
                     return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
