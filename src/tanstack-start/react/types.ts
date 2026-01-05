@@ -108,7 +108,9 @@ export namespace GetOidc {
     export type Oidc<DecodedIdToken> =
         | (Oidc.NotLoggedIn & {
               getAccessToken?: never;
+              subscribeToAccessTokenRotation?: never;
               getDecodedIdToken?: never;
+              subscribeToDecodedIdTokenChange?: never;
               logout?: never;
               renewTokens?: never;
               goToAuthServer?: never;
@@ -136,7 +138,13 @@ export namespace GetOidc {
         export type LoggedIn<DecodedIdToken> = Common & {
             isUserLoggedIn: true;
             getAccessToken: () => Promise<string>;
+            subscribeToAccessTokenRotation: (next: (accessToken: string) => void) => {
+                unsubscribeFromAccessTokenRotation: () => void;
+            };
             getDecodedIdToken: () => DecodedIdToken;
+            subscribeToDecodedIdTokenChange: (next: (decodedIdToken: DecodedIdToken) => void) => {
+                unsubscribeFromDecodedIdTokenChange: () => void;
+            };
             logout: Oidc_core.LoggedIn["logout"];
             renewTokens: Oidc_core.LoggedIn["renewTokens"];
             goToAuthServer: Oidc_core.LoggedIn["goToAuthServer"];

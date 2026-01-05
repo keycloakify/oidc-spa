@@ -1,4 +1,4 @@
-import { BehaviorSubject, from, switchMap, Subject } from "rxjs";
+import { BehaviorSubject, from, switchMap, Subject, type Observable } from "rxjs";
 import type { Oidc, OidcInitializationError, ParamsOfCreateOidc } from "./core";
 import type { OidcMetadata } from "./core/OidcMetadata";
 import { Deferred } from "./tools/Deferred";
@@ -804,6 +804,28 @@ export abstract class AbstractOidcService<
                   isUserLoggedIn: false
               };
     }
+
+    readonly accessTokenRotation$: Observable<string> = (() => {
+        const accessTokenRotation$ = new Subject<string>();
+
+        (async () => {
+            const { oidc } = await this.#dState.pr;
+
+            if (oidc === undefined) {
+                return;
+            }
+
+            if (!oidc.isUserLoggedIn) {
+                return;
+            }
+
+            oidc.subscribeToTokensChange(({ accessToken }) => {
+                accessTokenRotation$.next(accessToken);
+            });
+        })();
+
+        return accessTokenRotation$;
+    })();
 
     readonly $secondsLeftBeforeAutoLogout: Signal<number | null> = (() => {
         const secondsLeftBeforeAutoLogout$ = new BehaviorSubject<number | null>(null);

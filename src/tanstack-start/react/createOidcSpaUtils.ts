@@ -418,7 +418,27 @@ export function createOidcSpaUtils<
                       const { accessToken } = await oidcCore.getTokens();
                       return accessToken;
                   },
+                  subscribeToAccessTokenRotation: next => {
+                      const { unsubscribe } = oidcCore.subscribeToTokensChange(({ accessToken }) => {
+                          next(accessToken);
+                      });
+
+                      return { unsubscribeFromAccessTokenRotation: unsubscribe };
+                  },
                   getDecodedIdToken: oidcCore.getDecodedIdToken,
+                  subscribeToDecodedIdTokenChange: next => {
+                      const current = oidcCore.getDecodedIdToken();
+
+                      const { unsubscribe } = oidcCore.subscribeToTokensChange(({ decodedIdToken }) => {
+                          // NOTE: oidc-spa/core keeps the reference stable
+                          // when structure hasn't changed.
+                          if (current !== decodedIdToken) {
+                              next(decodedIdToken);
+                          }
+                      });
+
+                      return { unsubscribeFromDecodedIdTokenChange: unsubscribe };
+                  },
                   logout: oidcCore.logout,
                   renewTokens: oidcCore.renewTokens,
                   goToAuthServer: oidcCore.goToAuthServer,
