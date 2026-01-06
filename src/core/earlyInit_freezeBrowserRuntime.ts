@@ -31,7 +31,7 @@ export type ApiName =
     | "atob"
     | "btoa"
     | "crypto.subtle"
-    | "Function";
+    | "Function.prototype.call";
 
 export function freezeBrowserRuntime(params: { excludedApiNames: ApiName[] }) {
     const { excludedApiNames } = params;
@@ -64,7 +64,6 @@ export function freezeBrowserRuntime(params: { excludedApiNames: ApiName[] }) {
         "WeakMap",
         "Blob",
         "String",
-        "Object",
         "Promise",
         "Array",
         "RegExp",
@@ -79,7 +78,8 @@ export function freezeBrowserRuntime(params: { excludedApiNames: ApiName[] }) {
         "atob",
         "btoa",
         "crypto.subtle",
-        "Function"
+        "Function.prototype.call",
+        "Object"
     ] as const) {
         assert<Equals<typeof apiName, ApiName>>;
 
@@ -174,20 +174,44 @@ export function freezeBrowserRuntime(params: { excludedApiNames: ApiName[] }) {
         }
 
         Function: {
-            if (apiName !== "Function") {
+            if (apiName !== "Function.prototype.call") {
                 break Function;
             }
 
-            for (const name of ["call", "apply", "bind"] as const) {
-                const original = Function.prototype[name];
+            const pName = "call";
 
-                Object.defineProperty(Function.prototype, name, {
+            {
+                const defineProperty_original = Object.defineProperty;
+
+                Object.defineProperty = (o, p, attributes) => {
+                    if (o instanceof Function && p === pName) {
+                        throw createWriteError({
+                            target: `<some function> 's .${pName}() behavior`,
+                            apiName
+                        });
+                    }
+
+                    return defineProperty_original(o, p, attributes);
+                };
+            }
+
+            Object.defineProperties = (o, properties) => {
+                for (const p of Reflect.ownKeys(properties)) {
+                    Object.defineProperty(o, p, properties[p as keyof typeof properties]);
+                }
+                return o;
+            };
+
+            {
+                const original = Function.prototype[pName];
+
+                Object.defineProperty(Function.prototype, pName, {
                     configurable: false,
                     enumerable: true,
                     get: () => original,
                     set: () => {
                         throw createWriteError({
-                            target: `window.Function.prototype.${name}`,
+                            target: `window.Function.prototype.${pName}`,
                             apiName
                         });
                     }
