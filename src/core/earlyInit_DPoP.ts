@@ -569,10 +569,10 @@ export function implementFetchAndXhrDPoPInterceptor() {
                 handledRequestState: undefined
             });
 
-            return XMLHttpRequest_prototype_actual.open.apply(
+            return XMLHttpRequest_prototype_actual.open.call(
                 this,
                 // @ts-expect-error
-                arguments
+                ...arguments
             );
         };
 
@@ -635,10 +635,10 @@ export function implementFetchAndXhrDPoPInterceptor() {
                 return;
             }
 
-            return XMLHttpRequest_prototype_actual.setRequestHeader.apply(
+            return XMLHttpRequest_prototype_actual.setRequestHeader.call(
                 this,
                 // @ts-expect-error
-                arguments
+                ...arguments
             );
         };
 
@@ -725,21 +725,13 @@ export function implementFetchAndXhrDPoPInterceptor() {
                     );
                     XMLHttpRequest_prototype_actual.setRequestHeader.call(this, "DPoP", dpopProof);
 
-                    XMLHttpRequest_prototype_actual.send.apply(
-                        this,
-                        // @ts-expect-error
-                        arguments
-                    );
+                    XMLHttpRequest_prototype_actual.send.call(this, ...arguments);
                 });
 
                 return;
             }
 
-            return XMLHttpRequest_prototype_actual.send.apply(
-                this,
-                // @ts-expect-error
-                arguments
-            );
+            return XMLHttpRequest_prototype_actual.send.call(this, ...arguments);
         };
     }
 }
