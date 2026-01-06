@@ -841,8 +841,6 @@ export async function createOidc_nonMemoized<
                 break handle_redirect_auth_response;
             }
 
-            // TODO: Delete cookie if exist
-
             const { stateData, authResponse } = stateDataAndAuthResponse;
 
             switch (stateData.action) {
