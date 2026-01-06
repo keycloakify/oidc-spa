@@ -184,7 +184,7 @@ export function freezeBrowserRuntime(params: { excludedApiNames: ApiName[] }) {
                 const defineProperty_original = Object.defineProperty;
 
                 Object.defineProperty = (o, p, attributes) => {
-                    if (o instanceof Function && p === pName) {
+                    if (typeof o === "function" && o !== Function.prototype && p === pName) {
                         throw createWriteError({
                             target: `<some function> 's .${pName}() behavior`,
                             apiName
