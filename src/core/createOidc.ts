@@ -963,7 +963,7 @@ export async function createOidc_nonMemoized<
             const persistedAuthState = getPersistedAuthState({ configId });
 
             if (persistedAuthState === "explicitly logged out" && !autoLogin) {
-                log?.("Skipping silent signin with iframe, the user has logged out");
+                log?.("Skipping session restoration completely, the user is explicitly logged out.");
                 break silent_login_if_possible_and_auto_login;
             }
 
@@ -997,16 +997,18 @@ export async function createOidc_nonMemoized<
 
             actual_silent_signin: {
                 if (persistedAuthState === "explicitly logged out") {
+                    log?.(
+                        "Skipping session restoration via iframe (silent signin), the user is explicitly logged out."
+                    );
                     break actual_silent_signin;
                 }
 
                 if (!canUseIframe) {
+                    log?.("Skipping session restoration via iframe (can't use iframe)");
                     break actual_silent_signin;
                 }
 
-                log?.(
-                    "Trying to restore the auth from the http only cookie (silent signin with iframe)"
-                );
+                log?.("Performing session restoration via iframe (silent signin)");
 
                 const result_loginSilent = await loginSilent({
                     getEvtIframeAuthResponse,
@@ -1090,7 +1092,7 @@ export async function createOidc_nonMemoized<
                             authResponse_error === "consent_required" ||
                             authResponse_error === "account_selection_required"))
                 ) {
-                    log?.("Performing auto login with redirect");
+                    log?.("Performing session restoration (or autoLogin) with full page redirect");
 
                     completeLoginOrRefreshProcess();
 
@@ -1153,7 +1155,7 @@ export async function createOidc_nonMemoized<
                 break silent_login_if_possible_and_auto_login;
             }
 
-            log?.("Successful silent signed in");
+            log?.("Successful session restoration via iframe (silent signin)");
 
             return {
                 oidcClientTsUser,
