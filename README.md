@@ -8,6 +8,9 @@
     <a href="https://www.npmjs.com/package/oidc-spa">
       <img src="https://img.shields.io/npm/dw/oidc-spa">
     </a>
+    <a href="https://npmgraph.js.org/?q=oidc-spa">
+      <img src="https://depx.co/api/badge/oidc-spa">
+    </a>
     <a href="https://github.com/garronej/oidc-spa/blob/main/LICENSE">
       <img src="https://img.shields.io/npm/l/oidc-spa">
     </a>
@@ -30,7 +33,7 @@ It wraps the full Authorization Code + PKCE flow in a high-level API so you can 
 -   🔒 Security-first defaults: in-memory tokens, strict redirect handling, and opt-in defenses like [DPoP](https://docs.oidc-spa.dev/v/v9/security-features/dpop)
     and [token substitution](https://docs.oidc-spa.dev/docs/v9/security-features/token-substitution) to reduce token exposure risk.
 -   🧭 Battle-tested auth UX: token renewal, idle timeout, auto login/logout, multi-tab session sync, and reliable session restore on reload.
--   🧩 Full-stack ready: backend token validation utilities and first-class TanStack Start integration in the same library.
+-   🧩 Full-stack ready: [backend token validation utilities](https://docs.oidc-spa.dev/v/v9/integration-guides/backend-token-validation) and [first-class TanStack Start integration](https://docs.oidc-spa.dev/v/v9/integration-guides/tanstack-router-start/tanstack-start) in the same library.
 -   🧰 Provider-aware: handles real-world quirks across Keycloak, Entra ID, Auth0, Google, and more.
 -   ✨ Developer experience: types flow from config into the API, minimal knobs, and easy-to-mock auth for tests.
 
