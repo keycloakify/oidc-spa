@@ -6,10 +6,12 @@ import { getSearchParam, addOrUpdateSearchParam } from "../tools/urlSearchParams
 import { getRootRelativeOriginalLocationHref_earlyInit } from "../core/earlyInit_rootRelativeOriginalLocationHref";
 import { INFINITY_TIME } from "../tools/INFINITY_TIME";
 import { getBASE_URL_earlyInit } from "../core/earlyInit_BASE_URL";
+import type { MaybeAsync } from "../tools/MaybeAsync";
 
 export type ParamsOfCreateMockOidc<
     DecodedIdToken extends Record<string, unknown> = Record<string, unknown>,
-    AutoLogin extends boolean = false
+    AutoLogin extends boolean = false,
+    User = never
 > = {
     mockedParams?: Partial<Oidc["params"]>;
     mockedTokens?: Partial<Oidc.Tokens<DecodedIdToken>>;
@@ -26,6 +28,7 @@ export type ParamsOfCreateMockOidc<
 
     autoLogin?: AutoLogin;
     postLoginRedirectUrl?: string;
+    createUser?: (params: { decodedIdToken: DecodedIdToken; accessToken: string }) => MaybeAsync<User>;
 } & (AutoLogin extends true
     ? { isUserInitiallyLoggedIn?: true }
     : {
@@ -38,16 +41,18 @@ const locationHref_moduleEvalTime = location.href;
 
 export async function createMockOidc<
     DecodedIdToken extends Record<string, unknown> = Oidc.Tokens.DecodedIdToken_OidcCoreSpec,
-    AutoLogin extends boolean = false
+    AutoLogin extends boolean = false,
+    User = never
 >(
-    params: ParamsOfCreateMockOidc<DecodedIdToken, AutoLogin>
-): Promise<AutoLogin extends true ? Oidc.LoggedIn<DecodedIdToken> : Oidc<DecodedIdToken>> {
+    params: ParamsOfCreateMockOidc<DecodedIdToken, AutoLogin, User>
+): Promise<AutoLogin extends true ? Oidc.LoggedIn<DecodedIdToken, User> : Oidc<DecodedIdToken, User>> {
     const {
         isUserInitiallyLoggedIn = true,
         mockedParams = {},
         mockedTokens = {},
         autoLogin = false,
-        postLoginRedirectUrl
+        postLoginRedirectUrl,
+        createUser
     } = params;
 
     const BASE_URL_params = params.BASE_URL ?? params.homeUrl;
@@ -145,53 +150,65 @@ export async function createMockOidc<
         return oidc;
     }
 
-    const oidc: Oidc.LoggedIn<DecodedIdToken> = {
+    const { tokens } = (() => {
+        const tokens_common: Oidc.Tokens.Common<DecodedIdToken> = {
+            accessToken: mockedTokens.accessToken ?? "mocked-access-token",
+            accessTokenExpirationTime: mockedTokens.accessTokenExpirationTime ?? INFINITY_TIME,
+            idToken: mockedTokens.idToken ?? "mocked-id-token",
+            decodedIdToken:
+                mockedTokens.decodedIdToken ??
+                createObjectThatThrowsIfAccessed<DecodedIdToken>({
+                    debugMessage: [
+                        "You haven't provided a mocked decodedIdToken",
+                        "See https://docs.oidc-spa.dev/v/v9/integration-guides/usage#mock-adapter"
+                    ].join("\n")
+                }),
+            decodedIdToken_original:
+                mockedTokens.decodedIdToken_original ??
+                createObjectThatThrowsIfAccessed<Oidc.Tokens.DecodedIdToken_OidcCoreSpec>({
+                    debugMessage: [
+                        "You haven't provided a mocked decodedIdToken_original",
+                        "See https://docs.oidc-spa.dev/v/v9/integration-guides/usage#mock-adapter"
+                    ].join("\n")
+                }),
+            issuedAtTime: Date.now(),
+            getServerDateNow: () => Date.now()
+        };
+
+        const tokens: Oidc.Tokens<DecodedIdToken> =
+            mockedTokens.refreshToken !== undefined || mockedTokens.hasRefreshToken === true
+                ? id<Oidc.Tokens.WithRefreshToken<DecodedIdToken>>({
+                      ...tokens_common,
+                      hasRefreshToken: true,
+                      refreshToken: mockedTokens.refreshToken ?? "mocked-refresh-token",
+                      refreshTokenExpirationTime: mockedTokens.refreshTokenExpirationTime
+                  })
+                : id<Oidc.Tokens.WithoutRefreshToken<DecodedIdToken>>({
+                      ...tokens_common,
+                      hasRefreshToken: false
+                  });
+
+        return { tokens };
+    })();
+
+    const user =
+        createUser === undefined
+            ? undefined
+            : createUser({
+                  get decodedIdToken() {
+                      return tokens.decodedIdToken;
+                  },
+                  get accessToken() {
+                      return tokens.accessToken;
+                  }
+              });
+
+    const oidc: Oidc.LoggedIn<DecodedIdToken, User> = {
         ...common,
         isUserLoggedIn: true,
         renewTokens: async () => {},
-        ...(() => {
-            const tokens_common: Oidc.Tokens.Common<DecodedIdToken> = {
-                accessToken: mockedTokens.accessToken ?? "mocked-access-token",
-                accessTokenExpirationTime: mockedTokens.accessTokenExpirationTime ?? INFINITY_TIME,
-                idToken: mockedTokens.idToken ?? "mocked-id-token",
-                decodedIdToken:
-                    mockedTokens.decodedIdToken ??
-                    createObjectThatThrowsIfAccessed<DecodedIdToken>({
-                        debugMessage: [
-                            "You haven't provided a mocked decodedIdToken",
-                            "See https://docs.oidc-spa.dev/v/v9/integration-guides/usage#mock-adapter"
-                        ].join("\n")
-                    }),
-                decodedIdToken_original:
-                    mockedTokens.decodedIdToken_original ??
-                    createObjectThatThrowsIfAccessed<Oidc.Tokens.DecodedIdToken_OidcCoreSpec>({
-                        debugMessage: [
-                            "You haven't provided a mocked decodedIdToken_original",
-                            "See https://docs.oidc-spa.dev/v/v9/integration-guides/usage#mock-adapter"
-                        ].join("\n")
-                    }),
-                issuedAtTime: Date.now(),
-                getServerDateNow: () => Date.now()
-            };
-
-            const tokens: Oidc.Tokens<DecodedIdToken> =
-                mockedTokens.refreshToken !== undefined || mockedTokens.hasRefreshToken === true
-                    ? id<Oidc.Tokens.WithRefreshToken<DecodedIdToken>>({
-                          ...tokens_common,
-                          hasRefreshToken: true,
-                          refreshToken: mockedTokens.refreshToken ?? "mocked-refresh-token",
-                          refreshTokenExpirationTime: mockedTokens.refreshTokenExpirationTime
-                      })
-                    : id<Oidc.Tokens.WithoutRefreshToken<DecodedIdToken>>({
-                          ...tokens_common,
-                          hasRefreshToken: false
-                      });
-
-            return {
-                getTokens: () => Promise.resolve(tokens),
-                getDecodedIdToken: () => tokens_common.decodedIdToken
-            };
-        })(),
+        getTokens: () => Promise.resolve(tokens),
+        getDecodedIdToken: () => tokens.decodedIdToken,
         subscribeToTokensChange: () => ({
             unsubscribe: () => {}
         }),
@@ -224,7 +241,19 @@ export async function createMockOidc<
         }),
         goToAuthServer: async ({ redirectUrl }) => loginOrGoToAuthServer({ redirectUrl }),
         isNewBrowserSession: false,
-        backFromAuthServer: undefined
+        backFromAuthServer: undefined,
+        getUser: async () => {
+            if (user === undefined) {
+                throw new Error("oidc-spa: createUser wasn't provided");
+            }
+
+            return user;
+        },
+        subscribeToUserChange: () => {
+            return {
+                unsubscribeFromUserChange: () => {}
+            };
+        }
     };
 
     return oidc;

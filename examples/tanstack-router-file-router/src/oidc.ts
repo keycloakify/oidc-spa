@@ -1,6 +1,13 @@
 import { oidcSpa } from "oidc-spa/react-spa";
 import { z } from "zod";
 
+type User = {
+    id: string;
+    username: string;
+    name: string;
+    isAdmin: boolean;
+};
+
 export const {
     bootstrapOidc,
     useOidc,
@@ -29,6 +36,20 @@ export const {
             realm_access: {
                 roles: ["realm-admin"]
             }
+        }
+    })
+    .withUserAbstraction<User>({
+        createUser: async ({ decodedIdToken }) => {
+            // Potentially use fetchWithAuth here to fetch some additional data of the user.
+
+            const user: User = {
+                id: decodedIdToken.sub,
+                name: decodedIdToken.name,
+                username:
+                    decodedIdToken.preferred_username ?? decodedIdToken.email ?? decodedIdToken.sub,
+                isAdmin: decodedIdToken.realm_access?.roles.includes("realm-admin") ?? false
+            };
+            return user;
         }
     })
     // See: https://docs.oidc-spa.dev/v/v9/features/auto-login#react-spa

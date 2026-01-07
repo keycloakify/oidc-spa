@@ -179,7 +179,7 @@ assert<
         Omit<ParamsOfProvide, "warnUserSecondsBeforeAutoLogout">,
         Omit<
             ParamsOfCreateOidc<any, boolean>,
-            "homeUrl" | "BASE_URL" | "noIframe" | "decodedIdTokenSchema"
+            "homeUrl" | "BASE_URL" | "noIframe" | "decodedIdTokenSchema" | "createUser"
         >
     >
 >;

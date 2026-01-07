@@ -1,8 +1,9 @@
 import type { OidcInitializationError } from "./OidcInitializationError";
 
 export declare type Oidc<
-    DecodedIdToken extends Record<string, unknown> = Oidc.Tokens.DecodedIdToken_OidcCoreSpec
-> = Oidc.LoggedIn<DecodedIdToken> | Oidc.NotLoggedIn;
+    DecodedIdToken extends Record<string, unknown> = Oidc.Tokens.DecodedIdToken_OidcCoreSpec,
+    User = never
+> = Oidc.LoggedIn<DecodedIdToken, User> | Oidc.NotLoggedIn;
 
 export declare namespace Oidc {
     export type Common = {
@@ -38,59 +39,62 @@ export declare namespace Oidc {
         initializationError: OidcInitializationError | undefined;
     };
 
-    export type LoggedIn<DecodedIdToken extends Record<string, unknown> = Record<string, unknown>> =
-        Common & {
-            isUserLoggedIn: true;
-            renewTokens(params?: {
-                extraTokenParams?: Record<string, string | undefined>;
-            }): Promise<void>;
-            getTokens: () => Promise<Tokens<DecodedIdToken>>;
-            subscribeToTokensChange: (onTokenChange: (tokens: Tokens<DecodedIdToken>) => void) => {
-                unsubscribe: () => void;
-            };
-            getDecodedIdToken: () => DecodedIdToken;
-            logout: (
-                params:
-                    | { redirectTo: "home" | "current page" }
-                    | { redirectTo: "specific url"; url: string }
-            ) => Promise<never>;
-            goToAuthServer: (params: {
-                extraQueryParams?: Record<string, string | undefined>;
-                redirectUrl?: string;
-                transformUrlBeforeRedirect?: (url: string) => string;
-            }) => Promise<never>;
-            subscribeToAutoLogoutCountdown: (
-                tickCallback: (params: { secondsLeft: number | undefined }) => void
-            ) => { unsubscribeFromAutoLogoutCountdown: () => void };
-            /**
-             * If you called `goToAuthServer` or `login` with extraQueryParams, this object let you know the outcome of the
-             * of the action that was intended.
-             *
-             * For example, on a Keycloak server, if you called `goToAuthServer({ extraQueryParams: { kc_action: "UPDATE_PASSWORD" } })`
-             * you'll get back: `{ extraQueryParams: { kc_action: "UPDATE_PASSWORD" }, result: { kc_action_status: "success" } }` (or "cancelled")
-             */
-            backFromAuthServer:
-                | {
-                      extraQueryParams: Record<string, string>;
-                      result: Record<string, string>;
-                  }
-                | undefined;
-            /**
-             * This is true when the user has just returned from the login pages.
-             * This is also true when the user navigate to your app and was able to be silently signed in because there was still a valid session.
-             * This false however when the use just reload the page.
-             *
-             * This can be used to perform some action related to session initialization
-             * but avoiding doing it repeatedly every time the user reload the page.
-             *
-             * Note that this is referring to the browser session and not the OIDC session
-             * on the server side.
-             *
-             * If you want to perform an action only when a new OIDC session is created
-             * you can test oidc.isNewBrowserSession && oidc.backFromAuthServer !== undefined
-             */
-            isNewBrowserSession: boolean;
+    export type LoggedIn<
+        DecodedIdToken extends Record<string, unknown> = Record<string, unknown>,
+        User = never
+    > = Common & {
+        isUserLoggedIn: true;
+        renewTokens(params?: { extraTokenParams?: Record<string, string | undefined> }): Promise<void>;
+        getUser: () => Promise<User>;
+        subscribeToUserChange: (onUserChange: (user: User) => void) => {
+            unsubscribeFromUserChange: () => void;
         };
+        refreshUser: () => Promise<void>;
+        getTokens: () => Promise<Tokens<DecodedIdToken>>;
+        subscribeToTokensChange: (onTokenChange: (tokens: Tokens<DecodedIdToken>) => void) => {
+            unsubscribe: () => void;
+        };
+        getDecodedIdToken: () => DecodedIdToken;
+        logout: (
+            params: { redirectTo: "home" | "current page" } | { redirectTo: "specific url"; url: string }
+        ) => Promise<never>;
+        goToAuthServer: (params: {
+            extraQueryParams?: Record<string, string | undefined>;
+            redirectUrl?: string;
+            transformUrlBeforeRedirect?: (url: string) => string;
+        }) => Promise<never>;
+        subscribeToAutoLogoutCountdown: (
+            tickCallback: (params: { secondsLeft: number | undefined }) => void
+        ) => { unsubscribeFromAutoLogoutCountdown: () => void };
+        /**
+         * If you called `goToAuthServer` or `login` with extraQueryParams, this object let you know the outcome of the
+         * of the action that was intended.
+         *
+         * For example, on a Keycloak server, if you called `goToAuthServer({ extraQueryParams: { kc_action: "UPDATE_PASSWORD" } })`
+         * you'll get back: `{ extraQueryParams: { kc_action: "UPDATE_PASSWORD" }, result: { kc_action_status: "success" } }` (or "cancelled")
+         */
+        backFromAuthServer:
+            | {
+                  extraQueryParams: Record<string, string>;
+                  result: Record<string, string>;
+              }
+            | undefined;
+        /**
+         * This is true when the user has just returned from the login pages.
+         * This is also true when the user navigate to your app and was able to be silently signed in because there was still a valid session.
+         * This false however when the use just reload the page.
+         *
+         * This can be used to perform some action related to session initialization
+         * but avoiding doing it repeatedly every time the user reload the page.
+         *
+         * Note that this is referring to the browser session and not the OIDC session
+         * on the server side.
+         *
+         * If you want to perform an action only when a new OIDC session is created
+         * you can test oidc.isNewBrowserSession && oidc.backFromAuthServer !== undefined
+         */
+        isNewBrowserSession: boolean;
+    };
 
     export type Tokens<
         DecodedIdToken extends Record<string, unknown> = Tokens.DecodedIdToken_OidcCoreSpec

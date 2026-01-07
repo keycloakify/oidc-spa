@@ -62,13 +62,16 @@ import {
 import { createInMemoryDPoPStore } from "./earlyInit_DPoP";
 import { loadWebcryptoLinerShim } from "../tools/loadWebcryptoLinerShim";
 import type { Evt } from "../tools/Evt";
+import type { MaybeAsync } from "../tools/MaybeAsync";
+import { createStatefulEvt } from "../tools/StatefulEvt";
 
 // NOTE: Replaced at build time
 const VERSION = "{{OIDC_SPA_VERSION}}";
 
 export type ParamsOfCreateOidc<
     DecodedIdToken extends Record<string, unknown> = Oidc.Tokens.DecodedIdToken_OidcCoreSpec,
-    AutoLogin extends boolean = false
+    AutoLogin extends boolean = false,
+    User = never
 > = {
     /**
      * See: https://docs.oidc-spa.dev/v/v9/providers-configuration/provider-configuration
@@ -248,6 +251,8 @@ export type ParamsOfCreateOidc<
 
     /** See: https://docs.oidc-spa.dev/v/v9/security-features/dpop */
     dpop?: "disabled" | "enabled" | "auto";
+
+    createUser?: (params: { decodedIdToken: DecodedIdToken; accessToken: string }) => MaybeAsync<User>;
 };
 
 type SensitiveBindings = {
@@ -262,7 +267,7 @@ export function registerEarlyInitSensitiveBindings(sensitiveBindings: SensitiveB
 }
 
 const globalContext = {
-    prOidcByConfigId: new Map<string, Promise<Oidc<any>>>(),
+    prOidcByConfigId: new Map<string, Promise<Oidc<any, any>>>(),
     hasLogoutBeenCalled: id<boolean>(false),
     dSensitiveBindings: new Deferred<SensitiveBindings>()
 };
@@ -270,10 +275,11 @@ const globalContext = {
 /** @see: https://docs.oidc-spa.dev/v/v9/usage */
 export async function createOidc<
     DecodedIdToken extends Record<string, unknown> = Oidc.Tokens.DecodedIdToken_OidcCoreSpec,
-    AutoLogin extends boolean = false
+    AutoLogin extends boolean = false,
+    User = never
 >(
-    params: ParamsOfCreateOidc<DecodedIdToken, AutoLogin>
-): Promise<AutoLogin extends true ? Oidc.LoggedIn<DecodedIdToken> : Oidc<DecodedIdToken>> {
+    params: ParamsOfCreateOidc<DecodedIdToken, AutoLogin, User>
+): Promise<AutoLogin extends true ? Oidc.LoggedIn<DecodedIdToken, User> : Oidc<DecodedIdToken, User>> {
     for (const name of ["issuerUri", "clientId"] as const) {
         const value = params[name];
         if (!value) {
@@ -332,7 +338,7 @@ export async function createOidc<
         return prOidc;
     }
 
-    const dOidc = new Deferred<Oidc<any>>();
+    const dOidc = new Deferred<Oidc<any, any>>();
 
     prOidcByConfigId.set(configId, dOidc.pr);
 
@@ -350,16 +356,20 @@ export async function createOidc<
 
 export async function createOidc_nonMemoized<
     DecodedIdToken extends Record<string, unknown>,
-    AutoLogin extends boolean
+    AutoLogin extends boolean,
+    User
 >(
-    params: Omit<ParamsOfCreateOidc<DecodedIdToken, AutoLogin>, "issuerUri" | "clientId" | "debugLogs">,
+    params: Omit<
+        ParamsOfCreateOidc<DecodedIdToken, AutoLogin, User>,
+        "issuerUri" | "clientId" | "debugLogs"
+    >,
     preProcessedParams: {
         issuerUri: string;
         clientId: string;
         configId: string;
         log: typeof console.log | undefined;
     }
-): Promise<AutoLogin extends true ? Oidc.LoggedIn<DecodedIdToken> : Oidc<DecodedIdToken>> {
+): Promise<AutoLogin extends true ? Oidc.LoggedIn<DecodedIdToken, User> : Oidc<DecodedIdToken, User>> {
     {
         const timer = window.setTimeout(() => {
             console.warn(
@@ -397,7 +407,8 @@ export async function createOidc_nonMemoized<
         __unsafe_useIdTokenAsAccessToken = false,
         __metadata,
         sessionRestorationMethod = params.autoLogin === true ? "full page redirect" : "auto",
-        dpop
+        dpop,
+        createUser
     } = params;
 
     const scopes = Array.from(new Set(["openid", ...(params.scopes ?? ["profile"])]));
@@ -1375,9 +1386,20 @@ export async function createOidc_nonMemoized<
 
     let prOngoingTokenRenewal: Promise<void> | undefined = undefined;
 
-    const oidc_loggedIn = id<Oidc.LoggedIn<DecodedIdToken>>({
+    let dUser = new Deferred<User>();
+
+    const oidc_loggedIn = id<Oidc.LoggedIn<DecodedIdToken, User>>({
         ...oidc_common,
         isUserLoggedIn: true,
+        getUser: () => {
+            return dUser.pr;
+        },
+        subscribeToUserChange: () => {
+            return {
+                unsubscribeFromUserChange: () => {}
+            };
+        },
+        refreshUser: async () => {},
         getTokens: async () => {
             if (wouldHaveAutoLoggedOutIfBrowserWasOnline) {
                 await oidc_loggedIn.logout(autoLogoutParams);
