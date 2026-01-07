@@ -1,18 +1,11 @@
 import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";
 import { type KeycloakIssuerUriParsed, parseKeycloakIssuerUri } from "./keycloakIssuerUriParsed";
-import { assert } from "../tools/tsafe/assert";
 
 export type KeycloakUtils = {
     issuerUriParsed: KeycloakIssuerUriParsed;
     adminConsoleUrl: string;
     adminConsoleUrl_master: string;
-    getAccountUrl: (params: {
-        clientId: string;
-        validRedirectUri?: string;
-        /** @deprecated: Use validRedirectUri */
-        backToAppFromAccountUrl?: string;
-        locale?: string;
-    }) => string;
+    getAccountUrl: (params: { clientId: string; validRedirectUri: string; locale?: string }) => string;
     fetchUserProfile: (params: { accessToken: string }) => Promise<KeycloakProfile>;
     fetchUserInfo: (params: { accessToken: string }) => Promise<KeycloakUserInfo>;
     transformUrlBeforeRedirectForRegister: (authorizationUrl: string) => string;
@@ -52,26 +45,7 @@ export function createKeycloakUtils(params: { issuerUri: string }): KeycloakUtil
         issuerUriParsed,
         adminConsoleUrl: getAdminConsoleUrl(issuerUriParsed.realm),
         adminConsoleUrl_master: getAdminConsoleUrl("master"),
-        getAccountUrl: ({ clientId, locale, ...rest }) => {
-            const validRedirectUri = (() => {
-                const { validRedirectUri, backToAppFromAccountUrl } = rest;
-
-                if (validRedirectUri !== undefined) {
-                    assert(
-                        backToAppFromAccountUrl === undefined,
-                        "getAccountUrl: backToAppFromAccountUrl is deprecated"
-                    );
-                    return validRedirectUri;
-                }
-
-                assert(
-                    backToAppFromAccountUrl !== undefined,
-                    "getAccountUrl: Must provide validRedirectUri"
-                );
-
-                return backToAppFromAccountUrl;
-            })();
-
+        getAccountUrl: ({ clientId, locale, validRedirectUri }) => {
             const accountUrlObj = new URL(
                 `${keycloakServerUrl}/realms/${issuerUriParsed.realm}/account`
             );
