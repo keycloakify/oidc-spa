@@ -93,13 +93,18 @@ export async function createMockOidc<
         doOutputWithTrailingSlash: true
     });
 
-    const common: Oidc.Common = {
-        params: {
+    const common: Oidc.Common = (() => {
+        const params = {
             clientId: mockedParams.clientId ?? "mymockclient",
             issuerUri: mockedParams.issuerUri ?? "https://my-mock-oidc-server.net/realms/mymockrealm",
             validRedirectUri: homeUrl
-        }
-    };
+        };
+
+        return {
+            params,
+            ...params
+        };
+    })();
 
     const loginOrGoToAuthServer = async (params: {
         redirectUrl: string | undefined;
@@ -192,9 +197,13 @@ export async function createMockOidc<
                 getDecodedIdToken: () => tokens_common.decodedIdToken
             };
         })(),
-        subscribeToTokensChange: () => ({
-            unsubscribe: () => {}
-        }),
+        subscribeToTokensChange: () => {
+            const unsubscribeFromTokensChange = () => {};
+            return {
+                unsubscribeFromTokensChange,
+                unsubscribe: unsubscribeFromTokensChange
+            };
+        },
         logout: params => {
             const redirectUrl = addOrUpdateSearchParam({
                 url: (() => {

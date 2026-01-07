@@ -1178,7 +1178,10 @@ export async function createOidc_nonMemoized<
             issuerUri,
             clientId,
             validRedirectUri: homeUrlAndRedirectUri
-        }
+        },
+        issuerUri,
+        clientId,
+        validRedirectUri: homeUrlAndRedirectUri
     };
 
     not_loggedIn_case: {
@@ -1739,10 +1742,13 @@ export async function createOidc_nonMemoized<
         subscribeToTokensChange: onTokenChange => {
             onTokenChanges.add(onTokenChange);
 
+            const unsubscribeFromTokensChange = () => {
+                onTokenChanges.delete(onTokenChange);
+            };
+
             return {
-                unsubscribe: () => {
-                    onTokenChanges.delete(onTokenChange);
-                }
+                unsubscribe: unsubscribeFromTokensChange,
+                unsubscribeFromTokensChange
             };
         },
         subscribeToAutoLogoutCountdown: tickCallback => {
