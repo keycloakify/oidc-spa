@@ -16,7 +16,6 @@ jobs:
 
   test_format:
     runs-on: ubuntu-latest
-    if: ${{ !github.event.created && github.repository != 'garronej/ts-ci' }}
     steps:
     - uses: actions/checkout@v3
     - uses: actions/setup-node@v3
@@ -112,11 +111,7 @@ jobs:
           echo "Can't publish on NPM, You must first create a secret called NPM_TOKEN that contains your NPM auth token. https://help.github.com/en/actions/automating-your-workflow-with-github-actions/creating-and-using-encrypted-secrets"
           false
         fi
-        EXTRA_ARGS=""
-        if [ "$IS_PRE_RELEASE" = "true" ]; then
-            EXTRA_ARGS="--tag next"
-        fi
-        npm publish $EXTRA_ARGS
+        npm publish --tag v8-legacy
       env:
         VERSION: ${{ needs.check_if_version_upgraded.outputs.to_version }}
         IS_PRE_RELEASE: ${{ needs.check_if_version_upgraded.outputs.is_pre_release }}
