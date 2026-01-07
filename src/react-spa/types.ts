@@ -147,11 +147,11 @@ export namespace ParamsOfBootstrap {
         implementation: "real";
 
         /**
-         * See: https://docs.oidc-spa.dev/v/v9/providers-configuration/provider-configuration
+         * See: https://docs.oidc-spa.dev/v/v10/providers-configuration/provider-configuration
          */
         issuerUri: string;
         /**
-         * See: https://docs.oidc-spa.dev/v/v9/providers-configuration/provider-configuration
+         * See: https://docs.oidc-spa.dev/v/v10/providers-configuration/provider-configuration
          */
         clientId: string;
 
@@ -163,7 +163,7 @@ export namespace ParamsOfBootstrap {
          * NOTE: This parameter is only UI related! It does not defines
          * after how much time of inactivity the user should be auto logged out.
          * This is a server policy (that can be overwrote by idleSessionLifetimeInSeconds)
-         * See: https://docs.oidc-spa.dev/v/v9/auto-logout
+         * See: https://docs.oidc-spa.dev/v/v10/auto-logout
          */
         warnUserSecondsBeforeAutoLogout?: number;
         /**
@@ -299,7 +299,7 @@ export namespace ParamsOfBootstrap {
          */
         BASE_URL?: string;
 
-        /** See: https://docs.oidc-spa.dev/v/v9/security-features/dpop */
+        /** See: https://docs.oidc-spa.dev/v/v10/security-features/dpop */
         dpop?: "disabled" | "enabled" | "auto";
     } & (AutoLogin extends true ? {} : {});
 

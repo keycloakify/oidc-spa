@@ -231,7 +231,7 @@ export async function createIframeTimeoutInitializationError(params: {
                         ]}`,
                         `\n  - OR remove the frame-src directive from your CSP`,
                         `\n  - OR, if you cannot change your CSP, call bootstrapOidc/createOidc with sessionRestorationMethod: "full page redirect"`,
-                        `\n\nMore info: https://docs.oidc-spa.dev/v/v9/resources/csp-configuration`
+                        `\n\nMore info: https://docs.oidc-spa.dev/v/v10/resources/csp-configuration`
                     ].join(" ")
                 });
             }
@@ -262,7 +262,7 @@ export async function createIframeTimeoutInitializationError(params: {
                         `\n  - Update your CSP to: frame-ancestors 'self'`,
                         `\n  - OR remove the frame-ancestors directive from your CSP`,
                         `\n  - OR, if you cannot modify your CSP, call bootstrapOidc/createOidc with sessionRestorationMethod: "full page redirect"`,
-                        `\n\nMore info: https://docs.oidc-spa.dev/v/v9/resources/csp-configuration`
+                        `\n\nMore info: https://docs.oidc-spa.dev/v/v10/resources/csp-configuration`
                     ].join(" ")
                 });
             }
@@ -290,7 +290,7 @@ export async function createIframeTimeoutInitializationError(params: {
                     `\n${key}: ${value}`,
                     `\nThis header prevents your app from being framed by itself.`,
                     `\nTo fix this, remove the ${key} header and rely on Content-Security-Policy if you need to restrict framing.`,
-                    `\n\nMore info: https://docs.oidc-spa.dev/v/v9/resources/csp-configuration`
+                    `\n\nMore info: https://docs.oidc-spa.dev/v/v10/resources/csp-configuration`
                 ].join(" ")
             });
         }
@@ -328,12 +328,12 @@ export async function createIframeTimeoutInitializationError(params: {
                     `5. Locate the client "${clientId}" in the list and click on it.\n`,
                     `6. Find "Valid Redirect URIs" and add "${redirectUri}" to the list.\n`,
                     `7. Save the changes.\n\n`,
-                    `For more information, refer to the documentation: https://docs.oidc-spa.dev/v/v9/providers-configuration/keycloak`
+                    `For more information, refer to the documentation: https://docs.oidc-spa.dev/v/v10/providers-configuration/keycloak`
                 ];
             })(),
             "\n\n",
             `If nothing works, or if you see in the console a message mentioning 'refused to frame' there might be a problem with your CSP.`,
-            `Read more: https://docs.oidc-spa.dev/v/v9/resources/csp-configuration`
+            `Read more: https://docs.oidc-spa.dev/v/v10/resources/csp-configuration`
         ].join(" ")
     });
 }
@@ -380,7 +380,7 @@ export async function createFailedToFetchTokenEndpointInitializationError(params
                     `5. Find '${clientId}' in the list of clients and click on it.\n`,
                     `6. Find 'Web Origins' and add '${window.location.origin}' to the list.\n`,
                     `7. Save the changes.\n\n`,
-                    `More info: https://docs.oidc-spa.dev/v/v9/providers-configuration/keycloak`
+                    `More info: https://docs.oidc-spa.dev/v/v10/providers-configuration/keycloak`
                 ];
             })()
         ].join(" ")

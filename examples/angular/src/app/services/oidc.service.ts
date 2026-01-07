@@ -10,6 +10,6 @@ export type DecodedIdToken = {
 
 @Injectable({ providedIn: 'root' })
 export class Oidc extends AbstractOidcService<DecodedIdToken> {
-  // For AutoLogin see: https://docs.oidc-spa.dev/v/v9/features/auto-login#angular
-  // For Non blocking rendering see: https://docs.oidc-spa.dev/v/v9/features/non-blocking-rendering#react-spas
+  // For AutoLogin see: https://docs.oidc-spa.dev/v/v10/features/auto-login#angular
+  // For Non blocking rendering see: https://docs.oidc-spa.dev/v/v10/features/non-blocking-rendering#react-spas
 }

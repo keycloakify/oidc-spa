@@ -7,7 +7,7 @@ export const {
     getOidc,
     enforceLogin,
     // Wrap your whole application within this component in the root route
-    // Non blocking rendering is possible, see: https://docs.oidc-spa.dev/v/v9/features/non-blocking-rendering#react-spas
+    // Non blocking rendering is possible, see: https://docs.oidc-spa.dev/v/v10/features/non-blocking-rendering#react-spas
     OidcInitializationGate
 } = oidcSpa
     .withExpectedDecodedIdTokenShape({
@@ -31,7 +31,7 @@ export const {
             }
         }
     })
-    // See: https://docs.oidc-spa.dev/v/v9/features/auto-login#react-spa
+    // See: https://docs.oidc-spa.dev/v/v10/features/auto-login#react-spa
     //.withAutoLogin()
     .createUtils();
 
