@@ -380,7 +380,7 @@ export async function createOidc_nonMemoized<
         __unsafe_clientSecret,
         __unsafe_useIdTokenAsAccessToken = false,
         __metadata,
-        sessionRestorationMethod = params.autoLogin === true ? "full page redirect" : "auto",
+        sessionRestorationMethod = params.noIframe === true ? "full page redirect" : "auto",
         dpop
     } = params;
 
