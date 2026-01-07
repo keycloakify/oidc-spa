@@ -69,7 +69,8 @@ function LoggedInAuthButtons() {
             <a
                 href={keycloakUtils?.getAccountUrl({
                     clientId,
-                    validRedirectUri
+                    validRedirectUri,
+                    locale: undefined
                 })}
                 className="flex items-center gap-3 text-sm font-medium text-slate-200 hover:text-white"
             >

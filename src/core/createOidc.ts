@@ -172,15 +172,6 @@ export type ParamsOfCreateOidc<
      */
     sessionRestorationMethod?: "iframe" | "full page redirect" | "auto";
 
-    /**
-     * @deprecated Use `sessionRestorationMethod: "full page redirect"` instead.
-     *
-     * Default: false
-     *
-     * See: https://docs.oidc-spa.dev/v/v9/resources/third-party-cookies-and-session-restoration
-     */
-    noIframe?: boolean;
-
     debugLogs?: boolean;
 
     /**
@@ -227,9 +218,6 @@ export type ParamsOfCreateOidc<
      *   - Other:                    `BASE_URL: "/"` (Usually, or `/dashboard` if your app is not at the root of the domain)
      */
     BASE_URL?: string;
-
-    /** @deprecated: Use BASE_URL (same thing, just renamed). */
-    homeUrl?: string;
 
     /**
      * This parameter is irrelevant in most usecases.
@@ -397,12 +385,11 @@ export async function createOidc_nonMemoized<
         __unsafe_useIdTokenAsAccessToken = false,
         __metadata,
         sessionRestorationMethod = params.autoLogin === true ? "full page redirect" : "auto",
-        dpop
+        dpop,
+        BASE_URL: BASE_URL_params
     } = params;
 
     const scopes = Array.from(new Set(["openid", ...(params.scopes ?? ["profile"])]));
-
-    const BASE_URL_params = params.BASE_URL ?? params.homeUrl;
 
     const { issuerUri, clientId, configId, log } = preProcessedParams;
 
@@ -1174,11 +1161,6 @@ export async function createOidc_nonMemoized<
     });
 
     const oidc_common: Oidc.Common = {
-        params: {
-            issuerUri,
-            clientId,
-            validRedirectUri: homeUrlAndRedirectUri
-        },
         issuerUri,
         clientId,
         validRedirectUri: homeUrlAndRedirectUri
@@ -1830,11 +1812,11 @@ export async function createOidc_nonMemoized<
 
         scheduleCheck();
 
-        const { unsubscribe: tokenChangeUnsubscribe } = oidc_loggedIn.subscribeToTokensChange(() => {
+        const { unsubscribeFromTokensChange } = oidc_loggedIn.subscribeToTokensChange(() => {
             if (timer !== undefined) {
                 clearTimeout(timer);
             }
-            tokenChangeUnsubscribe();
+            unsubscribeFromTokensChange();
             renewOnLocalTimeShift();
         });
     })();
@@ -2033,9 +2015,9 @@ export async function createOidc_nonMemoized<
             )
         );
 
-        const { unsubscribe: tokenChangeUnsubscribe } = oidc_loggedIn.subscribeToTokensChange(() => {
+        const { unsubscribeFromTokensChange } = oidc_loggedIn.subscribeToTokensChange(() => {
             clearTimeout(timer);
-            tokenChangeUnsubscribe();
+            unsubscribeFromTokensChange();
             scheduleTokenRefreshToKeepSessionAlive();
         });
     })();

@@ -1,8 +1,6 @@
 import { isKeycloak, createKeycloakUtils } from "../keycloak";
 
 /**
- * @deprecated: Use `import { ... } from "oidc-spa/keycloak"` instead.
- *
  * Return undefined if the issuerUri doesn't match the expected shape of a Keycloak issuerUri
  *
  * Example:

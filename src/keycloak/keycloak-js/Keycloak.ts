@@ -284,13 +284,13 @@ export class Keycloak {
 
                 onNewToken();
 
-                const { unsubscribe } = oidc.subscribeToTokensChange(onNewToken);
+                const { unsubscribeFromTokensChange } = oidc.subscribeToTokensChange(onNewToken);
 
                 clear = () => {
                     if (timer !== undefined) {
                         clearTimeout(timer);
                     }
-                    unsubscribe();
+                    unsubscribeFromTokensChange();
                 };
             };
 

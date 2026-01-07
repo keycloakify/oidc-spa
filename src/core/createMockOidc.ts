@@ -11,7 +11,10 @@ export type ParamsOfCreateMockOidc<
     DecodedIdToken extends Record<string, unknown> = Record<string, unknown>,
     AutoLogin extends boolean = false
 > = {
-    mockedParams?: Partial<Oidc["params"]>;
+    mockedParams?: {
+        issuerUri?: string;
+        clientId?: string;
+    };
     mockedTokens?: Partial<Oidc.Tokens<DecodedIdToken>>;
     /**
      * The URL of the home page of your app.
@@ -20,9 +23,6 @@ export type ParamsOfCreateMockOidc<
      * if your web app isn't hosted at the root of the domain.
      */
     BASE_URL?: string;
-
-    /** @deprecated: Use BASE_URL (same thing, just renamed). */
-    homeUrl?: string;
 
     autoLogin?: AutoLogin;
     postLoginRedirectUrl?: string;
@@ -50,7 +50,7 @@ export async function createMockOidc<
         postLoginRedirectUrl
     } = params;
 
-    const BASE_URL_params = params.BASE_URL ?? params.homeUrl;
+    const BASE_URL_params = params.BASE_URL;
 
     const isUserLoggedIn = (() => {
         const { wasPresent, value } = getSearchParam({
@@ -93,18 +93,11 @@ export async function createMockOidc<
         doOutputWithTrailingSlash: true
     });
 
-    const common: Oidc.Common = (() => {
-        const params = {
-            clientId: mockedParams.clientId ?? "mymockclient",
-            issuerUri: mockedParams.issuerUri ?? "https://my-mock-oidc-server.net/realms/mymockrealm",
-            validRedirectUri: homeUrl
-        };
-
-        return {
-            params,
-            ...params
-        };
-    })();
+    const common: Oidc.Common = {
+        clientId: mockedParams.clientId ?? "mymockclient",
+        issuerUri: mockedParams.issuerUri ?? "https://my-mock-oidc-server.net/realms/mymockrealm",
+        validRedirectUri: homeUrl
+    };
 
     const loginOrGoToAuthServer = async (params: {
         redirectUrl: string | undefined;

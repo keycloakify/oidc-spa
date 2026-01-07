@@ -242,7 +242,7 @@ export abstract class AbstractOidcService<
 
                         try {
                             return createOidc({
-                                homeUrl: getBaseHref(),
+                                BASE_URL: getBaseHref(),
                                 autoLogin: instance.autoLogin,
                                 decodedIdTokenSchema: instance.decodedIdTokenSchema,
                                 ...params
@@ -275,7 +275,7 @@ export abstract class AbstractOidcService<
                         const { createMockOidc } = await import("./core/createMockOidc");
 
                         return createMockOidc<Record<string, unknown>, boolean>({
-                            homeUrl: getBaseHref(),
+                            BASE_URL: getBaseHref(),
                             autoLogin: instance.autoLogin,
                             isUserInitiallyLoggedIn: instance.autoLogin
                                 ? true
@@ -618,15 +618,15 @@ export abstract class AbstractOidcService<
     }
 
     get issuerUri() {
-        return this.#getOidc({ callerName: "issuerUri" }).params.issuerUri;
+        return this.#getOidc({ callerName: "issuerUri" }).issuerUri;
     }
 
     get clientId() {
-        return this.#getOidc({ callerName: "clientId" }).params.clientId;
+        return this.#getOidc({ callerName: "clientId" }).clientId;
     }
 
     get validRedirectUri() {
-        return this.#getOidc({ callerName: "validRedirectUri" }).params.validRedirectUri;
+        return this.#getOidc({ callerName: "validRedirectUri" }).validRedirectUri;
     }
 
     #isUserLoggedIn_override: boolean | undefined = undefined;

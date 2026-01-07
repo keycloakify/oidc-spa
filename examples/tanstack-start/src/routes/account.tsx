@@ -78,7 +78,11 @@ function Account() {
 
                         <div className="mt-6">
                             <a
-                                href={keycloakUtils.getAccountUrl({ clientId, validRedirectUri })}
+                                href={keycloakUtils.getAccountUrl({
+                                    clientId,
+                                    validRedirectUri,
+                                    locale: undefined
+                                })}
                                 rel="noreferrer"
                                 className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-700 text-white font-semibold transition-colors shadow-lg shadow-cyan-500/30 border border-cyan-400/40"
                             >

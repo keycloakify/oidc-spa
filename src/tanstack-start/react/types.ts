@@ -127,6 +127,7 @@ export namespace GetOidc {
         type Common = {
             issuerUri: string;
             clientId: string;
+            validRedirectUri: string;
         };
 
         export type NotLoggedIn = Common & {

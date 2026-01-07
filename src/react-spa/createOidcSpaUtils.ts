@@ -188,7 +188,7 @@ export function createOidcSpaUtils<
 
                 unsubscribe = oidcCore.subscribeToTokensChange(() => {
                     reRenderIfDecodedIdTokenChanged(oidcCore.getDecodedIdToken());
-                }).unsubscribe;
+                }).unsubscribeFromTokensChange;
             })();
 
             return () => {
@@ -237,9 +237,9 @@ export function createOidcSpaUtils<
             return id<UseOidc.Oidc.NotLoggedIn>({
                 isUserLoggedIn: false,
                 initializationError: oidcCore.initializationError,
-                issuerUri: oidcCore.params.issuerUri,
-                clientId: oidcCore.params.clientId,
-                validRedirectUri: oidcCore.params.validRedirectUri,
+                issuerUri: oidcCore.issuerUri,
+                clientId: oidcCore.clientId,
+                validRedirectUri: oidcCore.validRedirectUri,
                 autoLogoutState: { shouldDisplayWarning: false },
                 login: params =>
                     oidcCore.login({
@@ -264,9 +264,9 @@ export function createOidcSpaUtils<
                 evtIsAutoLogoutStateUsed.current = true;
                 return evtAutoLogoutState.current;
             },
-            issuerUri: oidcCore.params.issuerUri,
-            clientId: oidcCore.params.clientId,
-            validRedirectUri: oidcCore.params.validRedirectUri
+            issuerUri: oidcCore.issuerUri,
+            clientId: oidcCore.clientId,
+            validRedirectUri: oidcCore.validRedirectUri
         });
     }
 
@@ -300,35 +300,44 @@ export function createOidcSpaUtils<
             );
         }
 
+        const common = {
+            issuerUri: oidcCore.issuerUri,
+            clientId: oidcCore.clientId,
+            validRedirectUri: oidcCore.validRedirectUri
+        };
+
         return oidcCore.isUserLoggedIn
             ? id<GetOidc.Oidc.LoggedIn<DecodedIdToken>>({
-                  issuerUri: oidcCore.params.issuerUri,
-                  clientId: oidcCore.params.clientId,
+                  ...common,
                   isUserLoggedIn: true,
                   getAccessToken: async () => {
                       const { accessToken } = await oidcCore.getTokens();
                       return accessToken;
                   },
                   subscribeToAccessTokenRotation: next => {
-                      const { unsubscribe } = oidcCore.subscribeToTokensChange(({ accessToken }) => {
-                          next(accessToken);
-                      });
+                      const { unsubscribeFromTokensChange } = oidcCore.subscribeToTokensChange(
+                          ({ accessToken }) => {
+                              next(accessToken);
+                          }
+                      );
 
-                      return { unsubscribeFromAccessTokenRotation: unsubscribe };
+                      return { unsubscribeFromAccessTokenRotation: unsubscribeFromTokensChange };
                   },
                   getDecodedIdToken: oidcCore.getDecodedIdToken,
                   subscribeToDecodedIdTokenChange: next => {
                       const current = oidcCore.getDecodedIdToken();
 
-                      const { unsubscribe } = oidcCore.subscribeToTokensChange(({ decodedIdToken }) => {
-                          // NOTE: oidc-spa/core keeps the reference stable
-                          // when structure hasn't changed.
-                          if (current !== decodedIdToken) {
-                              next(decodedIdToken);
+                      const { unsubscribeFromTokensChange } = oidcCore.subscribeToTokensChange(
+                          ({ decodedIdToken }) => {
+                              // NOTE: oidc-spa/core keeps the reference stable
+                              // when structure hasn't changed.
+                              if (current !== decodedIdToken) {
+                                  next(decodedIdToken);
+                              }
                           }
-                      });
+                      );
 
-                      return { unsubscribeFromDecodedIdTokenChange: unsubscribe };
+                      return { unsubscribeFromDecodedIdTokenChange: unsubscribeFromTokensChange };
                   },
                   logout: oidcCore.logout,
                   renewTokens: oidcCore.renewTokens,
@@ -344,8 +353,7 @@ export function createOidcSpaUtils<
                   }
               })
             : id<GetOidc.Oidc.NotLoggedIn>({
-                  issuerUri: oidcCore.params.issuerUri,
-                  clientId: oidcCore.params.clientId,
+                  ...common,
                   isUserLoggedIn: false,
                   initializationError: oidcCore.initializationError,
                   login: oidcCore.login

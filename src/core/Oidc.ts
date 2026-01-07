@@ -6,12 +6,6 @@ export declare type Oidc<
 
 export declare namespace Oidc {
     export type Common = {
-        /** @deprecated: Those properties are now attached directly on the object */
-        params: {
-            issuerUri: string;
-            clientId: string;
-            validRedirectUri: string;
-        };
         issuerUri: string;
         clientId: string;
         validRedirectUri: string;
@@ -50,8 +44,6 @@ export declare namespace Oidc {
             }): Promise<void>;
             getTokens: () => Promise<Tokens<DecodedIdToken>>;
             subscribeToTokensChange: (onTokenChange: (tokens: Tokens<DecodedIdToken>) => void) => {
-                /** @deprecated: Use unsubscribeFromTokensChange */
-                unsubscribe: () => void;
                 unsubscribeFromTokensChange: () => void;
             };
             getDecodedIdToken: () => DecodedIdToken;
