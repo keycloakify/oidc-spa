@@ -1,7 +1,7 @@
 import { oidcEarlyInit } from 'oidc-spa/entrypoint';
 import { browserRuntimeFreeze } from 'oidc-spa/browser-runtime-freeze';
 import { DPoP } from 'oidc-spa/DPoP';
-//import { tokenSubstitution } from 'oidc-spa/token-substitution';
+import { tokenSubstitution } from 'oidc-spa/token-substitution';
 
 const { shouldLoadApp } = oidcEarlyInit({
   securityDefenses: {
@@ -11,11 +11,9 @@ const { shouldLoadApp } = oidcEarlyInit({
     ...DPoP({
       mode: 'auto',
     }),
-    /*
     ...tokenSubstitution({
       trustedThirdPartyResourceServers: ['jsonplaceholder.typicode.com'],
     }),
-    */
   },
 });
 
