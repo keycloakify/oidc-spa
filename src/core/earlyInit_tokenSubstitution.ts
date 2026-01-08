@@ -471,13 +471,7 @@ function patchXMLHttpRequestApiToSubstituteTokenPlaceholder(params: {
 
     const stateByInstance = new WeakMap<XMLHttpRequest, { url: string; didSubstitute: boolean }>();
 
-    XMLHttpRequest.prototype.open = function open(
-        method: string,
-        url: string | URL,
-        async?: boolean,
-        username?: string | null,
-        password?: string | null
-    ) {
+    XMLHttpRequest.prototype.open = function open(method, url, ...rest: unknown[]) {
         const state = { url: "", didSubstitute: false };
 
         {
@@ -500,7 +494,13 @@ function patchXMLHttpRequestApiToSubstituteTokenPlaceholder(params: {
             throw new Error("oidc-spa: Blocked request to hashed static asset.");
         }
 
-        return open_actual.call(this, method, state.url, async as true, username, password);
+        return open_actual.call(
+            this,
+            method,
+            state.url,
+            //@ts-expect-error
+            ...rest
+        );
     };
 
     XMLHttpRequest.prototype.setRequestHeader = function setRequestHeader(name, value) {
