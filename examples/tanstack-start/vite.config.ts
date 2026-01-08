@@ -19,16 +19,12 @@ const config = defineConfig({
         tanstackStart(),
         oidcSpa({
             browserRuntimeFreeze: {
-                enabled: true,
-                exclude: ["fetch", "XMLHttpRequest"]
+                enabled: true
+                //exclude: [ "fetch", "XMLHttpRequest"]
             },
             DPoP: {
                 enabled: true,
                 mode: "auto"
-            },
-            tokenSubstitution: {
-                enabled: true,
-                trustedServiceWorkerSources: ["s3.amazon.com", "*.{{location.hostname}}"]
             }
         }),
         viteReact()
