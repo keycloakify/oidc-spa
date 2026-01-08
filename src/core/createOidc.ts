@@ -22,7 +22,6 @@ import {
 import { notifyOtherTabsOfLogout, getPrOtherTabLogout } from "./logoutPropagationToOtherTabs";
 import { notifyOtherTabsOfLogin, getPrOtherTabLogin } from "./loginPropagationToOtherTabs";
 import { getConfigId } from "./configId";
-import { getIsTokenSubstitutionEnabled } from "./earlyInit_tokenSubstitution";
 import { createOidcClientTsUserToTokens } from "./oidcClientTsUserToTokens";
 import { loginSilent } from "./loginSilent";
 import { authResponseToUrl, type AuthResponse } from "./AuthResponse";
@@ -43,7 +42,6 @@ import { createGetIsNewBrowserSession } from "./isNewBrowserSession";
 import { getIsOnline } from "../tools/getIsOnline";
 import { isKeycloak } from "../keycloak/isKeycloak";
 import { INFINITY_TIME } from "../tools/INFINITY_TIME";
-import { prShouldLoadApp } from "./earlyInit_prShouldLoadApp";
 import { getRootRelativeOriginalLocationHref_earlyInit } from "./earlyInit_rootRelativeOriginalLocationHref";
 import { getIsLikelyDevServer } from "../tools/isLikelyDevServer";
 import { createObjectThatThrowsIfAccessed } from "../tools/createObjectThatThrowsIfAccessed";
@@ -238,22 +236,46 @@ export type ParamsOfCreateOidc<
     dpop?: "disabled" | "enabled" | "auto";
 };
 
-type SensitiveBindings = {
-    getEvtIframeAuthResponse: () => Evt<AuthResponse>;
-    getRedirectAuthResponse: () =>
-        | { authResponse: AuthResponse; clearAuthResponse: () => void }
-        | { authResponse: undefined; clearAuthResponse?: never };
-};
-
-export function registerEarlyInitSensitiveBindings(sensitiveBindings: SensitiveBindings) {
-    globalContext.dSensitiveBindings.resolve(sensitiveBindings);
-}
-
 const globalContext = {
     prOidcByConfigId: new Map<string, Promise<Oidc<any>>>(),
     hasLogoutBeenCalled: id<boolean>(false),
-    dSensitiveBindings: new Deferred<SensitiveBindings>()
+    dExports_earlyInit: new Deferred<Exports_earlyInit>(),
+    dExports_tokenSubstitution: new Deferred<Exports_tokenSubstitution>()
 };
+
+export type Exports_earlyInit =
+    | { shouldLoadApp: false }
+    | {
+          shouldLoadApp: true;
+
+          getEvtIframeAuthResponse: () => Evt<AuthResponse>;
+          getRedirectAuthResponse: () =>
+              | { authResponse: AuthResponse; clearAuthResponse: () => void }
+              | { authResponse: undefined; clearAuthResponse?: never };
+      };
+
+export function registerExports_earlyInit(exports: Exports_earlyInit): void {
+    globalContext.dExports_earlyInit.resolve(exports);
+}
+
+export type Exports_tokenSubstitution = {
+    getTokensPlaceholders: (params: {
+        configId: string;
+        tokens: {
+            accessToken: string;
+            idToken: string;
+            refreshToken?: string;
+        };
+    }) => {
+        accessToken: string;
+        idToken: string;
+        refreshToken?: string;
+    };
+};
+
+export function registerExports_tokenSubstitution(exports: Exports_tokenSubstitution): void {
+    globalContext.dExports_tokenSubstitution.resolve(exports);
+}
 
 /** @see: https://docs.oidc-spa.dev/v/v10/usage */
 export async function createOidc<
@@ -348,7 +370,7 @@ export async function createOidc_nonMemoized<
         log: typeof console.log | undefined;
     }
 ): Promise<AutoLogin extends true ? Oidc.LoggedIn<DecodedIdToken> : Oidc<DecodedIdToken>> {
-    {
+    const exports_earlyInit = await (async () => {
         const timer = window.setTimeout(() => {
             console.warn(
                 [
@@ -360,17 +382,21 @@ export async function createOidc_nonMemoized<
             );
         }, 3_000);
 
-        const shouldLoadApp = await prShouldLoadApp;
+        const exports_earlyInit = await globalContext.dExports_earlyInit.pr;
 
         window.clearTimeout(timer);
 
-        if (!shouldLoadApp) {
-            return new Promise<never>(() => {});
-        }
+        return exports_earlyInit;
+    })();
+
+    if (!exports_earlyInit.shouldLoadApp) {
+        return new Promise<never>(() => {});
     }
 
-    const { getRedirectAuthResponse, getEvtIframeAuthResponse } = await globalContext.dSensitiveBindings
-        .pr;
+    const { getEvtIframeAuthResponse, getRedirectAuthResponse } = exports_earlyInit;
+
+    const { hasResolved: isTokenSubstitutionEnabled, value: exports_tokenSubstitution } =
+        globalContext.dExports_tokenSubstitution.getState();
 
     const {
         transformUrlBeforeRedirect,
@@ -437,7 +463,7 @@ export async function createOidc_nonMemoized<
         )}`
     );
 
-    if (getIsTokenSubstitutionEnabled()) {
+    if (isTokenSubstitutionEnabled) {
         log?.(
             [
                 "Token substitution successfully enabled.",
@@ -1298,6 +1324,9 @@ export async function createOidc_nonMemoized<
         decodedIdTokenSchema,
         __unsafe_useIdTokenAsAccessToken,
         isDPoPEnabled,
+        getTokensPlaceholders: isTokenSubstitutionEnabled
+            ? exports_tokenSubstitution.getTokensPlaceholders
+            : undefined,
         log
     });
 

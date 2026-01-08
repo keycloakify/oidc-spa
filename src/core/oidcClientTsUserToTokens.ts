@@ -7,7 +7,6 @@ import type { Oidc } from "./Oidc";
 import { INFINITY_TIME } from "../tools/INFINITY_TIME";
 import { registerAccessTokenForDPoP } from "./earlyInit_DPoP";
 import { createGetServerDateNow, type ParamsOfCreateGetServerDateNow } from "../tools/getServerDateNow";
-import { getIsTokenSubstitutionEnabled, getTokensPlaceholders } from "./earlyInit_tokenSubstitution";
 
 export function createOidcClientTsUserToTokens<DecodedIdToken extends Record<string, unknown>>(params: {
     configId: string;
@@ -16,10 +15,32 @@ export function createOidcClientTsUserToTokens<DecodedIdToken extends Record<str
     };
     __unsafe_useIdTokenAsAccessToken: boolean;
     isDPoPEnabled: boolean;
+
+    getTokensPlaceholders:
+        | ((params: {
+              configId: string;
+              tokens: {
+                  accessToken: string;
+                  idToken: string;
+                  refreshToken?: string;
+              };
+          }) => {
+              accessToken: string;
+              idToken: string;
+              refreshToken?: string;
+          })
+        | undefined;
+
     log: typeof console.log | undefined;
 }) {
-    const { configId, decodedIdTokenSchema, __unsafe_useIdTokenAsAccessToken, isDPoPEnabled, log } =
-        params;
+    const {
+        configId,
+        decodedIdTokenSchema,
+        __unsafe_useIdTokenAsAccessToken,
+        isDPoPEnabled,
+        getTokensPlaceholders,
+        log
+    } = params;
 
     function oidcClientTsUserToTokens(params: {
         oidcClientTsUser: OidcClientTsUser;
@@ -240,7 +261,7 @@ export function createOidcClientTsUserToTokens<DecodedIdToken extends Record<str
             });
         }
 
-        if (getIsTokenSubstitutionEnabled()) {
+        if (getTokensPlaceholders !== undefined) {
             const placeholders = getTokensPlaceholders({
                 configId,
                 tokens

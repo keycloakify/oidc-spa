@@ -1,12 +1,7 @@
 import { assert } from "../tools/tsafe/assert";
 import { getIsHostnameAuthorized } from "../tools/isHostnameAuthorized";
 import { getIsLikelyDevServer } from "../tools/isLikelyDevServer";
-
-let isTokenSubstitutionEnabled = false;
-
-export function getIsTokenSubstitutionEnabled() {
-    return isTokenSubstitutionEnabled;
-}
+import { prModuleCreateOidc } from "./earlyInit_prModuleCreateOidc";
 
 type Tokens = {
     accessToken: string;
@@ -73,10 +68,8 @@ function generatePlaceholderForToken(params: {
 
 let counter = Math.floor(Math.random() * 1_000_000) + 1_000_000;
 
-export function getTokensPlaceholders(params: { configId: string; tokens: Tokens }): Tokens {
+function getTokensPlaceholders(params: { configId: string; tokens: Tokens }): Tokens {
     const { configId, tokens } = params;
-
-    assert(isTokenSubstitutionEnabled, "2934482");
 
     for (const entry of entries) {
         if (entry.configId !== configId) {
@@ -176,14 +169,18 @@ export function enableTokenSubstitution(params?: {
 }) {
     const { trustedThirdPartyResourceServers = [], trustedServiceWorkerSources = [] } = params ?? {};
 
-    isTokenSubstitutionEnabled = true;
-
     patchFetchApiToSubstituteTokenPlaceholder({ trustedThirdPartyResourceServers });
     patchXMLHttpRequestApiToSubstituteTokenPlaceholder({ trustedThirdPartyResourceServers });
     patchWebSocketApiToSubstituteTokenPlaceholder({ trustedThirdPartyResourceServers });
     patchEventSourceApiToSubstituteTokenPlaceholder({ trustedThirdPartyResourceServers });
     patchNavigatorSendBeaconApiToSubstituteTokenPlaceholder({ trustedThirdPartyResourceServers });
     restrictServiceWorkerRegistration({ trustedServiceWorkerSources });
+
+    prModuleCreateOidc.then(({ registerExports_tokenSubstitution }) => {
+        registerExports_tokenSubstitution({
+            getTokensPlaceholders
+        });
+    });
 }
 
 function patchFetchApiToSubstituteTokenPlaceholder(params: {
