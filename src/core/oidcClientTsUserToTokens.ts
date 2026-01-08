@@ -5,8 +5,8 @@ import { readExpirationTimeInJwt } from "../tools/readExpirationTimeInJwt";
 import { decodeJwt } from "../tools/decodeJwt";
 import type { Oidc } from "./Oidc";
 import { INFINITY_TIME } from "../tools/INFINITY_TIME";
-import { registerAccessTokenForDPoP } from "./earlyInit_DPoP";
 import { createGetServerDateNow, type ParamsOfCreateGetServerDateNow } from "../tools/getServerDateNow";
+import type { Exports_DPoP, Exports_tokenSubstitution } from "./createOidc";
 
 export function createOidcClientTsUserToTokens<DecodedIdToken extends Record<string, unknown>>(params: {
     configId: string;
@@ -14,22 +14,9 @@ export function createOidcClientTsUserToTokens<DecodedIdToken extends Record<str
         parse: (decodedIdToken_original: Oidc.Tokens.DecodedIdToken_OidcCoreSpec) => DecodedIdToken;
     };
     __unsafe_useIdTokenAsAccessToken: boolean;
-    isDPoPEnabled: boolean;
 
-    getTokensPlaceholders:
-        | ((params: {
-              configId: string;
-              tokens: {
-                  accessToken: string;
-                  idToken: string;
-                  refreshToken?: string;
-              };
-          }) => {
-              accessToken: string;
-              idToken: string;
-              refreshToken?: string;
-          })
-        | undefined;
+    exports_DPoP: Pick<Exports_DPoP, "registerAccessTokenForDPoP"> | undefined;
+    exports_tokenSubstitution: Pick<Exports_tokenSubstitution, "getTokensPlaceholders"> | undefined;
 
     log: typeof console.log | undefined;
 }) {
@@ -37,8 +24,8 @@ export function createOidcClientTsUserToTokens<DecodedIdToken extends Record<str
         configId,
         decodedIdTokenSchema,
         __unsafe_useIdTokenAsAccessToken,
-        isDPoPEnabled,
-        getTokensPlaceholders,
+        exports_DPoP,
+        exports_tokenSubstitution,
         log
     } = params;
 
@@ -253,16 +240,16 @@ export function createOidcClientTsUserToTokens<DecodedIdToken extends Record<str
                       })()
                   });
 
-        if (isDPoPEnabled) {
-            registerAccessTokenForDPoP({
+        if (exports_DPoP !== undefined) {
+            exports_DPoP.registerAccessTokenForDPoP({
                 configId,
                 accessToken: tokens.accessToken,
                 paramsOfCreateGetServerDateNow
             });
         }
 
-        if (getTokensPlaceholders !== undefined) {
-            const placeholders = getTokensPlaceholders({
+        if (exports_tokenSubstitution !== undefined) {
+            const placeholders = exports_tokenSubstitution.getTokensPlaceholders({
                 configId,
                 tokens
             });

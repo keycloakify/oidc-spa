@@ -1,15 +1,16 @@
 import { assert } from "../tools/tsafe/assert";
 import { generateES256DPoPProof } from "../tools/generateES256DPoPProof";
 import { createGetServerDateNow, type ParamsOfCreateGetServerDateNow } from "../tools/getServerDateNow";
+import { prModuleCreateOidc } from "./earlyInit_prModuleCreateOidc";
 
-export type DPoPStore = {
+type DPoPStore = {
     set: (key: string, value: DPoPState) => Promise<void>;
     get: (key: string) => Promise<DPoPState>;
     remove: (key: string) => Promise<DPoPState>;
     getAllKeys: () => Promise<string[]>;
 };
 
-export type DPoPState = {
+type DPoPState = {
     keys: CryptoKeyPair;
     nonce?: string;
 };
@@ -17,7 +18,7 @@ export type DPoPState = {
 // NOTE: Using object instead of Map because Map is not freezed.
 const dpopStateByConfigId: { [configId: string]: DPoPState | undefined } = {};
 
-export function createInMemoryDPoPStore(params: { configId: string }): DPoPStore {
+function createInMemoryDPoPStore(params: { configId: string }): DPoPStore {
     const { configId } = params;
 
     let key_singleton: string | undefined = undefined;
@@ -102,7 +103,7 @@ const accessTokenConfigIdEntries: {
     paramsOfCreateGetServerDateNow: ParamsOfCreateGetServerDateNow;
 }[] = [];
 
-export function registerAccessTokenForDPoP(params: {
+function registerAccessTokenForDPoP(params: {
     configId: string;
     accessToken: string;
     paramsOfCreateGetServerDateNow: ParamsOfCreateGetServerDateNow;
@@ -225,7 +226,7 @@ function generateMaterialToUpgradeBearerRequestToDPoP(params: {
     };
 }
 
-export function implementFetchAndXhrDPoPInterceptor() {
+function registerInterceptors() {
     function readNonceFromResponseHeader(params: {
         getResponseHeader: (headerName: string) => string | null;
     }) {
@@ -734,4 +735,21 @@ export function implementFetchAndXhrDPoPInterceptor() {
             return XMLHttpRequest_prototype_actual.send.call(this, ...arguments);
         };
     }
+}
+
+export function DPoP(params: { mode: "auto" | "enforced" }) {
+    const { mode } = params;
+
+    const enableDPoP = () => {
+        registerInterceptors();
+        prModuleCreateOidc.then(({ registerExports_DPoP }) => {
+            registerExports_DPoP({
+                isEnforced: mode === "enforced",
+                createInMemoryDPoPStore,
+                registerAccessTokenForDPoP
+            });
+        });
+    };
+
+    return { enableDPoP };
 }

@@ -33,7 +33,17 @@ export type ApiName =
     | "crypto.subtle"
     | "Function.prototype.call";
 
-export function freezeBrowserRuntime(params: { excludedApiNames: ApiName[] }) {
+export function browserRuntimeFreeze(params?: { excludes?: ApiName[] }) {
+    const { excludes: excludedApiNames = [] } = params ?? {};
+
+    const enableBrowserRuntimeFreeze = () => {
+        freezeBrowserRuntime({ excludedApiNames });
+    };
+
+    return { enableBrowserRuntimeFreeze };
+}
+
+function freezeBrowserRuntime(params: { excludedApiNames: ApiName[] }) {
     const { excludedApiNames } = params;
 
     const createWriteError = (params: { target: string; apiName: ApiName }) => {

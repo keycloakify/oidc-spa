@@ -57,9 +57,9 @@ import {
     clearStateDataCookie,
     getIsStateDataCookieEnabled
 } from "./StateDataCookie";
-import { createInMemoryDPoPStore } from "./earlyInit_DPoP";
 import { loadWebcryptoLinerShim } from "../tools/loadWebcryptoLinerShim";
 import type { Evt } from "../tools/Evt";
+import type { ParamsOfCreateGetServerDateNow } from "../tools/getServerDateNow";
 
 // NOTE: Replaced at build time
 const VERSION = "{{OIDC_SPA_VERSION}}";
@@ -232,15 +232,16 @@ export type ParamsOfCreateOidc<
      */
     postLoginRedirectUrl?: string;
 
-    /** See: https://docs.oidc-spa.dev/v/v10/security-features/dpop */
-    dpop?: "disabled" | "enabled" | "auto";
+    /** Let you opt-out of DPoP for this specific instance */
+    disableDPoP?: boolean;
 };
 
 const globalContext = {
     prOidcByConfigId: new Map<string, Promise<Oidc<any>>>(),
     hasLogoutBeenCalled: id<boolean>(false),
     dExports_earlyInit: new Deferred<Exports_earlyInit>(),
-    dExports_tokenSubstitution: new Deferred<Exports_tokenSubstitution>()
+    dExports_tokenSubstitution: new Deferred<Exports_tokenSubstitution>(),
+    dExports_DPoP: new Deferred<Exports_DPoP>()
 };
 
 export type Exports_earlyInit =
@@ -261,20 +262,48 @@ export function registerExports_earlyInit(exports: Exports_earlyInit): void {
 export type Exports_tokenSubstitution = {
     getTokensPlaceholders: (params: {
         configId: string;
-        tokens: {
-            accessToken: string;
-            idToken: string;
-            refreshToken?: string;
-        };
-    }) => {
+        tokens: Exports_tokenSubstitution.Tokens;
+    }) => Exports_tokenSubstitution.Tokens;
+};
+
+export namespace Exports_tokenSubstitution {
+    export type Tokens = {
         accessToken: string;
         idToken: string;
         refreshToken?: string;
     };
-};
+}
 
 export function registerExports_tokenSubstitution(exports: Exports_tokenSubstitution): void {
     globalContext.dExports_tokenSubstitution.resolve(exports);
+}
+
+export type Exports_DPoP = {
+    isEnforced: boolean;
+    createInMemoryDPoPStore: (params: { configId: string }) => Exports_DPoP.DPoPStore;
+    registerAccessTokenForDPoP: (params: {
+        configId: string;
+        accessToken: string;
+        paramsOfCreateGetServerDateNow: ParamsOfCreateGetServerDateNow;
+    }) => void;
+};
+
+export namespace Exports_DPoP {
+    export type DPoPState = {
+        keys: CryptoKeyPair;
+        nonce?: string;
+    };
+
+    export type DPoPStore = {
+        set: (key: string, value: DPoPState) => Promise<void>;
+        get: (key: string) => Promise<DPoPState>;
+        remove: (key: string) => Promise<DPoPState>;
+        getAllKeys: () => Promise<string[]>;
+    };
+}
+
+export function registerExports_DPoP(exports: Exports_DPoP): void {
+    globalContext.dExports_DPoP.resolve(exports);
 }
 
 /** @see: https://docs.oidc-spa.dev/v/v10/usage */
@@ -370,6 +399,23 @@ export async function createOidc_nonMemoized<
         log: typeof console.log | undefined;
     }
 ): Promise<AutoLogin extends true ? Oidc.LoggedIn<DecodedIdToken> : Oidc<DecodedIdToken>> {
+    const {
+        transformUrlBeforeRedirect,
+        extraQueryParams: extraQueryParamsOrGetter,
+        extraTokenParams: extraTokenParamsOrGetter,
+        decodedIdTokenSchema,
+        idleSessionLifetimeInSeconds,
+        autoLogoutParams = { redirectTo: "current page" },
+        autoLogin = false,
+        postLoginRedirectUrl: postLoginRedirectUrl_default,
+        __unsafe_clientSecret,
+        __unsafe_useIdTokenAsAccessToken = false,
+        __metadata,
+        disableDPoP: disableDPoP_params = false,
+        sessionRestorationMethod = "auto",
+        BASE_URL: BASE_URL_params
+    } = params;
+
     const exports_earlyInit = await (async () => {
         const timer = window.setTimeout(() => {
             console.warn(
@@ -395,25 +441,9 @@ export async function createOidc_nonMemoized<
 
     const { getEvtIframeAuthResponse, getRedirectAuthResponse } = exports_earlyInit;
 
-    const { hasResolved: isTokenSubstitutionEnabled, value: exports_tokenSubstitution } =
-        globalContext.dExports_tokenSubstitution.getState();
+    const { value: exports_tokenSubstitution } = globalContext.dExports_tokenSubstitution.getState();
 
-    const {
-        transformUrlBeforeRedirect,
-        extraQueryParams: extraQueryParamsOrGetter,
-        extraTokenParams: extraTokenParamsOrGetter,
-        decodedIdTokenSchema,
-        idleSessionLifetimeInSeconds,
-        autoLogoutParams = { redirectTo: "current page" },
-        autoLogin = false,
-        postLoginRedirectUrl: postLoginRedirectUrl_default,
-        __unsafe_clientSecret,
-        __unsafe_useIdTokenAsAccessToken = false,
-        __metadata,
-        sessionRestorationMethod = "auto",
-        dpop,
-        BASE_URL: BASE_URL_params
-    } = params;
+    const { value: exports_DPoP } = globalContext.dExports_DPoP.getState();
 
     const scopes = Array.from(new Set(["openid", ...(params.scopes ?? ["profile"])]));
 
@@ -463,7 +493,7 @@ export async function createOidc_nonMemoized<
         )}`
     );
 
-    if (isTokenSubstitutionEnabled) {
+    if (exports_tokenSubstitution !== undefined) {
         log?.(
             [
                 "Token substitution successfully enabled.",
@@ -484,23 +514,19 @@ export async function createOidc_nonMemoized<
 
     const oidcMetadata = __metadata ?? (await fetchOidcMetadata({ issuerUri }));
 
-    const isDPoPEnabled = (() => {
-        if (dpop === undefined) {
+    const shouldEnableDPoP = (() => {
+        if (disableDPoP_params) {
+            log?.("DPoP explicitly disabled for this instance");
+            return false;
+        }
+
+        if (exports_DPoP === undefined) {
             log?.("DPoP disabled, to enable it see: https://docs.oidc-spa.dev/features/dpop");
             return false;
         }
 
-        if (dpop === "disabled") {
-            log?.("DPoP explicitly disabled");
-            return false;
-        }
-
-        if (oidcMetadata === undefined) {
-            return false;
-        }
-
         if (__unsafe_useIdTokenAsAccessToken) {
-            if (dpop === "enabled") {
+            if (exports_DPoP.isEnforced) {
                 throw new Error(
                     [
                         "oidc-spa: Cannot enable DPoP when",
@@ -509,6 +535,10 @@ export async function createOidc_nonMemoized<
                 );
             }
             log?.("DPoP Disabled due to __unsafe_useIdTokenAsAccessToken: true");
+            return false;
+        }
+
+        if (oidcMetadata === undefined) {
             return false;
         }
 
@@ -523,7 +553,11 @@ export async function createOidc_nonMemoized<
         })();
 
         if (!isSupported) {
-            log?.("DPoP disabled because it's not supported by your IdP");
+            if (exports_DPoP.isEnforced) {
+                throw new Error("oidc-spa: The IdP does not support DPoP");
+            }
+
+            log?.("DPoP disabled because it's not supported by the IdP");
         } else {
             log?.("DPoP enabled");
         }
@@ -743,11 +777,17 @@ export async function createOidc_nonMemoized<
                   }),
                   client_secret: __unsafe_clientSecret,
                   metadata: oidcMetadata,
-                  dpop: !isDPoPEnabled
-                      ? undefined
-                      : {
-                            store: createInMemoryDPoPStore({ configId })
-                        }
+                  dpop: (() => {
+                      if (!shouldEnableDPoP) {
+                          return undefined;
+                      }
+
+                      assert(exports_DPoP !== undefined, "49240");
+
+                      return {
+                          store: exports_DPoP.createInMemoryDPoPStore({ configId })
+                      };
+                  })()
               });
 
     const evtInitializationOutcomeUserNotLoggedIn = createEvt<void>();
@@ -1323,10 +1363,8 @@ export async function createOidc_nonMemoized<
         configId,
         decodedIdTokenSchema,
         __unsafe_useIdTokenAsAccessToken,
-        isDPoPEnabled,
-        getTokensPlaceholders: isTokenSubstitutionEnabled
-            ? exports_tokenSubstitution.getTokensPlaceholders
-            : undefined,
+        exports_DPoP: shouldEnableDPoP ? exports_DPoP : undefined,
+        exports_tokenSubstitution,
         log
     });
 

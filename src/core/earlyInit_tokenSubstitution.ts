@@ -163,24 +163,28 @@ function substitutePlaceholderByRealToken(text: string): string {
 
 const viteHashedJsAssetPathRegExp = /\/assets\/[^/]+-[a-zA-Z0-9_-]{8}\.js$/;
 
-export function enableTokenSubstitution(params?: {
+export function tokenSubstitution(params?: {
     trustedThirdPartyResourceServers?: string[];
     trustedServiceWorkerSources?: string[];
 }) {
     const { trustedThirdPartyResourceServers = [], trustedServiceWorkerSources = [] } = params ?? {};
 
-    patchFetchApiToSubstituteTokenPlaceholder({ trustedThirdPartyResourceServers });
-    patchXMLHttpRequestApiToSubstituteTokenPlaceholder({ trustedThirdPartyResourceServers });
-    patchWebSocketApiToSubstituteTokenPlaceholder({ trustedThirdPartyResourceServers });
-    patchEventSourceApiToSubstituteTokenPlaceholder({ trustedThirdPartyResourceServers });
-    patchNavigatorSendBeaconApiToSubstituteTokenPlaceholder({ trustedThirdPartyResourceServers });
-    restrictServiceWorkerRegistration({ trustedServiceWorkerSources });
+    const enableTokenSubstitution = () => {
+        patchFetchApiToSubstituteTokenPlaceholder({ trustedThirdPartyResourceServers });
+        patchXMLHttpRequestApiToSubstituteTokenPlaceholder({ trustedThirdPartyResourceServers });
+        patchWebSocketApiToSubstituteTokenPlaceholder({ trustedThirdPartyResourceServers });
+        patchEventSourceApiToSubstituteTokenPlaceholder({ trustedThirdPartyResourceServers });
+        patchNavigatorSendBeaconApiToSubstituteTokenPlaceholder({ trustedThirdPartyResourceServers });
+        restrictServiceWorkerRegistration({ trustedServiceWorkerSources });
 
-    prModuleCreateOidc.then(({ registerExports_tokenSubstitution }) => {
-        registerExports_tokenSubstitution({
-            getTokensPlaceholders
+        prModuleCreateOidc.then(({ registerExports_tokenSubstitution }) => {
+            registerExports_tokenSubstitution({
+                getTokensPlaceholders
+            });
         });
-    });
+    };
+
+    return { enableTokenSubstitution };
 }
 
 function patchFetchApiToSubstituteTokenPlaceholder(params: {

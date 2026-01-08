@@ -170,8 +170,8 @@ export type ParamsOfProvide = {
      */
     warnUserSecondsBeforeAutoLogout?: number;
 
-    /** See: https://docs.oidc-spa.dev/v/v10/security-features/dpop */
-    dpop?: "disabled" | "enabled" | "auto";
+    /** Let you opt-out of DPoP for this specific instance */
+    disableDPoP?: boolean;
 };
 
 assert<
