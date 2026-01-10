@@ -74,22 +74,6 @@ function createAndRecordDPoPStore(params: { configId: string }): DPoPStore {
     return dpopStore;
 }
 
-/*
-(async () => {
-    const s = createAndRecordDPoPStore({ configId: "foo" });
-
-    const v = await s.get();
-
-    console.log({ v });
-
-    await s.flush();
-    await s.flush();
-
-    console.log("PASS");
-
-})();
-*/
-
 async function getDpopState_assertPresent(params: { configId: string }): Promise<DPoPState> {
     const { configId } = params;
 
