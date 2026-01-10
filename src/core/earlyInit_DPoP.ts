@@ -17,15 +17,46 @@ const dpopStoreByClientId: { [configId: string]: DPoPStore | undefined } = {};
 function createAndRecordDPoPStore(params: { configId: string }): DPoPStore {
     const { configId } = params;
 
-    let dpopState: DPoPState | undefined = undefined;
+    const STORE_NAME = "main";
+
+    const prDb = new Promise<IDBDatabase>((resolve, reject) => {
+        const request = indexedDB.open(`oidc-spa:DPoP:${configId}`, 1);
+
+        request.onsuccess = () => {
+            resolve(request.result);
+        };
+        request.onerror = () => {
+            reject(request.error);
+        };
+    });
+
+    const runTransaction = async <T>(
+        mode: IDBTransactionMode,
+        action: (store: IDBObjectStore) => IDBRequest<T>
+    ): Promise<T> => {
+        const db = await prDb;
+
+        return await new Promise<T>((resolve, reject) => {
+            const tx = db.transaction(STORE_NAME, mode);
+            const store = tx.objectStore(STORE_NAME);
+            const request = action(store);
+
+            request.onsuccess = () => resolve(request.result as T);
+            request.onerror = () => reject(request.error);
+            tx.onabort = () => reject(tx.error);
+        });
+    };
+
+    const KEY = "dpopState";
 
     const dpopStore: DPoPStore = {
-        get: async () => dpopState,
+        get: async () =>
+            await runTransaction<DPoPState | undefined>("readonly", store => store.get(KEY)),
         set: async dpopState_new => {
-            dpopState = dpopState_new;
+            await runTransaction("readwrite", store => store.put(dpopState_new, KEY));
         },
         flush: async () => {
-            dpopState = undefined;
+            await runTransaction("readwrite", store => store.delete(KEY));
         }
     };
 
@@ -35,6 +66,22 @@ function createAndRecordDPoPStore(params: { configId: string }): DPoPStore {
 
     return dpopStore;
 }
+
+/*
+(async () => {
+    const s = createAndRecordDPoPStore({ configId: "foo" });
+
+    const v = await s.get();
+
+    console.log({ v });
+
+    await s.flush();
+    await s.flush();
+
+    console.log("PASS");
+
+})();
+*/
 
 async function getDpopState_assertPresent(params: { configId: string }): Promise<DPoPState> {
     const { configId } = params;
@@ -62,8 +109,12 @@ const exports_createDPoPStore: import("./createOidc").Exports_DPoP["createDPoPSt
     const dpopStore = createAndRecordDPoPStore({ configId });
 
     function addToJSONPropertyToKeys(dpopState: DPoPState): void {
-        Object.assign(dpopState.keys, {
-            toJSON: () => ({
+        if (Object.getOwnPropertyNames(dpopState.keys).includes("toJSON")) {
+            return;
+        }
+        Object.defineProperty(dpopState.keys, "toJSON", {
+            enumerable: false,
+            value: () => ({
                 __brand: "CryptoKeyPair Alias",
                 configId
             })
@@ -73,7 +124,6 @@ const exports_createDPoPStore: import("./createOidc").Exports_DPoP["createDPoPSt
     return {
         set: async (_key, value) => {
             addToJSONPropertyToKeys(value);
-
             await dpopStore.set(value);
         },
         get: async () => {
