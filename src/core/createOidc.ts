@@ -23,7 +23,7 @@ import { notifyOtherTabsOfLogout, getPrOtherTabLogout } from "./logoutPropagatio
 import { notifyOtherTabsOfLogin, getPrOtherTabLogin } from "./loginPropagationToOtherTabs";
 import { getConfigId } from "./configId";
 import { createOidcClientTsUserToTokens } from "./oidcClientTsUserToTokens";
-import { loginSilent } from "./loginSilent";
+import { createLoginSilent } from "./loginSilent";
 import { authResponseToUrl, type AuthResponse } from "./AuthResponse";
 import { getPersistedAuthState, persistAuthState } from "./persistedAuthState";
 import type { Oidc } from "./Oidc";
@@ -804,6 +804,18 @@ export async function createOidc_nonMemoized<
         log
     });
 
+    const { loginSilent } = createLoginSilent({
+        getEvtIframeAuthResponse,
+        oidcClientTsUserManager,
+        stateUrlParamValue_instance,
+        configId,
+        transformUrlBeforeRedirect,
+        getExtraQueryParams,
+        getExtraTokenParams,
+        autoLogin,
+        log
+    });
+
     const { getIsNewBrowserSession } = createGetIsNewBrowserSession({
         configId,
         evtInitializationOutcomeUserNotLoggedIn
@@ -817,6 +829,7 @@ export async function createOidc_nonMemoized<
         | {
               oidcClientTsUser: OidcClientTsUser;
               backFromAuthServer: Oidc.LoggedIn["backFromAuthServer"]; // Undefined is silent signin
+              isRestoredFromSessionStorage: boolean;
           }
     > => {
         if (oidcMetadata === undefined) {
@@ -856,7 +869,8 @@ export async function createOidc_nonMemoized<
 
             return {
                 oidcClientTsUser,
-                backFromAuthServer: undefined
+                backFromAuthServer: undefined,
+                isRestoredFromSessionStorage: true
             };
         }
 
@@ -957,6 +971,7 @@ export async function createOidc_nonMemoized<
 
                         return {
                             oidcClientTsUser,
+                            isRestoredFromSessionStorage: false,
                             backFromAuthServer: {
                                 extraQueryParams: stateData.extraQueryParams,
                                 result: Object.fromEntries(
@@ -1064,15 +1079,7 @@ export async function createOidc_nonMemoized<
                 log?.("Performing session restoration via iframe (silent signin)");
 
                 const result_loginSilent = await loginSilent({
-                    getEvtIframeAuthResponse,
-                    oidcClientTsUserManager,
-                    stateUrlParamValue_instance,
-                    configId,
-                    transformUrlBeforeRedirect,
-                    getExtraQueryParams,
-                    getExtraTokenParams,
-                    autoLogin,
-                    log
+                    extraTokenParams: undefined
                 });
 
                 assert(result_loginSilent.outcome !== "token refreshed using refresh token", "876995");
@@ -1212,7 +1219,8 @@ export async function createOidc_nonMemoized<
 
             return {
                 oidcClientTsUser,
-                backFromAuthServer: undefined
+                backFromAuthServer: undefined,
+                isRestoredFromSessionStorage: false
             };
         }
 
@@ -1607,15 +1615,7 @@ export async function createOidc_nonMemoized<
                 const { completeLoginOrRefreshProcess } = await startLoginOrRefreshProcess();
 
                 const result_loginSilent = await loginSilent({
-                    getEvtIframeAuthResponse,
-                    oidcClientTsUserManager,
-                    stateUrlParamValue_instance,
-                    configId,
-                    transformUrlBeforeRedirect,
-                    getExtraQueryParams,
-                    getExtraTokenParams: () => extraTokenParams,
-                    autoLogin,
-                    log
+                    extraTokenParams
                 });
 
                 if (result_loginSilent.outcome === "timeout") {
@@ -1825,6 +1825,10 @@ export async function createOidc_nonMemoized<
             return value;
         })()
     });
+
+    if (resultOfLoginProcess.isRestoredFromSessionStorage) {
+        await oidc_loggedIn.getTokens();
+    }
 
     {
         const { prOtherTabLogout } = getPrOtherTabLogout({
