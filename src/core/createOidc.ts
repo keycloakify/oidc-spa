@@ -280,7 +280,7 @@ export function registerExports_tokenSubstitution(exports: Exports_tokenSubstitu
 
 export type Exports_DPoP = {
     isEnforced: boolean;
-    createInMemoryDPoPStore: (params: { configId: string }) => Exports_DPoP.DPoPStore;
+    createDPoPStore: (params: { configId: string; clientId: string }) => Exports_DPoP.DPoPStore;
     registerAccessTokenForDPoP: (params: {
         configId: string;
         accessToken: string;
@@ -785,7 +785,7 @@ export async function createOidc_nonMemoized<
                       assert(exports_DPoP !== undefined, "49240");
 
                       return {
-                          store: exports_DPoP.createInMemoryDPoPStore({ configId })
+                          store: exports_DPoP.createDPoPStore({ configId, clientId })
                       };
                   })()
               });

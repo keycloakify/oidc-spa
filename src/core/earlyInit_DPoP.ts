@@ -3,99 +3,108 @@ import { generateES256DPoPProof } from "../tools/generateES256DPoPProof";
 import { createGetServerDateNow, type ParamsOfCreateGetServerDateNow } from "../tools/getServerDateNow";
 import { prModuleCreateOidc } from "./earlyInit_prModuleCreateOidc";
 
-type DPoPStore = {
-    set: (key: string, value: DPoPState) => Promise<void>;
-    get: (key: string) => Promise<DPoPState>;
-    remove: (key: string) => Promise<DPoPState>;
-    getAllKeys: () => Promise<string[]>;
-};
+type DPoPState = import("./createOidc").Exports_DPoP.DPoPState;
 
-type DPoPState = {
-    keys: CryptoKeyPair;
-    nonce?: string;
+type DPoPStore = {
+    get: () => Promise<DPoPState | undefined>;
+    set: (dpopState: DPoPState) => Promise<void>;
+    flush: () => Promise<void>;
 };
 
 // NOTE: Using object instead of Map because Map is not freezed.
-const dpopStateByConfigId: { [configId: string]: DPoPState | undefined } = {};
+const dpopStoreByClientId: { [configId: string]: DPoPStore | undefined } = {};
 
-function createInMemoryDPoPStore(params: { configId: string }): DPoPStore {
+function createAndRecordDPoPStore(params: { configId: string }): DPoPStore {
     const { configId } = params;
 
-    let key_singleton: string | undefined = undefined;
+    let dpopState: DPoPState | undefined = undefined;
 
-    const store: DPoPStore = {
-        set: (key, value) => {
-            if (key_singleton !== undefined) {
-                assert(key === key_singleton, "394303302");
-            }
-
-            key_singleton = key;
-
-            dpopStateByConfigId[configId] = value;
-
-            Object.assign(value.keys, {
-                toJSON: () => ({
-                    __brand: "CryptoKeyPair Alias",
-                    configId
-                })
-            });
-
-            return Promise.resolve();
+    const dpopStore: DPoPStore = {
+        get: async () => dpopState,
+        set: async dpopState_new => {
+            dpopState = dpopState_new;
         },
-        get: key => {
-            assert(key_singleton !== undefined, "49303403");
-            assert(key_singleton === key, "34023493");
-            const value = dpopStateByConfigId[configId];
-            assert(value !== undefined, "943023493");
-            assert("toJSON" in value.keys, "43553434");
-
-            const value_proxy = {
-                get nonce() {
-                    return value.nonce;
-                },
-                keys: {
-                    get publicKey() {
-                        assert(false, "40384439");
-                        return null as any;
-                    },
-                    get privateKey() {
-                        assert(false, "4939433");
-                        return null as any;
-                    },
-                    toJSON: value.keys.toJSON
-                }
-            };
-
-            return Promise.resolve(value_proxy);
-        },
-        remove: async () => {
-            assert(configId in dpopStateByConfigId, "30438443");
-            delete dpopStateByConfigId[configId];
-
-            const value: DPoPState = {
-                get nonce() {
-                    assert(false, "304339");
-                    return null as any;
-                },
-                get keys() {
-                    assert(false, "235533");
-                    return null as any;
-                }
-            };
-            return value;
-        },
-        getAllKeys: () => {
-            if (configId in dpopStateByConfigId) {
-                assert(key_singleton !== undefined, "39430338");
-                return Promise.resolve([key_singleton]);
-            } else {
-                return Promise.resolve([]);
-            }
+        flush: async () => {
+            dpopState = undefined;
         }
     };
 
-    return store;
+    assert(!(configId in dpopStoreByClientId), "30439");
+
+    dpopStoreByClientId[configId] = dpopStore;
+
+    return dpopStore;
 }
+
+async function getDpopState_assertPresent(params: { configId: string }): Promise<DPoPState> {
+    const { configId } = params;
+
+    const dpopStore = dpopStoreByClientId[configId];
+
+    assert(dpopStore !== undefined, "39434");
+
+    const dpopState = await dpopStore.get();
+
+    assert(dpopState, "4933");
+
+    return dpopState;
+}
+
+/**
+ * NOTE: This is a heavily hacked implementation of the interface oidc-client-ts expect as DPoP store.
+ * We've forked and own oidc-client-ts, we can make assertion on it's usage.
+ * We can make assertion on how this will be used.
+ */
+const exports_createDPoPStore: import("./createOidc").Exports_DPoP["createDPoPStore"] = ({
+    configId,
+    clientId
+}) => {
+    const dpopStore = createAndRecordDPoPStore({ configId });
+
+    function addToJSONPropertyToKeys(dpopState: DPoPState): void {
+        Object.assign(dpopState.keys, {
+            toJSON: () => ({
+                __brand: "CryptoKeyPair Alias",
+                configId
+            })
+        });
+    }
+
+    return {
+        set: async (_key, value) => {
+            addToJSONPropertyToKeys(value);
+
+            await dpopStore.set(value);
+        },
+        get: async () => {
+            const dpopState = await dpopStore.get();
+
+            assert(dpopState !== undefined, "4806");
+
+            addToJSONPropertyToKeys(dpopState);
+
+            return dpopState;
+        },
+        remove: async () => {
+            const dpopState = await dpopStore.get();
+
+            assert(dpopState !== undefined, "4806");
+
+            await dpopStore.flush();
+
+            addToJSONPropertyToKeys(dpopState);
+
+            return dpopState;
+        },
+        getAllKeys: async () => {
+            if ((await dpopStore.get()) === undefined) {
+                return [];
+            } else {
+                return [clientId];
+            }
+        }
+    };
+};
 
 const accessTokenConfigIdEntries: {
     configId: string;
@@ -189,17 +198,21 @@ function generateMaterialToUpgradeBearerRequestToDPoP(params: {
 
     const { configId, paramsOfCreateGetServerDateNow } = entry;
 
-    const dpopState = dpopStateByConfigId[configId];
+    const prKeyPair = (async () => {
+        const dpopState = await getDpopState_assertPresent({ configId });
 
-    assert(dpopState !== undefined, "304922047");
+        assert(dpopState !== undefined, "304922047");
+
+        return dpopState.keys;
+    })();
 
     const nonceEntries = (nonceEntriesByConfigId[configId] ??= []);
 
     const origin = new URL(url).origin;
 
-    const generateDPoPProof = () =>
+    const generateDPoPProof = async () =>
         generateES256DPoPProof({
-            keyPair: dpopState.keys,
+            keyPair: await prKeyPair,
             url,
             accessToken,
             httpMethod,
@@ -491,9 +504,7 @@ function registerInterceptors() {
                     nonce?: string;
                 };
 
-                const dpopState = dpopStateByConfigId[configId];
-
-                assert(dpopState !== undefined, "304922047");
+                const dpopState = await getDpopState_assertPresent({ configId });
 
                 const { paramsOfCreateGetServerDateNow } =
                     accessTokenConfigIdEntries
@@ -745,7 +756,7 @@ export function DPoP(params: { mode: "auto" | "enforced" }) {
         prModuleCreateOidc.then(({ registerExports_DPoP }) => {
             registerExports_DPoP({
                 isEnforced: mode === "enforced",
-                createInMemoryDPoPStore,
+                createDPoPStore: exports_createDPoPStore,
                 registerAccessTokenForDPoP
             });
         });
