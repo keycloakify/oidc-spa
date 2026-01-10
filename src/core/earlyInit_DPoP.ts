@@ -22,6 +22,13 @@ function createAndRecordDPoPStore(params: { configId: string }): DPoPStore {
     const prDb = new Promise<IDBDatabase>((resolve, reject) => {
         const request = indexedDB.open(`oidc-spa:DPoP:${configId}`, 1);
 
+        request.onupgradeneeded = () => {
+            const db = request.result;
+            if (!db.objectStoreNames.contains(STORE_NAME)) {
+                db.createObjectStore(STORE_NAME);
+            }
+        };
+
         request.onsuccess = () => {
             resolve(request.result);
         };
