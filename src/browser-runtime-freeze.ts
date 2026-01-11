@@ -1,1 +1,1 @@
-export { browserRuntimeFreeze } from "./core/earlyInit_freezeBrowserRuntime";
+export { browserRuntimeFreeze } from "./core/earlyInit_browserRuntimeFreeze";

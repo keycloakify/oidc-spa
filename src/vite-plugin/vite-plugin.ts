@@ -1,6 +1,6 @@
 import type { Plugin, TransformResult } from "vite";
 import { assert } from "../tools/tsafe/assert";
-import type { ApiName } from "../core/earlyInit_freezeBrowserRuntime";
+import type { ApiName } from "../core/earlyInit_browserRuntimeFreeze";
 import { createHandleClientEntrypoint } from "./handleClientEntrypoint";
 import { createHandleServerEntrypoint } from "./handleServerEntrypoint";
 import { manageOptimizedDeps } from "./manageOptimizedDeps";
