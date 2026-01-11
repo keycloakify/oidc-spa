@@ -67,7 +67,8 @@ export function createHandleClientEntrypoint(params: {
 
         entryResolution.watchFiles.forEach(file => pluginContext.addWatchFile(file));
 
-        const { browserRuntimeFreeze, tokenSubstitution, DPoP } = oidcSpaVitePluginParams ?? {};
+        const { browserRuntimeFreeze, tokenSubstitution, DPoP, sessionRestorationMethod } =
+            oidcSpaVitePluginParams ?? {};
 
         return [
             `import { oidcEarlyInit } from "oidc-spa/entrypoint";`,
@@ -80,6 +81,8 @@ export function createHandleClientEntrypoint(params: {
             `const { shouldLoadApp } = oidcEarlyInit({`,
             // prettier-ignore
             `BASE_URL: ${(() => { switch (projectType) { case "nuxt": return "__NUXT__.config.app.baseURL"; default: return `"${resolvedConfig.base}"`; } })()},`,
+            // prettier-ignore
+            sessionRestorationMethod === undefined ? "" : `sessionRestorationMethod: "${sessionRestorationMethod}",`,
             `securityDefenses: {`,
             // prettier-ignore
             !browserRuntimeFreeze ? "" : `...browserRuntimeFreeze(${paramsToJsLiteral(browserRuntimeFreeze)}),`,

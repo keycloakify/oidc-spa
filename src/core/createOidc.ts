@@ -139,6 +139,8 @@ export type ParamsOfCreateOidc<
     autoLogin?: AutoLogin;
 
     /**
+     * NOTE: Can be provided as parameter to the Vite plugin or to oidcEarlyInit()
+     *
      * Determines how session restoration is handled.
      * Session restoration allows users to stay logged in between visits
      * without needing to explicitly sign in each time.
@@ -256,6 +258,8 @@ export type Exports_earlyInit =
           getRedirectAuthResponse: () =>
               | { authResponse: AuthResponse; clearAuthResponse: () => void }
               | { authResponse: undefined; clearAuthResponse?: never };
+
+          sessionRestorationMethod: "iframe" | "full page redirect" | "auto" | undefined;
       };
 
 export function registerExports_earlyInit(exports: Exports_earlyInit): void {
@@ -415,7 +419,7 @@ export async function createOidc_nonMemoized<
         __unsafe_useIdTokenAsAccessToken = false,
         __metadata,
         disableDPoP: disableDPoP_params = false,
-        sessionRestorationMethod = "auto",
+        sessionRestorationMethod: sessionRestorationMethod_params,
         BASE_URL: BASE_URL_params
     } = params;
 
@@ -442,7 +446,14 @@ export async function createOidc_nonMemoized<
         return new Promise<never>(() => {});
     }
 
-    const { getEvtIframeAuthResponse, getRedirectAuthResponse } = exports_earlyInit;
+    const {
+        getEvtIframeAuthResponse,
+        getRedirectAuthResponse,
+        sessionRestorationMethod: sessionRestorationMethod_earlyInit
+    } = exports_earlyInit;
+
+    const sessionRestorationMethod =
+        sessionRestorationMethod_params ?? sessionRestorationMethod_earlyInit ?? "auto";
 
     const { value: exports_tokenSubstitution } = globalContext.dExports_tokenSubstitution.getState();
 
