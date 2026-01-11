@@ -82,11 +82,11 @@ export function createHandleClientEntrypoint(params: {
             `BASE_URL: ${(() => { switch (projectType) { case "nuxt": return "__NUXT__.config.app.baseURL"; default: return `"${resolvedConfig.base}"`; } })()},`,
             `securityDefenses: {`,
             // prettier-ignore
-            !browserRuntimeFreeze ? "" : `...browserRuntimeFreeze(${(()=>{ const { enabled, ...rest} = browserRuntimeFreeze; return JSON.stringify(rest, null, 2); })()}),`,
+            !browserRuntimeFreeze ? "" : `...browserRuntimeFreeze(${paramsToJsLiteral(browserRuntimeFreeze)}),`,
             // prettier-ignore
-            !DPoP ? "" : `...DPoP(${(()=>{ const { enabled, ...rest} = DPoP; return JSON.stringify(rest, null, 2); })()}),`,
+            !DPoP ? "" : `...DPoP(${paramsToJsLiteral(DPoP)}),`,
             // prettier-ignore
-            !tokenSubstitution ? "" : `...tokenSubstitution(${(()=>{ const { enabled, ...rest} = tokenSubstitution; return JSON.stringify(rest, null, 2); })()})`,
+            !tokenSubstitution ? "" : `...tokenSubstitution(${paramsToJsLiteral_tokenSubstitution(tokenSubstitution)})`,
             `}`,
             `});`,
             ``,
@@ -95,6 +95,47 @@ export function createHandleClientEntrypoint(params: {
             `import("./${path.basename(entryResolution.absolutePath)}?${ORIGINAL_QUERY_PARAM}=true");`,
             `}`
         ].join("\n");
+
+        function paramsToJsLiteral(
+            params:
+                | Exclude<typeof browserRuntimeFreeze, false | undefined>
+                | Exclude<typeof DPoP, false | undefined>
+        ): string {
+            const { enabled, ...rest } = params;
+            return JSON.stringify(rest);
+        }
+
+        function paramsToJsLiteral_tokenSubstitution(
+            params: Exclude<typeof tokenSubstitution, false | undefined>
+        ): string {
+            const {
+                enabled,
+                trustedExternalResourceServers = [],
+                trustedExternalServiceWorkerSources = [],
+                ...rest
+            } = params;
+
+            assert<Equals<typeof rest, {}>>;
+
+            const mustacheStrToJsTemplateStringLiteral = (mustacheStr: string) =>
+                `\`${mustacheStr.replace(/{{/g, "${").replace(/}}/g, "}")}\``;
+
+            const arrToJsLiteral = (arr: string[]) =>
+                [
+                    "[",
+                    `${arr.map(mStr => mustacheStrToJsTemplateStringLiteral(mStr)).join(", ")}`,
+                    "]"
+                ].join(" ");
+
+            return [
+                "{",
+                `trustedExternalResourceServers: ${arrToJsLiteral(trustedExternalResourceServers)},`,
+                `trustedExternalServiceWorkerSources: ${arrToJsLiteral(
+                    trustedExternalServiceWorkerSources
+                )},`,
+                "}"
+            ].join(" ");
+        }
     }
 
     return { load_handleClientEntrypoint };

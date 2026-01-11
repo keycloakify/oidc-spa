@@ -164,18 +164,19 @@ function substitutePlaceholderByRealToken(text: string): string {
 const viteHashedJsAssetPathRegExp = /\/assets\/[^/]+-[a-zA-Z0-9_-]{8}\.js$/;
 
 export function tokenSubstitution(params?: {
-    trustedThirdPartyResourceServers?: string[];
-    trustedServiceWorkerSources?: string[];
+    trustedExternalResourceServers?: string[];
+    trustedExternalServiceWorkerSources?: string[];
 }) {
-    const { trustedThirdPartyResourceServers = [], trustedServiceWorkerSources = [] } = params ?? {};
+    const { trustedExternalResourceServers = [], trustedExternalServiceWorkerSources = [] } =
+        params ?? {};
 
     const enableTokenSubstitution = () => {
-        patchFetchApiToSubstituteTokenPlaceholder({ trustedThirdPartyResourceServers });
-        patchXMLHttpRequestApiToSubstituteTokenPlaceholder({ trustedThirdPartyResourceServers });
-        patchWebSocketApiToSubstituteTokenPlaceholder({ trustedThirdPartyResourceServers });
-        patchEventSourceApiToSubstituteTokenPlaceholder({ trustedThirdPartyResourceServers });
-        patchNavigatorSendBeaconApiToSubstituteTokenPlaceholder({ trustedThirdPartyResourceServers });
-        restrictServiceWorkerRegistration({ trustedServiceWorkerSources });
+        patchFetchApiToSubstituteTokenPlaceholder({ trustedExternalResourceServers });
+        patchXMLHttpRequestApiToSubstituteTokenPlaceholder({ trustedExternalResourceServers });
+        patchWebSocketApiToSubstituteTokenPlaceholder({ trustedExternalResourceServers });
+        patchEventSourceApiToSubstituteTokenPlaceholder({ trustedExternalResourceServers });
+        patchNavigatorSendBeaconApiToSubstituteTokenPlaceholder({ trustedExternalResourceServers });
+        restrictServiceWorkerRegistration({ trustedExternalServiceWorkerSources });
 
         prModuleCreateOidc.then(({ registerExports_tokenSubstitution }) => {
             registerExports_tokenSubstitution({
@@ -188,9 +189,9 @@ export function tokenSubstitution(params?: {
 }
 
 function patchFetchApiToSubstituteTokenPlaceholder(params: {
-    trustedThirdPartyResourceServers: string[];
+    trustedExternalResourceServers: string[];
 }) {
-    const { trustedThirdPartyResourceServers } = params;
+    const { trustedExternalResourceServers } = params;
 
     const fetch_actual = window.fetch;
     //@ts-expect-error
@@ -385,8 +386,7 @@ function patchFetchApiToSubstituteTokenPlaceholder(params: {
 
                 if (
                     getIsHostnameAuthorized({
-                        allowedHostnames: trustedThirdPartyResourceServers,
-                        extendAuthorizationToParentDomain: true,
+                        allowedHostnames: trustedExternalResourceServers,
                         hostname
                     })
                 ) {
@@ -397,7 +397,7 @@ function patchFetchApiToSubstituteTokenPlaceholder(params: {
                     [
                         `oidc-spa: Blocked authed request to ${hostname}.`,
                         `To authorize this request add "${hostname}" to`,
-                        "`trustedThirdPartyResourceServers`."
+                        "`trustedExternalResourceServers`."
                     ].join(" ")
                 );
             }
@@ -461,9 +461,9 @@ function patchFetchApiToSubstituteTokenPlaceholder(params: {
 }
 
 function patchXMLHttpRequestApiToSubstituteTokenPlaceholder(params: {
-    trustedThirdPartyResourceServers: string[];
+    trustedExternalResourceServers: string[];
 }) {
-    const { trustedThirdPartyResourceServers } = params;
+    const { trustedExternalResourceServers } = params;
 
     const open_actual = XMLHttpRequest.prototype.open;
     const send_actual = XMLHttpRequest.prototype.send;
@@ -543,8 +543,7 @@ function patchXMLHttpRequestApiToSubstituteTokenPlaceholder(params: {
 
             if (
                 getIsHostnameAuthorized({
-                    allowedHostnames: trustedThirdPartyResourceServers,
-                    extendAuthorizationToParentDomain: true,
+                    allowedHostnames: trustedExternalResourceServers,
                     hostname
                 })
             ) {
@@ -555,7 +554,7 @@ function patchXMLHttpRequestApiToSubstituteTokenPlaceholder(params: {
                 [
                     `oidc-spa: Blocked authed request to ${hostname}.`,
                     `To authorize this request add "${hostname}" to`,
-                    "`trustedThirdPartyResourceServers`."
+                    "`trustedExternalResourceServers`."
                 ].join(" ")
             );
         }
@@ -565,9 +564,9 @@ function patchXMLHttpRequestApiToSubstituteTokenPlaceholder(params: {
 }
 
 function patchWebSocketApiToSubstituteTokenPlaceholder(params: {
-    trustedThirdPartyResourceServers: string[];
+    trustedExternalResourceServers: string[];
 }) {
-    const { trustedThirdPartyResourceServers } = params;
+    const { trustedExternalResourceServers } = params;
 
     const WebSocket_actual = window.WebSocket;
     const send_actual = WebSocket_actual.prototype.send;
@@ -631,8 +630,7 @@ function patchWebSocketApiToSubstituteTokenPlaceholder(params: {
 
             if (
                 getIsHostnameAuthorized({
-                    allowedHostnames: trustedThirdPartyResourceServers,
-                    extendAuthorizationToParentDomain: true,
+                    allowedHostnames: trustedExternalResourceServers,
                     hostname
                 })
             ) {
@@ -643,7 +641,7 @@ function patchWebSocketApiToSubstituteTokenPlaceholder(params: {
                 [
                     `oidc-spa: Blocked authed request to ${hostname}.`,
                     `To authorize this request add "${hostname}" to`,
-                    "`trustedThirdPartyResourceServers`."
+                    "`trustedExternalResourceServers`."
                 ].join(" ")
             );
         }
@@ -702,8 +700,7 @@ function patchWebSocketApiToSubstituteTokenPlaceholder(params: {
 
             if (
                 getIsHostnameAuthorized({
-                    allowedHostnames: trustedThirdPartyResourceServers,
-                    extendAuthorizationToParentDomain: true,
+                    allowedHostnames: trustedExternalResourceServers,
                     hostname: state.hostname
                 })
             ) {
@@ -714,7 +711,7 @@ function patchWebSocketApiToSubstituteTokenPlaceholder(params: {
                 [
                     `oidc-spa: Blocked authed request to ${state.hostname}.`,
                     `To authorize this request add "${state.hostname}" to`,
-                    "`trustedThirdPartyResourceServers`."
+                    "`trustedExternalResourceServers`."
                 ].join(" ")
             );
         }
@@ -732,9 +729,9 @@ function patchWebSocketApiToSubstituteTokenPlaceholder(params: {
 }
 
 function patchEventSourceApiToSubstituteTokenPlaceholder(params: {
-    trustedThirdPartyResourceServers: string[];
+    trustedExternalResourceServers: string[];
 }) {
-    const { trustedThirdPartyResourceServers } = params;
+    const { trustedExternalResourceServers } = params;
 
     const EventSource_actual = window.EventSource;
 
@@ -759,8 +756,7 @@ function patchEventSourceApiToSubstituteTokenPlaceholder(params: {
 
             if (
                 getIsHostnameAuthorized({
-                    allowedHostnames: trustedThirdPartyResourceServers,
-                    extendAuthorizationToParentDomain: true,
+                    allowedHostnames: trustedExternalResourceServers,
                     hostname
                 })
             ) {
@@ -771,7 +767,7 @@ function patchEventSourceApiToSubstituteTokenPlaceholder(params: {
                 [
                     `oidc-spa: Blocked authed request to ${hostname}.`,
                     `To authorize this request add "${hostname}" to`,
-                    "`trustedThirdPartyResourceServers`."
+                    "`trustedExternalResourceServers`."
                 ].join(" ")
             );
         }
@@ -796,9 +792,9 @@ function patchEventSourceApiToSubstituteTokenPlaceholder(params: {
 }
 
 function patchNavigatorSendBeaconApiToSubstituteTokenPlaceholder(params: {
-    trustedThirdPartyResourceServers: string[];
+    trustedExternalResourceServers: string[];
 }) {
-    const { trustedThirdPartyResourceServers } = params;
+    const { trustedExternalResourceServers } = params;
 
     const sendBeacon_actual = navigator.sendBeacon?.bind(navigator);
 
@@ -874,8 +870,7 @@ function patchNavigatorSendBeaconApiToSubstituteTokenPlaceholder(params: {
 
             if (
                 getIsHostnameAuthorized({
-                    allowedHostnames: trustedThirdPartyResourceServers,
-                    extendAuthorizationToParentDomain: true,
+                    allowedHostnames: trustedExternalResourceServers,
                     hostname
                 })
             ) {
@@ -886,7 +881,7 @@ function patchNavigatorSendBeaconApiToSubstituteTokenPlaceholder(params: {
                 [
                     `oidc-spa: Blocked authed request to ${hostname}.`,
                     `To authorize this request add "${hostname}" to`,
-                    "`trustedThirdPartyResourceServers`."
+                    "`trustedExternalResourceServers`."
                 ].join(" ")
             );
         }
@@ -895,8 +890,8 @@ function patchNavigatorSendBeaconApiToSubstituteTokenPlaceholder(params: {
     };
 }
 
-function restrictServiceWorkerRegistration(params: { trustedServiceWorkerSources: string[] }) {
-    const { trustedServiceWorkerSources } = params;
+function restrictServiceWorkerRegistration(params: { trustedExternalServiceWorkerSources: string[] }) {
+    const { trustedExternalServiceWorkerSources } = params;
 
     const { serviceWorker } = navigator;
 
@@ -927,8 +922,7 @@ function restrictServiceWorkerRegistration(params: { trustedServiceWorkerSources
 
         if (
             !getIsHostnameAuthorized({
-                allowedHostnames: trustedServiceWorkerSources,
-                extendAuthorizationToParentDomain: false,
+                allowedHostnames: trustedExternalServiceWorkerSources,
                 hostname
             })
         ) {
@@ -936,7 +930,7 @@ function restrictServiceWorkerRegistration(params: { trustedServiceWorkerSources
                 [
                     `oidc-spa: Blocked service worker registration to ${hostname}.`,
                     `To authorize this registration add "${hostname}" to`,
-                    "`trustedServiceWorkerSources`."
+                    "`trustedExternalServiceWorkerSources`."
                 ].join(" ")
             );
         }

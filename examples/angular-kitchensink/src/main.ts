@@ -8,11 +8,9 @@ const { shouldLoadApp } = oidcEarlyInit({
     ...browserRuntimeFreeze({
       //exclude: [ "fetch", "XMLHttpRequest", "Promise"]
     }),
-    ...DPoP({
-      mode: 'auto',
-    }),
+    ...DPoP({ mode: 'auto' }),
     ...tokenSubstitution({
-      trustedThirdPartyResourceServers: ['jsonplaceholder.typicode.com'],
+      trustedExternalResourceServers: ['jsonplaceholder.typicode.com', `*.${location.hostname}`],
     }),
   },
 });
