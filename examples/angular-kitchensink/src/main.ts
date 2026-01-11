@@ -10,7 +10,10 @@ const { shouldLoadApp } = oidcEarlyInit({
     }),
     ...DPoP({ mode: 'auto' }),
     ...tokenSubstitution({
-      trustedExternalResourceServers: ['jsonplaceholder.typicode.com', `*.${location.hostname}`],
+      trustedExternalResourceServers: [
+        'jsonplaceholder.typicode.com',
+        `*.${location.hostname.split('.').slice(-2).join('.')}`,
+      ],
     }),
   },
 });
