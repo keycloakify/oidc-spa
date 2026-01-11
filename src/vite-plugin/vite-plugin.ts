@@ -20,8 +20,8 @@ export type OidcSpaVitePluginParams = {
         | false
         | {
               enabled: true;
-              trustedThirdPartyResourceServers?: string[];
-              trustedServiceWorkerSources?: string[];
+              trustedExternalResourceServers?: string[];
+              trustedExternalServiceWorkerSources?: string[];
           };
     /** See: https://docs.oidc-spa.dev/v/v10/security-features/DPoP */
     DPoP?:
