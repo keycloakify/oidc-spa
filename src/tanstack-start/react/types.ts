@@ -341,6 +341,8 @@ export namespace ParamsOfBootstrap {
             | (() => Record<string, string | undefined>);
 
         /**
+         * NOTE: Can be provided as parameter to the Vite plugin or to oidcEarlyInit()
+         *
          * Determines how session restoration is handled.
          * Session restoration allows users to stay logged in between visits
          * without needing to explicitly sign in each time.
