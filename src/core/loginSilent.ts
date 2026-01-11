@@ -240,6 +240,7 @@ export function createLoginSilent(params: {
                         }
 
                         location.reload();
+                        return;
                     }
 
                     assert(false, `This is a bug in oidc-spa, please report: ${error.message}`);
