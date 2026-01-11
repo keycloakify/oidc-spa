@@ -299,8 +299,11 @@ export namespace ParamsOfBootstrap {
          */
         BASE_URL?: string;
 
-        /** Let you opt-out of DPoP for this specific instance */
-        disableDPoP?: boolean;
+        /**
+         * This is only for opting out of DPoP for a specific OIDC client instance.
+         * To enable DPoP see: https://docs.oidc-spa.dev/v/v10/security-features/dpop
+         * */
+        disableDPoP?: true;
     } & (AutoLogin extends true ? {} : {});
 
     export type Mock<AutoLogin, DecodedIdToken> = {
