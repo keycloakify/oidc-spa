@@ -67,42 +67,32 @@ export function createHandleClientEntrypoint(params: {
 
         entryResolution.watchFiles.forEach(file => pluginContext.addWatchFile(file));
 
-        const { browserRuntimeFreeze, tokenSubstitution } = oidcSpaVitePluginParams ?? {};
+        const { browserRuntimeFreeze, tokenSubstitution, DPoP } = oidcSpaVitePluginParams ?? {};
 
         return [
             `import { oidcEarlyInit } from "oidc-spa/entrypoint";`,
-            !tokenSubstitution
-                ? ""
-                : `import { enableTokenSubstitution } from "oidc-spa/token-substitution";`,
+            // prettier-ignore
+            !browserRuntimeFreeze ? "" : `import { browserRuntimeFreeze } from "oidc-spa/browser-runtime-freeze";`,
+            // prettier-ignore
+            !DPoP ? "" : `import { DPoP } from "oidc-spa/DPoP";`,
+            // prettier-ignore
+            !tokenSubstitution ? "" : `import { tokenSubstitution } from "oidc-spa/token-substitution";`,
             `const { shouldLoadApp } = oidcEarlyInit({`,
-            ...(() => {
-                return [
-                    `   browserRuntimeFreeze: ${JSON.stringify(browserRuntimeFreeze, null, 2)},`,
-                    !tokenSubstitution
-                        ? ""
-                        : `   extraDefenseHook: ()=> enableTokenSubstitution(${JSON.stringify(
-                              (() => {
-                                  const { enabled, ...rest } = tokenSubstitution;
-                                  return rest;
-                              })(),
-                              null,
-                              2
-                          )}),`,
-                    `   BASE_URL: ${(() => {
-                        switch (projectType) {
-                            case "nuxt":
-                                return "__NUXT__.config.app.baseURL";
-                            default:
-                                return `"${resolvedConfig.base}"`;
-                        }
-                    })()}`
-                ];
-            })(),
+            // prettier-ignore
+            `BASE_URL: ${(() => { switch (projectType) { case "nuxt": return "__NUXT__.config.app.baseURL"; default: return `"${resolvedConfig.base}"`; } })()},`,
+            `securityDefenses: {`,
+            // prettier-ignore
+            !browserRuntimeFreeze ? "" : `...browserRuntimeFreeze(${(()=>{ const { enabled, ...rest} = browserRuntimeFreeze; return JSON.stringify(rest, null, 2); })()}),`,
+            // prettier-ignore
+            !DPoP ? "" : `...DPoP(${(()=>{ const { enabled, ...rest} = DPoP; return JSON.stringify(rest, null, 2); })()}),`,
+            // prettier-ignore
+            !tokenSubstitution ? "" : `...tokenSubstitution(${(()=>{ const { enabled, ...rest} = tokenSubstitution; return JSON.stringify(rest, null, 2); })()})`,
+            `}`,
             `});`,
             ``,
             `if (shouldLoadApp) {`,
             // prettier-ignore
-            `    import("./${path.basename(entryResolution.absolutePath)}?${ORIGINAL_QUERY_PARAM}=true");`,
+            `import("./${path.basename(entryResolution.absolutePath)}?${ORIGINAL_QUERY_PARAM}=true");`,
             `}`
         ].join("\n");
     }

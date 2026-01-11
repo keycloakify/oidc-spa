@@ -196,6 +196,16 @@
             "import": "./dist/esm/token-substitution.mjs",
             "default": "./dist/token-substitution.js"
         },
+        "./DPoP": {
+            "module": "./dist/esm/DPoP.mjs",
+            "import": "./dist/esm/DPoP.mjs",
+            "default": "./dist/DPoP.js"
+        },
+        "./browser-runtime-freeze": {
+            "module": "./dist/esm/browser-runtime-freeze.mjs",
+            "import": "./dist/esm/browser-runtime-freeze.mjs",
+            "default": "./dist/browser-runtime-freeze.js"
+        },
         "./decode-jwt": {
             "module": "./dist/esm/decode-jwt.mjs",
             "import": "./dist/esm/decode-jwt.mjs",

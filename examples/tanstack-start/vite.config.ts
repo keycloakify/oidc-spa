@@ -21,6 +21,10 @@ const config = defineConfig({
             browserRuntimeFreeze: {
                 enabled: true
                 //exclude: [ "fetch", "XMLHttpRequest"]
+            },
+            DPoP: {
+                enabled: true,
+                mode: "auto"
             }
         }),
         viteReact()

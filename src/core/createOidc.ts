@@ -22,9 +22,8 @@ import {
 import { notifyOtherTabsOfLogout, getPrOtherTabLogout } from "./logoutPropagationToOtherTabs";
 import { notifyOtherTabsOfLogin, getPrOtherTabLogin } from "./loginPropagationToOtherTabs";
 import { getConfigId } from "./configId";
-import { getIsTokenSubstitutionEnabled } from "./earlyInit_tokenSubstitution";
 import { createOidcClientTsUserToTokens } from "./oidcClientTsUserToTokens";
-import { loginSilent } from "./loginSilent";
+import { createLoginSilent } from "./loginSilent";
 import { authResponseToUrl, type AuthResponse } from "./AuthResponse";
 import { getPersistedAuthState, persistAuthState } from "./persistedAuthState";
 import type { Oidc } from "./Oidc";
@@ -43,7 +42,6 @@ import { createGetIsNewBrowserSession } from "./isNewBrowserSession";
 import { getIsOnline } from "../tools/getIsOnline";
 import { isKeycloak } from "../keycloak/isKeycloak";
 import { INFINITY_TIME } from "../tools/INFINITY_TIME";
-import { prShouldLoadApp } from "./earlyInit_prShouldLoadApp";
 import { getRootRelativeOriginalLocationHref_earlyInit } from "./earlyInit_rootRelativeOriginalLocationHref";
 import { getIsLikelyDevServer } from "../tools/isLikelyDevServer";
 import { createObjectThatThrowsIfAccessed } from "../tools/createObjectThatThrowsIfAccessed";
@@ -59,9 +57,9 @@ import {
     clearStateDataCookie,
     getIsStateDataCookieEnabled
 } from "./StateDataCookie";
-import { createInMemoryDPoPStore } from "./earlyInit_DPoP";
 import { loadWebcryptoLinerShim } from "../tools/loadWebcryptoLinerShim";
 import type { Evt } from "../tools/Evt";
+import type { ParamsOfCreateGetServerDateNow } from "../tools/getServerDateNow";
 
 // NOTE: Replaced at build time
 const VERSION = "{{OIDC_SPA_VERSION}}";
@@ -234,26 +232,79 @@ export type ParamsOfCreateOidc<
      */
     postLoginRedirectUrl?: string;
 
-    /** See: https://docs.oidc-spa.dev/v/v10/security-features/dpop */
-    dpop?: "disabled" | "enabled" | "auto";
+    /** Let you opt-out of DPoP for this specific instance */
+    disableDPoP?: boolean;
 };
-
-type SensitiveBindings = {
-    getEvtIframeAuthResponse: () => Evt<AuthResponse>;
-    getRedirectAuthResponse: () =>
-        | { authResponse: AuthResponse; clearAuthResponse: () => void }
-        | { authResponse: undefined; clearAuthResponse?: never };
-};
-
-export function registerEarlyInitSensitiveBindings(sensitiveBindings: SensitiveBindings) {
-    globalContext.dSensitiveBindings.resolve(sensitiveBindings);
-}
 
 const globalContext = {
     prOidcByConfigId: new Map<string, Promise<Oidc<any>>>(),
     hasLogoutBeenCalled: id<boolean>(false),
-    dSensitiveBindings: new Deferred<SensitiveBindings>()
+    dExports_earlyInit: new Deferred<Exports_earlyInit>(),
+    dExports_tokenSubstitution: new Deferred<Exports_tokenSubstitution>(),
+    dExports_DPoP: new Deferred<Exports_DPoP>()
 };
+
+export type Exports_earlyInit =
+    | { shouldLoadApp: false }
+    | {
+          shouldLoadApp: true;
+
+          getEvtIframeAuthResponse: () => Evt<AuthResponse>;
+          getRedirectAuthResponse: () =>
+              | { authResponse: AuthResponse; clearAuthResponse: () => void }
+              | { authResponse: undefined; clearAuthResponse?: never };
+      };
+
+export function registerExports_earlyInit(exports: Exports_earlyInit): void {
+    globalContext.dExports_earlyInit.resolve(exports);
+}
+
+export type Exports_tokenSubstitution = {
+    getTokensPlaceholders: (params: {
+        configId: string;
+        tokens: Exports_tokenSubstitution.Tokens;
+    }) => Exports_tokenSubstitution.Tokens;
+};
+
+export namespace Exports_tokenSubstitution {
+    export type Tokens = {
+        accessToken: string;
+        idToken: string;
+        refreshToken?: string;
+    };
+}
+
+export function registerExports_tokenSubstitution(exports: Exports_tokenSubstitution): void {
+    globalContext.dExports_tokenSubstitution.resolve(exports);
+}
+
+export type Exports_DPoP = {
+    isEnforced: boolean;
+    createDPoPStore: (params: { configId: string; clientId: string }) => Exports_DPoP.DPoPStore;
+    registerAccessTokenForDPoP: (params: {
+        configId: string;
+        accessToken: string;
+        paramsOfCreateGetServerDateNow: ParamsOfCreateGetServerDateNow;
+    }) => void;
+};
+
+export namespace Exports_DPoP {
+    export type DPoPState = {
+        keys: CryptoKeyPair;
+        nonce?: string;
+    };
+
+    export type DPoPStore = {
+        set: (key: string, value: DPoPState) => Promise<void>;
+        get: (key: string) => Promise<DPoPState>;
+        remove: (key: string) => Promise<DPoPState>;
+        getAllKeys: () => Promise<string[]>;
+    };
+}
+
+export function registerExports_DPoP(exports: Exports_DPoP): void {
+    globalContext.dExports_DPoP.resolve(exports);
+}
 
 /** @see: https://docs.oidc-spa.dev/v/v10/usage */
 export async function createOidc<
@@ -348,30 +399,6 @@ export async function createOidc_nonMemoized<
         log: typeof console.log | undefined;
     }
 ): Promise<AutoLogin extends true ? Oidc.LoggedIn<DecodedIdToken> : Oidc<DecodedIdToken>> {
-    {
-        const timer = window.setTimeout(() => {
-            console.warn(
-                [
-                    "oidc-spa: Setup error.",
-                    "oidcEarlyInit() wasn't called.",
-                    "This is supposed to be handled by the oidc-spa Vite plugin",
-                    "or manually in other environments."
-                ].join(" ")
-            );
-        }, 3_000);
-
-        const shouldLoadApp = await prShouldLoadApp;
-
-        window.clearTimeout(timer);
-
-        if (!shouldLoadApp) {
-            return new Promise<never>(() => {});
-        }
-    }
-
-    const { getRedirectAuthResponse, getEvtIframeAuthResponse } = await globalContext.dSensitiveBindings
-        .pr;
-
     const {
         transformUrlBeforeRedirect,
         extraQueryParams: extraQueryParamsOrGetter,
@@ -384,10 +411,39 @@ export async function createOidc_nonMemoized<
         __unsafe_clientSecret,
         __unsafe_useIdTokenAsAccessToken = false,
         __metadata,
+        disableDPoP: disableDPoP_params = false,
         sessionRestorationMethod = "auto",
-        dpop,
         BASE_URL: BASE_URL_params
     } = params;
+
+    const exports_earlyInit = await (async () => {
+        const timer = window.setTimeout(() => {
+            console.warn(
+                [
+                    "oidc-spa: Setup error.",
+                    "oidcEarlyInit() wasn't called.",
+                    "This is supposed to be handled by the oidc-spa Vite plugin",
+                    "or manually in other environments."
+                ].join(" ")
+            );
+        }, 3_000);
+
+        const exports_earlyInit = await globalContext.dExports_earlyInit.pr;
+
+        window.clearTimeout(timer);
+
+        return exports_earlyInit;
+    })();
+
+    if (!exports_earlyInit.shouldLoadApp) {
+        return new Promise<never>(() => {});
+    }
+
+    const { getEvtIframeAuthResponse, getRedirectAuthResponse } = exports_earlyInit;
+
+    const { value: exports_tokenSubstitution } = globalContext.dExports_tokenSubstitution.getState();
+
+    const { value: exports_DPoP } = globalContext.dExports_DPoP.getState();
 
     const scopes = Array.from(new Set(["openid", ...(params.scopes ?? ["profile"])]));
 
@@ -437,7 +493,7 @@ export async function createOidc_nonMemoized<
         )}`
     );
 
-    if (getIsTokenSubstitutionEnabled()) {
+    if (exports_tokenSubstitution !== undefined) {
         log?.(
             [
                 "Token substitution successfully enabled.",
@@ -458,23 +514,19 @@ export async function createOidc_nonMemoized<
 
     const oidcMetadata = __metadata ?? (await fetchOidcMetadata({ issuerUri }));
 
-    const isDPoPEnabled = (() => {
-        if (dpop === undefined) {
+    const shouldEnableDPoP = (() => {
+        if (disableDPoP_params) {
+            log?.("DPoP explicitly disabled for this instance");
+            return false;
+        }
+
+        if (exports_DPoP === undefined) {
             log?.("DPoP disabled, to enable it see: https://docs.oidc-spa.dev/features/dpop");
             return false;
         }
 
-        if (dpop === "disabled") {
-            log?.("DPoP explicitly disabled");
-            return false;
-        }
-
-        if (oidcMetadata === undefined) {
-            return false;
-        }
-
         if (__unsafe_useIdTokenAsAccessToken) {
-            if (dpop === "enabled") {
+            if (exports_DPoP.isEnforced) {
                 throw new Error(
                     [
                         "oidc-spa: Cannot enable DPoP when",
@@ -483,6 +535,10 @@ export async function createOidc_nonMemoized<
                 );
             }
             log?.("DPoP Disabled due to __unsafe_useIdTokenAsAccessToken: true");
+            return false;
+        }
+
+        if (oidcMetadata === undefined) {
             return false;
         }
 
@@ -497,7 +553,11 @@ export async function createOidc_nonMemoized<
         })();
 
         if (!isSupported) {
-            log?.("DPoP disabled because it's not supported by your IdP");
+            if (exports_DPoP.isEnforced) {
+                throw new Error("oidc-spa: The IdP does not support DPoP");
+            }
+
+            log?.("DPoP disabled because it's not supported by the IdP");
         } else {
             log?.("DPoP enabled");
         }
@@ -717,11 +777,17 @@ export async function createOidc_nonMemoized<
                   }),
                   client_secret: __unsafe_clientSecret,
                   metadata: oidcMetadata,
-                  dpop: !isDPoPEnabled
-                      ? undefined
-                      : {
-                            store: createInMemoryDPoPStore({ configId })
-                        }
+                  dpop: (() => {
+                      if (!shouldEnableDPoP) {
+                          return undefined;
+                      }
+
+                      assert(exports_DPoP !== undefined, "49240");
+
+                      return {
+                          store: exports_DPoP.createDPoPStore({ configId, clientId })
+                      };
+                  })()
               });
 
     const evtInitializationOutcomeUserNotLoggedIn = createEvt<void>();
@@ -738,6 +804,18 @@ export async function createOidc_nonMemoized<
         log
     });
 
+    const { loginSilent } = createLoginSilent({
+        getEvtIframeAuthResponse,
+        oidcClientTsUserManager,
+        stateUrlParamValue_instance,
+        configId,
+        transformUrlBeforeRedirect,
+        getExtraQueryParams,
+        getExtraTokenParams,
+        autoLogin,
+        log
+    });
+
     const { getIsNewBrowserSession } = createGetIsNewBrowserSession({
         configId,
         evtInitializationOutcomeUserNotLoggedIn
@@ -751,6 +829,7 @@ export async function createOidc_nonMemoized<
         | {
               oidcClientTsUser: OidcClientTsUser;
               backFromAuthServer: Oidc.LoggedIn["backFromAuthServer"]; // Undefined is silent signin
+              isRestoredFromSessionStorage: boolean;
           }
     > => {
         if (oidcMetadata === undefined) {
@@ -790,7 +869,8 @@ export async function createOidc_nonMemoized<
 
             return {
                 oidcClientTsUser,
-                backFromAuthServer: undefined
+                backFromAuthServer: undefined,
+                isRestoredFromSessionStorage: true
             };
         }
 
@@ -891,6 +971,7 @@ export async function createOidc_nonMemoized<
 
                         return {
                             oidcClientTsUser,
+                            isRestoredFromSessionStorage: false,
                             backFromAuthServer: {
                                 extraQueryParams: stateData.extraQueryParams,
                                 result: Object.fromEntries(
@@ -998,15 +1079,7 @@ export async function createOidc_nonMemoized<
                 log?.("Performing session restoration via iframe (silent signin)");
 
                 const result_loginSilent = await loginSilent({
-                    getEvtIframeAuthResponse,
-                    oidcClientTsUserManager,
-                    stateUrlParamValue_instance,
-                    configId,
-                    transformUrlBeforeRedirect,
-                    getExtraQueryParams,
-                    getExtraTokenParams,
-                    autoLogin,
-                    log
+                    extraTokenParams: undefined
                 });
 
                 assert(result_loginSilent.outcome !== "token refreshed using refresh token", "876995");
@@ -1146,7 +1219,8 @@ export async function createOidc_nonMemoized<
 
             return {
                 oidcClientTsUser,
-                backFromAuthServer: undefined
+                backFromAuthServer: undefined,
+                isRestoredFromSessionStorage: false
             };
         }
 
@@ -1297,7 +1371,8 @@ export async function createOidc_nonMemoized<
         configId,
         decodedIdTokenSchema,
         __unsafe_useIdTokenAsAccessToken,
-        isDPoPEnabled,
+        exports_DPoP: shouldEnableDPoP ? exports_DPoP : undefined,
+        exports_tokenSubstitution,
         log
     });
 
@@ -1540,15 +1615,7 @@ export async function createOidc_nonMemoized<
                 const { completeLoginOrRefreshProcess } = await startLoginOrRefreshProcess();
 
                 const result_loginSilent = await loginSilent({
-                    getEvtIframeAuthResponse,
-                    oidcClientTsUserManager,
-                    stateUrlParamValue_instance,
-                    configId,
-                    transformUrlBeforeRedirect,
-                    getExtraQueryParams,
-                    getExtraTokenParams: () => extraTokenParams,
-                    autoLogin,
-                    log
+                    extraTokenParams
                 });
 
                 if (result_loginSilent.outcome === "timeout") {
@@ -1758,6 +1825,10 @@ export async function createOidc_nonMemoized<
             return value;
         })()
     });
+
+    if (resultOfLoginProcess.isRestoredFromSessionStorage) {
+        await oidc_loggedIn.getTokens();
+    }
 
     {
         const { prOtherTabLogout } = getPrOtherTabLogout({

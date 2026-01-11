@@ -1,12 +1,7 @@
 import { assert } from "../tools/tsafe/assert";
 import { getIsHostnameAuthorized } from "../tools/isHostnameAuthorized";
 import { getIsLikelyDevServer } from "../tools/isLikelyDevServer";
-
-let isTokenSubstitutionEnabled = false;
-
-export function getIsTokenSubstitutionEnabled() {
-    return isTokenSubstitutionEnabled;
-}
+import { prModuleCreateOidc } from "./earlyInit_prModuleCreateOidc";
 
 type Tokens = {
     accessToken: string;
@@ -73,10 +68,8 @@ function generatePlaceholderForToken(params: {
 
 let counter = Math.floor(Math.random() * 1_000_000) + 1_000_000;
 
-export function getTokensPlaceholders(params: { configId: string; tokens: Tokens }): Tokens {
+function getTokensPlaceholders(params: { configId: string; tokens: Tokens }): Tokens {
     const { configId, tokens } = params;
-
-    assert(isTokenSubstitutionEnabled, "2934482");
 
     for (const entry of entries) {
         if (entry.configId !== configId) {
@@ -170,20 +163,28 @@ function substitutePlaceholderByRealToken(text: string): string {
 
 const viteHashedJsAssetPathRegExp = /\/assets\/[^/]+-[a-zA-Z0-9_-]{8}\.js$/;
 
-export function enableTokenSubstitution(params?: {
+export function tokenSubstitution(params?: {
     trustedThirdPartyResourceServers?: string[];
     trustedServiceWorkerSources?: string[];
 }) {
     const { trustedThirdPartyResourceServers = [], trustedServiceWorkerSources = [] } = params ?? {};
 
-    isTokenSubstitutionEnabled = true;
+    const enableTokenSubstitution = () => {
+        patchFetchApiToSubstituteTokenPlaceholder({ trustedThirdPartyResourceServers });
+        patchXMLHttpRequestApiToSubstituteTokenPlaceholder({ trustedThirdPartyResourceServers });
+        patchWebSocketApiToSubstituteTokenPlaceholder({ trustedThirdPartyResourceServers });
+        patchEventSourceApiToSubstituteTokenPlaceholder({ trustedThirdPartyResourceServers });
+        patchNavigatorSendBeaconApiToSubstituteTokenPlaceholder({ trustedThirdPartyResourceServers });
+        restrictServiceWorkerRegistration({ trustedServiceWorkerSources });
 
-    patchFetchApiToSubstituteTokenPlaceholder({ trustedThirdPartyResourceServers });
-    patchXMLHttpRequestApiToSubstituteTokenPlaceholder({ trustedThirdPartyResourceServers });
-    patchWebSocketApiToSubstituteTokenPlaceholder({ trustedThirdPartyResourceServers });
-    patchEventSourceApiToSubstituteTokenPlaceholder({ trustedThirdPartyResourceServers });
-    patchNavigatorSendBeaconApiToSubstituteTokenPlaceholder({ trustedThirdPartyResourceServers });
-    restrictServiceWorkerRegistration({ trustedServiceWorkerSources });
+        prModuleCreateOidc.then(({ registerExports_tokenSubstitution }) => {
+            registerExports_tokenSubstitution({
+                getTokensPlaceholders
+            });
+        });
+    };
+
+    return { enableTokenSubstitution };
 }
 
 function patchFetchApiToSubstituteTokenPlaceholder(params: {
@@ -470,13 +471,7 @@ function patchXMLHttpRequestApiToSubstituteTokenPlaceholder(params: {
 
     const stateByInstance = new WeakMap<XMLHttpRequest, { url: string; didSubstitute: boolean }>();
 
-    XMLHttpRequest.prototype.open = function open(
-        method: string,
-        url: string | URL,
-        async?: boolean,
-        username?: string | null,
-        password?: string | null
-    ) {
+    XMLHttpRequest.prototype.open = function open(method, url, ...rest: unknown[]) {
         const state = { url: "", didSubstitute: false };
 
         {
@@ -499,7 +494,13 @@ function patchXMLHttpRequestApiToSubstituteTokenPlaceholder(params: {
             throw new Error("oidc-spa: Blocked request to hashed static asset.");
         }
 
-        return open_actual.call(this, method, state.url, async as true, username, password);
+        return open_actual.call(
+            this,
+            method,
+            state.url,
+            //@ts-expect-error
+            ...rest
+        );
     };
 
     XMLHttpRequest.prototype.setRequestHeader = function setRequestHeader(name, value) {

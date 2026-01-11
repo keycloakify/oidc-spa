@@ -5,9 +5,8 @@ import { readExpirationTimeInJwt } from "../tools/readExpirationTimeInJwt";
 import { decodeJwt } from "../tools/decodeJwt";
 import type { Oidc } from "./Oidc";
 import { INFINITY_TIME } from "../tools/INFINITY_TIME";
-import { registerAccessTokenForDPoP } from "./earlyInit_DPoP";
 import { createGetServerDateNow, type ParamsOfCreateGetServerDateNow } from "../tools/getServerDateNow";
-import { getIsTokenSubstitutionEnabled, getTokensPlaceholders } from "./earlyInit_tokenSubstitution";
+import type { Exports_DPoP, Exports_tokenSubstitution } from "./createOidc";
 
 export function createOidcClientTsUserToTokens<DecodedIdToken extends Record<string, unknown>>(params: {
     configId: string;
@@ -15,11 +14,20 @@ export function createOidcClientTsUserToTokens<DecodedIdToken extends Record<str
         parse: (decodedIdToken_original: Oidc.Tokens.DecodedIdToken_OidcCoreSpec) => DecodedIdToken;
     };
     __unsafe_useIdTokenAsAccessToken: boolean;
-    isDPoPEnabled: boolean;
+
+    exports_DPoP: Pick<Exports_DPoP, "registerAccessTokenForDPoP"> | undefined;
+    exports_tokenSubstitution: Pick<Exports_tokenSubstitution, "getTokensPlaceholders"> | undefined;
+
     log: typeof console.log | undefined;
 }) {
-    const { configId, decodedIdTokenSchema, __unsafe_useIdTokenAsAccessToken, isDPoPEnabled, log } =
-        params;
+    const {
+        configId,
+        decodedIdTokenSchema,
+        __unsafe_useIdTokenAsAccessToken,
+        exports_DPoP,
+        exports_tokenSubstitution,
+        log
+    } = params;
 
     function oidcClientTsUserToTokens(params: {
         oidcClientTsUser: OidcClientTsUser;
@@ -232,16 +240,16 @@ export function createOidcClientTsUserToTokens<DecodedIdToken extends Record<str
                       })()
                   });
 
-        if (isDPoPEnabled) {
-            registerAccessTokenForDPoP({
+        if (exports_DPoP !== undefined) {
+            exports_DPoP.registerAccessTokenForDPoP({
                 configId,
                 accessToken: tokens.accessToken,
                 paramsOfCreateGetServerDateNow
             });
         }
 
-        if (getIsTokenSubstitutionEnabled()) {
-            const placeholders = getTokensPlaceholders({
+        if (exports_tokenSubstitution !== undefined) {
+            const placeholders = exports_tokenSubstitution.getTokensPlaceholders({
                 configId,
                 tokens
             });

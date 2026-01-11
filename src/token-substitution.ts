@@ -1,1 +1,1 @@
-export { enableTokenSubstitution } from "./core/earlyInit_tokenSubstitution";
+export { tokenSubstitution } from "./core/earlyInit_tokenSubstitution";

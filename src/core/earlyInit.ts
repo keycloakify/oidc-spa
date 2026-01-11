@@ -2,15 +2,13 @@ import { getStateData, getIsStatQueryParamValue } from "./StateData";
 import { assert, type Equals } from "../tools/tsafe/assert";
 import type { AuthResponse } from "./AuthResponse";
 import { setBASE_URL_earlyInit } from "./earlyInit_BASE_URL";
-import { resolvePrShouldLoadApp } from "./earlyInit_prShouldLoadApp";
 import { isBrowser } from "../tools/isBrowser";
 import { createEvt, type Evt } from "../tools/Evt";
-import { implementFetchAndXhrDPoPInterceptor } from "./earlyInit_DPoP";
-import { freezeBrowserRuntime, type ApiName } from "./earlyInit_freezeBrowserRuntime";
 import {
     setGetRootRelativeOriginalLocationHref_earlyInit,
     getRootRelativeOriginalLocationHref_earlyInit
 } from "./earlyInit_rootRelativeOriginalLocationHref";
+import { prModuleCreateOidc } from "./earlyInit_prModuleCreateOidc";
 
 let hasEarlyInitBeenCalled = false;
 
@@ -24,26 +22,22 @@ export type ParamsOfEarlyInit = {
      */
     BASE_URL?: string;
 
-    /** See: https://docs.oidc-spa.dev/security-features/browser-runtime-freeze */
-    browserRuntimeFreeze?:
-        | false
-        | {
-              enabled: true;
-              exclude?: ApiName[];
-          };
-
     /** See: https://docs.oidc-spa.dev/v/v10/security-features/token-substitution */
-    extraDefenseHook?: () => void;
+    securityDefenses?: {
+        enableBrowserRuntimeFreeze?: () => void;
+        enableDPoP?: () => void;
+        enableTokenSubstitution?: () => void;
+    };
 };
 
-export function oidcEarlyInit(params: ParamsOfEarlyInit) {
+export function oidcEarlyInit(params?: ParamsOfEarlyInit) {
     if (hasEarlyInitBeenCalled) {
         throw new Error("oidc-spa: oidcEarlyInit() Should be called only once");
     }
 
     hasEarlyInitBeenCalled = true;
 
-    const { BASE_URL, browserRuntimeFreeze, extraDefenseHook } = params;
+    const { BASE_URL, securityDefenses = {} } = params ?? {};
 
     if (!isBrowser) {
         return { shouldLoadApp: true };
@@ -51,9 +45,9 @@ export function oidcEarlyInit(params: ParamsOfEarlyInit) {
 
     const { shouldLoadApp } = handleOidcCallback();
 
-    if (shouldLoadApp) {
-        implementFetchAndXhrDPoPInterceptor();
+    let exports_earlyInit: import("./createOidc").Exports_earlyInit;
 
+    if (shouldLoadApp) {
         let evtIframeAuthResponse: Evt<AuthResponse> | undefined = undefined;
 
         {
@@ -123,34 +117,39 @@ export function oidcEarlyInit(params: ParamsOfEarlyInit) {
             setBASE_URL_earlyInit({ BASE_URL });
         }
 
-        extraDefenseHook?.();
+        {
+            const { enableBrowserRuntimeFreeze, enableDPoP, enableTokenSubstitution } = securityDefenses;
 
-        if (!!browserRuntimeFreeze) {
-            freezeBrowserRuntime({
-                excludedApiNames: browserRuntimeFreeze.exclude ?? []
-            });
+            enableDPoP?.();
+            enableTokenSubstitution?.();
+            enableBrowserRuntimeFreeze?.();
         }
 
-        import("./createOidc").then(({ registerEarlyInitSensitiveBindings }) => {
-            registerEarlyInitSensitiveBindings({
-                getEvtIframeAuthResponse: () => {
-                    return (evtIframeAuthResponse ??= createEvt());
-                },
-                getRedirectAuthResponse: () => {
-                    return redirectAuthResponse === undefined
-                        ? { authResponse: undefined }
-                        : {
-                              authResponse: redirectAuthResponse,
-                              clearAuthResponse: () => {
-                                  redirectAuthResponse = undefined;
-                              }
-                          };
-                }
-            });
-        });
+        exports_earlyInit = {
+            shouldLoadApp: true,
+            getEvtIframeAuthResponse: () => {
+                return (evtIframeAuthResponse ??= createEvt());
+            },
+            getRedirectAuthResponse: () => {
+                return redirectAuthResponse === undefined
+                    ? { authResponse: undefined }
+                    : {
+                          authResponse: redirectAuthResponse,
+                          clearAuthResponse: () => {
+                              redirectAuthResponse = undefined;
+                          }
+                      };
+            }
+        };
+    } else {
+        exports_earlyInit = {
+            shouldLoadApp: false
+        };
     }
 
-    resolvePrShouldLoadApp({ shouldLoadApp });
+    prModuleCreateOidc.then(({ registerExports_earlyInit }) => {
+        registerExports_earlyInit(exports_earlyInit);
+    });
 
     return { shouldLoadApp };
 }

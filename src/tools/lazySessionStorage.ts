@@ -13,10 +13,12 @@ export type LazySessionStorage = {
     persistCurrentStateAndSubsequentChanges: () => void;
 };
 
+export const SESSION_STORAGE_GLOBAL_PREFIX = `oidc-spa:lazy-session-storage:`;
+
 export function createLazySessionStorage(params: { storageId: string }): LazySessionStorage {
     const { storageId } = params;
 
-    const sessionStoragePrefix = `lazy-session-storage:${storageId}:`;
+    const sessionStoragePrefix = `${SESSION_STORAGE_GLOBAL_PREFIX}${storageId}:`;
 
     const getSessionStorageKey = (key: string) => `${sessionStoragePrefix}${key}`;
 

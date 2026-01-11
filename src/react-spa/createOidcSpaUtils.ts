@@ -443,7 +443,7 @@ export function createOidcSpaUtils<
                                 __unsafe_useIdTokenAsAccessToken:
                                     paramsOfBootstrap.__unsafe_useIdTokenAsAccessToken,
                                 autoLogoutParams: paramsOfBootstrap.autoLogoutParams,
-                                dpop: paramsOfBootstrap.dpop
+                                disableDPoP: paramsOfBootstrap.disableDPoP
                             });
                         } catch (error) {
                             if (!(error instanceof OidcInitializationError)) {

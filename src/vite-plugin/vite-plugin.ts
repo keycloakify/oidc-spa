@@ -23,6 +23,13 @@ export type OidcSpaVitePluginParams = {
               trustedThirdPartyResourceServers?: string[];
               trustedServiceWorkerSources?: string[];
           };
+    /** See: https://docs.oidc-spa.dev/v/v10/security-features/DPoP */
+    DPoP?:
+        | false
+        | {
+              enabled: true;
+              mode: "auto" | "enforced";
+          };
 };
 
 export function oidcSpa(params: OidcSpaVitePluginParams = {}) {
