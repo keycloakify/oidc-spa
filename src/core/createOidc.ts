@@ -57,7 +57,10 @@ import {
     clearStateDataCookie,
     getIsStateDataCookieEnabled
 } from "./StateDataCookie";
-import { loadWebcryptoLinerShim } from "../tools/loadWebcryptoLinerShim";
+import {
+    loadWebcryptoLinerShim,
+    hasLoadWebcryptoLinerShimBeenCalled
+} from "../tools/loadWebcryptoLinerShim";
 import type { Evt } from "../tools/Evt";
 import type { ParamsOfCreateGetServerDateNow } from "../tools/getServerDateNow";
 
@@ -287,7 +290,11 @@ export function registerExports_tokenSubstitution(exports: Exports_tokenSubstitu
 
 export type Exports_DPoP = {
     isEnforced: boolean;
-    createDPoPStore: (params: { configId: string; clientId: string }) => Exports_DPoP.DPoPStore;
+    createDPoPStore: (params: {
+        implementation: "indexedDB" | "in memory";
+        configId: string;
+        clientId: string;
+    }) => Exports_DPoP.DPoPStore;
     registerAccessTokenForDPoP: (params: {
         configId: string;
         accessToken: string;
@@ -799,7 +806,13 @@ export async function createOidc_nonMemoized<
                       assert(exports_DPoP !== undefined, "49240");
 
                       return {
-                          store: exports_DPoP.createDPoPStore({ configId, clientId })
+                          store: exports_DPoP.createDPoPStore({
+                              implementation: hasLoadWebcryptoLinerShimBeenCalled()
+                                  ? "in memory"
+                                  : "indexedDB",
+                              configId,
+                              clientId
+                          })
                       };
                   })()
               });

@@ -14,58 +14,86 @@ type DPoPStore = {
 // NOTE: Using object instead of Map because Map is not freezed.
 const dpopStoreByClientId: { [configId: string]: DPoPStore | undefined } = {};
 
-function createAndRecordDPoPStore(params: { configId: string }): DPoPStore {
-    const { configId } = params;
+function createAndRecordDPoPStore(params: {
+    implementation: "indexedDB" | "in memory";
+    configId: string;
+}): DPoPStore {
+    const { configId, implementation } = params;
 
-    const STORE_NAME = "main";
+    let dpopStore: DPoPStore;
 
-    const prDb = new Promise<IDBDatabase>((resolve, reject) => {
-        const request = indexedDB.open(`oidc-spa:DPoP:${configId}`, 1);
+    switch (implementation) {
+        case "in memory":
+            {
+                let dpopState: DPoPState | undefined = undefined;
 
-        request.onupgradeneeded = () => {
-            const db = request.result;
-            if (!db.objectStoreNames.contains(STORE_NAME)) {
-                db.createObjectStore(STORE_NAME);
+                dpopStore = {
+                    get: async () => {
+                        return dpopState;
+                    },
+                    set: async value => {
+                        dpopState = value;
+                    },
+                    flush: async () => {
+                        dpopState = undefined;
+                    }
+                };
             }
-        };
+            break;
+        case "indexedDB":
+            {
+                const STORE_NAME = "main";
 
-        request.onsuccess = () => {
-            resolve(request.result);
-        };
-        request.onerror = () => {
-            reject(request.error);
-        };
-    });
+                const prDb = new Promise<IDBDatabase>((resolve, reject) => {
+                    const request = indexedDB.open(`oidc-spa:DPoP:${configId}`, 1);
 
-    const runTransaction = async <T>(
-        mode: IDBTransactionMode,
-        action: (store: IDBObjectStore) => IDBRequest<T>
-    ): Promise<T> => {
-        const db = await prDb;
+                    request.onupgradeneeded = () => {
+                        const db = request.result;
+                        if (!db.objectStoreNames.contains(STORE_NAME)) {
+                            db.createObjectStore(STORE_NAME);
+                        }
+                    };
 
-        return await new Promise<T>((resolve, reject) => {
-            const tx = db.transaction(STORE_NAME, mode);
-            const store = tx.objectStore(STORE_NAME);
-            const request = action(store);
+                    request.onsuccess = () => {
+                        resolve(request.result);
+                    };
+                    request.onerror = () => {
+                        reject(request.error);
+                    };
+                });
 
-            request.onsuccess = () => resolve(request.result as T);
-            request.onerror = () => reject(request.error);
-            tx.onabort = () => reject(tx.error);
-        });
-    };
+                const runTransaction = async <T>(
+                    mode: IDBTransactionMode,
+                    action: (store: IDBObjectStore) => IDBRequest<T>
+                ): Promise<T> => {
+                    const db = await prDb;
 
-    const KEY = "dpopState";
+                    return await new Promise<T>((resolve, reject) => {
+                        const tx = db.transaction(STORE_NAME, mode);
+                        const store = tx.objectStore(STORE_NAME);
+                        const request = action(store);
 
-    const dpopStore: DPoPStore = {
-        get: async () =>
-            await runTransaction<DPoPState | undefined>("readonly", store => store.get(KEY)),
-        set: async dpopState_new => {
-            await runTransaction("readwrite", store => store.put(dpopState_new, KEY));
-        },
-        flush: async () => {
-            await runTransaction("readwrite", store => store.delete(KEY));
-        }
-    };
+                        request.onsuccess = () => resolve(request.result as T);
+                        request.onerror = () => reject(request.error);
+                        tx.onabort = () => reject(tx.error);
+                    });
+                };
+
+                const KEY = "dpopState";
+
+                dpopStore = {
+                    get: async () =>
+                        await runTransaction<DPoPState | undefined>("readonly", store => store.get(KEY)),
+                    set: async dpopState_new => {
+                        await runTransaction("readwrite", store => store.put(dpopState_new, KEY));
+                    },
+                    flush: async () => {
+                        await runTransaction("readwrite", store => store.delete(KEY));
+                    }
+                };
+            }
+            break;
+    }
 
     assert(!(configId in dpopStoreByClientId), "30439");
 
@@ -94,10 +122,11 @@ async function getDpopState_assertPresent(params: { configId: string }): Promise
  * We can make assertion on how this will be used.
  */
 const exports_createDPoPStore: import("./createOidc").Exports_DPoP["createDPoPStore"] = ({
+    implementation,
     configId,
     clientId
 }) => {
-    const dpopStore = createAndRecordDPoPStore({ configId });
+    const dpopStore = createAndRecordDPoPStore({ implementation, configId });
 
     function addToJSONPropertyToKeys(dpopState: DPoPState): void {
         if (Object.getOwnPropertyNames(dpopState.keys).includes("toJSON")) {

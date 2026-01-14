@@ -9,3 +9,7 @@ export function loadWebcryptoLinerShim() {
 
     return prLoaded;
 }
+
+export function hasLoadWebcryptoLinerShimBeenCalled() {
+    return prLoaded !== undefined;
+}
