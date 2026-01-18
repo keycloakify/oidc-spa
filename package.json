@@ -191,6 +191,11 @@
             "import": "./dist/esm/keycloak-js.mjs",
             "default": "./dist/keycloak-js.js"
         },
+        "./keycloak-js-authz": {
+            "module": "./dist/esm/keycloak-js-authz.mjs",
+            "import": "./dist/esm/keycloak-js-authz.mjs",
+            "default": "./dist/keycloak-js-authz.js"
+        },
         "./token-substitution": {
             "module": "./dist/esm/token-substitution.mjs",
             "import": "./dist/esm/token-substitution.mjs",
