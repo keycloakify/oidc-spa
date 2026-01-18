@@ -185,7 +185,15 @@ class KeycloakAuthorization {
 
                 request.open("POST", this.config!.token_endpoint, true);
                 request.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
-                request.setRequestHeader("Authorization", "Bearer " + this.keycloak.token);
+
+                if (!this.keycloak.oidc.isUserLoggedIn) {
+                    throw new Error("oidc-spa: The user is not currently logged in");
+                }
+
+                request.setRequestHeader(
+                    "Authorization",
+                    "Bearer " + (await this.keycloak.oidc.getTokens()).accessToken
+                );
 
                 request.onreadystatechange = () => {
                     if (request.readyState === 4) {
@@ -275,7 +283,15 @@ class KeycloakAuthorization {
 
             request.open("POST", this.config!.token_endpoint, true);
             request.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
-            request.setRequestHeader("Authorization", "Bearer " + this.keycloak.token);
+
+            if (!this.keycloak.oidc.isUserLoggedIn) {
+                throw new Error("oidc-spa: The user is not currently logged in");
+            }
+
+            request.setRequestHeader(
+                "Authorization",
+                "Bearer " + (await this.keycloak.oidc.getTokens()).accessToken
+            );
 
             request.onreadystatechange = () => {
                 if (request.readyState === 4) {
