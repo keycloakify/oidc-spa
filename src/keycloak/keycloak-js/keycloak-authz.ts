@@ -130,7 +130,6 @@ export interface Uma2Configuration {
 export class KeycloakAuthorization {
     rpt: string | null = null;
     config: Uma2Configuration | undefined;
-    then: KeycloakAuthorizationPromise["then"] | undefined;
 
     private configPromise: Promise<Uma2Configuration> | undefined;
 
@@ -146,11 +145,11 @@ export class KeycloakAuthorization {
      * @returns A promise to set functions to be invoked on grant, deny or error.
      */
     authorize(authorizationRequest: AuthorizationRequest): KeycloakAuthorizationPromise {
-        this.then = async (onGrant, onDeny, onError) => {
+        const then: KeycloakAuthorizationPromise["then"] = async (onGrant, onDeny, onError) => {
             try {
                 await this.initializeConfigIfNeeded();
             } catch (error) {
-                handleError(error, onError);
+                handleError(error, onError?.bind(this));
                 return;
             }
 
@@ -161,7 +160,8 @@ export class KeycloakAuthorization {
                 request.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
 
                 if (!this.keycloak.oidc.isUserLoggedIn) {
-                    throw new Error("oidc-spa: The user is not currently logged in");
+                    handleError(new Error("oidc-spa: The user is not currently logged in"));
+                    return;
                 }
 
                 request.setRequestHeader(
@@ -176,10 +176,10 @@ export class KeycloakAuthorization {
                         if (status >= 200 && status < 300) {
                             const rpt = JSON.parse(request.responseText).access_token as string;
                             this.rpt = rpt;
-                            onGrant(rpt);
+                            onGrant.call(this, rpt);
                         } else if (status === 403) {
                             if (onDeny) {
-                                onDeny();
+                                onDeny.call(this);
                             } else {
                                 console.error("Authorization request was denied by the server.");
                             }
@@ -231,7 +231,9 @@ export class KeycloakAuthorization {
             }
         };
 
-        return this as KeycloakAuthorizationPromise;
+        return {
+            then
+        };
     }
 
     /**
@@ -245,11 +247,11 @@ export class KeycloakAuthorization {
         resourceServerId: string,
         authorizationRequest: AuthorizationRequest = {}
     ): KeycloakAuthorizationPromise {
-        this.then = async (onGrant, onDeny, onError) => {
+        const then: KeycloakAuthorizationPromise["then"] = async (onGrant, onDeny, onError) => {
             try {
                 await this.initializeConfigIfNeeded();
             } catch (error) {
-                handleError(error, onError);
+                handleError(error, onError?.bind(this));
                 return;
             }
 
@@ -259,7 +261,8 @@ export class KeycloakAuthorization {
             request.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
 
             if (!this.keycloak.oidc.isUserLoggedIn) {
-                throw new Error("oidc-spa: The user is not currently logged in");
+                handleError(new Error("oidc-spa: The user is not currently logged in"));
+                return;
             }
 
             request.setRequestHeader(
@@ -274,16 +277,16 @@ export class KeycloakAuthorization {
                     if (status >= 200 && status < 300) {
                         const rpt = JSON.parse(request.responseText).access_token as string;
                         this.rpt = rpt;
-                        onGrant(rpt);
+                        onGrant.call(this, rpt);
                     } else if (status === 403) {
                         if (onDeny) {
-                            onDeny();
+                            onDeny.call(this);
                         } else {
                             console.error("Authorization request was denied by the server.");
                         }
                     } else {
                         if (onError) {
-                            onError();
+                            onError.call(this);
                         } else {
                             console.error("Could not obtain authorization data from server.");
                         }
@@ -348,7 +351,7 @@ export class KeycloakAuthorization {
             request.send(params);
         };
 
-        return this as KeycloakAuthorizationPromise;
+        return { then };
     }
 
     private async initializeConfigIfNeeded(): Promise<Uma2Configuration> {
