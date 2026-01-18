@@ -392,7 +392,11 @@ async function loadConfig(serverUrl: string, realm: string): Promise<Uma2Configu
     try {
         return await fetchJSON(url);
     } catch (error) {
-        throw new Error("Could not obtain configuration from server.", { cause: error as Error });
+        throw new Error(
+            "Could not obtain configuration from server.",
+            //@ts-expect-error
+            { cause: error as Error }
+        );
     }
 }
 
@@ -407,7 +411,11 @@ async function fetchJSON(url: string): Promise<Uma2Configuration> {
     try {
         response = await fetch(url);
     } catch (error) {
-        throw new Error("Server did not respond.", { cause: error as Error });
+        throw new Error(
+            "Server did not respond.",
+            //@ts-expect-error
+            { cause: error as Error }
+        );
     }
 
     if (!response.ok) {
@@ -417,7 +425,11 @@ async function fetchJSON(url: string): Promise<Uma2Configuration> {
     try {
         return (await response.json()) as Uma2Configuration;
     } catch (error) {
-        throw new Error("Server responded with invalid JSON.", { cause: error as Error });
+        throw new Error(
+            "Server responded with invalid JSON.",
+            // @ts-expect-error
+            { cause: error as Error }
+        );
     }
 }
 
