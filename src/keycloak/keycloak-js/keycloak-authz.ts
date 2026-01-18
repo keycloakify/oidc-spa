@@ -127,12 +127,7 @@ export interface Uma2Configuration {
     [key: string]: unknown;
 }
 
-/**
- * @deprecated Instead of importing 'KeycloakAuthorizationInstance' you can import 'KeycloakAuthorization' directly as a type.
- */
-export type KeycloakAuthorizationInstance = KeycloakAuthorization;
-
-class KeycloakAuthorization {
+export class KeycloakAuthorization {
     rpt: string | null = null;
     config: Uma2Configuration | undefined;
     then: KeycloakAuthorizationPromise["then"] | undefined;
@@ -140,27 +135,6 @@ class KeycloakAuthorization {
     private configPromise: Promise<Uma2Configuration> | undefined;
 
     constructor(private keycloak: Keycloak) {}
-
-    /**
-     * Initializes the `KeycloakAuthorization` instance.
-     * @deprecated Initialization now happens automatically, calling this method is no longer required.
-     */
-    init(): void {
-        console.warn(
-            "The 'init()' method is deprecated and will be removed in a future version. Initialization now happens automatically, calling this method is no longer required."
-        );
-    }
-
-    /**
-     * A promise that resolves when the `KeycloakAuthorization` instance is initialized.
-     * @deprecated Initialization now happens automatically, using this property is no longer required.
-     */
-    get ready(): Promise<void> {
-        console.warn(
-            "The 'ready' property is deprecated and will be removed in a future version. Initialization now happens automatically, using this property is no longer required."
-        );
-        return Promise.resolve();
-    }
 
     /**
      * This method enables client applications to better integrate with resource servers protected by a Keycloak
@@ -456,5 +430,3 @@ function handleError(error: unknown, handler?: (error: unknown) => void): void {
         console.error(error);
     }
 }
-
-export default KeycloakAuthorization;
