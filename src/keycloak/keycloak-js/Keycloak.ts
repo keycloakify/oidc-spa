@@ -81,8 +81,8 @@ export class Keycloak {
         issuerUri: string;
         dInitialized: Deferred<void>;
         initOptions: KeycloakInitOptions | undefined;
-        oidc: Oidc<Record<string, unknown>> | undefined;
-        tokens: Oidc.Tokens<Record<string, unknown>> | undefined;
+        oidc: Oidc | undefined;
+        tokens: Oidc.Tokens | undefined;
         profile: KeycloakProfile | undefined;
         userInfo: KeycloakUserInfo | undefined;
         $onTokenExpired: StatefulEvt<(() => void) | undefined>;
@@ -120,7 +120,14 @@ export class Keycloak {
      */
     init = this.#init.bind(this);
     async #init(initOptions: KeycloakInitOptions = {}): Promise<boolean> {
-        const { onLoad = "check-sso", redirectUri, enableLogging, scope, locale } = initOptions;
+        const {
+            onLoad = "check-sso",
+            redirectUri,
+            enableLogging,
+            scope,
+            locale,
+            autoLogoutParams
+        } = initOptions;
 
         if (this.#state.initOptions !== undefined) {
             if (JSON.stringify(this.#state.initOptions) !== JSON.stringify(initOptions)) {
@@ -149,6 +156,7 @@ export class Keycloak {
             postLoginRedirectUrl: redirectUri,
             debugLogs: enableLogging,
             scopes: scope?.split(" "),
+            autoLogoutParams,
             extraQueryParams:
                 !autoLogin || locale === undefined
                     ? undefined
@@ -183,7 +191,7 @@ export class Keycloak {
         if (oidc.isUserLoggedIn) {
             const tokens = await oidc.getTokens();
 
-            const onNewToken = (tokens_new: Oidc.Tokens<Record<string, unknown>>) => {
+            const onNewToken = (tokens_new: Oidc.Tokens) => {
                 this.#state.tokens = tokens_new;
                 this.onAuthRefreshSuccess?.();
             };
@@ -1112,8 +1120,14 @@ export class Keycloak {
         return (this.#state.userInfo = await keycloakUtils.fetchUserInfo({ accessToken }));
     }
 
-    /** Get the underlying oidc-spa instance */
-    get oidc(): Oidc<Record<string, unknown>> {
+    /**
+     * This property does not exist in the original keycloak-js module.
+     * It let you access the underlying oidc-spa/core instance that power this adapter under the hood.
+     * It can be useful for example to create an auto logout warning overlay.
+     *
+     * See: https://docs.oidc-spa.dev/v/v10/resources/migrating-from-keycloak-js
+     */
+    get oidc(): Oidc {
         assert(
             this.didInitialize,
             "Cannot get keycloak.oidc before the init() method was called and have resolved."
