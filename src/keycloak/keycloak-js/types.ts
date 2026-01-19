@@ -252,6 +252,31 @@ export interface KeycloakInitOptions {
      */
     //logoutMethod?: 'GET' | 'POST';
     logoutMethod?: "GET";
+
+    /**
+     * Extra optional parameter specific to oidc-spa
+     * (not present in the original keycloak-js module)
+     *
+     * Where to redirect when auto logout happens du to session expiration
+     * on the Keycloak server.
+     *
+     * Example:
+     * autoLogoutParams: { redirectTo: "current page" } // Default
+     * autoLogoutParams: { redirectTo: "home" }
+     * autoLogoutParams: { redirectTo: "specific url", url: "/your-session-has-expired" }
+     * autoLogoutParams: {
+     *      redirectTo: "specific url",
+     *      get url(){ return `/your-session-has-expired?return_url=${encodeUriComponent(location.href)}`; }
+     * }
+     */
+    autoLogoutParams?:
+        | {
+              redirectTo: "home" | "current page";
+          }
+        | {
+              redirectTo: "specific url";
+              url: string;
+          };
 }
 
 export interface KeycloakLoginOptions {
