@@ -1875,7 +1875,12 @@ export async function createOidc_nonMemoized<
     });
 
     if (resultOfLoginProcess.isRestoredFromSessionStorage) {
-        await oidc_loggedIn.getTokens();
+        const { isOnline, prOnline } = getIsOnline();
+        if (isOnline) {
+            await oidc_loggedIn.getTokens();
+        } else {
+            prOnline.then(() => oidc_loggedIn.getTokens());
+        }
     }
 
     {
