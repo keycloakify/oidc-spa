@@ -27,7 +27,14 @@ function generatePlaceholderForToken(params: {
 
     if (match === null) {
         assert(tokenType !== "id_token", "39232932927");
-        return `${tokenType}_placeholder_${id}`;
+
+        const seed = `${tokenType[0]}_placeholder_${id}`;
+
+        if (seed.length <= token_real.length) {
+            return seed + "A".repeat(token_real.length - seed.length);
+        }
+        // Fallback: can't fit the placeholder marker and id within the target length.
+        return seed;
     }
 
     const [, header_b64, payload_b64, signature_b64] = match;
@@ -375,6 +382,11 @@ function patchFetchApiToSubstituteTokenPlaceholder(params: {
                 }
 
                 body = nextBodyText;
+            }
+
+            if (body instanceof FormData) {
+                // Let the browser generate the multipart boundary for FormData bodies.
+                headers.delete("content-type");
             }
 
             block_authed_request_to_unauthorized_hostnames: {
