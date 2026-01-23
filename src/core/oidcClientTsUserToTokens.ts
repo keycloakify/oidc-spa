@@ -194,36 +194,42 @@ export function createOidcClientTsUserToTokens<DecodedIdToken extends Record<str
                       hasRefreshToken: true,
                       refreshToken,
                       refreshTokenExpirationTime: (() => {
-                          read_from_token_response_expires_at: {
-                              const { refresh_expires_at } = oidcClientTsUser.__oidc_spa_tokenResponse;
+                          for (const propertyName of [
+                              "refresh_expires_at",
+                              "refresh_token_expires_at"
+                          ] as const) {
+                              const expiresAt = oidcClientTsUser.__oidc_spa_tokenResponse[propertyName];
 
-                              if (refresh_expires_at === undefined) {
-                                  break read_from_token_response_expires_at;
+                              if (expiresAt === undefined) {
+                                  continue;
                               }
 
-                              assert(typeof refresh_expires_at === "number", "2033392");
+                              assert(typeof expiresAt === "number", "2033392");
 
-                              if (refresh_expires_at === 0) {
+                              if (expiresAt === 0) {
                                   return INFINITY_TIME;
                               }
 
-                              return refresh_expires_at * 1000;
+                              return expiresAt * 1000;
                           }
 
-                          read_from_token_response_expires_in: {
-                              const { refresh_expires_in } = oidcClientTsUser.__oidc_spa_tokenResponse;
+                          for (const propertyName of [
+                              "refresh_expires_in",
+                              "refresh_token_expires_in"
+                          ] as const) {
+                              const expiresIn = oidcClientTsUser.__oidc_spa_tokenResponse[propertyName];
 
-                              if (refresh_expires_in === undefined) {
-                                  break read_from_token_response_expires_in;
+                              if (expiresIn === undefined) {
+                                  continue;
                               }
 
-                              assert(typeof refresh_expires_in === "number", "2033425330");
+                              assert(typeof expiresIn === "number", "2033425330");
 
-                              if (refresh_expires_in === 0) {
+                              if (expiresIn === 0) {
                                   return INFINITY_TIME;
                               }
 
-                              return issuedAtTime + refresh_expires_in * 1000;
+                              return issuedAtTime + expiresIn * 1000;
                           }
 
                           read_from_jwt: {
