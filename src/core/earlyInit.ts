@@ -10,8 +10,6 @@ import {
 } from "./earlyInit_rootRelativeOriginalLocationHref";
 import { prModuleCreateOidc } from "./earlyInit_prModuleCreateOidc";
 
-let hasEarlyInitBeenCalled = false;
-
 const IFRAME_MESSAGE_PREFIX = "oidc-spa:cross-window-messaging:";
 
 export type ParamsOfEarlyInit = {
@@ -62,13 +60,19 @@ export type ParamsOfEarlyInit = {
     };
 };
 
+let shouldLoadApp: boolean | undefined = undefined;
+
 export function oidcEarlyInit(params?: ParamsOfEarlyInit) {
-    if (hasEarlyInitBeenCalled) {
-        throw new Error("oidc-spa: oidcEarlyInit() Should be called only once");
+    if (shouldLoadApp !== undefined) {
+        return { shouldLoadApp };
     }
 
-    hasEarlyInitBeenCalled = true;
+    shouldLoadApp = oidcEarlyInit_nonMemoized(params).shouldLoadApp;
 
+    return { shouldLoadApp };
+}
+
+function oidcEarlyInit_nonMemoized(params: ParamsOfEarlyInit | undefined) {
     const { BASE_URL, sessionRestorationMethod, securityDefenses = {} } = params ?? {};
 
     if (!isBrowser) {
