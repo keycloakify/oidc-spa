@@ -63,14 +63,26 @@ import {
 } from "../tools/loadWebcryptoLinerShim";
 import type { Evt } from "../tools/Evt";
 import type { ParamsOfCreateGetServerDateNow } from "../tools/getServerDateNow";
+import type { MaybeAsync } from "../tools/MaybeAsync";
 
 // NOTE: Replaced at build time
 const VERSION = "{{OIDC_SPA_VERSION}}";
 
 export type ParamsOfCreateOidc<
     DecodedIdToken extends Record<string, unknown> = Oidc.Tokens.DecodedIdToken_OidcCoreSpec,
-    AutoLogin extends boolean = false
+    AutoLogin extends boolean = false,
+    User = never
 > = {
+    createUser?: (params: {
+        decodedIdToken: Oidc.Tokens.DecodedIdToken_OidcCoreSpec;
+        accessToken: string;
+        fetchUserInfo: () => Promise<{
+            [key: string]: unknown;
+            sub: string;
+        }>;
+        issuerUri: string;
+    }) => MaybeAsync<User>;
+
     /**
      * See: https://docs.oidc-spa.dev/v/v10/providers-configuration/provider-configuration
      */
@@ -448,7 +460,8 @@ export async function createOidc_nonMemoized<
         __metadata,
         disableDPoP: disableDPoP_params = false,
         sessionRestorationMethod: sessionRestorationMethod_params,
-        BASE_URL: BASE_URL_params
+        BASE_URL: BASE_URL_params,
+        createUser
     } = params;
 
     const exports_earlyInit = await (async () => {
@@ -1871,7 +1884,22 @@ export async function createOidc_nonMemoized<
             log?.(`isNewBrowserSession: ${value}`);
 
             return value;
-        })()
+        })(),
+        getUser: async () => {
+            if (createUser === undefined) {
+                throw new Error("oidc-spa: createUser wasn't provided");
+            }
+
+            return {
+                user: null as any,
+                subscribeToUserChange: onUserChange => {
+                    return {
+                        unsubscribeFromUserChange: () => {}
+                    };
+                },
+                refreshUser: () => {}
+            };
+        }
     });
 
     if (resultOfLoginProcess.isRestoredFromSessionStorage) {

@@ -18,18 +18,24 @@ import { createStatefulEvt } from "../tools/StatefulEvt";
 import { id } from "../tools/tsafe/id";
 import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";
 import { setDesiredPostLoginRedirectUrl } from "../core/desiredPostLoginRedirectUrl";
+import type { MaybeAsync } from "../tools/MaybeAsync";
 
 export function createOidcSpaUtils<
     AutoLogin extends boolean,
-    DecodedIdToken extends Record<string, unknown>
+    DecodedIdToken extends Record<string, unknown>,
+    User
 >(params: {
     autoLogin: AutoLogin;
     decodedIdTokenSchema:
         | ZodSchemaLike<Oidc_core.Tokens.DecodedIdToken_OidcCoreSpec, DecodedIdToken>
         | undefined;
     decodedIdToken_mock: DecodedIdToken | undefined;
-}): OidcSpaUtils<AutoLogin, DecodedIdToken> {
-    const { autoLogin, decodedIdTokenSchema, decodedIdToken_mock } = params;
+    createUser:
+        | ((params: { decodedIdToken: DecodedIdToken; accessToken: string }) => MaybeAsync<User>)
+        | undefined;
+    user_mock: User | undefined;
+}): OidcSpaUtils<AutoLogin, DecodedIdToken, User> {
+    const { autoLogin, decodedIdTokenSchema, decodedIdToken_mock, createUser, user_mock } = params;
 
     const dParamsOfBootstrap = new Deferred<ParamsOfBootstrap<AutoLogin, DecodedIdToken>>();
 
@@ -98,7 +104,7 @@ export function createOidcSpaUtils<
 
     function useOidc(params?: {
         assert?: "user logged in" | "user not logged in";
-    }): UseOidc.Oidc<DecodedIdToken> {
+    }): UseOidc.Oidc<DecodedIdToken, User> {
         const { assert: assert_params } = params ?? {};
 
         if (!isBrowser) {
@@ -272,7 +278,7 @@ export function createOidcSpaUtils<
 
     async function getOidc(params?: {
         assert?: "user logged in" | "user not logged in";
-    }): Promise<GetOidc.Oidc<DecodedIdToken>> {
+    }): Promise<GetOidc.Oidc<DecodedIdToken, User>> {
         if (!isBrowser) {
             throw new Error("oidc-spa: getOidc() can't be used on the server");
         }
