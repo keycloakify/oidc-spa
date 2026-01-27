@@ -6,7 +6,7 @@ import { tokenSubstitution } from 'oidc-spa/token-substitution';
 const { shouldLoadApp } = oidcEarlyInit({
   securityDefenses: {
     ...browserRuntimeFreeze({
-      //exclude: [ "fetch", "XMLHttpRequest", "Promise"]
+      //excludes: [ "fetch", "XMLHttpRequest", "Promise"]
     }),
     ...DPoP({ mode: 'auto' }),
     ...tokenSubstitution({
