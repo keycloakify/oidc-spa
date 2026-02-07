@@ -1,6 +1,8 @@
-import type {
-    UserManager as OidcClientTsUserManager,
-    User as OidcClientTsUser
+import {
+    type UserManager as OidcClientTsUserManager,
+    type User as OidcClientTsUser,
+    ErrorTimeout,
+    ErrorResponse
 } from "../vendor/frontend/oidc-client-ts";
 import { Deferred } from "../tools/Deferred";
 import { assert } from "../tools/tsafe/assert";
@@ -13,7 +15,6 @@ import { type AuthResponse } from "./AuthResponse";
 import { addOrUpdateSearchParam } from "../tools/urlSearchParams";
 import { getIsOnline } from "../tools/getIsOnline";
 import type { Evt } from "../tools/Evt";
-import { SESSION_STORAGE_GLOBAL_PREFIX } from "../tools/lazySessionStorage";
 
 type ResultOfLoginSilent =
     | {
@@ -26,6 +27,13 @@ type ResultOfLoginSilent =
     | {
           outcome: "token refreshed using refresh token";
           oidcClientTsUser: OidcClientTsUser;
+      }
+    | {
+          outcome: "got error auth response using refresh token";
+          authResponse: {
+              error: string;
+              error_description: string | undefined;
+          };
       };
 
 export function createLoginSilent(params: {
@@ -101,6 +109,9 @@ export function createLoginSilent(params: {
 
             const timeouts = [
                 setTimeout(() => {
+                    clearStateStore({ stateUrlParamValue: stateUrlParamValue_instance });
+                    unsubscribe_evtIframeAuthResponse();
+
                     dResult.resolve({
                         outcome: "timeout"
                     });
@@ -121,6 +132,8 @@ export function createLoginSilent(params: {
             ];
 
             clearTimeouts = ({ wasSuccess }) => {
+                unsubscribe_evtIframeAuthResponse();
+
                 timeouts.forEach(clearTimeout);
                 if (wasSuccess && hasLoggedWarningMessage) {
                     console.log(
@@ -203,7 +216,6 @@ export function createLoginSilent(params: {
                     );
 
                     clearTimeouts({ wasSuccess: true });
-                    unsubscribe_evtIframeAuthResponse();
 
                     dResult.resolve({
                         outcome: "token refreshed using refresh token",
@@ -213,46 +225,31 @@ export function createLoginSilent(params: {
                 error => {
                     assert(error instanceof Error);
 
-                    if (error.message.includes("IFrame timed out without a response")) {
+                    if (error instanceof ErrorTimeout) {
                         // NOTE: This is the expected successful outcome
                         // oidc-spa is handling the iframe's response
                         // oidc-client-ts never sees it. By design.
                         return;
                     }
 
-                    if (
-                        error.message.includes("Session not active") ||
-                        error.message.includes("Token is not active")
-                    ) {
-                        log?.(
-                            [
-                                "The tokens that had been persisted in session storage are",
-                                "expired. Clearing session storage and performing full reload"
-                            ].join(" ")
-                        );
+                    if (error instanceof ErrorResponse) {
+                        clearTimeouts({ wasSuccess: false });
 
-                        for (let i = sessionStorage.length - 1; i >= 0; i--) {
-                            const key = sessionStorage.key(i);
-                            assert(key !== null, "323303");
-                            if (key.startsWith(SESSION_STORAGE_GLOBAL_PREFIX)) {
-                                sessionStorage.removeItem(key);
+                        assert(error.error !== null, "4033");
+
+                        dResult.resolve({
+                            outcome: "got error auth response using refresh token",
+                            authResponse: {
+                                error: error.error,
+                                error_description: error.error_description ?? undefined
                             }
-                        }
-
-                        location.reload();
+                        });
                         return;
                     }
 
                     assert(false, `This is a bug in oidc-spa, please report: ${error.message}`);
                 }
             );
-
-        dResult.pr.then(result => {
-            if (result.outcome === "timeout") {
-                clearStateStore({ stateUrlParamValue: stateUrlParamValue_instance });
-                unsubscribe_evtIframeAuthResponse();
-            }
-        });
 
         return dResult.pr;
     }

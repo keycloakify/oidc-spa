@@ -63,6 +63,7 @@ import {
 } from "../tools/loadWebcryptoLinerShim";
 import type { Evt } from "../tools/Evt";
 import type { ParamsOfCreateGetServerDateNow } from "../tools/getServerDateNow";
+import { SESSION_STORAGE_GLOBAL_PREFIX } from "../tools/lazySessionStorage";
 
 // NOTE: Replaced at build time
 const VERSION = "{{OIDC_SPA_VERSION}}";
@@ -1131,6 +1132,10 @@ export async function createOidc_nonMemoized<
                 });
 
                 assert(result_loginSilent.outcome !== "token refreshed using refresh token", "876995");
+                assert(
+                    result_loginSilent.outcome !== "got error auth response using refresh token",
+                    "876996"
+                );
 
                 if (result_loginSilent.outcome === "timeout") {
                     const { authorization_endpoint } = oidcMetadata;
@@ -1145,7 +1150,7 @@ export async function createOidc_nonMemoized<
                     });
                 }
 
-                assert<Equals<typeof result_loginSilent.outcome, "got auth response from iframe">>();
+                assert<Equals<typeof result_loginSilent.outcome, "got auth response from iframe">>;
 
                 const { authResponse } = result_loginSilent;
 
@@ -1678,6 +1683,23 @@ export async function createOidc_nonMemoized<
                     assert(false);
                 }
 
+                const clearPersistedTokensIfSessionStorageIfAny = () => {
+                    let hasRemoved = false;
+
+                    for (let i = sessionStorage.length - 1; i >= 0; i--) {
+                        const key = sessionStorage.key(i);
+                        assert(key !== null, "323303");
+                        if (key.startsWith(SESSION_STORAGE_GLOBAL_PREFIX)) {
+                            hasRemoved = true;
+                            sessionStorage.removeItem(key);
+                        }
+                    }
+
+                    if (hasRemoved) {
+                        log?.("The persisted session in sessionStorage was probably no longer valid");
+                    }
+                };
+
                 let oidcClientTsUser: OidcClientTsUser;
 
                 switch (result_loginSilent.outcome) {
@@ -1687,15 +1709,51 @@ export async function createOidc_nonMemoized<
                             oidcClientTsUser = result_loginSilent.oidcClientTsUser;
                         }
                         break;
+                    case "got error auth response using refresh token":
+                        {
+                            const { authResponse } = result_loginSilent;
+
+                            log?.(
+                                [
+                                    "Got error response trying to refresh tokens using the refresh token,",
+                                    "token endpoint response:",
+                                    JSON.stringify(authResponse, null, 2)
+                                ].join(" ")
+                            );
+
+                            clearPersistedTokensIfSessionStorageIfAny();
+
+                            completeLoginOrRefreshProcess();
+
+                            await fallbackToFullPageReload();
+
+                            assert(false, "136135");
+                        }
+                        break;
                     case "got auth response from iframe":
                         {
                             const { authResponse } = result_loginSilent;
 
-                            log?.("Tokens refresh using iframe", authResponse);
-
                             clearStateDataCookie({ stateUrlParamValue: authResponse.state });
 
                             const authResponse_error = authResponse.error;
+
+                            if (authResponse_error === undefined) {
+                                log?.(
+                                    [
+                                        "Tokens refreshed using iframe, authorization endpoint response: ",
+                                        JSON.stringify(authResponse, null, 2)
+                                    ].join(" ")
+                                );
+                            } else {
+                                log?.(
+                                    [
+                                        "Got error response trying to refresh tokens using iframe,",
+                                        "Authorization endpoint response:",
+                                        JSON.stringify(authResponse, null, 2)
+                                    ].join(" ")
+                                );
+                            }
 
                             let oidcClientTsUser_scope: OidcClientTsUser | undefined = undefined;
 
@@ -1705,18 +1763,14 @@ export async function createOidc_nonMemoized<
                                         authResponseToUrl(authResponse)
                                     );
                             } catch (error) {
-                                assert(error instanceof Error, "321389");
-
                                 if (authResponse_error === undefined) {
-                                    completeLoginOrRefreshProcess();
-                                    // Same here, if it fails it fails.
-                                    throw error;
+                                    console.error(error);
+                                    assert(false, `This is a bug in oidc-spa, please report.`);
                                 }
                             }
 
                             if (oidcClientTsUser_scope === undefined) {
-                                // NOTE: Here we got a response but it's an error, session might have been
-                                // deleted or other edge case.
+                                clearPersistedTokensIfSessionStorageIfAny();
 
                                 completeLoginOrRefreshProcess();
 
