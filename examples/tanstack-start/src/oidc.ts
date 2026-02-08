@@ -30,7 +30,7 @@ export const {
     })
     .withAccessTokenValidation({
         type: "RFC 9068: JSON Web Token (JWT) Profile for OAuth 2.0 Access Tokens",
-        expectedAudience: (/*{ paramsOfBootstrap, process }*/) => "account",
+        expectedAudience: ({ process }) => process.env.OIDC_CLIENT_ID_API,
         accessTokenClaimsSchema: z.object({
             sub: z.string(),
             realm_access: z.object({ roles: z.array(z.string()) }).optional()
@@ -58,6 +58,14 @@ bootstrapOidc(({ process }) =>
               implementation: "real",
               issuerUri: process.env.OIDC_ISSUER_URI,
               clientId: process.env.OIDC_CLIENT_ID,
+              scopes: [
+                  "profile",
+                  "https://graph.microsoft.com/User.Read",
+                  process.env.OIDC_SCOPE_FOR_API
+              ],
+              extraTokenParams: {
+                  scope: process.env.OIDC_SCOPE_FOR_API
+              },
               debugLogs: true
           }
 );

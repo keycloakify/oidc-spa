@@ -40,7 +40,13 @@ export function createLoginSilent(params: {
     getExtraQueryParams:
         | ((params: { isSilent: true; url: string }) => Record<string, string | undefined>)
         | undefined;
-    getExtraTokenParams: (() => Record<string, string | undefined>) | undefined;
+    getExtraTokenParams:
+        | (() => {
+              audience?: string;
+              state?: string;
+              [key: string]: string | undefined;
+          })
+        | undefined;
     autoLogin: boolean;
     log: typeof console.log | undefined;
 }) {

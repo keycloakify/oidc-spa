@@ -63,7 +63,13 @@ export function createLoginOrGoToAuthServer(params: {
         | ((params: { isSilent: boolean; url: string }) => Record<string, string | undefined>)
         | undefined;
 
-    getExtraTokenParams: (() => Record<string, string | undefined>) | undefined;
+    getExtraTokenParams:
+        | (() => {
+              audience?: string;
+              state?: string;
+              [key: string]: string | undefined;
+          })
+        | undefined;
 
     homeUrl: string;
     stateUrlParamValue_instance: string;

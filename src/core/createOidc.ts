@@ -63,6 +63,7 @@ import {
 } from "../tools/loadWebcryptoLinerShim";
 import type { Evt } from "../tools/Evt";
 import type { ParamsOfCreateGetServerDateNow } from "../tools/getServerDateNow";
+import type { ValueOrGetter } from "../tools/ValueOrGetter";
 
 // NOTE: Replaced at build time
 const VERSION = "{{OIDC_SPA_VERSION}}";
@@ -116,7 +117,11 @@ export type ParamsOfCreateOidc<
      * Example: extraTokenParams: ()=> ({ selectedCustomer: "xxx" })
      *          extraTokenParams: { selectedCustomer: "xxx" }
      */
-    extraTokenParams?: Record<string, string | undefined> | (() => Record<string, string | undefined>);
+    extraTokenParams?: ValueOrGetter<{
+        audience?: string;
+        state?: string;
+        [key: string]: string | undefined;
+    }>;
 
     decodedIdTokenSchema?: {
         parse: (decodedIdToken_original: Oidc.Tokens.DecodedIdToken_OidcCoreSpec) => DecodedIdToken;
@@ -508,16 +513,35 @@ export async function createOidc_nonMemoized<
         return extraQueryParamsOrGetter;
     })();
 
+    let getExtraTokenParams_lastCall = id<
+        | {
+              audience?: string;
+              state?: string;
+              [key: string]: string | undefined;
+          }
+        | undefined
+    >(undefined);
+
     const getExtraTokenParams = (() => {
         if (extraTokenParamsOrGetter === undefined) {
             return undefined;
         }
 
-        if (typeof extraTokenParamsOrGetter !== "function") {
-            return () => extraTokenParamsOrGetter;
-        }
+        const getter = (() => {
+            if (typeof extraTokenParamsOrGetter !== "function") {
+                return () => extraTokenParamsOrGetter;
+            }
 
-        return extraTokenParamsOrGetter;
+            return extraTokenParamsOrGetter;
+        })();
+
+        return () => {
+            const params = getter();
+
+            getExtraTokenParams_lastCall = JSON.parse(JSON.stringify(params));
+
+            return params;
+        };
     })();
 
     const { homeUrlAndRedirectUri } = getHomeAndRedirectUri({ BASE_URL_params });
@@ -1424,10 +1448,21 @@ export async function createOidc_nonMemoized<
         log
     });
 
-    let currentTokens = oidcClientTsUserToTokens({
-        oidcClientTsUser: resultOfLoginProcess.oidcClientTsUser,
-        decodedIdToken_previous: undefined
-    });
+    let currentTokens: Oidc.Tokens<DecodedIdToken> & {
+        extraTokenParams:
+            | {
+                  [key: string]: string | undefined;
+                  audience?: string;
+                  state?: string;
+              }
+            | undefined;
+    } = {
+        ...oidcClientTsUserToTokens({
+            oidcClientTsUser: resultOfLoginProcess.oidcClientTsUser,
+            decodedIdToken_previous: undefined
+        }),
+        extraTokenParams: getExtraTokenParams_lastCall
+    };
 
     detect_useless_idleSessionLifetimeInSeconds: {
         if (idleSessionLifetimeInSeconds === undefined) {
@@ -1486,7 +1521,9 @@ export async function createOidc_nonMemoized<
     const oidc_loggedIn = id<Oidc.LoggedIn<DecodedIdToken>>({
         ...oidc_common,
         isUserLoggedIn: true,
-        getTokens: async () => {
+        getTokens: async params => {
+            const { extraTokenParams } = params ?? {};
+
             if (wouldHaveAutoLoggedOutIfBrowserWasOnline) {
                 await oidc_loggedIn.logout(autoLogoutParams);
                 assert(false);
@@ -1520,7 +1557,7 @@ export async function createOidc_nonMemoized<
                     }
                 }
 
-                await oidc_loggedIn.renewTokens();
+                await oidc_loggedIn.renewTokens({ extraTokenParams });
             }
 
             return currentTokens;
@@ -1619,9 +1656,15 @@ export async function createOidc_nonMemoized<
         renewTokens: (() => {
             // NOTE: Cannot throw (or if it does it's our fault)
             async function renewTokens_nonMutexed(params: {
-                extraTokenParams: Record<string, string | undefined>;
+                extraTokenParams: {
+                    [key: string]: string | undefined;
+                    audience?: string;
+                    state?: string;
+                };
             }) {
-                const { extraTokenParams } = params;
+                const extraTokenParams = JSON.parse(
+                    JSON.stringify(params.extraTokenParams)
+                ) as typeof params.extraTokenParams;
 
                 const fallbackToFullPageReload = async (): Promise<never> => {
                     persistAuthState({ configId, state: undefined });
@@ -1740,10 +1783,16 @@ export async function createOidc_nonMemoized<
                         break;
                 }
 
-                currentTokens = oidcClientTsUserToTokens({
-                    oidcClientTsUser,
-                    decodedIdToken_previous: currentTokens.decodedIdToken
-                });
+                currentTokens = {
+                    ...oidcClientTsUserToTokens({
+                        oidcClientTsUser,
+                        decodedIdToken_previous: currentTokens.decodedIdToken
+                    }),
+                    extraTokenParams: {
+                        ...getExtraTokenParams_lastCall,
+                        ...extraTokenParams
+                    }
+                };
 
                 if (getPersistedAuthState({ configId }) !== undefined) {
                     persistAuthState({

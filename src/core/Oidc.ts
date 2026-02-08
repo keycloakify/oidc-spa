@@ -42,7 +42,13 @@ export declare namespace Oidc {
             renewTokens(params?: {
                 extraTokenParams?: Record<string, string | undefined>;
             }): Promise<void>;
-            getTokens: () => Promise<Tokens<DecodedIdToken>>;
+            getTokens: (params?: {
+                extraTokenParams?: {
+                    audience?: string;
+                    state?: string;
+                    [key: string]: string | undefined;
+                };
+            }) => Promise<Tokens<DecodedIdToken>>;
             subscribeToTokensChange: (onTokenChange: (tokens: Tokens<DecodedIdToken>) => void) => {
                 unsubscribeFromTokensChange: () => void;
             };

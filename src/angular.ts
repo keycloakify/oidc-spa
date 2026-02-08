@@ -16,7 +16,7 @@ import type { HttpInterceptorFn, HttpRequest } from "@angular/common/http";
 import { toSignal } from "@angular/core/rxjs-interop";
 import type { ReadonlyBehaviorSubject } from "./tools/ReadonlyBehaviorSubject";
 import { Router, type CanActivateFn } from "@angular/router";
-import type { ValueOrAsyncGetter } from "./tools/ValueOrAsyncGetter";
+import type { ValueOrAsyncGetter } from "./tools/ValueOrGetter";
 import { getBaseHref } from "./tools/getBaseHref";
 import type { ConcreteClass } from "./tools/ConcreteClass";
 import { setDesiredPostLoginRedirectUrl } from "./core/desiredPostLoginRedirectUrl";
