@@ -13,7 +13,7 @@ export type OidcSpaVitePluginParams = {
         | false
         | {
               enabled: true;
-              exclude?: ApiName[];
+              excludes?: ApiName[];
           };
     /** See: https://docs.oidc-spa.dev/v/v10/security-features/token-substitution */
     tokenSubstitution?:

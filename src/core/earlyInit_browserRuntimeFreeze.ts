@@ -52,11 +52,25 @@ function freezeBrowserRuntime(params: { excludedApiNames: ApiName[] }) {
             [
                 `oidc-spa: Blocked alteration of ${target}.`,
                 `\nThis runtime is frozen to prevent monkey patching.`,
-                `If it is monkey patched for legitimate reason add "${apiName}" to browserRuntimeFreeze.exclude.`,
+                `If it is monkey patched for legitimate reason add "${apiName}" to browserRuntimeFreeze.excludes.`,
                 `\nDocs: https://docs.oidc-spa.dev/v/v10/security-features/browser-runtime-freeze`
             ].join(" ")
         );
     };
+
+    const definePropertyInterceptors: ((o: unknown, p: PropertyKey) => void | never)[] = [];
+
+    {
+        const defineProperty_original = Object.defineProperty;
+
+        Object.defineProperty = (o, p, attributes) => {
+            definePropertyInterceptors.forEach(definePropertyInterceptor => {
+                definePropertyInterceptor(o, p);
+            });
+
+            return defineProperty_original(o, p, attributes);
+        };
+    }
 
     for (const apiName of [
         "fetch",
@@ -141,6 +155,12 @@ function freezeBrowserRuntime(params: { excludedApiNames: ApiName[] }) {
                                   })
                           })
                 });
+
+                definePropertyInterceptors.push((o, p) => {
+                    if (o === prototype && p === propertyName) {
+                        throw createWriteError({ target, apiName });
+                    }
+                });
             }
 
             {
@@ -150,14 +170,27 @@ function freezeBrowserRuntime(params: { excludedApiNames: ApiName[] }) {
                 }
             }
 
-            Object.defineProperty(crypto, "subtle", {
-                configurable: false,
-                enumerable: true,
-                get: () => subtle,
-                set: () => {
-                    throw createWriteError({ target: "window.crypto.subtle", apiName });
-                }
-            });
+            {
+                const o = crypto;
+                const p = "subtle";
+                const createWriteError_local = () =>
+                    createWriteError({ target: "window.crypto.subtle", apiName });
+
+                Object.defineProperty(o, p, {
+                    configurable: false,
+                    enumerable: true,
+                    get: () => subtle,
+                    set: () => {
+                        throw createWriteError_local();
+                    }
+                });
+
+                definePropertyInterceptors.push((o_, p_) => {
+                    if (o_ === o && p_ === p) {
+                        throw createWriteError_local();
+                    }
+                });
+            }
 
             continue;
         }
@@ -167,16 +200,30 @@ function freezeBrowserRuntime(params: { excludedApiNames: ApiName[] }) {
                 break service_worker;
             }
 
-            const name_ = "serviceWorker";
+            const o = window.navigator;
+            const p = "serviceWorker";
 
-            const original = navigator[name_];
+            const original = o?.[p];
 
-            Object.defineProperty(navigator, name_, {
+            if (!original) {
+                break service_worker;
+            }
+
+            const createWriteError_local = () =>
+                createWriteError({ target: `window.navigator.${p}`, apiName });
+
+            Object.defineProperty(o, p, {
                 configurable: false,
                 enumerable: true,
                 get: () => original,
                 set: () => {
-                    throw createWriteError({ target: `window.navigator.${name_}`, apiName });
+                    throw createWriteError_local();
+                }
+            });
+
+            definePropertyInterceptors.push((o_, p_) => {
+                if (o_ === o && p_ === p) {
+                    throw createWriteError_local();
                 }
             });
 
@@ -191,18 +238,14 @@ function freezeBrowserRuntime(params: { excludedApiNames: ApiName[] }) {
             const pName = "call";
 
             {
-                const defineProperty_original = Object.defineProperty;
-
-                Object.defineProperty = (o, p, attributes) => {
+                definePropertyInterceptors.push((o, p) => {
                     if (typeof o === "function" && o !== Function.prototype && p === pName) {
                         throw createWriteError({
                             target: `<some function> 's .${pName}() behavior`,
                             apiName
                         });
                     }
-
-                    return defineProperty_original(o, p, attributes);
-                };
+                });
             }
 
             Object.defineProperties = (o, properties) => {
@@ -215,15 +258,27 @@ function freezeBrowserRuntime(params: { excludedApiNames: ApiName[] }) {
             {
                 const original = Function.prototype[pName];
 
-                Object.defineProperty(Function.prototype, pName, {
+                const o = Function.prototype;
+                const p = pName;
+
+                const createWriteError_local = () =>
+                    createWriteError({
+                        target: `window.Function.prototype.${p}`,
+                        apiName
+                    });
+
+                Object.defineProperty(o, p, {
                     configurable: false,
                     enumerable: true,
                     get: () => original,
                     set: () => {
-                        throw createWriteError({
-                            target: `window.Function.prototype.${pName}`,
-                            apiName
-                        });
+                        throw createWriteError_local();
+                    }
+                });
+
+                definePropertyInterceptors.push((o_, p_) => {
+                    if (o === o_ && p === p_) {
+                        throw createWriteError_local();
                     }
                 });
             }
@@ -263,16 +318,20 @@ function freezeBrowserRuntime(params: { excludedApiNames: ApiName[] }) {
                     continue;
                 }
 
-                const target = `window.${apiName}.prototype.${propertyName}`;
+                const o = original.prototype;
+                const p = propertyName;
 
-                Object.defineProperty(original.prototype, propertyName, {
+                const createWriteError_local = () =>
+                    createWriteError({ target: `window.${apiName}.prototype.${p}`, apiName });
+
+                Object.defineProperty(o, p, {
                     enumerable: pd.enumerable,
                     configurable: false,
                     ...("value" in pd
                         ? {
                               get: () => pd.value,
                               set: () => {
-                                  throw createWriteError({ target, apiName });
+                                  throw createWriteError_local();
                               }
                           }
                         : {
@@ -280,9 +339,15 @@ function freezeBrowserRuntime(params: { excludedApiNames: ApiName[] }) {
                               set:
                                   pd.set ??
                                   (() => {
-                                      throw createWriteError({ target, apiName });
+                                      throw createWriteError_local();
                                   })
                           })
+                });
+
+                definePropertyInterceptors.push((o_, p_) => {
+                    if (o_ === o && p_ === p) {
+                        throw createWriteError_local();
+                    }
                 });
             }
 
@@ -295,16 +360,23 @@ function freezeBrowserRuntime(params: { excludedApiNames: ApiName[] }) {
                     continue;
                 }
 
-                const target = `window.${apiName}.prototype[Symbol.${symbol.toString()}]`;
+                const o = original.prototype;
+                const p = symbol;
 
-                Object.defineProperty(original.prototype, symbol, {
+                const createWriteError_local = () =>
+                    createWriteError({
+                        target: `window.${apiName}.prototype[Symbol.${p.toString()}]`,
+                        apiName
+                    });
+
+                Object.defineProperty(o, p, {
                     enumerable: pd.enumerable,
                     configurable: false,
                     ...("value" in pd
                         ? {
                               get: () => pd.value,
                               set: () => {
-                                  throw createWriteError({ target, apiName });
+                                  throw createWriteError_local();
                               }
                           }
                         : {
@@ -312,9 +384,15 @@ function freezeBrowserRuntime(params: { excludedApiNames: ApiName[] }) {
                               set:
                                   pd.set ??
                                   (() => {
-                                      throw createWriteError({ target, apiName });
+                                      throw createWriteError_local();
                                   })
                           })
+                });
+
+                definePropertyInterceptors.push((o_, p_) => {
+                    if (o_ === o && p_ === p) {
+                        throw createWriteError_local();
+                    }
                 });
             }
 
@@ -327,16 +405,20 @@ function freezeBrowserRuntime(params: { excludedApiNames: ApiName[] }) {
                     continue;
                 }
 
-                const target = `window.${apiName}.${propertyName}`;
+                const o = original;
+                const p = propertyName;
 
-                Object.defineProperty(original, propertyName, {
+                const createWriteError_local = () =>
+                    createWriteError({ target: `window.${apiName}.${propertyName}`, apiName });
+
+                Object.defineProperty(o, p, {
                     enumerable: pd.enumerable,
                     configurable: false,
                     ...("value" in pd
                         ? {
                               get: () => pd.value,
                               set: () => {
-                                  throw createWriteError({ target, apiName });
+                                  throw createWriteError_local();
                               }
                           }
                         : {
@@ -344,9 +426,15 @@ function freezeBrowserRuntime(params: { excludedApiNames: ApiName[] }) {
                               set:
                                   pd.set ??
                                   (() => {
-                                      throw createWriteError({ target, apiName });
+                                      throw createWriteError_local();
                                   })
                           })
+                });
+
+                definePropertyInterceptors.push((o_, p_) => {
+                    if (o_ === o && p_ === p) {
+                        throw createWriteError_local();
+                    }
                 });
             }
 
@@ -363,16 +451,23 @@ function freezeBrowserRuntime(params: { excludedApiNames: ApiName[] }) {
                         continue;
                     }
 
-                    const target = `new ${apiName}()[Symbol.iterator]().__proto__.${propertyName}`;
+                    const o = iterator_prototype;
+                    const p = propertyName;
 
-                    Object.defineProperty(iterator_prototype, propertyName, {
+                    const createWriteError_local = () =>
+                        createWriteError({
+                            target: `new ${apiName}()[Symbol.iterator]().__proto__.${propertyName}`,
+                            apiName
+                        });
+
+                    Object.defineProperty(o, p, {
                         enumerable: pd.enumerable,
                         configurable: false,
                         ...("value" in pd
                             ? {
                                   get: () => pd.value,
                                   set: () => {
-                                      throw createWriteError({ target, apiName });
+                                      throw createWriteError_local();
                                   }
                               }
                             : {
@@ -380,21 +475,41 @@ function freezeBrowserRuntime(params: { excludedApiNames: ApiName[] }) {
                                   set:
                                       pd.set ??
                                       (() => {
-                                          throw createWriteError({ target, apiName });
+                                          throw createWriteError_local();
                                       })
                               })
+                    });
+
+                    definePropertyInterceptors.push((o_, p_) => {
+                        if (o_ === o && p_ === p) {
+                            throw createWriteError_local();
+                        }
                     });
                 }
             }
         }
 
-        Object.defineProperty(window, apiName, {
-            configurable: false,
-            enumerable: true,
-            get: () => original,
-            set: () => {
-                throw createWriteError({ target: `window.${apiName}`, apiName });
-            }
-        });
+        {
+            const o = window;
+            const p = apiName;
+
+            const createWriteError_local = () =>
+                createWriteError({ target: `window.${apiName}`, apiName });
+
+            Object.defineProperty(o, p, {
+                configurable: false,
+                enumerable: true,
+                get: () => original,
+                set: () => {
+                    throw createWriteError_local();
+                }
+            });
+
+            definePropertyInterceptors.push((o_, p_) => {
+                if (o_ === o && p_ === p) {
+                    throw createWriteError_local();
+                }
+            });
+        }
     }
 }

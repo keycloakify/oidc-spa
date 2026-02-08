@@ -20,7 +20,7 @@ const config = defineConfig({
         oidcSpa({
             browserRuntimeFreeze: {
                 enabled: true
-                //exclude: [ "fetch", "XMLHttpRequest"]
+                //excludes: [ "fetch", "XMLHttpRequest"]
             },
             DPoP: {
                 enabled: true,

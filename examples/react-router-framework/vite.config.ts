@@ -11,7 +11,7 @@ export default defineConfig({
         oidcSpa({
             browserRuntimeFreeze: {
                 enabled: true
-                //exclude: [ "fetch", "XMLHttpRequest"]
+                //excludes: [ "fetch", "XMLHttpRequest"]
             }
         }),
         tsconfigPaths()
