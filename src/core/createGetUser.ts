@@ -1,13 +1,12 @@
 import type { Oidc } from "./Oidc";
-import { decodeJwt } from "../tools/decodeJwt";
 import { id } from "../tools/tsafe/id";
 import { assert } from "../tools/tsafe/assert";
 import type { MaybeAsync } from "../tools/MaybeAsync";
-import { Deferred } from "../tools/Deferred";
+import type { NonPostableEvt } from "../tools/Evt";
+import { decodeJwt } from "../tools/decodeJwt";
 
 export function createGetUser<User>(params: {
     issuerUri: string;
-    //createUser: ParamsOfCreateOidc["createUser"];
     createUser:
         | ((params: {
               decodedIdToken: Oidc.Tokens.DecodedIdToken_OidcCoreSpec;
@@ -19,14 +18,14 @@ export function createGetUser<User>(params: {
               issuerUri: string;
           }) => MaybeAsync<User>)
         | undefined;
-    getTokens: () => Promise<Oidc.Tokens>;
-    subscribeToTokensChange: (onTokenChange: (tokens: Oidc.Tokens) => void) => void;
+    getCurrentTokens: () => Oidc.Tokens<any>;
+    evtTokensChange: NonPostableEvt<void>;
     renewTokens(): Promise<void>;
     oidcMetadata: {
         userinfo_endpoint?: string;
     };
 }) {
-    const { issuerUri, createUser, getTokens, subscribeToTokensChange, renewTokens, oidcMetadata } =
+    const { issuerUri, createUser, getCurrentTokens, evtTokensChange, renewTokens, oidcMetadata } =
         params;
 
     type GetUser = Oidc.LoggedIn<any, User>["getUser"];
@@ -71,14 +70,14 @@ export function createGetUser<User>(params: {
 
         const hash_current = state?.hash;
 
+        const tokens = getCurrentTokens();
+
         const hash_new = computeHash({
             accessToken: tokens.accessToken,
-            decodedIdToken: tokens.decodedIdToken
+            decodedIdToken: tokens.decodedIdToken_original
         });
 
         const prUser_new = (async () => {
-            const tokens = await getTokens();
-
             const prUser_current = state?.prUser;
 
             if (hash_current === hash_new) {
@@ -118,23 +117,29 @@ export function createGetUser<User>(params: {
             state.hash = "";
         }
 
-        renewTokens();
+        await renewTokens();
+
+        assert(state !== undefined);
+
+        return state.prUser;
     };
 
-    subscribeToTokensChange(tokens => {});
+    evtTokensChange.subscribe(() => {
+        __updatePrUserIfHashChanged();
+    });
 
     const getUser: GetUser = async () => {
-        if (prUser === undefined) {
-            if (createUser === undefined) {
-                throw new Error("oidc-spa: createUser not provided");
-            }
-
-            __updatePrUser();
-
-            assert(prUser !== undefined);
+        if (createUser === undefined) {
+            throw new Error("oidc-spa: createUser not provided");
         }
 
-        const user = await prUser;
+        if (state === undefined) {
+            __updatePrUserIfHashChanged();
+
+            assert(state !== undefined);
+        }
+
+        const user = await state.prUser;
 
         return id<R_GetUser>({
             user,
@@ -149,4 +154,35 @@ export function createGetUser<User>(params: {
 function computeHash(params: {
     decodedIdToken: Oidc.Tokens.DecodedIdToken_OidcCoreSpec;
     accessToken: string;
-}): string {}
+}): string {
+    const { decodedIdToken, accessToken } = params;
+
+    const decodedIdToken_stableish = (() => {
+        const { exp, iat, nonce, auth_time, amr, acr, ...rest } = decodedIdToken;
+
+        return rest;
+    })();
+
+    const decodedAccessToken_stableish = (() => {
+        let decodedAccessToken: Record<string, unknown>;
+
+        try {
+            decodedAccessToken = decodeJwt(accessToken);
+        } catch {
+            return undefined;
+        }
+
+        const { exp, iat, jti, nbf, cnf, ...rest } = decodedAccessToken;
+
+        return rest;
+    })();
+
+    const stringify = (obj: Record<string, unknown>) =>
+        JSON.stringify(Object.entries(obj).sort(([a], [b]) => a.localeCompare(b)));
+
+    return [
+        stringify(decodedIdToken_stableish),
+        "|",
+        decodedAccessToken_stableish === undefined ? "" : stringify(decodedAccessToken_stableish)
+    ].join("");
+}
