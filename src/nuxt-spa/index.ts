@@ -13,7 +13,7 @@ export default defineNuxtModule<OidcSpaVitePluginParams>().with({
         // Check if SSR is disabled
         if (nuxt.options.ssr !== false) {
             throw new Error(
-                "oidc-spa module requires SSR to be disabled. Please set `ssr: false` in your nuxt.config.ts"
+                "Oidc-spa module requires SSR to be disabled. Please set `ssr: false` in your nuxt.config.ts."
             );
         }
 
