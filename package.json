@@ -52,7 +52,6 @@
         "@angular/router": "*",
         "@tanstack/react-router": "*",
         "@tanstack/react-start": "*",
-        "@nuxt/kit": "*",
         "@types/react": "*",
         "react": "*",
         "rxjs": "*"
@@ -80,9 +79,6 @@
             "optional": true
         },
         "@tanstack/react-router": {
-            "optional": true
-        },
-        "@nuxt/kit": {
             "optional": true
         }
     },
