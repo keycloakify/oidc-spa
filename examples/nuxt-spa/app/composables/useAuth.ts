@@ -1,4 +1,5 @@
 import type { Oidc } from "oidc-spa/core";
+import { createKeycloakUtils, isKeycloak } from "oidc-spa/keycloak";
 import type { DecodedIdToken } from "~/schemas/oidc";
 
 type AutoLogoutState =
@@ -54,6 +55,14 @@ export function useAuth() {
     });
 
     const issuerUri = computed(() => $oidc.issuerUri);
+    const keycloakUtils = computed(() => {
+        if (!isKeycloak({ issuerUri: issuerUri.value })) {
+            return undefined;
+        }
+
+        return createKeycloakUtils({ issuerUri: issuerUri.value });
+    });
+
     const clientId = computed(() => $oidc.clientId);
     const validRedirectUri = computed(() => $oidc.validRedirectUri);
 
@@ -116,6 +125,7 @@ export function useAuth() {
         idToken,
         autoLogoutState: readonly(autoLogoutStateRef),
         issuerUri,
+        keycloakUtils,
         clientId,
         validRedirectUri,
         backFromAuthServer,

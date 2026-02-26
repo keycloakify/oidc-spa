@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import { createKeycloakUtils, isKeycloak } from "oidc-spa/keycloak";
-
 // TODO DAN: Roles
 definePageMeta({
     middleware: "auth"
@@ -8,16 +6,7 @@ definePageMeta({
 
 const REQUIRED_ROLE = "realm-admin";
 
-const { idToken, issuerUri } = useAuth();
-
-// TODO DAN: move this logic to a composable since it's needed in multiple places
-const keycloakUtils = computed(() => {
-    if (!isKeycloak({ issuerUri: issuerUri.value })) {
-        return undefined;
-    }
-
-    return createKeycloakUtils({ issuerUri: issuerUri.value });
-});
+const { idToken, keycloakUtils } = useAuth();
 
 const hasRequiredRole = computed(() => {
     return !!idToken.value?.realm_access?.roles.includes(REQUIRED_ROLE);

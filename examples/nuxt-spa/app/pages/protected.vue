@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import { createKeycloakUtils, isKeycloak } from "oidc-spa/keycloak";
-
 definePageMeta({
     middleware: "auth"
 });
@@ -13,21 +11,13 @@ type DemoPost = {
 
 const {
     idToken,
-    issuerUri,
+    keycloakUtils,
     clientId,
     validRedirectUri,
     goToAuthServer,
     backFromAuthServer,
     fetchWithAuth
 } = useAuth();
-
-const keycloakUtils = computed(() => {
-    if (!isKeycloak({ issuerUri: issuerUri.value })) {
-        return undefined;
-    }
-
-    return createKeycloakUtils({ issuerUri: issuerUri.value });
-});
 
 const {
     data: demoPosts,

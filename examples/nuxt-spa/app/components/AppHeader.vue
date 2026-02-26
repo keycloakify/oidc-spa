@@ -1,15 +1,5 @@
 <script setup lang="ts">
-import { createKeycloakUtils, isKeycloak } from "oidc-spa/keycloak";
-
-const { isAuthenticated, idToken, issuerUri, login, register, logout } = useAuth();
-
-const keycloakUtils = computed(() => {
-    if (!isKeycloak({ issuerUri: issuerUri.value })) {
-        return undefined;
-    }
-
-    return createKeycloakUtils({ issuerUri: issuerUri.value });
-});
+const { isAuthenticated, idToken, keycloakUtils, login, register, logout } = useAuth();
 
 const profileImageSrc = computed(() => {
     const picture = idToken.value?.picture;
