@@ -29,13 +29,13 @@ const keycloakUtils = computed(() => {
     return createKeycloakUtils({ issuerUri: issuerUri.value });
 });
 
-// TODO DAN: useAsyncData
-const demoPosts = ref<DemoPost[] | undefined>(undefined);
-
-onMounted(async () => {
-    const response = await fetchWithAuth("https://jsonplaceholder.typicode.com/posts?_limit=4");
-    demoPosts.value = await response.json();
-});
+const {
+    data: demoPosts,
+    pending: isLoadingDemoPosts,
+    error: demoPostsError
+} = await useLazyAsyncData("demo-posts", () =>
+    fetchWithAuth<DemoPost[]>("https://jsonplaceholder.typicode.com/posts?_limit=4")
+);
 </script>
 
 <template>
@@ -151,7 +151,23 @@ onMounted(async () => {
                 description="Requests include Authorization: Bearer <access_token> when logged in."
             />
 
-            <p v-if="!demoPosts" class="mt-4 text-sm text-toned">Loading example posts…</p>
+            <div v-if="isLoadingDemoPosts" class="mt-4 space-y-3">
+                <UCard v-for="n in 4" :key="n" variant="soft">
+                    <USkeleton class="h-4 w-2/3" />
+                    <USkeleton class="mt-2 h-4 w-full" />
+                    <USkeleton class="mt-2 h-4 w-5/6" />
+                </UCard>
+            </div>
+
+            <UAlert
+                v-else-if="demoPostsError"
+                class="mt-4"
+                color="error"
+                variant="soft"
+                icon="i-lucide-triangle-alert"
+                title="Unable to load example posts"
+                :description="demoPostsError.message"
+            />
 
             <div v-else class="mt-4 space-y-3">
                 <UCard v-for="post in demoPosts" :key="post.id" variant="soft">

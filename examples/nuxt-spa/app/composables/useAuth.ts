@@ -94,7 +94,10 @@ export function useAuth() {
         }
     }
 
-    async function fetchWithAuth(input: RequestInfo | URL, init?: RequestInit) {
+    async function fetchWithAuth<T>(
+        input: Parameters<typeof $fetch<T>>[0],
+        init?: Parameters<typeof $fetch<T>>[1]
+    ) {
         const headers = new Headers(init?.headers);
 
         if ($oidc.isUserLoggedIn) {
@@ -102,7 +105,7 @@ export function useAuth() {
             headers.set("Authorization", `Bearer ${accessToken}`);
         }
 
-        return fetch(input, {
+        return $fetch<T>(input, {
             ...init,
             headers
         });
