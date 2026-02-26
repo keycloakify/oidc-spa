@@ -117,12 +117,12 @@ const {
                     </div>
 
                     <UAlert
-                        v-if="backFromAuthServer?.extraQueryParams.kc_action"
+                        v-if="backFromAuthServer?.extraQueryParams?.kc_action"
                         color="primary"
                         variant="soft"
                         icon="i-lucide-arrow-left-right"
-                        :title="`Result for ${backFromAuthServer.extraQueryParams.kc_action}`"
-                        :description="backFromAuthServer.result.kc_action_status"
+                        :title="`Result for ${backFromAuthServer?.extraQueryParams?.kc_action}`"
+                        :description="backFromAuthServer?.result?.kc_action_status"
                     />
                 </div>
             </template>
