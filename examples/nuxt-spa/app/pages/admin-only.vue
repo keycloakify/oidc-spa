@@ -1,14 +1,19 @@
 <script setup lang="ts">
 definePageMeta({
-    middleware: "auth"
+    middleware: "auth",
+    requiredRoles: ["realm-admin"]
 });
 
-const REQUIRED_ROLE = "realm-admin";
+const { routeRoleAccess, keycloakUtils } = useAuth();
 
-const { idToken, keycloakUtils } = useAuth();
+const hasRequiredRole = computed(() => routeRoleAccess.value.hasRequiredRoles);
 
-const hasRequiredRole = computed(() => {
-    return !!idToken.value?.realm_access?.roles.includes(REQUIRED_ROLE);
+const requiredRolesText = computed(() => {
+    return routeRoleAccess.value.requiredRoles.join(", ");
+});
+
+const missingRolesText = computed(() => {
+    return routeRoleAccess.value.missingRoles.join(", ");
 });
 </script>
 
@@ -19,7 +24,7 @@ const hasRequiredRole = computed(() => {
             variant="soft"
             icon="i-lucide-shield-x"
             title="Access denied"
-            :description="`You need the ${REQUIRED_ROLE} role to view this page.`"
+            :description="`You are authenticated but missing required role(s): ${missingRolesText}. Required: ${requiredRolesText}.`"
         />
     </section>
 
@@ -33,7 +38,7 @@ const hasRequiredRole = computed(() => {
                 color="success"
                 variant="soft"
                 icon="i-lucide-shield-check"
-                :description="`Access is granted because your ID token includes the ${REQUIRED_ROLE} role.`"
+                :description="`Access is granted because your ID token includes all required role(s): ${requiredRolesText}.`"
             />
 
             <template #footer>

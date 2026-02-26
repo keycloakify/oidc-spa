@@ -1,6 +1,7 @@
 import type { Oidc } from "oidc-spa/core";
 import { createKeycloakUtils, isKeycloak } from "oidc-spa/keycloak";
 import type { DecodedIdToken } from "~/schemas/oidc";
+export { Roles } from "~/constants/roles";
 
 type AutoLogoutState =
     | {
@@ -39,6 +40,7 @@ function ensureAutoLogoutSubscription(oidc: Oidc<DecodedIdToken>) {
 
 export function useAuth() {
     const { $oidc } = useNuxtApp();
+    const routeRoleAccessState = useRouteRoleAccessState();
 
     ensureAutoLogoutSubscription($oidc);
 
@@ -123,6 +125,7 @@ export function useAuth() {
     return {
         isAuthenticated,
         idToken,
+        routeRoleAccess: computed(() => routeRoleAccessState.value),
         autoLogoutState: readonly(autoLogoutStateRef),
         issuerUri,
         keycloakUtils,
