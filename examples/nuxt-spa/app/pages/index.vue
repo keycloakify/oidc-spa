@@ -1,94 +1,85 @@
 <script setup lang="ts">
-const { isAuthenticated, idToken, login, logout } = useAuth()
+const { isAuthenticated, idToken } = useAuth();
+
+const greeting = computed(() => {
+    if (!isAuthenticated.value) {
+        return "Browsing as a guest";
+    }
+
+    return `Signed in as ${idToken.value?.name ?? "user"}`;
+});
+
+const cards = [
+    {
+        title: "Sign in",
+        body: "Header actions reflect your auth state and show the decoded ID token picture claim."
+    },
+    {
+        title: "Visit /protected",
+        body: "Try the protected link; unauthenticated sessions are redirected to log in."
+    },
+    {
+        title: "Auto logout",
+        body: "Inactivity-triggered logouts display a gentle overlay warning first."
+    },
+    {
+        title: "Switch provider",
+        body: "Point .env.local at Auth0, Entra ID, Google OAuth or Keycloak (default)."
+    },
+    {
+        title: "Debug log",
+        body: "Pop open devtools to see extra auth state logs from oidc-spa."
+    },
+    {
+        title: "Nuxt UI",
+        body: "The Nuxt showcase now uses Nuxt UI cards, alerts, badges, and actions end-to-end."
+    }
+];
 </script>
 
 <template>
-  <div
-    class="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950 p-4"
-  >
-    <UCard class="w-full max-w-2xl">
-      <template #header>
-        <div class="text-center py-2">
-          <h1 class="text-2xl font-bold text-gray-900 dark:text-white">
-            Nuxt oidc-spa showcase
-          </h1>
-          <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            Secure authentication demo
-          </p>
-        </div>
-      </template>
+    <section class="space-y-8">
+        <UCard variant="subtle">
+            <template #header>
+                <div
+                    class="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between"
+                >
+                    <div>
+                        <p class="text-xs uppercase tracking-wide text-muted">Quick start</p>
+                        <h1 class="text-2xl font-semibold">A Nuxt-native place to try oidc-spa</h1>
+                    </div>
+                    <UBadge
+                        :color="isAuthenticated ? 'success' : 'neutral'"
+                        variant="soft"
+                        size="lg"
+                        class="max-w-full whitespace-normal"
+                    >
+                        {{ greeting }}
+                    </UBadge>
+                </div>
+            </template>
 
-      <div class="space-y-6">
-        <!-- Authentication Status -->
-        <div
-          class="flex items-center justify-between p-4 rounded-lg bg-gray-100 dark:bg-gray-800"
-        >
-          <span class="text-sm font-medium text-gray-700 dark:text-gray-300"
-            >Authentication Status</span
-          >
-          <UBadge
-            :color="isAuthenticated ? 'success' : 'error'"
-            variant="solid"
-            size="lg"
-          >
-            <UIcon
-              :name="`material-symbols:${isAuthenticated ? 'check-circle' : 'error'}`"
-              class="size-4 mr-1"
-            />
-            {{ isAuthenticated ? 'Logged In' : 'Not Logged In' }}
-          </UBadge>
-        </div>
+            <p class="text-sm text-toned">
+                Use the header actions to authenticate, then open protected routes to explore token data,
+                Keycloak account actions, and authenticated API calls.
+            </p>
 
-        <!-- Decoded ID Token -->
-        <div v-if="isAuthenticated && idToken" class="space-y-2">
-          <h2 class="text-sm font-semibold text-gray-700 dark:text-gray-300">
-            Decoded ID Token
-          </h2>
-          <div
-            class="bg-gray-950 dark:bg-gray-900 rounded-lg p-4 overflow-auto max-h-80 border border-gray-800"
-          >
-            <pre class="text-xs text-green-400 font-mono">{{
-              JSON.stringify(idToken, null, 2)
-            }}</pre>
-          </div>
-        </div>
+            <template #footer>
+                <UAlert
+                    icon="i-lucide-info"
+                    color="primary"
+                    variant="soft"
+                    title="Tip"
+                    description="Use mock mode in .env.local for fast local testing without a live identity provider."
+                />
+            </template>
+        </UCard>
 
-        <!-- Not Logged In Message -->
-        <div v-if="!isAuthenticated" class="text-center py-8 space-y-2">
-          <UIcon
-            name="material-symbols:lock"
-            class="text-4xl text-gray-400 dark:text-gray-600"
-          />
-          <p class="text-gray-500 dark:text-gray-400 text-sm">
-            Please log in to view your decoded ID token
-          </p>
+        <div class="grid gap-4 sm:grid-cols-2">
+            <UCard v-for="card in cards" :key="card.title" variant="outline">
+                <h2 class="text-sm font-semibold">{{ card.title }}</h2>
+                <p class="mt-1 text-sm text-toned">{{ card.body }}</p>
+            </UCard>
         </div>
-      </div>
-
-      <template #footer>
-        <div class="flex justify-center">
-          <UButton
-            v-if="!isAuthenticated"
-            color="primary"
-            size="lg"
-            class="px-8"
-            @click="login"
-          >
-            <UIcon name="material-symbols:login" class="size-5" />
-            Login
-          </UButton>
-          <UButton
-            v-if="isAuthenticated"
-            color="error"
-            size="lg"
-            class="px-8"
-            @click="logout"
-          >
-            <UIcon name="material-symbols:logout" class="size-5" />
-            Logout
-          </UButton>
-        </div>
-      </template>
-    </UCard>
-  </div>
+    </section>
 </template>

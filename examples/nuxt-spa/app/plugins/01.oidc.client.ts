@@ -18,7 +18,10 @@ export default defineNuxtPlugin({
                       decodedIdToken: {
                           sub: "mock-user",
                           name: "John Doe",
-                          preferred_username: "john.doe"
+                          preferred_username: "john.doe",
+                          realm_access: {
+                              roles: ["realm-admin"]
+                          }
                       }
                   },
                   BASE_URL: "/"
