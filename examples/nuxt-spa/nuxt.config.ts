@@ -18,9 +18,5 @@ export default defineNuxtConfig({
         // @ts-expect-error Type mismatch between Vite's plugin type and Nuxt's expected plugin type
         plugins: [tailwindcss()]
     },
-    oidcSpa: {
-        browserRuntimeFreeze: {
-            enabled: true
-        }
-    }
+    oidcSpa: {}
 });

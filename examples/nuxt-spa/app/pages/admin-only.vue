@@ -8,10 +8,6 @@ const { routeRoleAccess, keycloakUtils } = useAuth();
 
 const hasRequiredRole = computed(() => routeRoleAccess.value.hasRequiredRoles);
 
-const requiredRolesText = computed(() => {
-    return routeRoleAccess.value.requiredRoles.join(", ");
-});
-
 const missingRolesText = computed(() => {
     return routeRoleAccess.value.missingRoles.join(", ");
 });
@@ -24,7 +20,7 @@ const missingRolesText = computed(() => {
             variant="soft"
             icon="i-lucide-shield-x"
             title="Access denied"
-            :description="`You are authenticated but missing required role(s): ${missingRolesText}. Required: ${requiredRolesText}.`"
+            :description="`You are authenticated but missing required role(s): ${missingRolesText}.`"
         />
     </section>
 
@@ -38,7 +34,7 @@ const missingRolesText = computed(() => {
                 color="success"
                 variant="soft"
                 icon="i-lucide-shield-check"
-                :description="`Access is granted because your ID token includes all required role(s): ${requiredRolesText}.`"
+                :description="`Access is granted because your ID token includes all required role(s).`"
             />
 
             <template #footer>
