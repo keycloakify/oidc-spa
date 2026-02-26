@@ -12,5 +12,3 @@ export default defineNuxtRouteMiddleware(async to => {
 
     return abortNavigation();
 });
-
-// TODO DAN: Roles check here

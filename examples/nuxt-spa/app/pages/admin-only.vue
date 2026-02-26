@@ -1,5 +1,4 @@
 <script setup lang="ts">
-// TODO DAN: Roles
 definePageMeta({
     middleware: "auth"
 });
