@@ -31,7 +31,6 @@ export default defineNuxtPlugin({
                   clientId,
                   autoLogin: false,
                   debugLogs: true,
-                  autoLogoutParams: { redirectTo: "home" },
                   BASE_URL: "/",
                   decodedIdTokenSchema: DecodedIdTokenSchema
               });
