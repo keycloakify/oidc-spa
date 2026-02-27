@@ -1,5 +1,46 @@
 <script setup lang="ts">
 const { isAuthenticated, idToken, keycloakUtils, login, register, logout } = useAuth();
+const colorMode = useColorMode();
+
+if (!["light", "dark", "system"].includes(colorMode.preference)) {
+    colorMode.preference = "system";
+}
+
+const colorModeTriggerIcon = computed(() => {
+    return colorMode.value === "dark" ? "i-lucide-moon" : "i-lucide-sun";
+});
+
+function setColorMode(preference: "light" | "dark" | "system") {
+    colorMode.preference = preference;
+}
+
+const colorModeItems = computed(() => {
+    return [
+        [
+            {
+                label: "Light",
+                type: "checkbox",
+                checked: colorMode.preference === "light",
+                icon: "i-lucide-sun",
+                onSelect: () => setColorMode("light")
+            },
+            {
+                label: "Dark",
+                type: "checkbox",
+                checked: colorMode.preference === "dark",
+                icon: "i-lucide-moon",
+                onSelect: () => setColorMode("dark")
+            },
+            {
+                label: "System",
+                type: "checkbox",
+                checked: colorMode.preference === "system",
+                icon: "i-lucide-laptop",
+                onSelect: () => setColorMode("system")
+            }
+        ]
+    ];
+});
 
 const profileImageSrc = computed(() => {
     const picture = idToken.value?.picture;
@@ -41,6 +82,16 @@ function registerWithProvider() {
                     </div>
 
                     <div class="flex min-w-0 items-center justify-end gap-2">
+                        <UDropdownMenu :items="colorModeItems" :content="{ align: 'end' }">
+                            <UButton
+                                color="neutral"
+                                variant="ghost"
+                                size="sm"
+                                :icon="colorModeTriggerIcon"
+                                aria-label="Change color mode"
+                            />
+                        </UDropdownMenu>
+
                         <template v-if="!isAuthenticated">
                             <UButton
                                 color="primary"

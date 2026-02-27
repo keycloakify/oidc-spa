@@ -5,6 +5,9 @@ export default defineNuxtConfig({
     compatibilityDate: "2025-07-15",
     devtools: { enabled: true },
     modules: ["@nuxt/eslint", "@nuxt/ui", "@nuxt/icon", "oidc-spa/nuxt-spa"],
+    colorMode: {
+        preference: "system"
+    },
     ssr: false,
     runtimeConfig: {
         public: {
