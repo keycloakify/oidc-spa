@@ -48,7 +48,6 @@ export default defineNuxtRouteMiddleware(async to => {
     };
 
     await $oidc.login({
-        doesCurrentHrefRequiresAuth: true,
         redirectUrl: to.fullPath
     });
 
