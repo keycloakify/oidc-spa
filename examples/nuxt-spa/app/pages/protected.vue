@@ -39,7 +39,7 @@ const {
                         <p class="text-xs uppercase tracking-wide text-muted">Protected content</p>
                         <h1 class="text-2xl font-semibold">Hello {{ idToken?.name ?? "user" }}</h1>
                     </div>
-                    <UBadge color="primary" variant="soft">Authenticated</UBadge>
+                    <UBadge color="primary" variant="soft" size="lg">Authenticated</UBadge>
                 </div>
             </template>
 
