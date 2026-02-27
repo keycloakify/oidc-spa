@@ -1,7 +1,7 @@
 import { defineNuxtModule, addVitePlugin } from "@nuxt/kit";
 import { oidcSpa, type OidcSpaVitePluginParams } from "../vite-plugin";
 
-export default defineNuxtModule<OidcSpaVitePluginParams>().with({
+export const nuxtOidcSpaModule = defineNuxtModule<OidcSpaVitePluginParams>().with({
     meta: {
         name: "oidc-spa",
         configKey: "oidcSpa", // nuxt.config.ts: { oidcSpa: { ... } }
@@ -24,3 +24,5 @@ export default defineNuxtModule<OidcSpaVitePluginParams>().with({
         });
     }
 });
+
+export default nuxtOidcSpaModule;
