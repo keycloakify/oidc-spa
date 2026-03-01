@@ -50,6 +50,7 @@
         "@angular/common": "*",
         "@angular/core": "*",
         "@angular/router": "*",
+        "@nuxt/kit": "*",
         "@tanstack/react-router": "*",
         "@tanstack/react-start": "*",
         "@types/react": "*",
@@ -75,6 +76,9 @@
         "@angular/common": {
             "optional": true
         },
+        "@nuxt/kit": {
+            "optional": true
+        },
         "@tanstack/react-start": {
             "optional": true
         },
@@ -93,6 +97,8 @@
         "@babel/preset-env": "7.24.8",
         "@babel/traverse": "^7.28.4",
         "@babel/types": "^7.28.4",
+        "@nuxt/kit": "^4.3.1",
+        "@nuxt/schema": "^4.3.1",
         "@tanstack/react-start": "^1.132.0",
         "@types/babel__generator": "^7.6.4",
         "@types/babel__traverse": "^7.28.0",
@@ -158,6 +164,12 @@
             "module": "./dist/esm/vite-plugin/index.mjs",
             "import": "./dist/esm/vite-plugin/index.mjs",
             "default": "./dist/esm/vite-plugin/index.mjs"
+        },
+        "./nuxt-spa": {
+            "types": "./dist/esm/nuxt-spa/index.d.ts",
+            "module": "./dist/esm/nuxt-spa/index.mjs",
+            "import": "./dist/esm/nuxt-spa/index.mjs",
+            "default": "./dist/esm/nuxt-spa/index.mjs"
         },
         "./server": {
             "module": "./dist/esm/server/index.mjs",
