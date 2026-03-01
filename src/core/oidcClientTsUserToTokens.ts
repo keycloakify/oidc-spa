@@ -88,10 +88,7 @@ export function createOidcClientTsUserToTokens<DecodedIdToken extends Record<str
         })();
 
         const issuedAtTime = (() => {
-            // NOTE: The id_token is always a JWT as per the protocol.
-            // We don't use Date.now() due to network latency or if the
-            // local clock is inaccurate.
-            const id_token_iat = (() => {
+            let id_token_iat = (() => {
                 let iat: number | undefined;
 
                 try {
@@ -110,7 +107,44 @@ export function createOidcClientTsUserToTokens<DecodedIdToken extends Record<str
             })();
 
             if (id_token_iat === undefined) {
-                return Date.now();
+                return oidcClientTsUser.__oidc_spa_localTimeWhenTokenIssued;
+            }
+
+            correct_entra_builtin_skew: {
+                // See: https://github.com/keycloakify/oidc-spa/issues/162
+
+                const { expires_in } = oidcClientTsUser.__oidc_spa_tokenResponse;
+
+                if (expires_in === undefined) {
+                    break correct_entra_builtin_skew;
+                }
+
+                assert(typeof expires_in === "number", "203333425");
+
+                let access_token_iat: number;
+                let access_token_exp: number;
+
+                try {
+                    const decodedAccessToken = decodeJwt<Record<string, unknown>>(accessToken);
+
+                    assert(decodedAccessToken instanceof Object);
+
+                    const { iat, exp } = decodedAccessToken;
+
+                    assert(typeof iat === "number");
+                    assert(typeof exp === "number");
+
+                    access_token_iat = iat;
+                    access_token_exp = exp;
+                } catch {
+                    break correct_entra_builtin_skew;
+                }
+
+                const access_token_expires_in = access_token_exp - access_token_iat;
+
+                const builtin_skew_sec = access_token_expires_in - expires_in;
+
+                id_token_iat += builtin_skew_sec;
             }
 
             return id_token_iat * 1000;
