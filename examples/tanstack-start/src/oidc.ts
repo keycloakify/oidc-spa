@@ -16,7 +16,7 @@ export const {
         decodedIdTokenSchema: z.object({
             name: z.string(),
             picture: z.string().optional(),
-            email: z.string().email().optional(),
+            email: z.email().optional(),
             preferred_username: z.string().optional(),
             realm_access: z.object({ roles: z.array(z.string()) }).optional()
         }),
