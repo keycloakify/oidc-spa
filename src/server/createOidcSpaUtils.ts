@@ -702,11 +702,16 @@ async function fetchPublicSigningKeys(params: { issuerUri: string }): Promise<Pu
     const { jwks_uri } = await (async () => {
         const url = `${issuerUri.replace(/\/$/, "")}/.well-known/openid-configuration`;
 
-        const response = await fetch(url);
+        const response = await fetch(url).catch(error => {
+            assert(error instanceof Error);
+            return error;
+        });
 
-        if (!response.ok) {
+        if (response instanceof Error || !response.ok) {
             throw new Error(
-                `Failed to fetch openid configuration of the issuerUri: ${issuerUri} (${url}): ${response.statusText}`
+                `Failed to fetch openid configuration of the issuerUri: ${issuerUri} (${url}): ${
+                    response instanceof Error ? response.message : response.statusText
+                }`
             );
         }
 
