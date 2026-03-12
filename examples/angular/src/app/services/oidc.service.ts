@@ -3,6 +3,8 @@ import { AbstractOidcService } from 'oidc-spa/angular';
 
 export type DecodedIdToken = {
   name: string;
+  email?: string;
+  preferred_username?: string;
   realm_access?: {
     roles: string[];
   };

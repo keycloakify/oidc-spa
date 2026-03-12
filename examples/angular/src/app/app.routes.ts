@@ -8,5 +8,10 @@ export const routes: Routes = [
     loadComponent: () => import('./pages/protected').then((c) => c.Protected),
     canActivate: [Oidc.enforceLoginGuard],
   },
+  {
+    path: 'account',
+    loadComponent: () => import('./pages/account').then((c) => c.Account),
+    canActivate: [Oidc.enforceLoginGuard],
+  },
   { path: '**', redirectTo: '' },
 ];
