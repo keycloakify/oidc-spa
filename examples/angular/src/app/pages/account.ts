@@ -63,7 +63,11 @@ export class Account {
     locale: undefined,
   });
 
-  protected readonly actionResult = this.readAccountActionResult();
+  protected get actionResult(){
+
+    this.oidc.
+
+  };
 
   protected triggerAccountAction(action: AccountAction) {
     return this.oidc.goToAuthServer({
@@ -71,16 +75,4 @@ export class Account {
     });
   }
 
-  private readAccountActionResult(): { action: string; status: string } | undefined {
-    const searchParams = new URLSearchParams(window.location.search);
-
-    const action = searchParams.get('kc_action');
-    const status = searchParams.get('kc_action_status');
-
-    if (action === null || status === null) {
-      return undefined;
-    }
-
-    return { action, status };
-  }
 }

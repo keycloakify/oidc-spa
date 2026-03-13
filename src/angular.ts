@@ -634,6 +634,17 @@ export abstract class AbstractOidcService<
         return this.#getOidc({ callerName: "validRedirectUri" }).validRedirectUri;
     }
 
+    get backFromAuthServer(){
+        const oidc = this.#getOidc({ callerName: "backFromAuthServer" });
+        assert(oidc.isUserLoggedIn);
+
+        if (!oidc.isUserLoggedIn) {
+            throw new Error("oidc-spa: backFromAuthServer called but the user is not logged in.");
+        }
+
+        return oidc.backFromAuthServer;
+    }
+
     #isUserLoggedIn_override: boolean | undefined = undefined;
 
     get isUserLoggedIn() {
@@ -875,6 +886,7 @@ export abstract class AbstractOidcService<
 
         return oidc.isNewBrowserSession;
     }
+
 }
 
 export class OidcAccessedTooEarlyError extends Error {
