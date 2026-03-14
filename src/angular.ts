@@ -1,3 +1,4 @@
+import { isPlatformBrowser } from "@angular/common";
 import { BehaviorSubject, from, switchMap, Subject, type Observable } from "rxjs";
 import type { Oidc, OidcInitializationError, ParamsOfCreateOidc } from "./core";
 import type { OidcMetadata } from "./core/OidcMetadata";
@@ -10,7 +11,8 @@ import {
     inject,
     type EnvironmentProviders,
     makeEnvironmentProviders,
-    provideAppInitializer
+    provideAppInitializer,
+    PLATFORM_ID
 } from "@angular/core";
 import type { HttpInterceptorFn, HttpRequest } from "@angular/common/http";
 import { toSignal } from "@angular/core/rxjs-interop";
@@ -224,6 +226,13 @@ export abstract class AbstractOidcService<
         return makeEnvironmentProviders([
             this,
             provideAppInitializer(async () => {
+                {
+                    const platformId = inject(PLATFORM_ID);
+
+                    if (!isPlatformBrowser(platformId)) {
+                        return;
+                    }
+                }
                 const instance = inject(this);
 
                 instance.#initialize({
@@ -273,6 +282,14 @@ export abstract class AbstractOidcService<
         return makeEnvironmentProviders([
             this,
             provideAppInitializer(async () => {
+                {
+                    const platformId = inject(PLATFORM_ID);
+
+                    if (!isPlatformBrowser(platformId)) {
+                        return;
+                    }
+                }
+
                 const instance = inject(this);
 
                 instance.#initialize({
@@ -632,6 +649,17 @@ export abstract class AbstractOidcService<
 
     get validRedirectUri() {
         return this.#getOidc({ callerName: "validRedirectUri" }).validRedirectUri;
+    }
+
+    get backFromAuthServer() {
+        const oidc = this.#getOidc({ callerName: "backFromAuthServer" });
+        assert(oidc.isUserLoggedIn);
+
+        if (!oidc.isUserLoggedIn) {
+            throw new Error("oidc-spa: backFromAuthServer called but the user is not logged in.");
+        }
+
+        return oidc.backFromAuthServer;
     }
 
     #isUserLoggedIn_override: boolean | undefined = undefined;

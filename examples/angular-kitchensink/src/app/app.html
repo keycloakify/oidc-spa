@@ -1,66 +1,77 @@
-<header style="
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      width: calc(100% - 32px);
-      padding: 8px 16px;
-    ">
-      <div>
-            <span>OIDC-SPA + Angular (Kitchen Sink)</span>
-            &nbsp;
-            &nbsp;
-            &nbsp;
-            &nbsp;
-            <span>
-                  <a routerLink="/" routerLinkActive #rla="routerLinkActive" [routerLinkActiveOptions]="{ exact: true }"
-                        [style]="{ fontWeight: rla.isActive ? 'bold' : 'normal' }">Home</a>
-                  &nbsp; &nbsp;
-                  <a routerLink="/protected" routerLinkActive #rla2="routerLinkActive"
-                        [style]="{ fontWeight: rla2.isActive ? 'bold' : 'normal' }">My protected page</a>
+<header
+  style="
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    width: calc(100% - 32px);
+    padding: 8px 16px;
+  "
+>
+  <div>
+    <span>OIDC-SPA + Angular (Kitchen Sink)</span>
+    &nbsp; &nbsp; &nbsp; &nbsp;
+    <span>
+      <a
+        routerLink="/"
+        routerLinkActive
+        #rla="routerLinkActive"
+        [routerLinkActiveOptions]="{ exact: true }"
+        [style]="{ fontWeight: rla.isActive ? 'bold' : 'normal' }"
+        >Home</a
+      >
+      &nbsp; &nbsp;
+      <a
+        routerLink="/protected"
+        routerLinkActive
+        #rla2="routerLinkActive"
+        [style]="{ fontWeight: rla2.isActive ? 'bold' : 'normal' }"
+        >My protected page</a
+      >
 
-                  @defer (when oidc.prInitialized | async) {
-                  &nbsp; &nbsp;
-                  <a routerLink="/admin-only" routerLinkActive #rla3="routerLinkActive"
-                        [style]="{
+      @defer (when oidc.prInitialized | async) { &nbsp; &nbsp;
+      <a
+        routerLink="/admin-only"
+        routerLinkActive
+        #rla3="routerLinkActive"
+        [style]="{
                           fontWeight: rla3.isActive ? 'bold' : 'normal',
                           cursor: canShowAdminLink ? 'pointer' : 'not-allowed',
                         }"
-                        [attr.aria-disabled]="canShowAdminLink ? null : true"
-                        >Admin only</a>
-                  } @placeholder {
-                  &nbsp; &nbsp;
-                  <a routerLink="/admin-only" routerLinkActive>Admin only</a>
-                  }
-            </span>
-      </div>
+        [attr.aria-disabled]="canShowAdminLink ? null : true"
+        >Admin only</a
+      >
+      } @placeholder { &nbsp; &nbsp;
+      <a routerLink="/admin-only" routerLinkActive>Admin only</a>
+      }
+    </span>
+  </div>
 
-      @defer (when oidc.prInitialized | async) {
-      @if (oidc.isUserLoggedIn) {
-      <div>
-            <span>Hello {{ oidc.$decodedIdToken().name }}</span>
-            &nbsp; &nbsp;
-            <button (click)="oidc.logout({ redirectTo: 'home' })">Logout</button>
-      </div>
-      } @else {
-      <div>
-            <button (click)="oidc.login()">Login</button>
-            <button (click)="
+  @defer (when oidc.prInitialized | async) { @if (oidc.isUserLoggedIn) {
+  <div>
+    <span>Hello {{ oidc.$decodedIdToken().name }}</span>
+    &nbsp; &nbsp;
+    <button (click)="oidc.logout({ redirectTo: 'home' })">Logout</button>
+  </div>
+  } @else {
+  <div>
+    <button (click)="oidc.login()">Login</button>
+    <button
+      (click)="
                   oidc.login({
                     transformUrlBeforeRedirect: keycloakUtils.transformUrlBeforeRedirectForRegister,
                   })
-                ">
-                  Register
-            </button>
-      </div>
-      }
-      } @placeholder {
-      <span style="line-height: 1.35;">Initializing OIDC...</span>
-      }
-
+                "
+    >
+      Register
+    </button>
+  </div>
+  } } @placeholder {
+  <span style="line-height: 1.35">Initializing OIDC...</span>
+  }
 </header>
 
 <br />
@@ -69,7 +80,8 @@
 
 @if (oidc.$secondsLeftBeforeAutoLogout() ) {
 <!-- Full screen overlay, blurred background -->
-<div [style]="{
+<div
+  [style]="{
             position: 'fixed',
             top: 0,
             left: 0,
@@ -81,10 +93,11 @@
             justifyContent: 'center',
             alignItems: 'center',
             zIndex: 1000,
-          }">
-      <div>
-            <p>Are you still there?</p>
-            <p>You will be logged out in {{ oidc.$secondsLeftBeforeAutoLogout() }}</p>
-      </div>
+          }"
+>
+  <div>
+    <p>Are you still there?</p>
+    <p>You will be logged out in {{ oidc.$secondsLeftBeforeAutoLogout() }}</p>
+  </div>
 </div>
 }
