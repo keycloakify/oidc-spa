@@ -1,7 +1,9 @@
+import { isPlatformBrowser } from "@angular/common";
 import { HttpHandlerFn, HttpInterceptorFn, HttpRequest } from "@angular/common/http";
 import {
     inject,
     makeEnvironmentProviders,
+    PLATFORM_ID,
     provideAppInitializer,
     type EnvironmentProviders,
     type Signal
@@ -209,8 +211,11 @@ export abstract class AbstractOidcService<
         return makeEnvironmentProviders([
             this,
             provideAppInitializer(async () => {
-                const instance = inject(this);
+                // Detect platform
+                const platformId = inject(PLATFORM_ID);
 
+                if (!isPlatformBrowser(platformId)) return;
+                const instance = inject(this);
                 instance.#initialize({
                     prOidcOrInitializationError: (async () => {
                         const [{ createOidc }, { autoLogoutWarningDurationSeconds, ...params }] =
@@ -254,6 +259,10 @@ export abstract class AbstractOidcService<
         return makeEnvironmentProviders([
             this,
             provideAppInitializer(async () => {
+                // Detect platform
+                const platformId = inject(PLATFORM_ID);
+
+                if (!isPlatformBrowser(platformId)) return;
                 const instance = inject(this);
 
                 instance.#initialize({
