@@ -1,8 +1,6 @@
 import { isKeycloak, createKeycloakUtils } from "../keycloak";
 
 /**
- * @deprecated: Use `import { ... } from "oidc-spa/keycloak"` instead.
- *
  * Return undefined if the issuerUri doesn't match the expected shape of a Keycloak issuerUri
  *
  * Example:
@@ -44,6 +42,11 @@ export function parseKeycloakIssuerUri(issuerUri: string):
         kcHttpRelativePath: keycloakUtils.issuerUriParsed.kcHttpRelativePath,
         adminConsoleUrl: keycloakUtils.adminConsoleUrl,
         adminConsoleUrl_master: keycloakUtils.adminConsoleUrl_master,
-        getAccountUrl: keycloakUtils.getAccountUrl
+        getAccountUrl: ({ clientId, backToAppFromAccountUrl, locale }) =>
+            keycloakUtils.getAccountUrl({
+                clientId,
+                validRedirectUri: backToAppFromAccountUrl,
+                locale
+            })
     };
 }

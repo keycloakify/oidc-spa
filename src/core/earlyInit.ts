@@ -1,110 +1,201 @@
 import { getStateData, getIsStatQueryParamValue } from "./StateData";
 import { assert, type Equals } from "../tools/tsafe/assert";
 import type { AuthResponse } from "./AuthResponse";
+import { setBASE_URL_earlyInit } from "./earlyInit_BASE_URL";
+import { isBrowser } from "../tools/isBrowser";
+import { createEvt, type Evt } from "../tools/Evt";
 import {
-    encryptAuthResponse,
-    preventSessionStorageSetItemOfPublicKeyByThirdParty
-} from "./iframeMessageProtection";
+    setGetRootRelativeOriginalLocationHref_earlyInit,
+    getRootRelativeOriginalLocationHref_earlyInit
+} from "./earlyInit_rootRelativeOriginalLocationHref";
+import { prModuleCreateOidc } from "./earlyInit_prModuleCreateOidc";
 
-let hasEarlyInitBeenCalled = false;
+const IFRAME_MESSAGE_PREFIX = "oidc-spa:cross-window-messaging:";
 
-export function oidcEarlyInit(params: {
-    freezeFetch: boolean;
-    freezeXMLHttpRequest: boolean;
-    // NOTE: Made optional just to avoid breaking change.
-    // Will be made mandatory next major.
-    freezeWebSocket?: boolean;
-}) {
-    if (hasEarlyInitBeenCalled) {
-        throw new Error("oidc-spa: oidcEarlyInit() Should be called only once");
+export type ParamsOfEarlyInit = {
+    /**
+     * Base path of where is deployed the webapp
+     * usually `import.meta.env.BASE_URL`
+     * if omitted, can be provided to createOidc()
+     */
+    BASE_URL?: string;
+
+    /**
+     * Determines how session restoration is handled.
+     * Session restoration allows users to stay logged in between visits
+     * without needing to explicitly sign in each time.
+     *
+     * Options:
+     *
+     * - **"auto" (default)**:
+     *   Automatically selects the best method.
+     *   If the app’s domain shares a common parent domain with the authorization endpoint,
+     *   an iframe is used for silent session restoration.
+     *   Otherwise, a full-page redirect is used.
+     *
+     * - **"full page redirect"**:
+     *   Forces full-page reloads for session restoration.
+     *   Use this if your application is served with a restrictive CSP
+     *   (e.g., `Content-Security-Policy: frame-ancestors "none"`)
+     *   or `X-Frame-Options: DENY`, and you cannot modify those headers.
+     *   This mode provides a slightly less seamless UX and will lead oidc-spa to
+     *   store tokens in `localStorage` if multiple OIDC clients are used
+     *   (e.g., your app communicates with several APIs).
+     *
+     * - **"iframe"**:
+     *   Forces iframe-based session restoration.
+     *   In development, if you go in your browser setting and allow your auth server’s domain
+     *   to set third-party cookies this value will let you test your app
+     *   with the local dev server as it will behave in production.
+     *
+     *  See: https://docs.oidc-spa.dev/v/v10/resources/third-party-cookies-and-session-restoration
+     */
+    sessionRestorationMethod?: "iframe" | "full page redirect" | "auto";
+
+    /** See: https://docs.oidc-spa.dev/v/v10/security-features/token-substitution */
+    securityDefenses?: {
+        enableBrowserRuntimeFreeze?: () => void;
+        enableDPoP?: () => void;
+        enableTokenSubstitution?: () => void;
+    };
+};
+
+let shouldLoadApp: boolean | undefined = undefined;
+
+export function oidcEarlyInit(params?: ParamsOfEarlyInit) {
+    if (shouldLoadApp !== undefined) {
+        return { shouldLoadApp };
     }
 
-    hasEarlyInitBeenCalled = true;
+    shouldLoadApp = oidcEarlyInit_nonMemoized(params).shouldLoadApp;
 
-    const { freezeFetch, freezeXMLHttpRequest, freezeWebSocket = false } = params ?? {};
+    return { shouldLoadApp };
+}
+
+function oidcEarlyInit_nonMemoized(params: ParamsOfEarlyInit | undefined) {
+    const { BASE_URL, sessionRestorationMethod, securityDefenses = {} } = params ?? {};
+
+    if (!isBrowser) {
+        return { shouldLoadApp: true };
+    }
 
     const { shouldLoadApp } = handleOidcCallback();
 
+    let exports_earlyInit: import("./createOidc").Exports_earlyInit;
+
     if (shouldLoadApp) {
-        if (freezeXMLHttpRequest) {
-            const XMLHttpRequest_trusted = globalThis.XMLHttpRequest;
+        let evtIframeAuthResponse: Evt<AuthResponse> | undefined = undefined;
 
-            Object.freeze(XMLHttpRequest_trusted.prototype);
-            Object.freeze(XMLHttpRequest_trusted);
+        {
+            const _MessageEvent_prototype_data_get = (() => {
+                const pd = Object.getOwnPropertyDescriptor(MessageEvent.prototype, "data");
 
-            Object.defineProperty(globalThis, "XMLHttpRequest", {
-                configurable: false,
-                writable: false,
-                enumerable: true,
-                value: XMLHttpRequest_trusted
-            });
+                assert(pd !== undefined);
+
+                const { get } = pd;
+
+                assert(get !== undefined);
+
+                return get;
+            })();
+
+            const _MessageEvent_prototype_origin_get = (() => {
+                const pd = Object.getOwnPropertyDescriptor(MessageEvent.prototype, "origin");
+
+                assert(pd !== undefined);
+
+                const { get } = pd;
+
+                assert(get !== undefined);
+
+                return get;
+            })();
+
+            const _Event_prototype_stopImmediatePropagation_value =
+                Event.prototype.stopImmediatePropagation;
+
+            const origin = window.location.origin;
+
+            window.addEventListener(
+                "message",
+                event => {
+                    if (_MessageEvent_prototype_origin_get.call(event) !== origin) {
+                        return;
+                    }
+
+                    const eventData: unknown = _MessageEvent_prototype_data_get.call(event);
+
+                    if (typeof eventData !== "string") {
+                        return;
+                    }
+
+                    if (!eventData.startsWith(IFRAME_MESSAGE_PREFIX)) {
+                        return;
+                    }
+
+                    _Event_prototype_stopImmediatePropagation_value.call(event);
+
+                    const authResponse: AuthResponse = JSON.parse(
+                        eventData.slice(IFRAME_MESSAGE_PREFIX.length)
+                    );
+
+                    (evtIframeAuthResponse ??= createEvt()).post(authResponse);
+                },
+                {
+                    capture: true,
+                    once: false,
+                    passive: false
+                }
+            );
         }
 
-        if (freezeFetch) {
-            const fetch_trusted = globalThis.fetch;
-
-            Object.freeze(fetch_trusted);
-
-            Object.defineProperty(globalThis, "fetch", {
-                configurable: false,
-                writable: false,
-                enumerable: true,
-                value: fetch_trusted
-            });
+        if (BASE_URL !== undefined) {
+            setBASE_URL_earlyInit({ BASE_URL });
         }
 
-        if (freezeWebSocket) {
-            const WebSocket_trusted = globalThis.WebSocket;
+        {
+            const { enableBrowserRuntimeFreeze, enableDPoP, enableTokenSubstitution } = securityDefenses;
 
-            Object.freeze(WebSocket_trusted.prototype);
-            Object.freeze(WebSocket_trusted);
-
-            Object.defineProperty(globalThis, "WebSocket", {
-                configurable: false,
-                writable: false,
-                enumerable: true,
-                value: WebSocket_trusted
-            });
+            enableDPoP?.();
+            enableTokenSubstitution?.();
+            enableBrowserRuntimeFreeze?.();
         }
 
-        preventSessionStorageSetItemOfPublicKeyByThirdParty();
+        exports_earlyInit = {
+            shouldLoadApp: true,
+            getEvtIframeAuthResponse: () => {
+                return (evtIframeAuthResponse ??= createEvt());
+            },
+            getRedirectAuthResponse: () => {
+                return redirectAuthResponse === undefined
+                    ? { authResponse: undefined }
+                    : {
+                          authResponse: redirectAuthResponse,
+                          clearAuthResponse: () => {
+                              redirectAuthResponse = undefined;
+                          }
+                      };
+            },
+            sessionRestorationMethod
+        };
+    } else {
+        exports_earlyInit = {
+            shouldLoadApp: false
+        };
     }
+
+    prModuleCreateOidc.then(({ registerExports_earlyInit }) => {
+        registerExports_earlyInit(exports_earlyInit);
+    });
 
     return { shouldLoadApp };
 }
 
 let redirectAuthResponse: AuthResponse | undefined = undefined;
 
-export function getRedirectAuthResponse():
-    | { authResponse: AuthResponse; clearAuthResponse: () => void }
-    | { authResponse: undefined; clearAuthResponse?: never } {
-    if (!hasEarlyInitBeenCalled) {
-        throw new Error(
-            [
-                "oidc-spa setup error.",
-                "oidcEarlyInit() wasn't called.",
-                "In newer version, using oidc-spa/entrypoint is no longer optional."
-            ].join(" ")
-        );
-    }
-    return redirectAuthResponse === undefined
-        ? { authResponse: undefined }
-        : {
-              authResponse: redirectAuthResponse,
-              clearAuthResponse: () => {
-                  redirectAuthResponse = undefined;
-              }
-          };
-}
-
-let rootRelativeOriginalLocationHref: string | undefined = undefined;
-
-export function getRootRelativeOriginalLocationHref() {
-    assert(rootRelativeOriginalLocationHref !== undefined, "033292");
-    return rootRelativeOriginalLocationHref;
-}
-
-function handleOidcCallback(): { shouldLoadApp: boolean } {
+function handleOidcCallback(): {
+    shouldLoadApp: boolean;
+} {
     const location_urlObj = new URL(window.location.href);
 
     const locationHrefAssessment = (() => {
@@ -151,11 +242,15 @@ function handleOidcCallback(): { shouldLoadApp: boolean } {
     })();
 
     if (!locationHrefAssessment.hasAuthResponseInUrl) {
-        rootRelativeOriginalLocationHref = location_urlObj.href.slice(location_urlObj.origin.length);
+        setGetRootRelativeOriginalLocationHref_earlyInit({
+            rootRelativeOriginalLocationHref: location_urlObj.href.slice(location_urlObj.origin.length)
+        });
         return { shouldLoadApp: true };
     }
 
-    rootRelativeOriginalLocationHref = location_urlObj.pathname;
+    setGetRootRelativeOriginalLocationHref_earlyInit({
+        rootRelativeOriginalLocationHref: location_urlObj.pathname
+    });
 
     const { authResponse } = (() => {
         const authResponse: AuthResponse = { state: "" };
@@ -183,19 +278,28 @@ function handleOidcCallback(): { shouldLoadApp: boolean } {
     const stateData = getStateData({ stateUrlParamValue: authResponse.state });
 
     if (stateData === undefined) {
-        history.replaceState({}, "", rootRelativeOriginalLocationHref);
+        history.replaceState({}, "", getRootRelativeOriginalLocationHref_earlyInit());
         return { shouldLoadApp: true };
     }
 
     switch (stateData.context) {
         case "iframe":
-            encryptAuthResponse({
-                authResponse
-            }).then(({ encryptedMessage }) => parent.postMessage(encryptedMessage, location.origin));
+            if (parent !== top) {
+                const errorMessage = [
+                    "oidc-spa: For security reasons, refusing to post the auth response.",
+                    "If you want your app to be framable use sessionRestorationMethod: 'full page redirect'."
+                ].join(" ");
+                alert(errorMessage);
+
+                throw new Error(errorMessage);
+            }
+            parent.postMessage(
+                `${IFRAME_MESSAGE_PREFIX}${JSON.stringify(authResponse)}`,
+                location.origin
+            );
             return { shouldLoadApp: false };
         case "redirect": {
             redirectAuthResponse = authResponse;
-
             const rootRelativeRedirectUrl = (() => {
                 if (stateData.action === "login" && authResponse.error === "consent_required") {
                     return stateData.rootRelativeRedirectUrl_consentRequiredCase;
@@ -204,7 +308,6 @@ function handleOidcCallback(): { shouldLoadApp: boolean } {
             })();
 
             history.replaceState({}, "", rootRelativeRedirectUrl);
-
             return { shouldLoadApp: true };
         }
         default:

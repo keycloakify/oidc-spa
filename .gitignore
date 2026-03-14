@@ -42,3 +42,14 @@ jspm_packages
 
 /.yarn_home
 /dist
+
+/examples/*/yarn.lock
+
+.vercel
+/.tmp
+
+/www.oidc-spa.dev
+/docs.oidc-spa.dev
+/tanstack.com
+/react-router-website
+/oidc-client-ts

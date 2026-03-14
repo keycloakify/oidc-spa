@@ -18,19 +18,60 @@ import { createOidc, type Oidc, OidcInitializationError } from "../../core";
 import { Deferred } from "../../tools/Deferred";
 import { decodeJwt } from "../../tools/decodeJwt";
 import { type KeycloakUtils, createKeycloakUtils } from "../keycloakUtils";
-import { workerTimers } from "../../vendor/frontend/worker-timers";
 import { type StatefulEvt, createStatefulEvt } from "../../tools/StatefulEvt";
 import { readExpirationTimeInJwt } from "../../tools/readExpirationTimeInJwt";
+import { getHomeAndRedirectUri } from "../../core/homeAndRedirectUri";
 
 type ConstructorParams = KeycloakServerConfig & {
-    homeUrl: string;
+    /**
+     * NOTE: This parameter is optional if you use the Vite plugin.
+     *
+     * This parameter let's you overwrite the value provided in
+     * oidcEarlyInit({ BASE_URL: xxx });
+     *
+     * What should you put in this parameter?
+     *   - Vite project:             `BASE_URL: import.meta.env.BASE_URL`
+     *   - Create React App project: `BASE_URL: process.env.PUBLIC_URL`
+     *   - Other:                    `BASE_URL: "/"` (Usually, or `/dashboard` if your app is not at the root of the domain)
+     */
+    BASE_URL?: string;
+
+    /**
+     * Determines how session restoration is handled.
+     * Session restoration allows users to stay logged in between visits
+     * without needing to explicitly sign in each time.
+     *
+     * Options:
+     *
+     * - **"auto" (default)**:
+     *   Automatically selects the best method.
+     *   If the app’s domain shares a common parent domain with the authorization endpoint,
+     *   an iframe is used for silent session restoration.
+     *   Otherwise, a full-page redirect is used.
+     *
+     * - **"full page redirect"**:
+     *   Forces full-page reloads for session restoration.
+     *   Use this if your application is served with a restrictive CSP
+     *   (e.g., `Content-Security-Policy: frame-ancestors "none"`)
+     *   or `X-Frame-Options: DENY`, and you cannot modify those headers.
+     *   This mode provides a slightly less seamless UX and will lead oidc-spa to
+     *   store tokens in `localStorage` if multiple OIDC clients are used
+     *   (e.g., your app communicates with several APIs).
+     *
+     * - **"iframe"**:
+     *   Forces iframe-based session restoration.
+     *   In development, if you go in your browser setting and allow your auth server’s domain
+     *   to set third-party cookies this value will let you test your app
+     *   with the local dev server as it will behave in production.
+     */
+    sessionRestorationMethod?: "iframe" | "full page redirect" | "auto";
 };
 
 /**
  * This module provides a drop-in replacement for `keycloak-js`,
  * designed for teams migrating to `oidc-spa` with minimal changes.
  *
- * ⚠️ While the import path is `oidc-spa/keycloak-js`, this is *not* a re-export or patch —
+ * While the import path is `oidc-spa/keycloak-js`, this is *not* a re-export or patch —
  * it is a full alternative implementation aligned with the `keycloak-js` API.
  */
 export class Keycloak {
@@ -40,8 +81,8 @@ export class Keycloak {
         issuerUri: string;
         dInitialized: Deferred<void>;
         initOptions: KeycloakInitOptions | undefined;
-        oidc: Oidc<Record<string, unknown>> | undefined;
-        tokens: Oidc.Tokens<Record<string, unknown>> | undefined;
+        oidc: Oidc | undefined;
+        tokens: Oidc.Tokens | undefined;
         profile: KeycloakProfile | undefined;
         userInfo: KeycloakUserInfo | undefined;
         $onTokenExpired: StatefulEvt<(() => void) | undefined>;
@@ -77,8 +118,16 @@ export class Keycloak {
      * @param initOptions Initialization options.
      * @returns A promise to set functions to be invoked on success or error.
      */
-    async init(initOptions: KeycloakInitOptions = {}): Promise<boolean> {
-        const { onLoad = "check-sso", redirectUri, enableLogging, scope, locale } = initOptions;
+    init = this.#init.bind(this);
+    async #init(initOptions: KeycloakInitOptions = {}): Promise<boolean> {
+        const {
+            onLoad = "check-sso",
+            redirectUri,
+            enableLogging,
+            scope,
+            locale,
+            autoLogoutParams
+        } = initOptions;
 
         if (this.#state.initOptions !== undefined) {
             if (JSON.stringify(this.#state.initOptions) !== JSON.stringify(initOptions)) {
@@ -99,13 +148,15 @@ export class Keycloak {
         let hasCreateResolved = false;
 
         const oidcOrError = await createOidc({
-            homeUrl: constructorParams.homeUrl,
+            BASE_URL: constructorParams.BASE_URL,
+            sessionRestorationMethod: constructorParams.sessionRestorationMethod,
             issuerUri,
             clientId: this.#state.constructorParams.clientId,
             autoLogin,
             postLoginRedirectUrl: redirectUri,
             debugLogs: enableLogging,
             scopes: scope?.split(" "),
+            autoLogoutParams,
             extraQueryParams:
                 !autoLogin || locale === undefined
                     ? undefined
@@ -140,7 +191,7 @@ export class Keycloak {
         if (oidc.isUserLoggedIn) {
             const tokens = await oidc.getTokens();
 
-            const onNewToken = (tokens_new: Oidc.Tokens<Record<string, unknown>>) => {
+            const onNewToken = (tokens_new: Oidc.Tokens) => {
                 this.#state.tokens = tokens_new;
                 this.onAuthRefreshSuccess?.();
             };
@@ -224,30 +275,30 @@ export class Keycloak {
                     return;
                 }
 
-                let timer: ReturnType<typeof workerTimers.setTimeout> | undefined = undefined;
+                let timer: ReturnType<typeof setTimeout> | undefined = undefined;
 
                 const onNewToken = () => {
                     if (timer !== undefined) {
-                        workerTimers.clearTimeout(timer);
+                        clearTimeout(timer);
                     }
 
                     const { tokens } = this.#state;
                     assert(tokens !== undefined);
 
-                    timer = workerTimers.setTimeout(() => {
+                    timer = setTimeout(() => {
                         onTokenExpired.call(this);
                     }, Math.max(tokens.accessTokenExpirationTime - tokens.getServerDateNow() - 3_000, 0));
                 };
 
                 onNewToken();
 
-                const { unsubscribe } = oidc.subscribeToTokensChange(onNewToken);
+                const { unsubscribeFromTokensChange } = oidc.subscribeToTokensChange(onNewToken);
 
                 clear = () => {
                     if (timer !== undefined) {
-                        workerTimers.clearTimeout(timer);
+                        clearTimeout(timer);
                     }
-                    unsubscribe();
+                    unsubscribeFromTokensChange();
                 };
             };
 
@@ -737,7 +788,8 @@ export class Keycloak {
      * Redirects to login form.
      * @param options Login options.
      */
-    async login(
+    login = this.#login.bind(this);
+    async #login(
         options?: KeycloakLoginOptions & { doesCurrentHrefRequiresAuth?: boolean }
     ): Promise<never> {
         const {
@@ -809,7 +861,8 @@ export class Keycloak {
      * Redirects to logout.
      * @param options Logout options.
      */
-    async logout(options?: KeycloakLogoutOptions): Promise<never> {
+    logout = this.#logout.bind(this);
+    async #logout(options?: KeycloakLogoutOptions): Promise<never> {
         if (!this.didInitialize) {
             await this.#state.dInitialized.pr;
         }
@@ -835,7 +888,8 @@ export class Keycloak {
      * Redirects to registration form.
      * @param options The options used for the registration.
      */
-    async register(options?: KeycloakRegisterOptions): Promise<never> {
+    register = this.#register.bind(this);
+    async #register(options?: KeycloakRegisterOptions): Promise<never> {
         return this.login({
             ...options,
             action: "register"
@@ -845,7 +899,8 @@ export class Keycloak {
     /**
      * Redirects to the Account Management Console.
      */
-    async accountManagement(options?: {
+    accountManagement = this.#accountManagement.bind(this);
+    async #accountManagement(options?: {
         /**
          * Specifies the uri to redirect to when redirecting back to the application.
          */
@@ -889,14 +944,25 @@ export class Keycloak {
      * Returns the URL to the Account Management Console.
      * @param options The options used for creating the account URL.
      */
-    createAccountUrl(options?: KeycloakAccountOptions & { locale?: string }): string {
+    createAccountUrl = this.#createAccountUrl.bind(this);
+    #createAccountUrl(options?: KeycloakAccountOptions & { locale?: string }): string {
         const { locale, redirectUri } = options ?? {};
 
-        const { keycloakUtils } = this.#state;
+        const { keycloakUtils, constructorParams } = this.#state;
 
         return keycloakUtils.getAccountUrl({
             clientId: this.clientId,
-            backToAppFromAccountUrl: redirectUri ?? location.href,
+            validRedirectUri: (() => {
+                if (redirectUri !== undefined) {
+                    return redirectUri;
+                }
+
+                const { homeUrlAndRedirectUri } = getHomeAndRedirectUri({
+                    BASE_URL_params: constructorParams.BASE_URL
+                });
+
+                return homeUrlAndRedirectUri;
+            })(),
             locale
         });
     }
@@ -906,7 +972,8 @@ export class Keycloak {
      * it expires.
      * @param minValidity If not specified, `0` is used.
      */
-    isTokenExpired(minValidity: number = 0): boolean {
+    isTokenExpired = this.#isTokenExpired.bind(this);
+    #isTokenExpired(minValidity: number = 0): boolean {
         let accessTokenExpirationTime: number;
 
         if (!this.didInitialize) {
@@ -953,7 +1020,8 @@ export class Keycloak {
      *   alert('Failed to refresh the token, or the session has expired');
      * });
      */
-    async updateToken(minValidity: number = 5): Promise<boolean> {
+    updateToken = this.#updateToken.bind(this);
+    async #updateToken(minValidity: number = 5): Promise<boolean> {
         if (!this.didInitialize) {
             await this.#state.dInitialized.pr;
         }
@@ -990,7 +1058,8 @@ export class Keycloak {
      * Returns true if the token has the given realm role.
      * @param role A realm role name.
      */
-    hasRealmRole(role: string): boolean {
+    hasRealmRole = this.#hasRealmRole.bind(this);
+    #hasRealmRole(role: string): boolean {
         const access = this.realmAccess;
         return access !== undefined && access.roles.indexOf(role) >= 0;
     }
@@ -1000,7 +1069,8 @@ export class Keycloak {
      * @param role A role name.
      * @param resource If not specified, `clientId` is used.
      */
-    hasResourceRole(role: string, resource?: string): boolean {
+    hasResourceRole = this.#hasResourceRole.bind(this);
+    #hasResourceRole(role: string, resource?: string): boolean {
         if (this.resourceAccess === undefined) {
             return false;
         }
@@ -1013,7 +1083,8 @@ export class Keycloak {
      * Loads the user's profile.
      * @returns A promise to set functions to be invoked on success or error.
      */
-    async loadUserProfile(): Promise<KeycloakProfile> {
+    loadUserProfile = this.#loadUserProfile.bind(this);
+    async #loadUserProfile(): Promise<KeycloakProfile> {
         if (!this.didInitialize) {
             await this.#state.dInitialized.pr;
         }
@@ -1032,7 +1103,8 @@ export class Keycloak {
     /**
      * @private Undocumented.
      */
-    async loadUserInfo(): Promise<KeycloakUserInfo> {
+    loadUserInfo = this.#loadUserInfo.bind(this);
+    async #loadUserInfo(): Promise<KeycloakUserInfo> {
         if (!this.didInitialize) {
             await this.#state.dInitialized.pr;
         }
@@ -1048,8 +1120,14 @@ export class Keycloak {
         return (this.#state.userInfo = await keycloakUtils.fetchUserInfo({ accessToken }));
     }
 
-    /** Get the underlying oidc-spa instance */
-    get oidc(): Oidc<Record<string, unknown>> {
+    /**
+     * This property does not exist in the original keycloak-js module.
+     * It let you access the underlying oidc-spa/core instance that power this adapter under the hood.
+     * It can be useful for example to create an auto logout warning overlay.
+     *
+     * See: https://docs.oidc-spa.dev/v/v10/resources/migrating-from-keycloak-js
+     */
+    get oidc(): Oidc {
         assert(
             this.didInitialize,
             "Cannot get keycloak.oidc before the init() method was called and have resolved."

@@ -14,7 +14,6 @@
         "jsx": "react-jsx",
         "noFallthroughCasesInSwitch": true,
         "skipLibCheck": true,
-        // NOTE: Only for not getting error while developing, will be overwritten
         "module": "es2020"
     },
     "include": ["src"]

@@ -1,5 +1,4 @@
 import { Deferred } from "./Deferred";
-import { assert, is } from "../tools/tsafe/assert";
 
 export type NonPostableEvt<T> = {
     waitFor: () => Promise<T>;
@@ -12,40 +11,42 @@ export type Evt<T> = NonPostableEvt<T> & {
 };
 
 export function createEvt<T>(): Evt<T> {
-    const eventTarget = new EventTarget();
-    const KEY = "event";
-
+    const listeners: Array<(data: T) => void> = [];
     let postCount = 0;
 
     const evt: Evt<T> = {
         subscribe: next => {
-            const listener = (e: Event) => {
-                assert(is<CustomEvent<T>>(e));
-
-                next(e.detail);
-            };
-
-            eventTarget.addEventListener(KEY, listener);
-
+            listeners.push(next);
+            let isActive = true;
             return {
                 unsubscribe: () => {
-                    eventTarget.removeEventListener(KEY, listener);
+                    if (!isActive) {
+                        return;
+                    }
+                    isActive = false;
+                    const i = listeners.indexOf(next);
+                    if (i >= 0) {
+                        listeners.splice(i, 1);
+                    }
                 }
             };
         },
         waitFor: () => {
             const d = new Deferred<T>();
-
             const { unsubscribe } = evt.subscribe(data => {
                 unsubscribe();
                 d.resolve(data);
             });
-
             return d.pr;
         },
         post: (data: T) => {
             postCount++;
-            eventTarget.dispatchEvent(new CustomEvent(KEY, { detail: data }));
+            const snapshot = listeners.slice();
+            for (const l of snapshot) {
+                try {
+                    l(data);
+                } catch {}
+            }
         },
         get postCount() {
             return postCount;

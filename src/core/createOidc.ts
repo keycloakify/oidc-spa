@@ -4,10 +4,9 @@ import {
     type User as OidcClientTsUser,
     InMemoryWebStorage
 } from "../vendor/frontend/oidc-client-ts";
-import type { OidcMetadata } from "./OidcMetadata";
-import { assert, is, type Equals } from "../tools/tsafe/assert";
+import { type OidcMetadata, fetchOidcMetadata } from "./OidcMetadata";
+import { assert, type Equals } from "../tools/tsafe/assert";
 import { id } from "../tools/tsafe/id";
-import { setTimeout, clearTimeout } from "../tools/workerTimers";
 import { Deferred } from "../tools/Deferred";
 import { createEvtIsUserActive } from "./evtIsUserActive";
 import { createStartCountdown } from "../tools/startCountdown";
@@ -23,15 +22,9 @@ import {
 import { notifyOtherTabsOfLogout, getPrOtherTabLogout } from "./logoutPropagationToOtherTabs";
 import { notifyOtherTabsOfLogin, getPrOtherTabLogin } from "./loginPropagationToOtherTabs";
 import { getConfigId } from "./configId";
-import { oidcClientTsUserToTokens } from "./oidcClientTsUserToTokens";
-import { loginSilent } from "./loginSilent";
-import {
-    authResponseToUrl,
-    getPersistedRedirectAuthResponses,
-    setPersistedRedirectAuthResponses,
-    type AuthResponse
-} from "./AuthResponse";
-import { getRootRelativeOriginalLocationHref, getRedirectAuthResponse } from "./earlyInit";
+import { createOidcClientTsUserToTokens } from "./oidcClientTsUserToTokens";
+import { createLoginSilent } from "./loginSilent";
+import { authResponseToUrl, type AuthResponse } from "./AuthResponse";
 import { getPersistedAuthState, persistAuthState } from "./persistedAuthState";
 import type { Oidc } from "./Oidc";
 import { createEvt } from "../tools/Evt";
@@ -40,7 +33,7 @@ import {
     createLoginOrGoToAuthServer,
     getPrSafelyRestoredFromBfCacheAfterLoginBackNavigationOrInitializationError
 } from "./loginOrGoToAuthServer";
-import { createEphemeralSessionStorage } from "../tools/EphemeralSessionStorage";
+import { createLazySessionStorage } from "../tools/lazySessionStorage";
 import {
     startLoginOrRefreshProcess,
     waitForAllOtherOngoingLoginOrRefreshProcessesToComplete
@@ -49,25 +42,43 @@ import { createGetIsNewBrowserSession } from "./isNewBrowserSession";
 import { getIsOnline } from "../tools/getIsOnline";
 import { isKeycloak } from "../keycloak/isKeycloak";
 import { INFINITY_TIME } from "../tools/INFINITY_TIME";
-import type { WELL_KNOWN_PATH } from "./diagnostic";
-import { getIsValidRemoteJson } from "../tools/getIsValidRemoteJson";
+import { getRootRelativeOriginalLocationHref_earlyInit } from "./earlyInit_rootRelativeOriginalLocationHref";
+import { getIsLikelyDevServer } from "../tools/isLikelyDevServer";
+import { createObjectThatThrowsIfAccessed } from "../tools/createObjectThatThrowsIfAccessed";
+import {
+    evtIsThereMoreThanOneInstanceThatCantUserIframes,
+    notifyNewInstanceThatCantUseIframes
+} from "./instancesThatCantUseIframes";
+import { getDesiredPostLoginRedirectUrl } from "./desiredPostLoginRedirectUrl";
+import { getHomeAndRedirectUri } from "./homeAndRedirectUri";
+import { ensureNonBlankPaint } from "../tools/ensureNonBlankPaint";
+import {
+    setStateDataCookieIfEnabled,
+    clearStateDataCookie,
+    getIsStateDataCookieEnabled
+} from "./StateDataCookie";
+import {
+    loadWebcryptoLinerShim,
+    hasLoadWebcryptoLinerShimBeenCalled
+} from "../tools/loadWebcryptoLinerShim";
+import type { Evt } from "../tools/Evt";
+import type { ParamsOfCreateGetServerDateNow } from "../tools/getServerDateNow";
+import { SESSION_STORAGE_GLOBAL_PREFIX } from "../tools/lazySessionStorage";
 
 // NOTE: Replaced at build time
 const VERSION = "{{OIDC_SPA_VERSION}}";
 
 export type ParamsOfCreateOidc<
-    DecodedIdToken extends Record<string, unknown> = Oidc.Tokens.DecodedIdToken_base,
+    DecodedIdToken extends Record<string, unknown> = Oidc.Tokens.DecodedIdToken_OidcCoreSpec,
     AutoLogin extends boolean = false
 > = {
     /**
-     * What should you put in this parameter?
-     *   - Vite project:             `BASE_URL: import.meta.env.BASE_URL`
-     *   - Create React App project: `BASE_URL: process.env.PUBLIC_URL`
-     *   - Other:                    `BASE_URL: "/"` (Usually, or `/dashboard` if your app is not at the root of the domain)
+     * See: https://docs.oidc-spa.dev/v/v10/providers-configuration/provider-configuration
      */
-    homeUrl: string;
-
     issuerUri: string;
+    /**
+     * See: https://docs.oidc-spa.dev/v/v10/providers-configuration/provider-configuration
+     */
     clientId: string;
     /**
      * The scopes being requested from the OIDC/OAuth2 provider (default: `["profile"]`
@@ -107,22 +118,9 @@ export type ParamsOfCreateOidc<
      *          extraTokenParams: { selectedCustomer: "xxx" }
      */
     extraTokenParams?: Record<string, string | undefined> | (() => Record<string, string | undefined>);
-    /**
-     * Usage discouraged, it's here because we don't want to assume too much on your
-     * usecase but I can't think of a scenario where you would want anything
-     * other than the current page.
-     *
-     * Where to redirect after successful login.
-     * Default: window.location.href (here)
-     *
-     * It does not need to include the origin, eg: "/dashboard"
-     *
-     * This parameter can also be passed to login() directly as `redirectUrl`.
-     */
-    postLoginRedirectUrl?: string;
 
     decodedIdTokenSchema?: {
-        parse: (decodedIdToken_original: Oidc.Tokens.DecodedIdToken_base) => DecodedIdToken;
+        parse: (decodedIdToken_original: Oidc.Tokens.DecodedIdToken_OidcCoreSpec) => DecodedIdToken;
     };
 
     /**
@@ -132,25 +130,72 @@ export type ParamsOfCreateOidc<
      * WARNING: It should be configured on the identity server side
      * as it's the authoritative source for security policies and not the client.
      * If you don't provide this parameter it will be inferred from the refresh token expiration time.
+     * Some provider however don't issue a refresh token or do not correctly set the
+     * expiration time. This parameter enable you to hard code the value to compensate
+     * the shortcoming of your auth server.
      * */
     idleSessionLifetimeInSeconds?: number;
 
     /**
-     * Usage discouraged, this parameter exists because we don't want to assume
-     * too much about your usecase but I can't think of a scenario where you would
-     * want anything other than the current page.
+     * Extra optional parameter specific to oidc-spa
+     * (not present in the original keycloak-js module)
      *
-     * Default: { redirectTo: "current page" }
+     * Where to redirect when auto logout happens due to session expiration
+     * on the Keycloak server.
+     *
+     * Example:
+     * autoLogoutParams: { redirectTo: "current page" } // Default
+     * autoLogoutParams: { redirectTo: "home" }
+     * autoLogoutParams: { redirectTo: "specific url", url: "/your-session-has-expired" }
+     * autoLogoutParams: {
+     *      redirectTo: "specific url",
+     *      get url(){ return `/your-session-has-expired?return_url=${encodeURIComponent(location.href)}`; }
+     * }
      */
-    autoLogoutParams?: Parameters<Oidc.LoggedIn<any>["logout"]>[0];
+    autoLogoutParams?:
+        | {
+              redirectTo: "home" | "current page";
+          }
+        | {
+              redirectTo: "specific url";
+              url: string;
+          };
+
     autoLogin?: AutoLogin;
 
     /**
-     * Default: false
+     * NOTE: Can be provided as parameter to the Vite plugin or to oidcEarlyInit()
      *
-     * See: https://docs.oidc-spa.dev/v/v8/resources/iframe-related-issues
+     * Determines how session restoration is handled.
+     * Session restoration allows users to stay logged in between visits
+     * without needing to explicitly sign in each time.
+     *
+     * Options:
+     *
+     * - **"auto" (default)**:
+     *   Automatically selects the best method.
+     *   If the app’s domain shares a common parent domain with the authorization endpoint,
+     *   an iframe is used for silent session restoration.
+     *   Otherwise, a full-page redirect is used.
+     *
+     * - **"full page redirect"**:
+     *   Forces full-page reloads for session restoration.
+     *   Use this if your application is served with a restrictive CSP
+     *   (e.g., `Content-Security-Policy: frame-ancestors "none"`)
+     *   or `X-Frame-Options: DENY`, and you cannot modify those headers.
+     *   This mode provides a slightly less seamless UX and will lead oidc-spa to
+     *   store tokens in `localStorage` if multiple OIDC clients are used
+     *   (e.g., your app communicates with several APIs).
+     *
+     * - **"iframe"**:
+     *   Forces iframe-based session restoration.
+     *   In development, if you go in your browser setting and allow your auth server’s domain
+     *   to set third-party cookies this value will let you test your app
+     *   with the local dev server as it will behave in production.
+     *
+     *  See: https://docs.oidc-spa.dev/v/v10/resources/third-party-cookies-and-session-restoration
      */
-    noIframe?: boolean;
+    sessionRestorationMethod?: "iframe" | "full page redirect" | "auto";
 
     debugLogs?: boolean;
 
@@ -185,31 +230,121 @@ export type ParamsOfCreateOidc<
      * or non-standard deployments), and you cannot fix the server-side configuration.
      */
     __metadata?: Partial<OidcMetadata>;
+
+    /**
+     * NOTE: This parameter is optional if you use the Vite plugin.
+     *
+     * This parameter let's you overwrite the value provided in
+     * oidcEarlyInit({ BASE_URL: xxx });
+     *
+     * What should you put in this parameter?
+     *   - Vite project:             `BASE_URL: import.meta.env.BASE_URL`
+     *   - Create React App project: `BASE_URL: process.env.PUBLIC_URL`
+     *   - Other:                    `BASE_URL: "/"` (Usually, or `/dashboard` if your app is not at the root of the domain)
+     */
+    BASE_URL?: string;
+
+    /**
+     * This parameter is irrelevant in most usecases.
+     * It tells where to redirect after a successful login or autoLogin.
+     *
+     * If you are not in autoLogin mode there is absolutely no reason to use
+     * this parameter since you can pass `login({ redirectUrl: "..." })`.
+     *
+     * It can only be useful in some edge case with `autoLogin: true`
+     * When you want to precisely redirect somewhere after login.
+     *
+     * This can make sense if you have multiple clients to talk with different
+     * API and no iframe capabilities.
+     */
+    postLoginRedirectUrl?: string;
+
+    /**
+     * This is only for opting out of DPoP for a specific OIDC client instance.
+     * To enable DPoP see: https://docs.oidc-spa.dev/v/v10/security-features/dpop
+     * */
+    disableDPoP?: true;
 };
 
 const globalContext = {
     prOidcByConfigId: new Map<string, Promise<Oidc<any>>>(),
     hasLogoutBeenCalled: id<boolean>(false),
-    evtRequestToPersistTokens: createEvt<{ configIdOfInstancePostingTheRequest: string }>()
+    dExports_earlyInit: new Deferred<Exports_earlyInit>(),
+    dExports_tokenSubstitution: new Deferred<Exports_tokenSubstitution>(),
+    dExports_DPoP: new Deferred<Exports_DPoP>()
 };
 
-globalContext.evtRequestToPersistTokens.subscribe(() => {
-    const { authResponse } = getRedirectAuthResponse();
+export type Exports_earlyInit =
+    | { shouldLoadApp: false }
+    | {
+          shouldLoadApp: true;
 
-    if (authResponse === undefined) {
-        return;
-    }
+          getEvtIframeAuthResponse: () => Evt<AuthResponse>;
+          getRedirectAuthResponse: () =>
+              | { authResponse: AuthResponse; clearAuthResponse: () => void }
+              | { authResponse: undefined; clearAuthResponse?: never };
 
-    const { authResponses } = getPersistedRedirectAuthResponses();
+          sessionRestorationMethod: "iframe" | "full page redirect" | "auto" | undefined;
+      };
 
-    setPersistedRedirectAuthResponses({
-        authResponses: [...authResponses, authResponse]
-    });
-});
+export function registerExports_earlyInit(exports: Exports_earlyInit): void {
+    globalContext.dExports_earlyInit.resolve(exports);
+}
 
-/** @see: https://docs.oidc-spa.dev/v/v8/usage */
+export type Exports_tokenSubstitution = {
+    getTokensPlaceholders: (params: {
+        configId: string;
+        tokens: Exports_tokenSubstitution.Tokens;
+    }) => Exports_tokenSubstitution.Tokens;
+};
+
+export namespace Exports_tokenSubstitution {
+    export type Tokens = {
+        accessToken: string;
+        idToken: string;
+        refreshToken?: string;
+    };
+}
+
+export function registerExports_tokenSubstitution(exports: Exports_tokenSubstitution): void {
+    globalContext.dExports_tokenSubstitution.resolve(exports);
+}
+
+export type Exports_DPoP = {
+    isEnforced: boolean;
+    createDPoPStore: (params: {
+        implementation: "indexedDB" | "in memory";
+        configId: string;
+        clientId: string;
+    }) => Exports_DPoP.DPoPStore;
+    registerAccessTokenForDPoP: (params: {
+        configId: string;
+        accessToken: string;
+        paramsOfCreateGetServerDateNow: ParamsOfCreateGetServerDateNow;
+    }) => void;
+};
+
+export namespace Exports_DPoP {
+    export type DPoPState = {
+        keys: CryptoKeyPair;
+        nonce?: string;
+    };
+
+    export type DPoPStore = {
+        set: (key: string, value: DPoPState) => Promise<void>;
+        get: (key: string) => Promise<DPoPState>;
+        remove: (key: string) => Promise<DPoPState>;
+        getAllKeys: () => Promise<string[]>;
+    };
+}
+
+export function registerExports_DPoP(exports: Exports_DPoP): void {
+    globalContext.dExports_DPoP.resolve(exports);
+}
+
+/** @see: https://docs.oidc-spa.dev/v/v10/usage */
 export async function createOidc<
-    DecodedIdToken extends Record<string, unknown> = Oidc.Tokens.DecodedIdToken_base,
+    DecodedIdToken extends Record<string, unknown> = Oidc.Tokens.DecodedIdToken_OidcCoreSpec,
     AutoLogin extends boolean = false
 >(
     params: ParamsOfCreateOidc<DecodedIdToken, AutoLogin>
@@ -223,7 +358,7 @@ export async function createOidc<
         }
     }
 
-    const { issuerUri: issuerUri_params, clientId, scopes = ["profile"], debugLogs, ...rest } = params;
+    const { issuerUri: issuerUri_params, clientId, debugLogs, ...rest } = params;
 
     const issuerUri = toFullyQualifiedUrl({
         urlish: issuerUri_params,
@@ -279,7 +414,6 @@ export async function createOidc<
     const oidc = await createOidc_nonMemoized(rest, {
         issuerUri,
         clientId,
-        scopes,
         configId,
         log
     });
@@ -293,14 +427,10 @@ export async function createOidc_nonMemoized<
     DecodedIdToken extends Record<string, unknown>,
     AutoLogin extends boolean
 >(
-    params: Omit<
-        ParamsOfCreateOidc<DecodedIdToken, AutoLogin>,
-        "issuerUri" | "clientId" | "scopes" | "debugLogs"
-    >,
+    params: Omit<ParamsOfCreateOidc<DecodedIdToken, AutoLogin>, "issuerUri" | "clientId" | "debugLogs">,
     preProcessedParams: {
         issuerUri: string;
         clientId: string;
-        scopes: string[];
         configId: string;
         log: typeof console.log | undefined;
     }
@@ -309,7 +439,6 @@ export async function createOidc_nonMemoized<
         transformUrlBeforeRedirect,
         extraQueryParams: extraQueryParamsOrGetter,
         extraTokenParams: extraTokenParamsOrGetter,
-        homeUrl: homeUrl_params,
         decodedIdTokenSchema,
         idleSessionLifetimeInSeconds,
         autoLogoutParams = { redirectTo: "current page" },
@@ -318,10 +447,55 @@ export async function createOidc_nonMemoized<
         __unsafe_clientSecret,
         __unsafe_useIdTokenAsAccessToken = false,
         __metadata,
-        noIframe = false
+        disableDPoP: disableDPoP_params = false,
+        sessionRestorationMethod: sessionRestorationMethod_params,
+        BASE_URL: BASE_URL_params
     } = params;
 
-    const { issuerUri, clientId, scopes, configId, log } = preProcessedParams;
+    const exports_earlyInit = await (async () => {
+        const timer = window.setTimeout(() => {
+            console.warn(
+                [
+                    "oidc-spa: Setup error.",
+                    "oidcEarlyInit() wasn't called.",
+                    "This is supposed to be handled by the oidc-spa Vite plugin",
+                    "or manually in other environments."
+                ].join(" ")
+            );
+        }, 3_000);
+
+        const exports_earlyInit = await globalContext.dExports_earlyInit.pr;
+
+        window.clearTimeout(timer);
+
+        return exports_earlyInit;
+    })();
+
+    if (!exports_earlyInit.shouldLoadApp) {
+        return new Promise<never>(() => {});
+    }
+
+    const {
+        getEvtIframeAuthResponse,
+        getRedirectAuthResponse,
+        sessionRestorationMethod: sessionRestorationMethod_earlyInit
+    } = exports_earlyInit;
+
+    const sessionRestorationMethod =
+        sessionRestorationMethod_params ?? sessionRestorationMethod_earlyInit ?? "auto";
+
+    const { value: exports_tokenSubstitution } = globalContext.dExports_tokenSubstitution.getState();
+
+    const { value: exports_DPoP } = globalContext.dExports_DPoP.getState();
+
+    const scopes = Array.from(new Set(["openid", ...(params.scopes ?? ["profile"])]));
+
+    const { issuerUri, clientId, configId, log } = preProcessedParams;
+
+    if (window.crypto.subtle === undefined) {
+        log?.("window.crypto.subtle not present, lazily loading polyfills.");
+        await loadWebcryptoLinerShim();
+    }
 
     const getExtraQueryParams = (() => {
         if (extraQueryParamsOrGetter === undefined) {
@@ -347,11 +521,7 @@ export async function createOidc_nonMemoized<
         return extraTokenParamsOrGetter;
     })();
 
-    const homeUrlAndRedirectUri = toFullyQualifiedUrl({
-        urlish: homeUrl_params,
-        doAssertNoQueryParams: true,
-        doOutputWithTrailingSlash: true
-    });
+    const { homeUrlAndRedirectUri } = getHomeAndRedirectUri({ BASE_URL_params });
 
     log?.(
         `Calling createOidc v${VERSION} ${JSON.stringify(
@@ -359,102 +529,315 @@ export async function createOidc_nonMemoized<
                 issuerUri,
                 clientId,
                 scopes,
-                configId,
-                homeUrlAndRedirectUri
+                validRedirectUri: homeUrlAndRedirectUri
             },
             null,
             2
         )}`
     );
 
+    if (exports_tokenSubstitution !== undefined) {
+        log?.(
+            [
+                "Token substitution successfully enabled.",
+                "",
+                "→ Tokens exposed to the application layer are unusable for resource server calls.",
+                "→ They remain structurally valid JWTs, but their signature segment is replaced.",
+                "→ Before any request leaves the app (fetch, XHR, WebSocket, beacon),",
+                "   the real tokens are restored inside a fully hardened, sandboxed interceptor.",
+                "",
+                "This means that even with an XSS vulnerability or a compromised dependency,",
+                "an attacker cannot extract valid tokens, unless they have also compromised",
+                "your application's build pipeline."
+            ].join("\n")
+        );
+    }
+
     const stateUrlParamValue_instance = generateStateUrlParamValue();
 
-    const canUseIframe = (() => {
-        if (noIframe) {
+    const oidcMetadata = __metadata ?? (await fetchOidcMetadata({ issuerUri }));
+
+    const shouldEnableDPoP = (() => {
+        if (disableDPoP_params) {
+            log?.("DPoP explicitly disabled for this instance");
             return false;
         }
 
+        if (exports_DPoP === undefined) {
+            log?.("DPoP disabled, to enable it see: https://docs.oidc-spa.dev/features/dpop");
+            return false;
+        }
+
+        if (__unsafe_useIdTokenAsAccessToken) {
+            if (exports_DPoP.isEnforced) {
+                throw new Error(
+                    [
+                        "oidc-spa: Cannot enable DPoP when",
+                        "__unsafe_useIdTokenAsAccessToken is set to true"
+                    ].join(" ")
+                );
+            }
+            log?.("DPoP Disabled due to __unsafe_useIdTokenAsAccessToken: true");
+            return false;
+        }
+
+        if (oidcMetadata === undefined) {
+            return false;
+        }
+
+        const isSupported = (() => {
+            const { dpop_signing_alg_values_supported } = oidcMetadata;
+
+            if (dpop_signing_alg_values_supported === undefined) {
+                return false;
+            }
+
+            return dpop_signing_alg_values_supported.includes("ES256");
+        })();
+
+        if (!isSupported) {
+            if (exports_DPoP.isEnforced) {
+                throw new Error("oidc-spa: The IdP does not support DPoP");
+            }
+
+            log?.("DPoP disabled because it's not supported by the IdP");
+        } else {
+            log?.("DPoP enabled");
+        }
+
+        return isSupported;
+    })();
+
+    const canUseIframe = (() => {
+        switch (sessionRestorationMethod) {
+            case "auto":
+                break;
+            case "full page redirect":
+                return false;
+            case "iframe":
+                return true;
+            default:
+                assert<Equals<typeof sessionRestorationMethod, never>>;
+        }
+
         third_party_cookies: {
-            const isOidcServerThirdPartyRelativeToApp =
-                getHaveSharedParentDomain({
-                    url1: window.location.origin,
-                    url2: issuerUri
-                }) === false;
+            if (oidcMetadata === undefined) {
+                return false;
+            }
+
+            const { authorization_endpoint } = oidcMetadata;
+
+            assert(
+                authorization_endpoint !== undefined,
+                "Missing authorization_endpoint on the provided __metadata"
+            );
+
+            const isOidcServerThirdPartyRelativeToApp = !getHaveSharedParentDomain({
+                url1: window.location.origin,
+                // TODO: No, here we should test against the authorization endpoint!
+                url2: authorization_endpoint
+            });
 
             if (!isOidcServerThirdPartyRelativeToApp) {
                 break third_party_cookies;
             }
 
-            const isGoogleChrome = (() => {
-                const ua = navigator.userAgent;
-                const vendor = navigator.vendor;
+            const isLikelyDevServer = getIsLikelyDevServer();
 
-                return (
-                    /Chrome/.test(ua) && /Google Inc/.test(vendor) && !/Edg/.test(ua) && !/OPR/.test(ua)
-                );
+            const domain_auth = new URL(authorization_endpoint).origin.split("//")[1];
+
+            assert(domain_auth !== undefined, "33921384");
+
+            const domain_here = window.location.origin.split("//")[1];
+
+            let isWellKnownProviderDomain = false;
+            let isIp = false;
+
+            const suggestedDeployments = (() => {
+                if (/^(?:\d{1,3}\.){3}\d{1,3}$|^\[?[A-Fa-f0-9:]+\]?$/.test(domain_auth)) {
+                    isIp = true;
+                    return [];
+                }
+
+                const baseDomain = (() => {
+                    const segments = domain_auth.split(".");
+
+                    if (segments.length >= 3) {
+                        segments.shift();
+                    }
+                    return segments.join(".");
+                })();
+
+                {
+                    const baseDomain_low = baseDomain.toLowerCase();
+
+                    if (
+                        baseDomain_low.includes("auth0") ||
+                        baseDomain_low.includes("clerk") ||
+                        baseDomain_low.includes("microsoft") ||
+                        baseDomain_low.includes("okta") ||
+                        baseDomain_low.includes("aws")
+                    ) {
+                        isWellKnownProviderDomain = true;
+                        return [];
+                    }
+                }
+
+                const baseUrl = new URL(homeUrlAndRedirectUri).pathname;
+
+                return [
+                    `myapp.${baseDomain}`,
+                    baseDomain === domain_auth ? undefined : baseDomain,
+                    `${baseDomain}/${baseUrl === "/" ? "dashboard" : baseUrl}`
+                ].filter(x => x !== undefined);
             })();
 
-            if (window.location.origin.startsWith("http://localhost") && isGoogleChrome) {
-                break third_party_cookies;
-            }
+            if (isLikelyDevServer) {
+                log?.(
+                    [
+                        "Detected localhost environment.",
+                        "\nWhen reloading while logged in, you will briefly see",
+                        "some URL params appear in the address bar.",
+                        "\nThis happens because session restore via iframe is disabled,",
+                        "the browser treats your auth server as a third party.",
+                        `\nAuth server: ${domain_auth}`,
+                        `\nApp domain:  ${domain_here}`,
+                        ...(() => {
+                            if (isIp) {
+                                return [];
+                            }
 
-            log?.(
-                [
-                    "Can't use iframe because your auth server is on a third party domain relative",
-                    "to the domain of your app and third party cookies are blocked by navigators."
-                ].join(" ")
-            );
+                            if (isWellKnownProviderDomain) {
+                                return [
+                                    "\nYou seem to be using a well-known auth provider.",
+                                    "Check your provider's docs, some allow configuring",
+                                    `a your custom domain at least for the authorization endpoint.`,
+                                    "\nIf configured, oidc-spa will restore sessions silently",
+                                    "and improve the user experience."
+                                ];
+                            }
+
+                            return [
+                                "\nOnce deployed under the same root domain as your auth server,",
+                                "oidc-spa will use iframes to restore sessions silently.",
+                                "\nSuggested deployments:",
+                                ...suggestedDeployments.map(d => `\n  • ${d}`)
+                            ];
+                        })(),
+                        "\n\nMore info:",
+                        "https://docs.oidc-spa.dev/v/v10/resources/third-party-cookies-and-session-restoration"
+                    ].join(" ")
+                );
+            } else {
+                log?.(
+                    [
+                        "Silent session restore via iframe is disabled.",
+                        `\nAuth server: ${domain_auth}`,
+                        `App domain:  ${domain_here}`,
+                        "\nThey do not share a common root domain.",
+                        ...(() => {
+                            if (isIp) {
+                                return [];
+                            }
+
+                            if (isWellKnownProviderDomain) {
+                                return [
+                                    "\nYou seem to be using a well-known auth provider.",
+                                    "Check if you can configure a custom auth domain.",
+                                    "\nIf so, oidc-spa can restore sessions silently",
+                                    "and improve the user experience."
+                                ];
+                            }
+
+                            return [
+                                "\nTo improve the experience, here are some examples of deployment for your app:",
+                                ...suggestedDeployments.map(d => `\n  • ${d}`)
+                            ];
+                        })(),
+                        "\nMore info:",
+                        "https://docs.oidc-spa.dev/v/v10/resources/third-party-cookies-and-session-restoration"
+                    ].join(" ")
+                );
+            }
 
             return false;
         }
 
-        // NOTE: Maybe not, it depend if the app can iframe itself.
         return true;
     })();
 
-    let isUserStoreInMemoryOnly: boolean;
+    if (!canUseIframe) {
+        notifyNewInstanceThatCantUseIframes();
 
-    const oidcClientTsUserManager = new OidcClientTsUserManager({
-        stateUrlParamValue: stateUrlParamValue_instance,
-        authority: issuerUri,
-        client_id: clientId,
-        redirect_uri: homeUrlAndRedirectUri,
-        silent_redirect_uri: homeUrlAndRedirectUri,
-        post_logout_redirect_uri: homeUrlAndRedirectUri,
-        response_mode: isKeycloak({ issuerUri }) ? "fragment" : "query",
-        response_type: "code",
-        scope: Array.from(new Set(["openid", ...scopes])).join(" "),
-        automaticSilentRenew: false,
-        userStore: new WebStorageStateStore({
-            store: (() => {
-                if (canUseIframe) {
-                    isUserStoreInMemoryOnly = true;
-                    return new InMemoryWebStorage();
-                }
+        if (evtIsThereMoreThanOneInstanceThatCantUserIframes.current) {
+            log?.(
+                [
+                    "More than one oidc instance can't use iframe",
+                    "falling back to persisting tokens in session storage"
+                ].join(" ")
+            );
+        }
+    }
 
-                isUserStoreInMemoryOnly = false;
+    const oidcClientTsUserManager =
+        oidcMetadata === undefined
+            ? createObjectThatThrowsIfAccessed<OidcClientTsUserManager>({
+                  debugMessage: "oidc-spa: Wrong assertion 43943"
+              })
+            : new OidcClientTsUserManager({
+                  stateUrlParamValue: stateUrlParamValue_instance,
+                  authority: issuerUri,
+                  client_id: clientId,
+                  redirect_uri: homeUrlAndRedirectUri,
+                  silent_redirect_uri: homeUrlAndRedirectUri,
+                  post_logout_redirect_uri: homeUrlAndRedirectUri,
+                  response_mode:
+                      isKeycloak({ issuerUri }) && !getIsStateDataCookieEnabled() ? "fragment" : "query",
+                  response_type: "code",
+                  scope: scopes.join(" "),
+                  userStore: new WebStorageStateStore({
+                      store: (() => {
+                          if (canUseIframe) {
+                              return new InMemoryWebStorage();
+                          }
 
-                const storage = createEphemeralSessionStorage({
-                    sessionStorageTtlMs: 3 * 60_000
-                });
+                          const storage = createLazySessionStorage({ storageId: configId });
 
-                const { evtRequestToPersistTokens } = globalContext;
+                          if (evtIsThereMoreThanOneInstanceThatCantUserIframes.current) {
+                              storage.persistCurrentStateAndSubsequentChanges();
+                          } else {
+                              evtIsThereMoreThanOneInstanceThatCantUserIframes.subscribe(() => {
+                                  storage.persistCurrentStateAndSubsequentChanges();
+                              });
+                          }
 
-                evtRequestToPersistTokens.subscribe(({ configIdOfInstancePostingTheRequest }) => {
-                    if (configIdOfInstancePostingTheRequest === configId) {
-                        return;
-                    }
+                          return storage;
+                      })()
+                  }),
+                  stateStore: new WebStorageStateStore({
+                      store: localStorage,
+                      prefix: STATE_STORE_KEY_PREFIX
+                  }),
+                  client_secret: __unsafe_clientSecret,
+                  metadata: oidcMetadata,
+                  dpop: (() => {
+                      if (!shouldEnableDPoP) {
+                          return undefined;
+                      }
 
-                    storage.persistCurrentStateAndSubsequentChanges();
-                });
+                      assert(exports_DPoP !== undefined, "49240");
 
-                return storage;
-            })()
-        }),
-        stateStore: new WebStorageStateStore({ store: localStorage, prefix: STATE_STORE_KEY_PREFIX }),
-        client_secret: __unsafe_clientSecret,
-        metadata: __metadata
-    });
+                      return {
+                          store: exports_DPoP.createDPoPStore({
+                              implementation: hasLoadWebcryptoLinerShimBeenCalled()
+                                  ? "in memory"
+                                  : "indexedDB",
+                              configId,
+                              clientId
+                          })
+                      };
+                  })()
+              });
 
     const evtInitializationOutcomeUserNotLoggedIn = createEvt<void>();
 
@@ -465,7 +848,20 @@ export async function createOidc_nonMemoized<
         getExtraQueryParams,
         getExtraTokenParams,
         homeUrl: homeUrlAndRedirectUri,
+        stateUrlParamValue_instance,
         evtInitializationOutcomeUserNotLoggedIn,
+        log
+    });
+
+    const { loginSilent } = createLoginSilent({
+        getEvtIframeAuthResponse,
+        oidcClientTsUserManager,
+        stateUrlParamValue_instance,
+        configId,
+        transformUrlBeforeRedirect,
+        getExtraQueryParams,
+        getExtraTokenParams,
+        autoLogin,
         log
     });
 
@@ -482,77 +878,79 @@ export async function createOidc_nonMemoized<
         | {
               oidcClientTsUser: OidcClientTsUser;
               backFromAuthServer: Oidc.LoggedIn["backFromAuthServer"]; // Undefined is silent signin
+              isRestoredFromSessionStorage: boolean;
           }
     > => {
+        if (oidcMetadata === undefined) {
+            return (
+                await import("./diagnostic")
+            ).createWellKnownOidcConfigurationEndpointUnreachableInitializationError({
+                issuerUri
+            });
+        }
+
+        restore_from_session_storage: {
+            if (canUseIframe) {
+                break restore_from_session_storage;
+            }
+
+            if (!evtIsThereMoreThanOneInstanceThatCantUserIframes.current) {
+                break restore_from_session_storage;
+            }
+
+            let oidcClientTsUser: OidcClientTsUser | null;
+
+            try {
+                oidcClientTsUser = await oidcClientTsUserManager.getUser();
+            } catch {
+                // NOTE: Not sure if it can throw, but let's be safe.
+                oidcClientTsUser = null;
+                try {
+                    await oidcClientTsUserManager.removeUser();
+                } catch {}
+            }
+
+            if (oidcClientTsUser === null) {
+                break restore_from_session_storage;
+            }
+
+            log?.("Session was restored from session storage");
+
+            return {
+                oidcClientTsUser,
+                backFromAuthServer: undefined,
+                isRestoredFromSessionStorage: true
+            };
+        }
+
         handle_redirect_auth_response: {
             let stateDataAndAuthResponse:
                 | { stateData: StateData.Redirect; authResponse: AuthResponse }
                 | undefined = undefined;
 
-            get_stateData_and_authResponse: {
-                from_memory: {
-                    const { authResponse, clearAuthResponse } = getRedirectAuthResponse();
+            {
+                const { authResponse, clearAuthResponse } = getRedirectAuthResponse();
 
-                    if (authResponse === undefined) {
-                        break from_memory;
-                    }
+                if (authResponse === undefined) {
+                    break handle_redirect_auth_response;
+                }
 
-                    const stateData = getStateData({ stateUrlParamValue: authResponse.state });
+                const stateData = getStateData({ stateUrlParamValue: authResponse.state });
 
-                    if (stateData === undefined) {
-                        clearAuthResponse();
-                        break from_memory;
-                    }
-
-                    if (stateData.configId !== configId) {
-                        break from_memory;
-                    }
-
-                    assert(stateData.context === "redirect", "3229492");
-
+                if (stateData === undefined) {
                     clearAuthResponse();
-
-                    stateDataAndAuthResponse = { stateData, authResponse };
-
-                    break get_stateData_and_authResponse;
+                    break handle_redirect_auth_response;
                 }
 
-                // from storage, this is for race condition in multiple instance
-                // setup where one instance would need to redirect before
-                // the authResponse in memory had the chance to be processed.
-                // This can only happen if:
-                // 1) There are multiple oidc instances in the App.
-                // 2) They are instantiated in a non deterministic order.
-                // 3) We can't use iframe
-                // We practically never persist the auth response and do it only in session
-                // an ephemeral session storage, when we know it's gonna be required.
-                {
-                    const { authResponses } = getPersistedRedirectAuthResponses();
-
-                    for (const authResponse of authResponses) {
-                        const stateData = getStateData({ stateUrlParamValue: authResponse.state });
-
-                        if (stateData === undefined) {
-                            continue;
-                        }
-
-                        if (stateData.configId !== configId) {
-                            continue;
-                        }
-
-                        assert(stateData.context === "redirect", "35935591");
-
-                        setPersistedRedirectAuthResponses({
-                            authResponses: authResponses.filter(
-                                authResponse_i => authResponse_i !== authResponse
-                            )
-                        });
-
-                        stateDataAndAuthResponse = { stateData, authResponse };
-
-                        break get_stateData_and_authResponse;
-                    }
+                if (stateData.configId !== configId) {
+                    break handle_redirect_auth_response;
                 }
+
+                assert(stateData.context === "redirect", "3229492");
+
+                clearAuthResponse();
+
+                stateDataAndAuthResponse = { stateData, authResponse };
             }
 
             if (stateDataAndAuthResponse === undefined) {
@@ -566,13 +964,22 @@ export async function createOidc_nonMemoized<
                     {
                         log?.(
                             `Handling login redirect auth response ${JSON.stringify(
-                                authResponse,
+                                {
+                                    ...authResponse,
+                                    ...(authResponse.code === undefined
+                                        ? undefined
+                                        : {
+                                              code: authResponse.code.slice(0, 20) + "..."
+                                          })
+                                },
                                 null,
                                 2
                             )}`
                         );
 
                         const authResponseUrl = authResponseToUrl(authResponse);
+
+                        clearStateDataCookie({ stateUrlParamValue: authResponse.state });
 
                         let oidcClientTsUser: OidcClientTsUser | undefined = undefined;
 
@@ -597,7 +1004,10 @@ export async function createOidc_nonMemoized<
 
                                 if (authResponse_error !== undefined) {
                                     log?.(
-                                        `The auth server responded with: ${authResponse_error}, trying to restore from the http only cookie`
+                                        [
+                                            `The auth server responded with: ${authResponse_error},`,
+                                            `trying to restore session as if we didn't had a auth response.`
+                                        ].join(" ")
                                     );
                                     break handle_redirect_auth_response;
                                 }
@@ -610,6 +1020,7 @@ export async function createOidc_nonMemoized<
 
                         return {
                             oidcClientTsUser,
+                            isRestoredFromSessionStorage: false,
                             backFromAuthServer: {
                                 extraQueryParams: stateData.extraQueryParams,
                                 result: Object.fromEntries(
@@ -665,42 +1076,11 @@ export async function createOidc_nonMemoized<
             }
         }
 
-        // NOTE: We almost never persist tokens, we have to only to support edge case
-        // of multiple oidc instance in a single App with no iframe support.
-        restore_from_session_storage: {
-            if (isUserStoreInMemoryOnly) {
-                break restore_from_session_storage;
-            }
-
-            let oidcClientTsUser: OidcClientTsUser | null;
-
-            try {
-                oidcClientTsUser = await oidcClientTsUserManager.getUser();
-            } catch {
-                // NOTE: Not sure if it can throw, but let's be safe.
-                oidcClientTsUser = null;
-                try {
-                    await oidcClientTsUserManager.removeUser();
-                } catch {}
-            }
-
-            if (oidcClientTsUser === null) {
-                break restore_from_session_storage;
-            }
-
-            log?.("Restored the auth from ephemeral session storage");
-
-            return {
-                oidcClientTsUser,
-                backFromAuthServer: undefined
-            };
-        }
-
         silent_login_if_possible_and_auto_login: {
             const persistedAuthState = getPersistedAuthState({ configId });
 
             if (persistedAuthState === "explicitly logged out" && !autoLogin) {
-                log?.("Skipping silent signin with iframe, the user has logged out");
+                log?.("Skipping session restoration completely, the user is explicitly logged out.");
                 break silent_login_if_possible_and_auto_login;
             }
 
@@ -734,71 +1114,62 @@ export async function createOidc_nonMemoized<
 
             actual_silent_signin: {
                 if (persistedAuthState === "explicitly logged out") {
+                    log?.(
+                        "Skipping session restoration via iframe (silent signin), the user is explicitly logged out."
+                    );
                     break actual_silent_signin;
                 }
 
                 if (!canUseIframe) {
-                    if (
-                        !(await getIsValidRemoteJson(
-                            `${issuerUri}${id<typeof WELL_KNOWN_PATH>(
-                                "/.well-known/openid-configuration"
-                            )}`
-                        ))
-                    ) {
-                        return (
-                            await import("./diagnostic")
-                        ).createWellKnownOidcConfigurationEndpointUnreachableInitializationError({
-                            issuerUri
-                        });
-                    }
-
+                    log?.("Skipping session restoration via iframe (can't use iframe)");
                     break actual_silent_signin;
                 }
 
-                log?.(
-                    "Trying to restore the auth from the http only cookie (silent signin with iframe)"
-                );
+                log?.("Performing session restoration via iframe (silent signin)");
 
                 const result_loginSilent = await loginSilent({
-                    oidcClientTsUserManager,
-                    stateUrlParamValue_instance,
-                    configId,
-                    transformUrlBeforeRedirect,
-                    getExtraQueryParams,
-                    getExtraTokenParams,
-                    autoLogin,
-                    log
+                    extraTokenParams: undefined
                 });
 
                 assert(result_loginSilent.outcome !== "token refreshed using refresh token", "876995");
+                assert(
+                    result_loginSilent.outcome !== "got error auth response using refresh token",
+                    "876996"
+                );
 
-                if (result_loginSilent.outcome === "failure") {
-                    switch (result_loginSilent.cause) {
-                        case "can't reach well-known oidc endpoint":
-                            return (
-                                await import("./diagnostic")
-                            ).createWellKnownOidcConfigurationEndpointUnreachableInitializationError({
-                                issuerUri
-                            });
-                        case "timeout":
-                            return (await import("./diagnostic")).createIframeTimeoutInitializationError(
-                                {
-                                    redirectUri: homeUrlAndRedirectUri,
-                                    clientId,
-                                    issuerUri,
-                                    noIframe
-                                }
-                            );
-                    }
+                if (result_loginSilent.outcome === "timeout") {
+                    const { authorization_endpoint } = oidcMetadata;
 
-                    assert<Equals<typeof result_loginSilent.cause, never>>(false);
+                    assert(authorization_endpoint !== undefined, "39447394");
+
+                    return (await import("./diagnostic")).createIframeTimeoutInitializationError({
+                        redirectUri: homeUrlAndRedirectUri,
+                        clientId,
+                        issuerUri,
+                        authorizationEndpointUrl: authorization_endpoint
+                    });
                 }
 
-                assert<Equals<typeof result_loginSilent.outcome, "got auth response from iframe">>();
+                assert<Equals<typeof result_loginSilent.outcome, "got auth response from iframe">>;
 
                 const { authResponse } = result_loginSilent;
 
-                log?.(`Silent signin auth response ${JSON.stringify(authResponse, null, 2)}`);
+                log?.(
+                    `Silent signin auth response ${JSON.stringify(
+                        {
+                            ...authResponse,
+                            ...(authResponse.code === undefined
+                                ? undefined
+                                : {
+                                      code: authResponse.code.slice(0, 20) + "..."
+                                  })
+                        },
+                        null,
+                        2
+                    )}`
+                );
+
+                clearStateDataCookie({ stateUrlParamValue: authResponse.state });
 
                 authResponse_error = authResponse.error;
 
@@ -834,9 +1205,7 @@ export async function createOidc_nonMemoized<
                             authResponse_error === "consent_required" ||
                             authResponse_error === "account_selection_required"))
                 ) {
-                    log?.("Performing auto login with redirect");
-
-                    persistAuthState({ configId, state: undefined });
+                    log?.("Performing session restoration (or autoLogin) with full page redirect");
 
                     completeLoginOrRefreshProcess();
 
@@ -844,26 +1213,28 @@ export async function createOidc_nonMemoized<
                         evtInitializationOutcomeUserNotLoggedIn.post();
                     }
 
+                    ensureNonBlankPaint();
+
                     await waitForAllOtherOngoingLoginOrRefreshProcessesToComplete({
                         prUnlock:
                             getPrSafelyRestoredFromBfCacheAfterLoginBackNavigationOrInitializationError()
                     });
 
-                    if (persistedAuthState === "logged in") {
-                        globalContext.evtRequestToPersistTokens.post({
-                            configIdOfInstancePostingTheRequest: configId
-                        });
-                    }
-
-                    const dCantFetchWellKnownEndpointOrNever = new Deferred<void | never>();
-
-                    loginOrGoToAuthServer({
+                    await loginOrGoToAuthServer({
                         action: "login",
                         doForceReloadOnBfCache: true,
-                        redirectUrl: getRootRelativeOriginalLocationHref(),
-                        // NOTE: Wether or not it's the preferred behavior, pushing to history
-                        // only works on user interaction so it have to be false
-                        doNavigateBackToLastPublicUrlIfTheTheUserNavigateBack: false,
+                        redirectUrl: (() => {
+                            if (postLoginRedirectUrl_default) {
+                                return postLoginRedirectUrl_default;
+                            }
+
+                            if (!evtIsThereMoreThanOneInstanceThatCantUserIframes.current) {
+                                return getRootRelativeOriginalLocationHref_earlyInit();
+                            }
+
+                            return getDesiredPostLoginRedirectUrl() ?? window.location.href;
+                        })(),
+                        doNavigateBackToLastPublicUrlIfTheTheUserNavigateBack: true,
                         extraQueryParams_local: undefined,
                         transformUrlBeforeRedirect_local: undefined,
                         interaction: (() => {
@@ -877,18 +1248,9 @@ export async function createOidc_nonMemoized<
 
                             return "ensure no interaction";
                         })(),
-                        onCantFetchWellKnownEndpointError: () => {
-                            dCantFetchWellKnownEndpointOrNever.resolve();
+                        preRedirectHook: () => {
+                            persistAuthState({ configId, state: undefined });
                         }
-                    });
-
-                    await dCantFetchWellKnownEndpointOrNever.pr;
-
-                    return (
-                        await import("./diagnostic")
-                    ).createFailedToFetchTokenEndpointInitializationError({
-                        clientId,
-                        issuerUri
                     });
                 }
 
@@ -906,11 +1268,12 @@ export async function createOidc_nonMemoized<
                 break silent_login_if_possible_and_auto_login;
             }
 
-            log?.("Successful silent signed in");
+            log?.("Successful session restoration via iframe (silent signin)");
 
             return {
                 oidcClientTsUser,
-                backFromAuthServer: undefined
+                backFromAuthServer: undefined,
+                isRestoredFromSessionStorage: false
             };
         }
 
@@ -925,10 +1288,9 @@ export async function createOidc_nonMemoized<
     });
 
     const oidc_common: Oidc.Common = {
-        params: {
-            issuerUri,
-            clientId
-        }
+        issuerUri,
+        clientId,
+        validRedirectUri: homeUrlAndRedirectUri
     };
 
     not_loggedIn_case: {
@@ -987,15 +1349,29 @@ export async function createOidc_nonMemoized<
                     ...oidc_common,
                     isUserLoggedIn: false,
                     login: async ({
-                        doesCurrentHrefRequiresAuth,
+                        doesCurrentHrefRequiresAuth = false,
                         extraQueryParams,
                         redirectUrl,
                         transformUrlBeforeRedirect
-                    }) => {
+                    } = {}) => {
                         await waitForAllOtherOngoingLoginOrRefreshProcessesToComplete({
                             prUnlock:
                                 getPrSafelyRestoredFromBfCacheAfterLoginBackNavigationOrInitializationError()
                         });
+
+                        if (!canUseIframe) {
+                            log?.(
+                                [
+                                    "IMPORTANT DEBUG INFO:",
+                                    "\nWe are about to redirect to your Identity Provider (IdP).",
+                                    "\nIf you see an 'Invalid Redirect URI' error on the IdP page, make sure you've added:",
+                                    `\n${homeUrlAndRedirectUri}`,
+                                    "\nto the list of valid redirect URIs in your IdP configuration.",
+                                    "\nIf you see a 'Client not found' error make sure you've created the flowing OIDC client:",
+                                    `\n${clientId}`
+                                ].join(" ")
+                            );
+                        }
 
                         return loginOrGoToAuthServer({
                             action: "login",
@@ -1010,10 +1386,7 @@ export async function createOidc_nonMemoized<
                                 getPersistedAuthState({ configId }) === "explicitly logged out"
                                     ? "ensure interaction"
                                     : "directly redirect if active session show login otherwise",
-                            onCantFetchWellKnownEndpointError: () => {
-                                log?.("Login called but the auth server seems to be down..");
-                                alert("Authentication unavailable please try again later.");
-                            }
+                            preRedirectHook: undefined
                         });
                     },
                     initializationError: undefined
@@ -1045,13 +1418,42 @@ export async function createOidc_nonMemoized<
 
     log?.("User is logged in");
 
-    let currentTokens = oidcClientTsUserToTokens({
-        oidcClientTsUser: resultOfLoginProcess.oidcClientTsUser,
+    assert(oidcMetadata !== undefined, "30483403");
+
+    const { oidcClientTsUserToTokens } = createOidcClientTsUserToTokens({
+        configId,
         decodedIdTokenSchema,
         __unsafe_useIdTokenAsAccessToken,
-        decodedIdToken_previous: undefined,
+        exports_DPoP: shouldEnableDPoP ? exports_DPoP : undefined,
+        exports_tokenSubstitution,
         log
     });
+
+    let currentTokens = oidcClientTsUserToTokens({
+        oidcClientTsUser: resultOfLoginProcess.oidcClientTsUser,
+        decodedIdToken_previous: undefined
+    });
+
+    detect_useless_idleSessionLifetimeInSeconds: {
+        if (idleSessionLifetimeInSeconds === undefined) {
+            break detect_useless_idleSessionLifetimeInSeconds;
+        }
+
+        if (currentTokens.refreshTokenExpirationTime === undefined) {
+            break detect_useless_idleSessionLifetimeInSeconds;
+        }
+
+        console.warn(
+            [
+                "oidc-spa: You've specified idleSessionLifetimeInSeconds,",
+                "but your auth server issues a refresh_token with a known expiration time.",
+                "idleSessionLifetimeInSeconds should only be used as a fallback",
+                "for auth servers that don't specify when an inactive session expires.",
+                "The auth server, not your code, is the source of truth.",
+                "See: https://docs.oidc-spa.dev/v/v10/auto-logout"
+            ].join(" ")
+        );
+    }
 
     {
         if (getPersistedAuthState({ configId }) !== undefined) {
@@ -1064,6 +1466,7 @@ export async function createOidc_nonMemoized<
                 state: {
                     stateDescription: "logged in",
                     refreshTokenExpirationTime: currentTokens.refreshTokenExpirationTime,
+                    serverDateNow: currentTokens.getServerDateNow(),
                     idleSessionLifetimeInSeconds
                 }
             });
@@ -1154,11 +1557,51 @@ export async function createOidc_nonMemoized<
                 prUnlock: new Promise<never>(() => {})
             });
 
+            if (!oidcMetadata.end_session_endpoint) {
+                log?.("No end session endpoint, managing logging state locally");
+
+                persistAuthState({ configId, state: { stateDescription: "explicitly logged out" } });
+
+                try {
+                    await oidcClientTsUserManager.removeUser();
+                } catch {
+                    // NOTE: Not sure if it can throw
+                }
+
+                notifyOtherTabsOfLogout({
+                    configId,
+                    sessionId
+                });
+
+                window.location.href = rootRelativePostLogoutRedirectUrl;
+
+                return new Promise<never>(() => {});
+            }
+
+            log?.(
+                [
+                    "IMPORTANT DEBUG INFO:",
+                    "\nWe are about to redirect to your Identity Provider (IdP).",
+                    "\nIf you see an 'Invalid Redirect URI' error on the IdP page, make sure you've added:",
+                    `\n${homeUrlAndRedirectUri}`,
+                    "\nto the list of valid post logout redirect URIs in your IdP configuration."
+                ].join(" ")
+            );
+
             window.addEventListener("pageshow", event => {
                 if (!event.persisted) {
                     return;
                 }
                 location.reload();
+            });
+
+            setStateDataCookieIfEnabled({
+                homeUrl: homeUrlAndRedirectUri,
+                stateUrlParamValue_instance,
+                stateDataCookie: {
+                    action: "logout",
+                    rootRelativeRedirectUrl: rootRelativePostLogoutRedirectUrl
+                }
             });
 
             try {
@@ -1173,28 +1616,7 @@ export async function createOidc_nonMemoized<
                     redirectMethod: "assign"
                 });
             } catch (error) {
-                assert(is<Error>(error));
-
-                if (error.message === "No end session endpoint") {
-                    log?.("No end session endpoint, managing logging state locally");
-
-                    persistAuthState({ configId, state: { stateDescription: "explicitly logged out" } });
-
-                    try {
-                        await oidcClientTsUserManager.removeUser();
-                    } catch {
-                        // NOTE: Not sure if it can throw
-                    }
-
-                    notifyOtherTabsOfLogout({
-                        configId,
-                        sessionId
-                    });
-
-                    window.location.href = rootRelativePostLogoutRedirectUrl;
-                } else {
-                    throw error;
-                }
+                assert(false, `signoutRedirect() is not expected to throw but it did: ${String(error)}`);
             }
 
             return new Promise<never>(() => {});
@@ -1213,27 +1635,15 @@ export async function createOidc_nonMemoized<
                         prUnlock: new Promise<never>(() => {})
                     });
 
-                    globalContext.evtRequestToPersistTokens.post({
-                        configIdOfInstancePostingTheRequest: configId
-                    });
-
                     await loginOrGoToAuthServer({
                         action: "login",
                         redirectUrl: window.location.href,
                         doForceReloadOnBfCache: true,
                         extraQueryParams_local: undefined,
                         transformUrlBeforeRedirect_local: undefined,
-                        doNavigateBackToLastPublicUrlIfTheTheUserNavigateBack: false,
+                        doNavigateBackToLastPublicUrlIfTheTheUserNavigateBack: true,
                         interaction: "directly redirect if active session show login otherwise",
-                        onCantFetchWellKnownEndpointError: () => {
-                            log?.(
-                                [
-                                    "The auth server seems to be down while we needed to refresh the token",
-                                    "with a full page redirect. Reloading the page"
-                                ].join(" ")
-                            );
-                            window.location.reload();
-                        }
+                        preRedirectHook: undefined
                     });
                     assert(false, "136134");
                 };
@@ -1258,20 +1668,13 @@ export async function createOidc_nonMemoized<
                 const { completeLoginOrRefreshProcess } = await startLoginOrRefreshProcess();
 
                 const result_loginSilent = await loginSilent({
-                    oidcClientTsUserManager,
-                    stateUrlParamValue_instance,
-                    configId,
-                    transformUrlBeforeRedirect,
-                    getExtraQueryParams,
-                    getExtraTokenParams: () => extraTokenParams,
-                    autoLogin,
-                    log
+                    extraTokenParams
                 });
 
-                if (result_loginSilent.outcome === "failure") {
+                if (result_loginSilent.outcome === "timeout") {
                     log?.(
                         [
-                            `Silent refresh of the token failed with ${result_loginSilent.cause}.`,
+                            `Silent refresh of the token failed the iframe didn't post a response (timeout).`,
                             `This isn't recoverable, reloading the page.`
                         ].join(" ")
                     );
@@ -1279,6 +1682,23 @@ export async function createOidc_nonMemoized<
                     await new Promise<never>(() => {});
                     assert(false);
                 }
+
+                const clearPersistedTokensIfSessionStorageIfAny = () => {
+                    let hasRemoved = false;
+
+                    for (let i = sessionStorage.length - 1; i >= 0; i--) {
+                        const key = sessionStorage.key(i);
+                        assert(key !== null, "323303");
+                        if (key.startsWith(SESSION_STORAGE_GLOBAL_PREFIX)) {
+                            hasRemoved = true;
+                            sessionStorage.removeItem(key);
+                        }
+                    }
+
+                    if (hasRemoved) {
+                        log?.("The persisted session in sessionStorage was probably no longer valid");
+                    }
+                };
 
                 let oidcClientTsUser: OidcClientTsUser;
 
@@ -1289,13 +1709,51 @@ export async function createOidc_nonMemoized<
                             oidcClientTsUser = result_loginSilent.oidcClientTsUser;
                         }
                         break;
+                    case "got error auth response using refresh token":
+                        {
+                            const { authResponse } = result_loginSilent;
+
+                            log?.(
+                                [
+                                    "Got error response trying to refresh tokens using the refresh token,",
+                                    "token endpoint response:",
+                                    JSON.stringify(authResponse, null, 2)
+                                ].join(" ")
+                            );
+
+                            clearPersistedTokensIfSessionStorageIfAny();
+
+                            completeLoginOrRefreshProcess();
+
+                            await fallbackToFullPageReload();
+
+                            assert(false, "136135");
+                        }
+                        break;
                     case "got auth response from iframe":
                         {
                             const { authResponse } = result_loginSilent;
 
-                            log?.("Tokens refresh using iframe", authResponse);
+                            clearStateDataCookie({ stateUrlParamValue: authResponse.state });
 
                             const authResponse_error = authResponse.error;
+
+                            if (authResponse_error === undefined) {
+                                log?.(
+                                    [
+                                        "Tokens refreshed using iframe, authorization endpoint response: ",
+                                        JSON.stringify(authResponse, null, 2)
+                                    ].join(" ")
+                                );
+                            } else {
+                                log?.(
+                                    [
+                                        "Got error response trying to refresh tokens using iframe,",
+                                        "Authorization endpoint response:",
+                                        JSON.stringify(authResponse, null, 2)
+                                    ].join(" ")
+                                );
+                            }
 
                             let oidcClientTsUser_scope: OidcClientTsUser | undefined = undefined;
 
@@ -1305,18 +1763,14 @@ export async function createOidc_nonMemoized<
                                         authResponseToUrl(authResponse)
                                     );
                             } catch (error) {
-                                assert(error instanceof Error, "321389");
-
                                 if (authResponse_error === undefined) {
-                                    completeLoginOrRefreshProcess();
-                                    // Same here, if it fails it fails.
-                                    throw error;
+                                    console.error(error);
+                                    assert(false, `This is a bug in oidc-spa, please report.`);
                                 }
                             }
 
                             if (oidcClientTsUser_scope === undefined) {
-                                // NOTE: Here we got a response but it's an error, session might have been
-                                // deleted or other edge case.
+                                clearPersistedTokensIfSessionStorageIfAny();
 
                                 completeLoginOrRefreshProcess();
 
@@ -1342,10 +1796,7 @@ export async function createOidc_nonMemoized<
 
                 currentTokens = oidcClientTsUserToTokens({
                     oidcClientTsUser,
-                    decodedIdTokenSchema,
-                    __unsafe_useIdTokenAsAccessToken,
-                    decodedIdToken_previous: currentTokens.decodedIdToken,
-                    log
+                    decodedIdToken_previous: currentTokens.decodedIdToken
                 });
 
                 if (getPersistedAuthState({ configId }) !== undefined) {
@@ -1354,6 +1805,7 @@ export async function createOidc_nonMemoized<
                         state: {
                             stateDescription: "logged in",
                             refreshTokenExpirationTime: currentTokens.refreshTokenExpirationTime,
+                            serverDateNow: currentTokens.getServerDateNow(),
                             idleSessionLifetimeInSeconds
                         }
                     });
@@ -1441,10 +1893,13 @@ export async function createOidc_nonMemoized<
         subscribeToTokensChange: onTokenChange => {
             onTokenChanges.add(onTokenChange);
 
+            const unsubscribeFromTokensChange = () => {
+                onTokenChanges.delete(onTokenChange);
+            };
+
             return {
-                unsubscribe: () => {
-                    onTokenChanges.delete(onTokenChange);
-                }
+                unsubscribe: unsubscribeFromTokensChange,
+                unsubscribeFromTokensChange
             };
         },
         subscribeToAutoLogoutCountdown: tickCallback => {
@@ -1461,11 +1916,7 @@ export async function createOidc_nonMemoized<
                 action: "go to auth server",
                 redirectUrl: redirectUrl ?? window.location.href,
                 extraQueryParams_local: extraQueryParams,
-                transformUrlBeforeRedirect_local: transformUrlBeforeRedirect,
-                onCantFetchWellKnownEndpointError: () => {
-                    log?.("goToAuthServer called but the auth server seems to be down..");
-                    alert("Authentication unavailable please try again later.");
-                }
+                transformUrlBeforeRedirect_local: transformUrlBeforeRedirect
             }),
         backFromAuthServer: resultOfLoginProcess.backFromAuthServer,
         isNewBrowserSession: (() => {
@@ -1476,6 +1927,15 @@ export async function createOidc_nonMemoized<
             return value;
         })()
     });
+
+    if (resultOfLoginProcess.isRestoredFromSessionStorage) {
+        const { isOnline, prOnline } = getIsOnline();
+        if (isOnline) {
+            await oidc_loggedIn.getTokens();
+        } else {
+            prOnline.then(() => oidc_loggedIn.getTokens());
+        }
+    }
 
     {
         const { prOtherTabLogout } = getPrOtherTabLogout({
@@ -1502,38 +1962,39 @@ export async function createOidc_nonMemoized<
             return;
         }
 
+        const CHECK_DELAY_MS = 5_000;
+        const DRIFT_THRESHOLD_MS = 1_000;
+
+        // NOTE: performance.now() is monotonic and not subject to system clock changes,
+        // so the difference between Date.now() and performance.now() lets us detect
+        // local clock adjustments even if timers are throttled in background tabs.
+        const getClockOffset = () => Date.now() - performance.now();
+
+        let referenceClockOffset = getClockOffset();
         let timer: ReturnType<typeof setTimeout> | undefined = undefined;
 
-        const DELAY = 5_000;
+        const scheduleCheck = () => {
+            timer = setTimeout(() => {
+                const currentClockOffset = getClockOffset();
 
-        (async () => {
-            while (true) {
-                const before = Date.now();
-                await new Promise<void>(resolve => {
-                    timer = setTimeout(resolve, DELAY);
-                });
-                const after = Date.now();
-
-                const elapsed_measured = after - before;
-                const elapsed_theoretical = DELAY;
-
-                if (Math.abs(elapsed_measured - elapsed_theoretical) > 1_000) {
+                if (Math.abs(currentClockOffset - referenceClockOffset) > DRIFT_THRESHOLD_MS) {
                     log?.("Renewing token now as local time might have shifted");
-                    // NOTE: This **will** happen, even if there is no local time drift.
-                    // For example when the computer wakes up after sleep.
-                    // But it doesn't matter, we'll just make a token renewal that was probably
-                    // not necessary. It's best than risking to deem expired token as valid.
                     oidc_loggedIn.renewTokens();
                     return;
                 }
-            }
-        })();
 
-        const { unsubscribe: tokenChangeUnsubscribe } = oidc_loggedIn.subscribeToTokensChange(() => {
+                referenceClockOffset = currentClockOffset;
+                scheduleCheck();
+            }, CHECK_DELAY_MS);
+        };
+
+        scheduleCheck();
+
+        const { unsubscribeFromTokensChange } = oidc_loggedIn.subscribeToTokensChange(() => {
             if (timer !== undefined) {
                 clearTimeout(timer);
             }
-            tokenChangeUnsubscribe();
+            unsubscribeFromTokensChange();
             renewOnLocalTimeShift();
         });
     })();
@@ -1548,6 +2009,18 @@ export async function createOidc_nonMemoized<
             );
             return;
         }
+
+        const msBeforeExpiration_idleSessionLifetimeInSeconds =
+            idleSessionLifetimeInSeconds === undefined ? undefined : idleSessionLifetimeInSeconds * 1000;
+
+        const msBeforeExpiration_refreshToken =
+            currentTokens.refreshTokenExpirationTime === undefined
+                ? undefined
+                : currentTokens.refreshTokenExpirationTime - currentTokens.getServerDateNow();
+        const msBeforeExpiration_accessToken =
+            currentTokens.accessTokenExpirationTime - currentTokens.getServerDateNow();
+
+        let isRefreshTokenNeverExpiring = false;
 
         if (
             currentTokens.refreshTokenExpirationTime !== undefined &&
@@ -1564,74 +2037,117 @@ export async function createOidc_nonMemoized<
             if (warningLines.length > 0) {
                 warningLines.push(
                     ...[
-                        "Misconfiguration: offline_access is for native apps, not SPAs. ",
+                        "Misconfiguration: offline_access is for native apps, not for web apps like yours. ",
                         "You lose SSO and users must log in after every reload."
                     ]
                 );
+                console.warn(`oidc-spa: ${warningLines.join(" ")}`);
+                return;
             }
 
-            const logMessage = [
-                "Refresh token never expires → no need to ping server.",
-                "The backend session will not expire.",
-                ...warningLines
-            ].join(" ");
-
-            if (warningLines.length > 0) {
-                console.warn(`oidc-spa: ${logMessage}`);
-            } else {
-                log?.(logMessage);
-            }
-            return;
+            isRefreshTokenNeverExpiring = true;
         }
-
-        const msBeforeExpiration =
-            (currentTokens.refreshTokenExpirationTime ?? currentTokens.accessTokenExpirationTime) -
-            currentTokens.getServerDateNow();
-
-        const typeOfTheTokenWeGotTheTtlFrom =
-            currentTokens.refreshTokenExpirationTime !== undefined ? "refresh" : "access";
 
         const RENEW_MS_BEFORE_EXPIRES = 30_000;
+        const MIN_ACCEPTABLE_MS_BEFORE_EXPIRATION = RENEW_MS_BEFORE_EXPIRES + 15_000;
 
-        if (msBeforeExpiration <= RENEW_MS_BEFORE_EXPIRES) {
-            log?.(
+        detect_session_reached_max_life: {
+            if (msBeforeExpiration_refreshToken === undefined) {
+                break detect_session_reached_max_life;
+            }
+
+            if (msBeforeExpiration_refreshToken > MIN_ACCEPTABLE_MS_BEFORE_EXPIRATION) {
+                break detect_session_reached_max_life;
+            }
+
+            console.warn(
                 [
-                    "Session keep-alive disabled. We just got fresh tokens",
-                    (() => {
-                        switch (typeOfTheTokenWeGotTheTtlFrom) {
-                            case "refresh":
-                                return [
-                                    " and the refresh token is already about to expires.",
-                                    "This means that we have reached the max session lifespan, we can't keep",
-                                    "the session alive any longer.",
-                                    "(This can also mean that the refresh token was configured with a TTL,",
-                                    "aka the idle session lifespan, too low to make sense)"
-                                ].join(" ");
-                            case "access":
-                                return [
-                                    currentTokens.hasRefreshToken
-                                        ? ", we can't read the expiration time of the refresh token"
-                                        : ", we don't have a refresh token",
-                                    ` and the access token is already about to expire`,
-                                    "we would spam the auth server by constantly renewing the access token in the background",
-                                    "avoiding to do so."
-                                ].join(" ");
-                        }
-                    })()
+                    "oidc-spa: The session is nearing its maximum lifetime, and the user will soon need to log in again,",
+                    `or you've configured a refresh_token with a TTL of ${toHumanReadableDuration(
+                        msBeforeExpiration_refreshToken
+                    )}.`,
+                    `If it's the latter, the TTL is too short, it must be at least ${toHumanReadableDuration(
+                        MIN_ACCEPTABLE_MS_BEFORE_EXPIRATION
+                    )} for reliable operation.`,
+                    "Shorter lifetimes can cause unpredictable session expirations and are usually a misconfiguration.",
+                    "\nIn either case, oidc-spa will not ping the auth server to keep the session alive."
                 ].join(" ")
             );
+
             return;
         }
 
-        log?.(
-            [
-                toHumanReadableDuration(msBeforeExpiration),
-                `before expiration of the ${typeOfTheTokenWeGotTheTtlFrom} token.`,
-                `Scheduling renewal ${toHumanReadableDuration(
-                    RENEW_MS_BEFORE_EXPIRES
-                )} before expiration to keep the session alive on the OIDC server.`
-            ].join(" ")
-        );
+        let msBeforeExpiration = (() => {
+            if (msBeforeExpiration_refreshToken !== undefined && !isRefreshTokenNeverExpiring) {
+                log?.(
+                    [
+                        toHumanReadableDuration(msBeforeExpiration_refreshToken),
+                        `before expiration of the refresh_token.`,
+                        `Scheduling renewal of the tokens ${toHumanReadableDuration(
+                            RENEW_MS_BEFORE_EXPIRES
+                        )} before expiration as a way to keep the session alive on the OIDC server.`
+                    ].join(" ")
+                );
+
+                return msBeforeExpiration_refreshToken;
+            }
+
+            if (msBeforeExpiration_idleSessionLifetimeInSeconds !== undefined) {
+                if (
+                    msBeforeExpiration_idleSessionLifetimeInSeconds < MIN_ACCEPTABLE_MS_BEFORE_EXPIRATION
+                ) {
+                    throw new Error(
+                        [
+                            `oidc-spa: The configured idleSessionLifetimeInSeconds (${toHumanReadableDuration(
+                                msBeforeExpiration_idleSessionLifetimeInSeconds
+                            )}) is too short.`,
+                            `For reliability, it must be at least ${toHumanReadableDuration(
+                                MIN_ACCEPTABLE_MS_BEFORE_EXPIRATION
+                            )}.`,
+                            "Very short session idle lifetimes are usually a misconfiguration, even for ultra sensitive apps."
+                        ].join(" ")
+                    );
+                }
+
+                log?.(
+                    [
+                        `You've set idleSessionLifetimeInSeconds to ${toHumanReadableDuration(
+                            msBeforeExpiration_idleSessionLifetimeInSeconds
+                        )}.`,
+                        `This means the user session will expire after ${toHumanReadableDuration(
+                            msBeforeExpiration_idleSessionLifetimeInSeconds
+                        )} of inactivity (assuming you're right).`,
+                        `Scheduling token renewal ${toHumanReadableDuration(
+                            RENEW_MS_BEFORE_EXPIRES
+                        )} before expiration to keep the session active on the OIDC server.`
+                    ].join(" ")
+                );
+
+                return msBeforeExpiration_idleSessionLifetimeInSeconds;
+            }
+
+            const msBeforeExpiration =
+                msBeforeExpiration_accessToken > MIN_ACCEPTABLE_MS_BEFORE_EXPIRATION
+                    ? msBeforeExpiration_accessToken
+                    : 3_600_000;
+
+            log?.(
+                [
+                    "The auth server's idle session timeout is unknown.",
+                    isRefreshTokenNeverExpiring && "(The refresh token never expires)",
+                    `Assuming a default idle session TTL of ${toHumanReadableDuration(
+                        msBeforeExpiration
+                    )}.`,
+                    `Scheduling token renewal ${toHumanReadableDuration(
+                        RENEW_MS_BEFORE_EXPIRES
+                    )} before expiration to keep the session active on the OIDC server.`
+                ]
+                    .filter(line => typeof line === "string")
+                    .join(" ")
+            );
+
+            return msBeforeExpiration;
+        })();
 
         const timer = setTimeout(
             async () => {
@@ -1661,7 +2177,7 @@ export async function createOidc_nonMemoized<
                 }
 
                 log?.(
-                    `Renewing the tokens now as the ${typeOfTheTokenWeGotTheTtlFrom} token will expire in ${toHumanReadableDuration(
+                    `Renewing the tokens now as otherwise the session will be terminated by the auth server in ${toHumanReadableDuration(
                         RENEW_MS_BEFORE_EXPIRES
                     )}`
                 );
@@ -1677,32 +2193,35 @@ export async function createOidc_nonMemoized<
             )
         );
 
-        const { unsubscribe: tokenChangeUnsubscribe } = oidc_loggedIn.subscribeToTokensChange(() => {
+        const { unsubscribeFromTokensChange } = oidc_loggedIn.subscribeToTokensChange(() => {
             clearTimeout(timer);
-            tokenChangeUnsubscribe();
+            unsubscribeFromTokensChange();
             scheduleTokenRefreshToKeepSessionAlive();
         });
     })();
 
     auto_logout: {
         const getCurrentRefreshTokenTtlInSeconds = () => {
-            if (idleSessionLifetimeInSeconds !== undefined) {
+            if (currentTokens.refreshTokenExpirationTime === undefined) {
                 return idleSessionLifetimeInSeconds;
             }
 
-            if (currentTokens.refreshTokenExpirationTime === undefined) {
-                return undefined;
-            }
-
             if (currentTokens.refreshTokenExpirationTime >= INFINITY_TIME) {
-                return 0;
+                return idleSessionLifetimeInSeconds ?? 0;
             }
 
-            return (currentTokens.refreshTokenExpirationTime - currentTokens.issuedAtTime) / 1000;
+            const ttlInSeconds =
+                (currentTokens.refreshTokenExpirationTime - currentTokens.issuedAtTime) / 1000;
+
+            if (idleSessionLifetimeInSeconds !== undefined) {
+                return Math.min(idleSessionLifetimeInSeconds, ttlInSeconds);
+            }
+
+            return ttlInSeconds;
         };
 
         if (getCurrentRefreshTokenTtlInSeconds() === 0) {
-            log?.("The refresh_token never expires, disabling auto logout mechanism");
+            log?.("The refresh_token never expires, disabling auto logout mechanism.");
             break auto_logout;
         }
 
@@ -1712,7 +2231,7 @@ export async function createOidc_nonMemoized<
                     currentTokens.hasRefreshToken
                         ? "The refresh token is opaque, we can't read it's expiration time"
                         : "No refresh token"
-                }, and idleSessionLifetimeInSeconds was not set, can't implement auto logout mechanism`
+                }, and idleSessionLifetimeInSeconds was not set, can't implement auto logout mechanism.`
             );
             break auto_logout;
         }
@@ -1776,8 +2295,8 @@ export async function createOidc_nonMemoized<
             sessionId
         });
 
-        const { unsubscribe: unsubscribeFromIsUserActive } = evtIsUserActive.subscribe(isUserActive => {
-            if (isUserActive) {
+        const { unsubscribe: unsubscribeFromIsUserActive } = evtIsUserActive.subscribe(eventData => {
+            if (eventData.isUserActive) {
                 if (stopCountdown !== undefined) {
                     stopCountdown();
                     stopCountdown = undefined;
@@ -1790,7 +2309,11 @@ export async function createOidc_nonMemoized<
                 assert(currentRefreshTokenTtlInSeconds !== undefined, "902992326");
 
                 stopCountdown = startCountdown({
-                    countDownFromSeconds: currentRefreshTokenTtlInSeconds
+                    countDownFromSeconds: Math.floor(
+                        (currentRefreshTokenTtlInSeconds * 1_000 -
+                            eventData.hasBeenInactiveForHowLongMs) /
+                            1_000
+                    )
                 }).stopCountdown;
             }
         });

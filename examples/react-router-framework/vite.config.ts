@@ -1,16 +1,19 @@
 import { reactRouter } from "@react-router/dev/vite";
 import { defineConfig } from "vite";
 import tsconfigPaths from "vite-tsconfig-paths";
+import { oidcSpa } from "oidc-spa/vite-plugin";
 
 export default defineConfig({
-    plugins: [reactRouter(), tsconfigPaths()],
-    optimizeDeps: {
-        include: [
-            "oidc-spa/react",
-            "oidc-spa/entrypoint",
-            "oidc-spa/keycloak",
-            "oidc-spa/tools/decodeJwt",
-            "zod"
-        ]
-    }
+    plugins: [
+        reactRouter(),
+        // To improve the security of your app see:
+        // https://docs.oidc-spa.dev/security-features/overview
+        oidcSpa({
+            browserRuntimeFreeze: {
+                enabled: true
+                //excludes: [ "fetch", "XMLHttpRequest"]
+            }
+        }),
+        tsconfigPaths()
+    ]
 });

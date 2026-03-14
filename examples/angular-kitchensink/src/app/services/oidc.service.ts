@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { AbstractOidcService } from 'oidc-spa/angular';
 import { z } from 'zod';
+import { HttpContextToken } from '@angular/common/http';
 
 export type DecodedIdToken = z.infer<typeof decodedIdTokenSchema>;
 
@@ -26,12 +27,14 @@ const mockDecodedIdToken: DecodedIdToken = {
 export class Oidc extends AbstractOidcService<DecodedIdToken> {
   override decodedIdTokenSchema = decodedIdTokenSchema;
   override mockDecodedIdToken = async () => mockDecodedIdToken;
+  // See: https://docs.oidc-spa.dev/v/v10/features/auto-login#angular
   override autoLogin = false;
-  // NOTE: In this mode we are responsible for
-  // @defer (when oidc.prInitialized | async) { } @placeholder { Loading... }
-  // on public pages and app template.
+  // See: https://docs.oidc-spa.dev/v/v10/features/non-blocking-rendering#react-spas
   override providerAwaitsInitialization = false;
 }
+
+export const REQUIRE_ACCESS_TOKEN = new HttpContextToken<boolean>(() => false);
+export const INCLUDE_ACCESS_TOKEN_IF_LOGGED_IN = new HttpContextToken<boolean>(() => false);
 
 // If you want to validate the shape of the token without Zod:
 /*

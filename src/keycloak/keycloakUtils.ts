@@ -5,11 +5,7 @@ export type KeycloakUtils = {
     issuerUriParsed: KeycloakIssuerUriParsed;
     adminConsoleUrl: string;
     adminConsoleUrl_master: string;
-    getAccountUrl: (params: {
-        clientId: string;
-        backToAppFromAccountUrl: string;
-        locale?: string;
-    }) => string;
+    getAccountUrl: (params: { clientId: string; validRedirectUri: string; locale?: string }) => string;
     fetchUserProfile: (params: { accessToken: string }) => Promise<KeycloakProfile>;
     fetchUserInfo: (params: { accessToken: string }) => Promise<KeycloakUserInfo>;
     transformUrlBeforeRedirectForRegister: (authorizationUrl: string) => string;
@@ -49,17 +45,27 @@ export function createKeycloakUtils(params: { issuerUri: string }): KeycloakUtil
         issuerUriParsed,
         adminConsoleUrl: getAdminConsoleUrl(issuerUriParsed.realm),
         adminConsoleUrl_master: getAdminConsoleUrl("master"),
-        getAccountUrl: ({ clientId, backToAppFromAccountUrl, locale }) => {
+        getAccountUrl: ({ clientId, locale, validRedirectUri }) => {
             const accountUrlObj = new URL(
                 `${keycloakServerUrl}/realms/${issuerUriParsed.realm}/account`
             );
             accountUrlObj.searchParams.set("referrer", clientId);
             accountUrlObj.searchParams.set(
                 "referrer_uri",
-                toFullyQualifiedUrl({
-                    urlish: backToAppFromAccountUrl,
-                    doAssertNoQueryParams: false
-                })
+                (() => {
+                    try {
+                        return toFullyQualifiedUrl({
+                            urlish: validRedirectUri,
+                            doAssertNoQueryParams: true,
+                            doOutputWithTrailingSlash: true
+                        });
+                    } catch {
+                        return toFullyQualifiedUrl({
+                            urlish: validRedirectUri,
+                            doAssertNoQueryParams: false
+                        });
+                    }
+                })()
             );
             if (locale !== undefined) {
                 accountUrlObj.searchParams.set("kc_locale", locale);

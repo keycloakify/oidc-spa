@@ -1,6 +1,8 @@
-import type {
-    UserManager as OidcClientTsUserManager,
-    User as OidcClientTsUser
+import {
+    type UserManager as OidcClientTsUserManager,
+    type User as OidcClientTsUser,
+    ErrorTimeout,
+    ErrorResponse
 } from "../vendor/frontend/oidc-client-ts";
 import { Deferred } from "../tools/Deferred";
 import { assert } from "../tools/tsafe/assert";
@@ -11,8 +13,8 @@ import { getDownlinkAndRtt } from "../tools/getDownlinkAndRtt";
 import { getIsDev } from "../tools/isDev";
 import { type AuthResponse } from "./AuthResponse";
 import { addOrUpdateSearchParam } from "../tools/urlSearchParams";
-import { initIframeMessageProtection } from "./iframeMessageProtection";
 import { getIsOnline } from "../tools/getIsOnline";
+import type { Evt } from "../tools/Evt";
 
 type ResultOfLoginSilent =
     | {
@@ -20,15 +22,22 @@ type ResultOfLoginSilent =
           authResponse: AuthResponse;
       }
     | {
-          outcome: "failure";
-          cause: "timeout" | "can't reach well-known oidc endpoint";
+          outcome: "timeout";
       }
     | {
           outcome: "token refreshed using refresh token";
           oidcClientTsUser: OidcClientTsUser;
+      }
+    | {
+          outcome: "got error auth response using refresh token";
+          authResponse: {
+              error: string;
+              error_description: string | undefined;
+          };
       };
 
-export async function loginSilent(params: {
+export function createLoginSilent(params: {
+    getEvtIframeAuthResponse: () => Evt<AuthResponse>;
     oidcClientTsUserManager: OidcClientTsUserManager;
     stateUrlParamValue_instance: string;
     configId: string;
@@ -36,16 +45,15 @@ export async function loginSilent(params: {
     transformUrlBeforeRedirect:
         | ((params: { authorizationUrl: string; isSilent: true }) => string)
         | undefined;
-
     getExtraQueryParams:
         | ((params: { isSilent: true; url: string }) => Record<string, string | undefined>)
         | undefined;
-
     getExtraTokenParams: (() => Record<string, string | undefined>) | undefined;
     autoLogin: boolean;
     log: typeof console.log | undefined;
-}): Promise<ResultOfLoginSilent> {
+}) {
     const {
+        getEvtIframeAuthResponse,
         oidcClientTsUserManager,
         stateUrlParamValue_instance,
         configId,
@@ -56,201 +64,195 @@ export async function loginSilent(params: {
         log
     } = params;
 
-    delay_until_online: {
-        const { isOnline, prOnline } = getIsOnline();
-        if (isOnline) {
-            break delay_until_online;
-        }
-        log?.("The browser seems offline, waiting to get back a connection before proceeding to login");
-        await prOnline;
-    }
+    async function loginSilent(params: {
+        extraTokenParams: Record<string, string | undefined> | undefined;
+    }): Promise<ResultOfLoginSilent> {
+        const { extraTokenParams } = params;
 
-    const dResult = new Deferred<ResultOfLoginSilent>();
-
-    const timeoutDelayMs: number = (() => {
-        const isDev = getIsDev();
-
-        const downlinkAndRtt = getDownlinkAndRtt();
-
-        // Base delay is the minimum delay we should wait in any case
-        const BASE_DELAY_MS = isDev ? 9_000 : autoLogin ? 25_000 : 7_000;
-
-        if (downlinkAndRtt === undefined) {
-            return BASE_DELAY_MS;
-        }
-
-        const { downlink, rtt } = downlinkAndRtt;
-
-        // Calculate dynamic delay based on RTT and downlink
-        // Add 1 to downlink to avoid division by zero
-        const dynamicDelay = rtt * 2.5 + BASE_DELAY_MS / (downlink + 1);
-
-        return Math.max(BASE_DELAY_MS, dynamicDelay);
-    })();
-
-    const { decodeEncryptedAuth, getIsEncryptedAuthResponse, clearSessionStoragePublicKey } =
-        await initIframeMessageProtection({
-            stateUrlParamValue: stateUrlParamValue_instance
-        });
-
-    let clearTimeouts: (params: { wasSuccess: boolean }) => void;
-    {
-        let hasLoggedWarningMessage = false;
-
-        const timeouts = [
-            setTimeout(() => {
-                dResult.resolve({
-                    outcome: "failure",
-                    cause: "timeout"
-                });
-            }, timeoutDelayMs),
-            setTimeout(() => {
-                console.warn(
-                    [
-                        "oidc-spa: Session restoration is taking longer than expected.",
-                        "This likely indicates a misconfiguration.",
-                        `Waiting ${Math.floor(
-                            timeoutDelayMs / 1_000
-                        )} seconds before running diagnostics.`,
-                        "Once the timeout expires, helpful debugging information will be printed to the console."
-                    ].join(" ")
-                );
-                hasLoggedWarningMessage = true;
-            }, 2_000)
-        ];
-
-        clearTimeouts = ({ wasSuccess }) => {
-            timeouts.forEach(clearTimeout);
-            if (wasSuccess && hasLoggedWarningMessage) {
-                console.log(
-                    [
-                        "oidc-spa: Never mind, the auth server was just slow to respond.",
-                        "You can safely ignore the previous warning."
-                    ].join(" ")
-                );
+        delay_until_online: {
+            const { isOnline, prOnline } = getIsOnline();
+            if (isOnline) {
+                break delay_until_online;
             }
-        };
-    }
-
-    const listener = async (event: MessageEvent) => {
-        if (event.origin !== window.location.origin) {
-            return;
+            log?.(
+                "The browser seems offline, waiting to get back a connection before proceeding to login"
+            );
+            await prOnline;
         }
 
-        if (
-            !getIsEncryptedAuthResponse({
-                message: event.data
-            })
-        ) {
-            return;
-        }
+        const dResult = new Deferred<ResultOfLoginSilent>();
 
-        const { authResponse } = await decodeEncryptedAuth({ encryptedAuthResponse: event.data });
+        const timeoutDelayMs: number = (() => {
+            const isDev = getIsDev();
 
-        const stateData = getStateData({ stateUrlParamValue: authResponse.state });
+            const downlinkAndRtt = getDownlinkAndRtt();
 
-        assert(stateData !== undefined, "765645");
-        assert(stateData.context === "iframe", "250711");
+            // Base delay is the minimum delay we should wait in any case
+            const BASE_DELAY_MS = isDev ? 9_000 : autoLogin ? 25_000 : 7_000;
 
-        if (stateData.configId !== configId) {
-            return;
-        }
-
-        clearTimeouts({ wasSuccess: true });
-
-        window.removeEventListener("message", listener);
-
-        dResult.resolve({
-            outcome: "got auth response from iframe",
-            authResponse
-        });
-    };
-
-    window.addEventListener("message", listener, false);
-
-    const transformUrl_oidcClientTs = (url: string) => {
-        add_extra_query_params: {
-            if (getExtraQueryParams === undefined) {
-                break add_extra_query_params;
+            if (downlinkAndRtt === undefined) {
+                return BASE_DELAY_MS;
             }
 
-            const extraQueryParams = getExtraQueryParams({ isSilent: true, url });
+            const { downlink, rtt } = downlinkAndRtt;
 
-            for (const [name, value] of Object.entries(extraQueryParams)) {
-                if (value === undefined) {
-                    continue;
-                }
-                url = addOrUpdateSearchParam({ url, name, value, encodeMethod: "www-form" });
-            }
-        }
+            // Calculate dynamic delay based on RTT and downlink
+            // Add 1 to downlink to avoid division by zero
+            const dynamicDelay = rtt * 2.5 + BASE_DELAY_MS / (downlink + 1);
 
-        apply_transform_url: {
-            if (transformUrlBeforeRedirect === undefined) {
-                break apply_transform_url;
-            }
-            url = transformUrlBeforeRedirect({ authorizationUrl: url, isSilent: true });
-        }
+            return Math.max(BASE_DELAY_MS, dynamicDelay);
+        })();
 
-        return url;
-    };
+        let clearTimeouts: (params: { wasSuccess: boolean }) => void;
+        {
+            let hasLoggedWarningMessage = false;
 
-    oidcClientTsUserManager
-        .signinSilent({
-            state: id<StateData.IFrame>({
-                context: "iframe",
-                configId
-            }),
-            silentRequestTimeoutInSeconds: timeoutDelayMs / 1000,
-            extraTokenParams:
-                getExtraTokenParams === undefined ? undefined : noUndefined(getExtraTokenParams()),
-            transformUrl: transformUrl_oidcClientTs
-        })
-        .then(
-            oidcClientTsUser => {
-                assert(oidcClientTsUser !== null, "oidcClientTsUser is not supposed to be null here");
-
-                clearTimeouts({ wasSuccess: true });
-                window.removeEventListener("message", listener);
-
-                dResult.resolve({
-                    outcome: "token refreshed using refresh token",
-                    oidcClientTsUser
-                });
-            },
-            (error: Error) => {
-                if (error.message === "Failed to fetch") {
-                    // NOTE: If we got an error here it means that the fetch to the
-                    // well-known oidc endpoint failed.
-                    // This usually means that the server is down or that the issuerUri
-                    // is not pointing to a valid oidc server.
-                    // It could be a CORS error on the well-known endpoint but it's unlikely.
-
-                    // NOTE: This error should happen well before we displayed
-                    // the warning notifying that something is probably misconfigured.
-                    // wasSuccess shouldn't really be a required parameter but we do it
-                    // for peace of mind.
-                    clearTimeouts({ wasSuccess: false });
+            const timeouts = [
+                setTimeout(() => {
+                    clearStateStore({ stateUrlParamValue: stateUrlParamValue_instance });
+                    unsubscribe_evtIframeAuthResponse();
 
                     dResult.resolve({
-                        outcome: "failure",
-                        cause: "can't reach well-known oidc endpoint"
+                        outcome: "timeout"
                     });
+                }, timeoutDelayMs),
+                setTimeout(() => {
+                    console.warn(
+                        [
+                            "oidc-spa: Session restoration is taking longer than expected.",
+                            "This likely indicates a misconfiguration.",
+                            `Waiting ${Math.floor(
+                                timeoutDelayMs / 1_000
+                            )} seconds before running diagnostics.`,
+                            "Once the timeout expires, helpful debugging information will be printed to the console."
+                        ].join(" ")
+                    );
+                    hasLoggedWarningMessage = true;
+                }, 2_000)
+            ];
 
+            clearTimeouts = ({ wasSuccess }) => {
+                unsubscribe_evtIframeAuthResponse();
+
+                timeouts.forEach(clearTimeout);
+                if (wasSuccess && hasLoggedWarningMessage) {
+                    console.log(
+                        [
+                            "oidc-spa: Never mind, the auth server was just slow to respond.",
+                            "You can safely ignore the previous warning."
+                        ].join(" ")
+                    );
+                }
+            };
+        }
+
+        const { unsubscribe: unsubscribe_evtIframeAuthResponse } = getEvtIframeAuthResponse().subscribe(
+            authResponse => {
+                if (authResponse.state !== stateUrlParamValue_instance) {
                     return;
                 }
 
-                // NOTE: Here, except error on our understanding there can't be any other
-                // error than timeout so we fail silently and let the timeout expire.
+                unsubscribe_evtIframeAuthResponse();
+
+                const stateData = getStateData({ stateUrlParamValue: authResponse.state });
+
+                assert(stateData !== undefined, "765645");
+                assert(stateData.context === "iframe", "250711");
+                assert(stateData.configId === configId, "4922732");
+
+                clearTimeouts({ wasSuccess: true });
+
+                dResult.resolve({
+                    outcome: "got auth response from iframe",
+                    authResponse
+                });
             }
         );
 
-    dResult.pr.then(result => {
-        clearSessionStoragePublicKey();
+        const transformUrl_oidcClientTs = (url: string) => {
+            add_extra_query_params: {
+                if (getExtraQueryParams === undefined) {
+                    break add_extra_query_params;
+                }
 
-        if (result.outcome === "failure") {
-            clearStateStore({ stateUrlParamValue: stateUrlParamValue_instance });
-        }
-    });
+                const extraQueryParams = getExtraQueryParams({ isSilent: true, url });
 
-    return dResult.pr;
+                for (const [name, value] of Object.entries(extraQueryParams)) {
+                    if (value === undefined) {
+                        continue;
+                    }
+                    url = addOrUpdateSearchParam({ url, name, value, encodeMethod: "www-form" });
+                }
+            }
+
+            apply_transform_url: {
+                if (transformUrlBeforeRedirect === undefined) {
+                    break apply_transform_url;
+                }
+                url = transformUrlBeforeRedirect({ authorizationUrl: url, isSilent: true });
+            }
+
+            return url;
+        };
+
+        oidcClientTsUserManager
+            .signinSilent({
+                state: id<StateData.IFrame>({
+                    context: "iframe",
+                    configId
+                }),
+                silentRequestTimeoutInSeconds: timeoutDelayMs / 1000,
+                extraTokenParams: noUndefined({
+                    ...getExtraTokenParams?.(),
+                    ...extraTokenParams
+                }),
+                transformUrl: transformUrl_oidcClientTs
+            })
+            .then(
+                oidcClientTsUser => {
+                    assert(
+                        oidcClientTsUser !== null,
+                        "oidcClientTsUser is not supposed to be null here"
+                    );
+
+                    clearTimeouts({ wasSuccess: true });
+
+                    dResult.resolve({
+                        outcome: "token refreshed using refresh token",
+                        oidcClientTsUser
+                    });
+                },
+                error => {
+                    assert(error instanceof Error);
+
+                    if (error instanceof ErrorTimeout) {
+                        // NOTE: This is the expected successful outcome
+                        // oidc-spa is handling the iframe's response
+                        // oidc-client-ts never sees it. By design.
+                        return;
+                    }
+
+                    if (error instanceof ErrorResponse) {
+                        clearTimeouts({ wasSuccess: false });
+
+                        assert(error.error !== null, "4033");
+
+                        dResult.resolve({
+                            outcome: "got error auth response using refresh token",
+                            authResponse: {
+                                error: error.error,
+                                error_description: error.error_description ?? undefined
+                            }
+                        });
+                        return;
+                    }
+
+                    assert(false, `This is a bug in oidc-spa, please report: ${error.message}`);
+                }
+            );
+
+        return dResult.pr;
+    }
+
+    return { loginSilent };
 }

@@ -1,7 +1,7 @@
 {
     "name": "oidc-spa",
-    "version": "8.1.5",
-    "description": "Openidconnect client for Single Page Applications",
+    "version": "10.1.1",
+    "description": "OpenID Connect / OAuth2 solution for client-first Web Applications",
     "repository": {
         "type": "git",
         "url": "git://github.com/keycloakify/oidc-spa.git"
@@ -9,21 +9,18 @@
     "scripts": {
         "prepare": "patch-package",
         "build": "tsx scripts/build.ts",
-        "tsc:cjs": "tsc --module CommonJS --outDir ./dist",
-        "tsc:esm": "tsc --module es2020 --outDir ./dist/esm",
-        "watch": "yarn run tsc:esm -w",
         "_format": "prettier '**/*.{ts,tsx,json,md}'",
         "format": "yarn _format --write",
         "format:check": "yarn _format --list-different",
-        "link-in-app": "tsx scripts/link-in-app.ts",
-        "start-react-router-example": "yarn build && tsx scripts/link-in-examples.ts && cd examples/react-router && rm -rf node_modules/.vite && yarn dev",
-        "start-react-router-framework-example": "yarn build && tsx scripts/link-in-examples.ts && cd examples/react-router-framework && rm -rf node_modules/.vite && yarn dev",
-        "start-tanstack-router-example": "yarn build && tsx scripts/link-in-examples.ts && cd examples/tanstack-router && rm -rf node_modules/.vite && yarn dev",
-        "start-tanstack-router-file-based-example": "yarn build && tsx scripts/link-in-examples.ts && cd examples/tanstack-router-file-based && rm -rf node_modules/.vite && yarn dev",
-        "start-multi-providers-example": "yarn build && tsx scripts/link-in-examples.ts && cd examples/multi-providers && rm -rf node_modules/.vite && yarn dev",
-        "start-angular-example": "yarn build && tsx scripts/link-in-examples.ts && cd examples/angular && rm -rf .angular/cache && yarn start",
-        "start-angular-kitchensink-example": "yarn build && tsx scripts/link-in-examples.ts && cd examples/angular-kitchensink && rm -rf .angular/cache && yarn start",
-        "size": "bash ./scripts/compute-payload.sh"
+        "size": "bash ./scripts/compute-payload.sh",
+        "start-angular-example": "bash ./scripts/start-example.sh angular start",
+        "start-angular-kitchensink-example": "bash ./scripts/start-example.sh angular-kitchensink start",
+        "start-react-router-framework-example": "bash ./scripts/start-example.sh react-router-framework dev",
+        "start-react-router-data-example": "bash ./scripts/start-example.sh react-router-data dev",
+        "start-react-router-declarative-example": "bash ./scripts/start-example.sh react-router-declarative dev",
+        "start-tanstack-start-example": "bash ./scripts/start-example.sh tanstack-start dev",
+        "start-tanstack-router-file-router-example": "bash ./scripts/start-example.sh tanstack-router-file-router dev",
+        "start-nuxt-spa-example": "bash ./scripts/start-example.sh nuxt-spa dev"
     },
     "lint-staged": {
         "*.{ts,tsx,json,md}": [
@@ -45,16 +42,21 @@
         "keycloak",
         "keycloak-js",
         "react",
-        "angular"
+        "angular",
+        "TanStack Start"
     ],
     "homepage": "https://docs.oidc-spa.dev/",
     "dependencies": {},
     "peerDependencies": {
+        "@angular/common": "*",
+        "@angular/core": "*",
+        "@angular/router": "*",
+        "@nuxt/kit": "*",
+        "@tanstack/react-router": "*",
+        "@tanstack/react-start": "*",
         "@types/react": "*",
         "react": "*",
-        "rxjs": "*",
-        "@angular/core": "*",
-        "@angular/router": "*"
+        "rxjs": "*"
     },
     "peerDependenciesMeta": {
         "react": {
@@ -71,91 +73,161 @@
         },
         "@angular/router": {
             "optional": true
+        },
+        "@angular/common": {
+            "optional": true
+        },
+        "@nuxt/kit": {
+            "optional": true
+        },
+        "@tanstack/react-start": {
+            "optional": true
+        },
+        "@tanstack/react-router": {
+            "optional": true
         }
     },
     "devDependencies": {
+        "@angular/common": "^20.3.1",
+        "@angular/core": "^20.3.1",
+        "@angular/platform-browser": "^20.3.1",
+        "@angular/router": "^20.3.1",
         "@babel/core": "7.24.9",
+        "@babel/generator": "^7.28.3",
+        "@babel/parser": "^7.28.4",
         "@babel/preset-env": "7.24.8",
-        "@types/jsonwebtoken": "9.0.6",
+        "@babel/traverse": "^7.28.4",
+        "@babel/types": "^7.28.4",
+        "@nuxt/kit": "^4.3.1",
+        "@nuxt/schema": "^4.3.1",
+        "@tanstack/react-start": "^1.132.0",
+        "@types/babel__generator": "^7.6.4",
+        "@types/babel__traverse": "^7.28.0",
         "@types/node": "^20.2.1",
-        "@types/node-fetch": "2.6.11",
-        "@types/node-jose": "1.1.13",
         "@types/react": "19.1.10",
         "babel-loader": "9.1.3",
-        "evt": "^2.5.7",
+        "esbuild": "^0.25.10",
+        "evt": "2.5.9",
+        "fastify": "^5.6.2",
+        "hono": "^4.11.3",
         "husky": "^4.3.8",
-        "jsonwebtoken": "9.0.2",
+        "jose": "5.9.4",
+        "js2mjs": "^1.0.1",
         "lint-staged": "^11.1.1",
-        "node-fetch": "2.7.0",
-        "node-jose": "2.2.0",
+        "magic-string": "^0.30.19",
         "oidc-client-ts": "3.1.0",
         "patch-package": "^8.0.0",
         "prettier": "^2.8.8",
         "punycode": "^2.3.1",
         "react": "19.1.1",
+        "rxjs": "^7.8.2",
+        "ts-add-js-extension": "^1.6.6",
         "ts-node": "^10.9.1",
-        "tsafe": "^1.8.12",
+        "tsafe": "1.8.12",
         "tsx": "^4.15.5",
         "typescript": "5.7.2",
+        "vite": "^7.1.10",
+        "webcrypto-liner-shim": "1.4.8",
         "webpack": "5.93.0",
         "webpack-cli": "5.1.4",
-        "worker-timers": "7.1.7",
-        "zod": "^3.23.8",
-        "rxjs": "^7.8.2",
-        "@angular/core": "^20.3.1",
-        "@angular/router": "^20.3.1",
-        "@angular/common": "^20.3.1",
-        "@angular/platform-browser": "^20.3.1"
+        "zod": "3.24.2"
     },
     "publishConfig": {
         "access": "public"
     },
     "sideEffects": false,
-    "main": "dist/index.js",
-    "types": "dist/index.d.ts",
-    "module": "dist/esm/index.js",
+    "main": "dist/entrypoint.js",
+    "types": "dist/entrypoint.d.ts",
+    "module": "dist/esm/entrypoint.mjs",
     "exports": {
         ".": {
-            "module": "./dist/esm/index.js",
-            "default": "./dist/index.js"
-        },
-        "./mock": {
-            "module": "./dist/esm/mock/index.js",
-            "default": "./dist/mock/index.js"
-        },
-        "./react": {
-            "module": "./dist/esm/react/index.js",
-            "default": "./dist/react/index.js"
-        },
-        "./angular": {
-            "module": "./dist/esm/angular.js",
-            "types": "./dist/esm/angular.d.ts",
-            "default": "./dist/esm/angular.js"
-        },
-        "./mock/react": {
-            "module": "./dist/esm/mock/react.js",
-            "default": "./dist/mock/react.js"
-        },
-        "./entrypoint": {
-            "module": "./dist/esm/entrypoint.js",
+            "module": "./dist/esm/entrypoint.mjs",
+            "import": "./dist/esm/entrypoint.mjs",
             "default": "./dist/entrypoint.js"
         },
-        "./backend": "./dist/backend.js",
+        "./entrypoint": {
+            "module": "./dist/esm/entrypoint.mjs",
+            "import": "./dist/esm/entrypoint.mjs",
+            "default": "./dist/entrypoint.js"
+        },
+        "./core": {
+            "module": "./dist/esm/core/index.mjs",
+            "import": "./dist/esm/core/index.mjs",
+            "default": "./dist/core/index.js"
+        },
+        "./core-mock": {
+            "module": "./dist/esm/core-mock.mjs",
+            "import": "./dist/esm/core-mock.mjs",
+            "default": "./dist/core-mock.js"
+        },
+        "./vite-plugin": {
+            "types": "./dist/esm/vite-plugin/index.d.ts",
+            "module": "./dist/esm/vite-plugin/index.mjs",
+            "import": "./dist/esm/vite-plugin/index.mjs",
+            "default": "./dist/esm/vite-plugin/index.mjs"
+        },
+        "./nuxt-spa": {
+            "types": "./dist/esm/nuxt-spa/index.d.ts",
+            "module": "./dist/esm/nuxt-spa/index.mjs",
+            "import": "./dist/esm/nuxt-spa/index.mjs",
+            "default": "./dist/esm/nuxt-spa/index.mjs"
+        },
+        "./server": {
+            "module": "./dist/esm/server/index.mjs",
+            "import": "./dist/esm/server/index.mjs",
+            "default": "./dist/server/index.js"
+        },
+        "./react-spa": {
+            "module": "./dist/esm/react-spa/index.mjs",
+            "import": "./dist/esm/react-spa/index.mjs",
+            "default": "./dist/react-spa/index.js"
+        },
+        "./react-tanstack-start": {
+            "types": "./dist/esm/tanstack-start/react/index.d.ts",
+            "module": "./dist/esm/tanstack-start/react/index.mjs",
+            "import": "./dist/esm/tanstack-start/react/index.mjs",
+            "default": "./dist/esm/tanstack-start/react/index.mjs"
+        },
+        "./angular": {
+            "types": "./dist/esm/angular.d.ts",
+            "module": "./dist/esm/angular.mjs",
+            "import": "./dist/esm/angular.mjs",
+            "default": "./dist/esm/angular.mjs"
+        },
         "./keycloak": {
-            "module": "./dist/esm/keycloak/index.js",
+            "module": "./dist/esm/keycloak/index.mjs",
+            "import": "./dist/esm/keycloak/index.mjs",
             "default": "./dist/keycloak/index.js"
         },
         "./keycloak-js": {
-            "module": "./dist/esm/keycloak-js.js",
+            "module": "./dist/esm/keycloak-js.mjs",
+            "import": "./dist/esm/keycloak-js.mjs",
             "default": "./dist/keycloak-js.js"
         },
-        "./tools/decodeJwt": {
-            "module": "./dist/esm/tools/decodeJwt.js",
-            "default": "./dist/tools/decodeJwt.js"
+        "./keycloak-js-authz": {
+            "module": "./dist/esm/keycloak-js-authz.mjs",
+            "import": "./dist/esm/keycloak-js-authz.mjs",
+            "default": "./dist/keycloak-js-authz.js"
         },
-        "./tools/parseKeycloakIssuerUri": {
-            "module": "./dist/esm/tools/parseKeycloakIssuerUri.js",
-            "default": "./dist/tools/parseKeycloakIssuerUri.js"
+        "./token-substitution": {
+            "module": "./dist/esm/token-substitution.mjs",
+            "import": "./dist/esm/token-substitution.mjs",
+            "default": "./dist/token-substitution.js"
+        },
+        "./DPoP": {
+            "module": "./dist/esm/DPoP.mjs",
+            "import": "./dist/esm/DPoP.mjs",
+            "default": "./dist/DPoP.js"
+        },
+        "./browser-runtime-freeze": {
+            "module": "./dist/esm/browser-runtime-freeze.mjs",
+            "import": "./dist/esm/browser-runtime-freeze.mjs",
+            "default": "./dist/browser-runtime-freeze.js"
+        },
+        "./decode-jwt": {
+            "module": "./dist/esm/decode-jwt.mjs",
+            "import": "./dist/esm/decode-jwt.mjs",
+            "default": "./dist/decode-jwt.js"
         }
     }
 }

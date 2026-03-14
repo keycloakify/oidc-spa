@@ -11,7 +11,16 @@ export type KeycloakIssuerUriParsed = {
 export function parseKeycloakIssuerUri(params: { issuerUri: string }): KeycloakIssuerUriParsed {
     const { issuerUri } = params;
 
-    assert(isKeycloak({ issuerUri }));
+    if (!isKeycloak({ issuerUri })) {
+        throw new Error(
+            [
+                `oidc-spa: The issuer uri provided ${issuerUri}`,
+                "if you are in an environnement that should support multiple",
+                "auth provider, you should first test `isKeycloakUrl({ issuerUri })`",
+                "before calling parseKeycloakIssuerUri({ issuerUri })"
+            ].join(" ")
+        );
+    }
 
     const url = new URL(issuerUri.replace(/\/$/, ""));
 

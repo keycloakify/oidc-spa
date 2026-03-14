@@ -1,10 +1,6 @@
 import { oidcEarlyInit } from 'oidc-spa/entrypoint';
 
-const { shouldLoadApp } = oidcEarlyInit({
-  freezeFetch: true,
-  freezeXMLHttpRequest: true,
-  freezeWebSocket: true,
-});
+const { shouldLoadApp } = oidcEarlyInit();
 
 if (shouldLoadApp) {
   import('./main.lazy');

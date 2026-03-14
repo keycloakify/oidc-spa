@@ -1,31 +1,27 @@
 import { isPlatformBrowser } from "@angular/common";
-import { HttpHandlerFn, HttpInterceptorFn, HttpRequest } from "@angular/common/http";
-import {
-    inject,
-    makeEnvironmentProviders,
-    PLATFORM_ID,
-    provideAppInitializer,
-    type EnvironmentProviders,
-    type Signal
-} from "@angular/core";
-import { toSignal } from "@angular/core/rxjs-interop";
-import {
-    ActivatedRouteSnapshot,
-    GuardResult,
-    Router,
-    RouterStateSnapshot,
-    type CanActivateFn
-} from "@angular/router";
-import { BehaviorSubject, from, mergeMap, switchMap } from "rxjs";
+import { BehaviorSubject, from, switchMap, Subject, type Observable } from "rxjs";
 import type { Oidc, OidcInitializationError, ParamsOfCreateOidc } from "./core";
 import type { OidcMetadata } from "./core/OidcMetadata";
-import type { ConcreteClass } from "./tools/ConcreteClass";
 import { Deferred } from "./tools/Deferred";
+import { assert, type Equals, is } from "./tools/tsafe/assert";
+import { uncapitalize } from "./tools/tsafe/uncapitalize";
+import { createObjectThatThrowsIfAccessed, AccessError } from "./tools/createObjectThatThrowsIfAccessed";
+import {
+    type Signal,
+    inject,
+    type EnvironmentProviders,
+    makeEnvironmentProviders,
+    provideAppInitializer,
+    PLATFORM_ID
+} from "@angular/core";
+import type { HttpInterceptorFn, HttpRequest } from "@angular/common/http";
+import { toSignal } from "@angular/core/rxjs-interop";
 import type { ReadonlyBehaviorSubject } from "./tools/ReadonlyBehaviorSubject";
+import { Router, type CanActivateFn } from "@angular/router";
 import type { ValueOrAsyncGetter } from "./tools/ValueOrAsyncGetter";
-import { createObjectThatThrowsIfAccessed } from "./tools/createObjectThatThrowsIfAccessed";
 import { getBaseHref } from "./tools/getBaseHref";
-import { assert, is, type Equals } from "./tools/tsafe/assert";
+import type { ConcreteClass } from "./tools/ConcreteClass";
+import { setDesiredPostLoginRedirectUrl } from "./core/desiredPostLoginRedirectUrl";
 
 export type ParamsOfProvide = {
     issuerUri: string;
@@ -103,11 +99,36 @@ export type ParamsOfProvide = {
     autoLogin?: boolean;
 
     /**
-     * Default: false
+     * NOTE: Can be provided as parameter to oidcEarlyInit()
      *
-     * See: https://docs.oidc-spa.dev/v/v8/resources/iframe-related-issues
+     * Determines how session restoration is handled.
+     * Session restoration allows users to stay logged in between visits
+     * without needing to explicitly sign in each time.
+     *
+     * Options:
+     *
+     * - **"auto" (default)**:
+     *   Automatically selects the best method.
+     *   If the app’s domain shares a common parent domain with the authorization endpoint,
+     *   an iframe is used for silent session restoration.
+     *   Otherwise, a full-page redirect is used.
+     *
+     * - **"full page redirect"**:
+     *   Forces full-page reloads for session restoration.
+     *   Use this if your application is served with a restrictive CSP
+     *   (e.g., `Content-Security-Policy: frame-ancestors "none"`)
+     *   or `X-Frame-Options: DENY`, and you cannot modify those headers.
+     *   This mode provides a slightly less seamless UX and will lead oidc-spa to
+     *   store tokens in `localStorage` if multiple OIDC clients are used
+     *   (e.g., your app communicates with several APIs).
+     *
+     * - **"iframe"**:
+     *   Forces iframe-based session restoration.
+     *   In development, if you go in your browser setting and allow your auth server’s domain
+     *   to set third-party cookies this value will let you test your app
+     *   with the local dev server as it will behave in production.
      */
-    noIframe?: boolean;
+    sessionRestorationMethod?: "iframe" | "full page redirect" | "auto";
 
     debugLogs?: boolean;
 
@@ -149,15 +170,24 @@ export type ParamsOfProvide = {
      * with the app.
      * This value let you define how long before how long before auto logout this warning should
      * start showing.
-     * Default is 45 seconds.
+     * Default is 60 seconds.
      */
-    autoLogoutWarningDurationSeconds?: number;
+    warnUserSecondsBeforeAutoLogout?: number;
+
+    /**
+     * This is only for opting out of DPoP for a specific OIDC client instance.
+     * To enable DPoP see: https://docs.oidc-spa.dev/v/v10/security-features/dpop
+     * */
+    disableDPoP?: true;
 };
 
 assert<
     Equals<
-        Omit<ParamsOfProvide, "autoLogoutWarningDurationSeconds">,
-        Omit<ParamsOfCreateOidc<any, boolean>, "homeUrl" | "decodedIdTokenSchema">
+        Omit<ParamsOfProvide, "warnUserSecondsBeforeAutoLogout">,
+        Omit<
+            ParamsOfCreateOidc<any, boolean>,
+            "homeUrl" | "BASE_URL" | "noIframe" | "decodedIdTokenSchema"
+        >
     >
 >;
 
@@ -168,40 +198,25 @@ export type ParamsOfProvideMock = {
     isUserInitiallyLoggedIn?: boolean;
 };
 
-type BearerTokenCondition<
-    T_DecodedIdToken extends Record<string, unknown> = Oidc.Tokens.DecodedIdToken_base
-> = {
-    /**
-     * A function that dynamically determines whether the Bearer token should be included
-     * in the `Authorization` header for a given request.
-     *
-     * This function is asynchronous and receives the following arguments:
-     * - `req`: The `HttpRequest` object representing the current outgoing HTTP request.
-     * - `next`: The `HttpHandlerFn` for forwarding the request to the next handler in the chain.
-     * - `oidc`: The `Oidc` instance representing the authentication context.
-     */
-    shouldAddToken: (
-        req: HttpRequest<unknown>,
-        next: HttpHandlerFn,
-        oidc: Oidc<T_DecodedIdToken>
-    ) => Promise<boolean>;
-};
-
 export abstract class AbstractOidcService<
-    T_DecodedIdToken extends Record<string, unknown> = Oidc.Tokens.DecodedIdToken_base
+    T_DecodedIdToken extends Record<string, unknown> = Oidc.Tokens.DecodedIdToken_OidcCoreSpec
 > {
     protected autoLogin: boolean = false;
     protected providerAwaitsInitialization: boolean = true;
     protected decodedIdTokenSchema:
         | {
-              parse: (decodedIdToken_original: Oidc.Tokens.DecodedIdToken_base) => T_DecodedIdToken;
+              parse: (
+                  decodedIdToken_original: Oidc.Tokens.DecodedIdToken_OidcCoreSpec
+              ) => T_DecodedIdToken;
           }
         | undefined = undefined;
 
     protected mockDecodedIdToken: (() => Promise<T_DecodedIdToken>) | T_DecodedIdToken | undefined =
         undefined;
 
-    #autoLogoutWarningDurationSeconds = 45;
+    #warnUserSecondsBeforeAutoLogout = 60;
+
+    #isRunningGetParams = false;
 
     static provide(params: ValueOrAsyncGetter<ParamsOfProvide>): EnvironmentProviders {
         const paramsOrGetParams = params;
@@ -211,29 +226,37 @@ export abstract class AbstractOidcService<
         return makeEnvironmentProviders([
             this,
             provideAppInitializer(async () => {
-                // Detect platform
-                const platformId = inject(PLATFORM_ID);
+                {
+                    const platformId = inject(PLATFORM_ID);
 
-                if (!isPlatformBrowser(platformId)) return;
+                    if (!isPlatformBrowser(platformId)) {
+                        return;
+                    }
+                }
                 const instance = inject(this);
+
                 instance.#initialize({
                     prOidcOrInitializationError: (async () => {
-                        const [{ createOidc }, { autoLogoutWarningDurationSeconds, ...params }] =
+                        const [{ createOidc }, { warnUserSecondsBeforeAutoLogout, ...params }] =
                             await Promise.all([
                                 import("./core"),
                                 typeof paramsOrGetParams === "function"
-                                    ? paramsOrGetParams()
+                                    ? (async () => {
+                                          instance.#isRunningGetParams = true;
+                                          const params = await paramsOrGetParams();
+                                          instance.#isRunningGetParams = false;
+                                          return params;
+                                      })()
                                     : paramsOrGetParams
                             ]);
 
-                        if (autoLogoutWarningDurationSeconds !== undefined) {
-                            instance.#autoLogoutWarningDurationSeconds =
-                                autoLogoutWarningDurationSeconds;
+                        if (warnUserSecondsBeforeAutoLogout !== undefined) {
+                            instance.#warnUserSecondsBeforeAutoLogout = warnUserSecondsBeforeAutoLogout;
                         }
 
                         try {
                             return createOidc({
-                                homeUrl: getBaseHref(),
+                                BASE_URL: getBaseHref(),
                                 autoLogin: instance.autoLogin,
                                 decodedIdTokenSchema: instance.decodedIdTokenSchema,
                                 ...params
@@ -259,18 +282,22 @@ export abstract class AbstractOidcService<
         return makeEnvironmentProviders([
             this,
             provideAppInitializer(async () => {
-                // Detect platform
-                const platformId = inject(PLATFORM_ID);
+                {
+                    const platformId = inject(PLATFORM_ID);
 
-                if (!isPlatformBrowser(platformId)) return;
+                    if (!isPlatformBrowser(platformId)) {
+                        return;
+                    }
+                }
+
                 const instance = inject(this);
 
                 instance.#initialize({
                     prOidcOrInitializationError: (async () => {
-                        const { createMockOidc } = await import("./mock");
+                        const { createMockOidc } = await import("./core/createMockOidc");
 
                         return createMockOidc<Record<string, unknown>, boolean>({
-                            homeUrl: getBaseHref(),
+                            BASE_URL: getBaseHref(),
                             autoLogin: instance.autoLogin,
                             isUserInitiallyLoggedIn: instance.autoLogin
                                 ? true
@@ -299,222 +326,236 @@ export abstract class AbstractOidcService<
         ]);
     }
 
-    #createBearerTokenInterceptor<
-        T_DecodedIdToken extends Record<string, unknown> = Oidc.Tokens.DecodedIdToken_base
-    >({
-        bearerPrefix,
-        authorizationHeaderName,
-        conditions,
-        req,
-        next
-    }: {
-        bearerPrefix?: string;
-        authorizationHeaderName?: string;
-        conditions: BearerTokenCondition<T_DecodedIdToken>[];
-        req: HttpRequest<unknown>;
-        next: HttpHandlerFn;
-    }): ReturnType<HttpInterceptorFn> {
-        return from(this.prInitialized).pipe(
-            switchMap(() => {
-                const oidc: Oidc<T_DecodedIdToken> = this.#getOidc({
-                    callerName: "createBearerTokenInterceptor"
-                }) as Oidc<T_DecodedIdToken>;
-                return from(
-                    Promise.all(
-                        conditions.map(
-                            async condition => await condition.shouldAddToken(req, next, oidc)
-                        )
-                    )
-                );
-            }),
-            mergeMap(evaluatedConditions => {
-                const matchingConditionIndex = evaluatedConditions.findIndex(Boolean);
-                const matchingCondition = conditions[matchingConditionIndex];
+    protected allowDecodedIdTokenAccessInShouldInjectAccessToken = false;
 
-                if (!matchingCondition) {
-                    return next(req);
-                }
-                return from(this.getAccessToken()).pipe(
-                    switchMap(({ isUserLoggedIn, accessToken }) => {
-                        if (!isUserLoggedIn) {
-                            throw new Error(
-                                `Assertion Error: Call to ${req.url} while the user isn't logged in.`
-                            );
-                        }
-                        const clonedRequest = req.clone({
-                            setHeaders: {
-                                [authorizationHeaderName ?? "Authorization"]: `${
-                                    bearerPrefix ?? "Bearer"
-                                } ${accessToken}`
-                            }
-                        });
-                        return next(clonedRequest);
-                    })
-                );
-            })
-        );
-    }
+    #deadlockDetectionTimer: ReturnType<typeof setTimeout> | undefined = undefined;
 
-    static createAdvancedBearerTokenInterceptor<
-        T_DecodedIdToken extends Record<string, unknown> = Oidc.Tokens.DecodedIdToken_base
-    >({
-        bearerPrefix,
-        authorizationHeaderName,
-        conditions
-    }: {
-        bearerPrefix?: string;
-        authorizationHeaderName?: string;
-        conditions?: BearerTokenCondition<T_DecodedIdToken>[];
+    static createBearerInterceptor(params: {
+        shouldInjectAccessToken: (req: HttpRequest<unknown>) => boolean;
     }): HttpInterceptorFn {
-        const bearerConditions = conditions ?? [];
-        const interceptor: HttpInterceptorFn = (req, next) => {
+        const { shouldInjectAccessToken: getShouldInjectAccessToken } = params;
+
+        return (req, next) => {
             const instance = inject(this);
 
-            return instance.#createBearerTokenInterceptor({
-                conditions: bearerConditions,
-                bearerPrefix,
-                next,
-                req,
-                authorizationHeaderName
-            });
-        };
-        return interceptor;
-    }
+            let shouldInjectAccessToken: boolean | undefined = undefined;
+            const shouldInjectAccessTokenByState: {
+                isUserLoggedIn: boolean;
+                isNewBrowserSession: boolean | undefined;
+                shouldInjectAccessTokenOrError: boolean | { error: unknown };
+            }[] = [];
 
-    static createBasicBearerTokenInterceptor({
-        bearerPrefix,
-        authorizationHeaderName,
-        conditions
-    }: {
-        bearerPrefix?: string;
-        authorizationHeaderName?: string;
-        conditions: {
-            urlPattern: RegExp;
-            httpMethods?: ("GET" | "POST" | "PUT" | "DELETE" | "OPTIONS" | "HEAD" | "PATCH")[];
-        }[];
-    }) {
-        const findMatchingCondition = (
-            { method, url }: HttpRequest<unknown>,
-            {
-                urlPattern,
-                httpMethods = []
-            }: {
-                urlPattern: RegExp;
-                httpMethods?: ("GET" | "POST" | "PUT" | "DELETE" | "OPTIONS" | "HEAD" | "PATCH")[];
+            let isDecodedIdTokenAccessed = false;
+
+            (instance.decodedIdTokenAccess = new Subject()).subscribe(
+                () => (isDecodedIdTokenAccessed = true)
+            );
+
+            try {
+                shouldInjectAccessToken = getShouldInjectAccessToken(req);
+            } catch (error) {
+                if (!(error instanceof OidcAccessedTooEarlyError) && !(error instanceof AccessError)) {
+                    throw error;
+                }
             }
-        ): boolean => {
-            const httpMethodTest =
-                httpMethods.length === 0 || httpMethods.join().indexOf(method.toUpperCase()) > -1;
 
-            const urlTest = urlPattern.test(url);
+            if (shouldInjectAccessToken === undefined) {
+                for (const isUserLoggedIn of [false, true]) {
+                    for (const isNewBrowserSession of isUserLoggedIn ? [false, true] : [undefined]) {
+                        let shouldInjectAccessTokenOrError: boolean | { error: unknown };
 
-            return httpMethodTest && urlTest;
-        };
-        const interceptor: HttpInterceptorFn = (req, next) => {
-            const instance = inject(this);
-            return instance.#createBearerTokenInterceptor({
-                bearerPrefix,
-                authorizationHeaderName,
-                conditions: conditions.map<BearerTokenCondition>(c => ({
-                    shouldAddToken: async req => findMatchingCondition(req, c)
-                })),
-                req,
-                next
-            });
-        };
+                        instance.#isUserLoggedIn_override = isUserLoggedIn;
+                        instance.#isNewBrowserSession_override = isNewBrowserSession;
 
-        return interceptor;
-    }
+                        try {
+                            shouldInjectAccessTokenOrError = getShouldInjectAccessToken(req);
+                        } catch (error) {
+                            shouldInjectAccessTokenOrError = { error };
+                        }
 
-    static get bearerTokenInterceptor() {
-        const interceptor: HttpInterceptorFn = (req, next) => {
-            const instance = inject(this);
-            return instance.#createBearerTokenInterceptor({
-                conditions: [{ shouldAddToken: async () => true }],
-                req,
-                next
-            });
-        };
-        return interceptor;
-    }
+                        instance.#isUserLoggedIn_override = undefined;
+                        instance.#isNewBrowserSession_override = undefined;
 
-    async #createAuthGuard<
-        T_DecodedIdToken extends Record<string, unknown> = Oidc.Tokens.DecodedIdToken_base
-    >(
-        isAccessAllowed: ({
-            route,
-            state,
-            oidc
-        }: {
-            route: ActivatedRouteSnapshot;
-            state: RouterStateSnapshot;
-            oidc: Oidc<T_DecodedIdToken>;
-        }) => Promise<GuardResult> | GuardResult,
-        route: ActivatedRouteSnapshot,
-        state: RouterStateSnapshot
-    ) {
-        await this.prInitialized;
-
-        const oidc: Oidc<T_DecodedIdToken> = this.#getOidc({
-            callerName: "createAuthGuard"
-        }) as Oidc<T_DecodedIdToken>;
-
-        return isAccessAllowed({ route, state, oidc });
-    }
-
-    static createAuthGuard<
-        T_DecodedIdToken extends Record<string, unknown> = Oidc.Tokens.DecodedIdToken_base
-    >(
-        isAccessAllowed: ({
-            route,
-            state,
-            oidc
-        }: {
-            route: ActivatedRouteSnapshot;
-            state: RouterStateSnapshot;
-            oidc: Oidc<T_DecodedIdToken>;
-        }) => Promise<GuardResult> | GuardResult
-    ): CanActivateFn {
-        const canActivateFn: CanActivateFn = (route, state) => {
-            const instance = inject(this);
-            return instance.#createAuthGuard(isAccessAllowed, route, state);
-        };
-        return canActivateFn;
-    }
-
-    static get enforceLoginGuard(): CanActivateFn {
-        const canActivateFn: CanActivateFn = (route, state) => {
-            const router = inject(Router);
-            const instance = inject(this);
-            return instance.#createAuthGuard(
-                async ({ route, oidc }) => {
-                    if (!oidc.isUserLoggedIn) {
-                        const redirectUrl = router.serializeUrl(
-                            router.createUrlTree(
-                                route.url.map(u => u.path),
-                                {
-                                    queryParams: route.queryParams,
-                                    fragment: route.fragment ?? undefined
-                                }
-                            )
-                        );
-
-                        const doesCurrentHrefRequiresAuth =
-                            location.href.replace(/\/$/, "") === redirectUrl.replace(/\/$/, "");
-
-                        await oidc.login({
-                            doesCurrentHrefRequiresAuth,
-                            redirectUrl
+                        shouldInjectAccessTokenByState.push({
+                            isUserLoggedIn,
+                            isNewBrowserSession,
+                            shouldInjectAccessTokenOrError
                         });
-                        return false;
+                    }
+                }
+            }
+
+            instance.decodedIdTokenAccess = undefined;
+
+            if (
+                !instance.providerAwaitsInitialization &&
+                isDecodedIdTokenAccessed &&
+                !instance.allowDecodedIdTokenAccessInShouldInjectAccessToken
+            ) {
+                throw new Error(
+                    "oidc-spa: See https://docs.oidc-spa.dev/release-notes/reading-decodedaccesstoken-within-shouldinjectaccesstoken"
+                );
+            }
+
+            if (
+                shouldInjectAccessToken === false ||
+                (shouldInjectAccessToken === undefined &&
+                    shouldInjectAccessTokenByState.every(
+                        ({ shouldInjectAccessTokenOrError }) => shouldInjectAccessTokenOrError === false
+                    ))
+            ) {
+                return next(req);
+            }
+
+            if (instance.#isRunningGetParams && instance.#deadlockDetectionTimer === undefined) {
+                instance.#deadlockDetectionTimer = setTimeout(() => {
+                    const name = this.name.replace(/^_/, "");
+
+                    switch (shouldInjectAccessToken) {
+                        case false:
+                            assert(false);
+                        case true:
+                            console.warn(
+                                [
+                                    "oidc-spa: Probable deadlock detected!",
+                                    `Request ${req.method} ${req.urlWithParams} requires an access token,`,
+                                    `but this request is probably being made inside the async callback of`,
+                                    `${name}.provide(async () => {...}).`,
+                                    "At this point the access token cannot exist yet, initialization depends on this request itself."
+                                ].join(" ")
+                            );
+                            break;
+                        case undefined:
+                            console.warn(
+                                [
+                                    "oidc-spa: Probable deadlock detected!",
+                                    `While evaluating shouldInjectAccessToken(req) for ${req.method} ${req.urlWithParams},`,
+                                    "you accessed synchronous properties of",
+                                    `\`${uncapitalize(name)} = inject(${name})\` that`,
+                                    "are only available after initialization completes.",
+                                    `Requests made inside the ${name}.provide(async () => {...}) callback`,
+                                    `(typically to fetch the params), should not trigger a read of `,
+                                    `${uncapitalize(
+                                        name
+                                    )}.isUserLoggedIn or other properties inside shouldInjectAccessToken()`,
+                                    "This creates a causality violation.",
+                                    "Reorganize your shouldInjectAccessToken implementation to exit early with `false` in those case,",
+                                    "before accessing the property."
+                                ].join(" ")
+                            );
+                            break;
+                    }
+                }, 4_000);
+            }
+
+            return from(instance.getAccessToken()).pipe(
+                switchMap(({ accessToken }) => {
+                    if (instance.#deadlockDetectionTimer !== undefined) {
+                        clearTimeout(instance.#deadlockDetectionTimer);
+                        instance.#deadlockDetectionTimer = undefined;
                     }
 
-                    return true;
-                },
-                route,
-                state
+                    if (shouldInjectAccessToken === undefined) {
+                        const match = shouldInjectAccessTokenByState.find(
+                            ({ isUserLoggedIn, isNewBrowserSession }) =>
+                                isUserLoggedIn === instance.isUserLoggedIn &&
+                                isNewBrowserSession ===
+                                    (instance.isUserLoggedIn ? instance.isNewBrowserSession : undefined)
+                        );
+
+                        assert(match !== undefined);
+
+                        const { shouldInjectAccessTokenOrError } = match;
+
+                        if (typeof shouldInjectAccessTokenOrError !== "boolean") {
+                            const { error } = shouldInjectAccessTokenOrError;
+                            throw error;
+                        }
+
+                        shouldInjectAccessToken = shouldInjectAccessTokenOrError;
+                    }
+
+                    if (!shouldInjectAccessToken) {
+                        return next(req);
+                    }
+
+                    if (!instance.isUserLoggedIn) {
+                        throw new OidcAccessedTooEarlyError(
+                            [
+                                `oidc-spa: attempted to inject an Authorization bearer token`,
+                                `for ${req.method} ${req.urlWithParams} but the user is not logged in.`,
+                                `You shouldn't be attempting to call API endpoint that require authentication`,
+                                `when the user isn't logged in.`
+                            ].join(" ")
+                        );
+                    }
+
+                    assert(accessToken !== undefined);
+
+                    return next(req.clone({ setHeaders: { Authorization: `Bearer ${accessToken}` } }));
+                })
             );
         };
+    }
+
+    static get enforceLoginGuard() {
+        const canActivateFn = (async route => {
+            const instance = inject(this);
+            const router = inject(Router);
+
+            await instance.prInitialized;
+
+            const redirectUrl = router.serializeUrl(
+                router.createUrlTree(
+                    route.url.map(u => u.path),
+                    {
+                        queryParams: route.queryParams,
+                        fragment: route.fragment ?? undefined
+                    }
+                )
+            );
+
+            const oidc = instance.#getOidc({ callerName: "enforceLoginGuard" });
+
+            const isUrlAlreadyReplaced =
+                window.location.href.replace(/\/$/, "") === redirectUrl.replace(/\/$/, "");
+
+            if (!oidc.isUserLoggedIn) {
+                await oidc.login({
+                    doesCurrentHrefRequiresAuth: isUrlAlreadyReplaced,
+                    redirectUrl
+                });
+            }
+
+            define_temporary_postLoginRedirectUrl: {
+                if (isUrlAlreadyReplaced) {
+                    break define_temporary_postLoginRedirectUrl;
+                }
+
+                setDesiredPostLoginRedirectUrl({ postLoginRedirectUrl: redirectUrl });
+
+                const history_pushState = history.pushState;
+                const history_replaceState = history.replaceState;
+
+                const onNavigated = () => {
+                    history.pushState = history_pushState;
+                    history.replaceState = history_replaceState;
+                    setDesiredPostLoginRedirectUrl({ postLoginRedirectUrl: undefined });
+                };
+
+                history.pushState = function pushState(...args) {
+                    onNavigated();
+                    return history_pushState.call(history, ...args);
+                };
+
+                history.replaceState = function replaceState(...args) {
+                    onNavigated();
+                    return history_replaceState.call(history, ...args);
+                };
+            }
+
+            return true;
+        }) satisfies CanActivateFn;
         return canActivateFn;
     }
 
@@ -564,7 +605,9 @@ export abstract class AbstractOidcService<
         const { callerName } = params;
         const { hasResolved, value } = this.#dState.getState();
         if (!hasResolved) {
-            throw new Error(this.#getPrInitializedNotResolvedErrorMessage({ callerName }));
+            throw new OidcAccessedTooEarlyError(
+                this.#getPrInitializedNotResolvedErrorMessage({ callerName })
+            );
         }
         return value;
     }
@@ -597,15 +640,35 @@ export abstract class AbstractOidcService<
     }
 
     get issuerUri() {
-        return this.#getOidc({ callerName: "issuerUri" }).params.issuerUri;
+        return this.#getOidc({ callerName: "issuerUri" }).issuerUri;
     }
 
     get clientId() {
-        return this.#getOidc({ callerName: "clientId" }).params.clientId;
+        return this.#getOidc({ callerName: "clientId" }).clientId;
     }
 
+    get validRedirectUri() {
+        return this.#getOidc({ callerName: "validRedirectUri" }).validRedirectUri;
+    }
+
+    get backFromAuthServer() {
+        const oidc = this.#getOidc({ callerName: "backFromAuthServer" });
+        assert(oidc.isUserLoggedIn);
+
+        if (!oidc.isUserLoggedIn) {
+            throw new Error("oidc-spa: backFromAuthServer called but the user is not logged in.");
+        }
+
+        return oidc.backFromAuthServer;
+    }
+
+    #isUserLoggedIn_override: boolean | undefined = undefined;
+
     get isUserLoggedIn() {
-        return this.#getOidc({ callerName: "isUserLoggedIn" }).isUserLoggedIn;
+        return (
+            this.#isUserLoggedIn_override ??
+            this.#getOidc({ callerName: "isUserLoggedIn" }).isUserLoggedIn
+        );
     }
 
     async login(params?: {
@@ -691,7 +754,14 @@ export abstract class AbstractOidcService<
         return oidc.goToAuthServer(params);
     }
 
-    readonly decodedIdToken$: ReadonlyBehaviorSubject<T_DecodedIdToken> = (() => {
+    decodedIdTokenAccess: Subject<void> | undefined = undefined;
+
+    get decodedIdToken$(): ReadonlyBehaviorSubject<T_DecodedIdToken> {
+        this.decodedIdTokenAccess?.next();
+        return this.#decodedIdToken$;
+    }
+
+    readonly #decodedIdToken$: ReadonlyBehaviorSubject<T_DecodedIdToken> = (() => {
         const decodedIdToken$ = new BehaviorSubject<T_DecodedIdToken>(
             createObjectThatThrowsIfAccessed({
                 debugMessage: this.#getPrInitializedNotResolvedErrorMessage({
@@ -747,7 +817,12 @@ export abstract class AbstractOidcService<
         return decodedIdToken$;
     })();
 
-    readonly $decodedIdToken = toSignal(this.decodedIdToken$, { requireSync: true });
+    readonly #$decodedIdToken = toSignal(this.decodedIdToken$, { requireSync: true });
+
+    get $decodedIdToken(): Signal<T_DecodedIdToken> {
+        this.decodedIdTokenAccess?.next();
+        return this.#$decodedIdToken;
+    }
 
     async getAccessToken(): Promise<
         { isUserLoggedIn: false; accessToken?: never } | { isUserLoggedIn: true; accessToken: string }
@@ -762,6 +837,28 @@ export abstract class AbstractOidcService<
                   isUserLoggedIn: false
               };
     }
+
+    readonly accessTokenRotation$: Observable<string> = (() => {
+        const accessTokenRotation$ = new Subject<string>();
+
+        (async () => {
+            const { oidc } = await this.#dState.pr;
+
+            if (oidc === undefined) {
+                return;
+            }
+
+            if (!oidc.isUserLoggedIn) {
+                return;
+            }
+
+            oidc.subscribeToTokensChange(({ accessToken }) => {
+                accessTokenRotation$.next(accessToken);
+            });
+        })();
+
+        return accessTokenRotation$;
+    })();
 
     readonly $secondsLeftBeforeAutoLogout: Signal<number | null> = (() => {
         const secondsLeftBeforeAutoLogout$ = new BehaviorSubject<number | null>(null);
@@ -778,7 +875,7 @@ export abstract class AbstractOidcService<
             }
 
             oidc.subscribeToAutoLogoutCountdown(({ secondsLeft }) => {
-                if (secondsLeft === undefined || secondsLeft > this.#autoLogoutWarningDurationSeconds) {
+                if (secondsLeft === undefined || secondsLeft > this.#warnUserSecondsBeforeAutoLogout) {
                     if (secondsLeftBeforeAutoLogout$.getValue() !== null) {
                         secondsLeftBeforeAutoLogout$.next(null);
                     }
@@ -791,7 +888,13 @@ export abstract class AbstractOidcService<
         return toSignal(secondsLeftBeforeAutoLogout$, { requireSync: true });
     })();
 
+    #isNewBrowserSession_override: boolean | undefined = undefined;
+
     get isNewBrowserSession() {
+        if (this.#isNewBrowserSession_override !== undefined) {
+            return this.#isNewBrowserSession_override;
+        }
+
         const oidc = this.#getOidc({ callerName: "isNewBrowserSession" });
 
         if (!oidc.isUserLoggedIn) {
@@ -799,5 +902,12 @@ export abstract class AbstractOidcService<
         }
 
         return oidc.isNewBrowserSession;
+    }
+}
+
+export class OidcAccessedTooEarlyError extends Error {
+    constructor(message: string) {
+        super(message);
+        Object.setPrototypeOf(this, new.target.prototype);
     }
 }

@@ -1,21 +1,20 @@
 import type { OidcInitializationError } from "./OidcInitializationError";
 
 export declare type Oidc<
-    DecodedIdToken extends Record<string, unknown> = Oidc.Tokens.DecodedIdToken_base
+    DecodedIdToken extends Record<string, unknown> = Oidc.Tokens.DecodedIdToken_OidcCoreSpec
 > = Oidc.LoggedIn<DecodedIdToken> | Oidc.NotLoggedIn;
 
 export declare namespace Oidc {
     export type Common = {
-        params: {
-            issuerUri: string;
-            clientId: string;
-        };
+        issuerUri: string;
+        clientId: string;
+        validRedirectUri: string;
     };
 
     export type NotLoggedIn = Common & {
         isUserLoggedIn: false;
-        login: (params: {
-            doesCurrentHrefRequiresAuth: boolean;
+        login: (params?: {
+            doesCurrentHrefRequiresAuth?: boolean;
             /**
              * Add extra query parameters to the url before redirecting to the login pages.
              */
@@ -45,7 +44,7 @@ export declare namespace Oidc {
             }): Promise<void>;
             getTokens: () => Promise<Tokens<DecodedIdToken>>;
             subscribeToTokensChange: (onTokenChange: (tokens: Tokens<DecodedIdToken>) => void) => {
-                unsubscribe: () => void;
+                unsubscribeFromTokensChange: () => void;
             };
             getDecodedIdToken: () => DecodedIdToken;
             logout: (
@@ -91,9 +90,9 @@ export declare namespace Oidc {
             isNewBrowserSession: boolean;
         };
 
-    export type Tokens<DecodedIdToken extends Record<string, unknown> = Tokens.DecodedIdToken_base> =
-        | Tokens.WithRefreshToken<DecodedIdToken>
-        | Tokens.WithoutRefreshToken<DecodedIdToken>;
+    export type Tokens<
+        DecodedIdToken extends Record<string, unknown> = Tokens.DecodedIdToken_OidcCoreSpec
+    > = Tokens.WithRefreshToken<DecodedIdToken> | Tokens.WithoutRefreshToken<DecodedIdToken>;
 
     export namespace Tokens {
         export type Common<DecodedIdToken> = {
@@ -112,7 +111,7 @@ export declare namespace Oidc {
              *
              * `decodedIdToken_original` is the actual decoded payload of the  id_token, untransformed.
              * */
-            decodedIdToken_original: DecodedIdToken_base;
+            decodedIdToken_original: DecodedIdToken_OidcCoreSpec;
             /** Millisecond epoch in the server's time, read from id_token's JWT, iat claim value */
             issuedAtTime: number;
 
@@ -132,12 +131,42 @@ export declare namespace Oidc {
             refreshTokenExpirationTime?: never;
         };
 
-        export type DecodedIdToken_base = {
-            iss: string;
-            sub: string;
-            aud: string | string[];
-            exp: number;
-            iat: number;
+        export type DecodedIdToken_OidcCoreSpec = {
+            // REQUIRED
+            iss: string; // Issuer Identifier
+            sub: string; // Subject Identifier
+            aud: string | string[]; // Audience(s)
+            exp: number; // Expiration time (Unix seconds)
+            iat: number; // Issued-at time (Unix seconds)
+
+            // CONDITIONAL
+            auth_time?: number; // Authentication time
+            nonce?: string; // Nonce
+            acr?: string; // Authentication Context Class Reference
+            amr?: string[]; // Authentication Methods References
+            azp?: string; // Authorized party (for multiple audiences)
+
+            // OPTIONAL standard user claims (OpenID §5.1)
+            name?: string;
+            given_name?: string;
+            family_name?: string;
+            middle_name?: string;
+            nickname?: string;
+            preferred_username?: string;
+            profile?: string;
+            picture?: string;
+            website?: string;
+            email?: string;
+            email_verified?: boolean;
+            gender?: string;
+            birthdate?: string;
+            zoneinfo?: string;
+            locale?: string;
+            phone_number?: string;
+            phone_number_verified?: boolean;
+            address?: Record<string, unknown>;
+            updated_at?: number;
+
             [claimName: string]: unknown;
         };
     }

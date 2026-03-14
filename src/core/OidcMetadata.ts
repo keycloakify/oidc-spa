@@ -1,5 +1,6 @@
 import { type OidcMetadata as OidcClientTsOidcMetadata } from "../vendor/frontend/oidc-client-ts";
 import { assert, type Equals } from "../tools/tsafe/assert";
+import { getIsLikelyDevServer } from "../tools/isLikelyDevServer";
 
 /**
  * OpenID Providers have metadata describing their configuration.
@@ -266,6 +267,82 @@ export type OidcMetadata = {
      * @see https://datatracker.ietf.org/doc/html/rfc8414
      */
     code_challenge_methods_supported: string[];
+
+    dpop_signing_alg_values_supported: string[];
 };
 
-assert<Equals<OidcMetadata, OidcClientTsOidcMetadata>>;
+assert<Equals<Omit<OidcMetadata, "dpop_signing_alg_values_supported">, OidcClientTsOidcMetadata>>;
+
+export const WELL_KNOWN_PATH = "/.well-known/openid-configuration";
+
+function getSessionStorageKey(params: { issuerUri: string }) {
+    const { issuerUri } = params;
+
+    return `oidc-spa:openid-configuration:${issuerUri}`;
+}
+
+function readSessionStorage(params: { issuerUri: string }) {
+    const { issuerUri } = params;
+
+    const value = sessionStorage.getItem(getSessionStorageKey({ issuerUri }));
+
+    if (value === null) {
+        return undefined;
+    }
+
+    return JSON.parse(value) as Partial<OidcMetadata>;
+}
+
+function setSessionStorage(params: { issuerUri: string; oidcMetadata: Partial<OidcMetadata> }): void {
+    const { issuerUri, oidcMetadata } = params;
+
+    sessionStorage.setItem(getSessionStorageKey({ issuerUri }), JSON.stringify(oidcMetadata));
+}
+
+export async function fetchOidcMetadata(params: { issuerUri: string }) {
+    const { issuerUri } = params;
+
+    from_cache: {
+        const oidcMetadata = readSessionStorage({ issuerUri });
+
+        if (oidcMetadata === undefined) {
+            break from_cache;
+        }
+
+        return oidcMetadata;
+    }
+
+    let oidcMetadata: Partial<OidcMetadata>;
+
+    try {
+        const response = await fetch(`${issuerUri}${WELL_KNOWN_PATH}`, {
+            headers: {
+                Accept: "application/jwk-set+json, application/json"
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error();
+        }
+
+        const obj = await response.json();
+
+        {
+            const { authorization_endpoint } = obj;
+
+            if (typeof authorization_endpoint !== "string") {
+                throw new Error();
+            }
+        }
+
+        oidcMetadata = obj;
+    } catch {
+        return undefined;
+    }
+
+    if (!getIsLikelyDevServer()) {
+        setSessionStorage({ issuerUri, oidcMetadata });
+    }
+
+    return oidcMetadata;
+}

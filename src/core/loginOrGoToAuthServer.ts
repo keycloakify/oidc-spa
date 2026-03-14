@@ -8,6 +8,7 @@ import { createStatefulEvt } from "../tools/StatefulEvt";
 import { Deferred } from "../tools/Deferred";
 import { addOrUpdateSearchParam, getAllSearchParams } from "../tools/urlSearchParams";
 import { getIsOnline } from "../tools/getIsOnline";
+import { setStateDataCookieIfEnabled } from "./StateDataCookie";
 
 const globalContext = {
     evtHasLoginBeenCalled: createStatefulEvt(() => false)
@@ -20,7 +21,6 @@ namespace Params {
         redirectUrl: string;
         extraQueryParams_local: Record<string, string | undefined> | undefined;
         transformUrlBeforeRedirect_local: ((url: string) => string) | undefined;
-        onCantFetchWellKnownEndpointError: () => void;
     };
 
     export type Login = Common & {
@@ -31,6 +31,7 @@ namespace Params {
             | "ensure no interaction"
             | "ensure interaction"
             | "directly redirect if active session show login otherwise";
+        preRedirectHook: (() => void) | undefined;
     };
 
     export type GoToAuthServer = Common & {
@@ -65,7 +66,9 @@ export function createLoginOrGoToAuthServer(params: {
     getExtraTokenParams: (() => Record<string, string | undefined>) | undefined;
 
     homeUrl: string;
+    stateUrlParamValue_instance: string;
     evtInitializationOutcomeUserNotLoggedIn: NonPostableEvt<void>;
+
     log: typeof console.log | undefined;
 }) {
     const {
@@ -78,6 +81,7 @@ export function createLoginOrGoToAuthServer(params: {
         getExtraTokenParams,
 
         homeUrl,
+        stateUrlParamValue_instance,
         evtInitializationOutcomeUserNotLoggedIn,
 
         log
@@ -90,10 +94,8 @@ export function createLoginOrGoToAuthServer(params: {
             redirectUrl: redirectUrl_params,
             extraQueryParams_local,
             transformUrlBeforeRedirect_local,
-            onCantFetchWellKnownEndpointError: onCantFetchWellKnownEndpointError_params,
             ...rest
         } = params;
-        let onCantFetchWellKnownEndpointError = onCantFetchWellKnownEndpointError_params;
 
         log?.(`Calling loginOrGoToAuthServer ${JSON.stringify(params, null, 2)}`);
 
@@ -147,12 +149,6 @@ export function createLoginOrGoToAuthServer(params: {
                     };
 
                     window.addEventListener("pageshow", callback);
-
-                    onCantFetchWellKnownEndpointError = () => {
-                        window.removeEventListener("pageshow", callback);
-                        onCantFetchWellKnownEndpointError_params();
-                    };
-
                     break bf_cache_handling;
                 }
 
@@ -183,12 +179,6 @@ export function createLoginOrGoToAuthServer(params: {
                 };
 
                 window.addEventListener("pageshow", callback);
-
-                onCantFetchWellKnownEndpointError = () => {
-                    window.removeEventListener("pageshow", callback);
-                    globalContext.evtHasLoginBeenCalled.current = false;
-                    onCantFetchWellKnownEndpointError_params();
-                };
             }
         }
 
@@ -201,7 +191,7 @@ export function createLoginOrGoToAuthServer(params: {
             const redirectUrl_obj = new URL(redirectUrl);
             const redirectUrl_originAndPath = `${redirectUrl_obj.origin}${redirectUrl_obj.pathname}`;
 
-            if (!redirectUrl_originAndPath.startsWith(homeUrl)) {
+            if (!redirectUrl_originAndPath.replace(/\/?$/, "/").startsWith(homeUrl)) {
                 throw new Error(
                     [
                         `oidc-spa: redirect target ${redirectUrl_originAndPath} is outside of your application.`,
@@ -218,20 +208,32 @@ export function createLoginOrGoToAuthServer(params: {
 
         log?.(`redirectUrl: ${rootRelativeRedirectUrl}`);
 
-        const stateData: StateData = {
+        const rootRelativeRedirectUrl_consentRequiredCase = (() => {
+            switch (rest.action) {
+                case "login":
+                    return (lastPublicUrl ?? homeUrl).slice(window.location.origin.length);
+                case "go to auth server":
+                    return rootRelativeRedirectUrl;
+            }
+        })();
+
+        setStateDataCookieIfEnabled({
+            homeUrl,
+            stateUrlParamValue_instance,
+            stateDataCookie: {
+                action: "login",
+                rootRelativeRedirectUrl,
+                rootRelativeRedirectUrl_consentRequiredCase
+            }
+        });
+
+        const stateData: StateData.Redirect = {
             context: "redirect",
             rootRelativeRedirectUrl,
             extraQueryParams: {},
             configId,
             action: "login",
-            rootRelativeRedirectUrl_consentRequiredCase: (() => {
-                switch (rest.action) {
-                    case "login":
-                        return (lastPublicUrl ?? homeUrl).slice(window.location.origin.length);
-                    case "go to auth server":
-                        return rootRelativeRedirectUrl;
-                }
-            })()
+            rootRelativeRedirectUrl_consentRequiredCase
         };
 
         const isSilent = rest.action === "login" && rest.interaction === "ensure no interaction";
@@ -320,6 +322,10 @@ export function createLoginOrGoToAuthServer(params: {
 
         log?.(`redirectMethod: ${redirectMethod}`);
 
+        if (rest.action === "login") {
+            rest.preRedirectHook?.();
+        }
+
         return oidcClientTsUserManager
             .signinRedirect({
                 state: stateData,
@@ -347,17 +353,10 @@ export function createLoginOrGoToAuthServer(params: {
             })
             .then(
                 () => new Promise<never>(() => {}),
-                (error: Error) => {
-                    if (error.message === "Failed to fetch") {
-                        // NOTE: See ./loginSilent for explanation.
-                        onCantFetchWellKnownEndpointError();
+                error => {
+                    assert(error instanceof Error, "393430");
 
-                        return new Promise<never>(() => {});
-                    }
-
-                    // NOTE: Here, except error on our understanding there can't be any other
-                    // error.
-                    assert(false, "30442320");
+                    assert(false, `This is a bug in oidc-spa, please report: ${error.message}`);
                 }
             );
     }

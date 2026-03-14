@@ -16,6 +16,9 @@ export class Deferred<T> {
 
         this.pr = new Promise<T>((resolve_, reject_) => {
             resolve = value => {
+                if (valueWrap !== undefined) {
+                    return;
+                }
                 valueWrap = [value];
                 resolve_(value);
             };

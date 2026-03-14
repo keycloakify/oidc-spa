@@ -1,5 +1,6 @@
 import { typeGuard } from "../tools/tsafe/typeGuard";
 import { id } from "../tools/tsafe/id";
+import { INFINITY_TIME } from "../tools/INFINITY_TIME";
 
 function getKey(params: { configId: string }) {
     const { configId } = params;
@@ -30,6 +31,7 @@ export function persistAuthState(params: {
               stateDescription: "logged in";
               idleSessionLifetimeInSeconds: number | undefined;
               refreshTokenExpirationTime: number | undefined;
+              serverDateNow: number;
           }
         | {
               stateDescription: "explicitly logged out";
@@ -56,14 +58,41 @@ export function persistAuthState(params: {
                                 __brand: "PersistedAuthState-v1",
                                 stateDescription: "logged in",
                                 untilTime: (() => {
-                                    const { idleSessionLifetimeInSeconds, refreshTokenExpirationTime } =
-                                        state;
+                                    const {
+                                        idleSessionLifetimeInSeconds,
+                                        refreshTokenExpirationTime,
+                                        serverDateNow
+                                    } = state;
 
-                                    if (idleSessionLifetimeInSeconds !== undefined) {
+                                    const untilTime_real = (() => {
+                                        if (refreshTokenExpirationTime === undefined) {
+                                            return undefined;
+                                        }
+
+                                        const msBeforeExpirationOfTheSession =
+                                            refreshTokenExpirationTime - serverDateNow;
+
+                                        return Date.now() + msBeforeExpirationOfTheSession;
+                                    })();
+
+                                    const unitTime_userOverwrite = (() => {
+                                        if (idleSessionLifetimeInSeconds === undefined) {
+                                            return undefined;
+                                        }
+
                                         return Date.now() + idleSessionLifetimeInSeconds * 1000;
+                                    })();
+
+                                    const untilTime = Math.min(
+                                        untilTime_real ?? INFINITY_TIME,
+                                        unitTime_userOverwrite ?? INFINITY_TIME
+                                    );
+
+                                    if (untilTime === INFINITY_TIME) {
+                                        return undefined;
                                     }
 
-                                    return refreshTokenExpirationTime;
+                                    return untilTime;
                                 })()
                             });
                         case "explicitly logged out":
