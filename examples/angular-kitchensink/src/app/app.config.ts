@@ -1,10 +1,10 @@
-import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import {
   ApplicationConfig,
+  inject,
   provideBrowserGlobalErrorListeners,
   provideZonelessChangeDetection,
 } from '@angular/core';
-import { provideClientHydration, withEventReplay } from '@angular/platform-browser';
+import { HttpClient, provideHttpClient, withInterceptors } from '@angular/common/http';
 import { provideRouter } from '@angular/router';
 import { routes } from './app.routes';
 import {
@@ -14,9 +14,11 @@ import {
 } from './services/oidc.service';
 import { firstValueFrom } from 'rxjs';
 import { environment } from '../environments/environment';
-import { routes } from './app.routes';
-import { BearerInterceptor } from './interceptors/bearer.interceptor';
-import { provideOidc } from './oidc';
+
+type RemoteOidcConfig = {
+  issuerUri: string;
+  clientId: string;
+};
 
 export const appConfig: ApplicationConfig = {
   providers: [
@@ -42,7 +44,19 @@ export const appConfig: ApplicationConfig = {
       ])
     ),
     provideRouter(routes),
-    provideOidc(environment.useMockOidc),
-    provideClientHydration(withEventReplay()),
+    environment.useMockOidc
+      ? Oidc.provideMock({
+          isUserInitiallyLoggedIn: true,
+        })
+      : Oidc.provide(async () => {
+          const http = inject(HttpClient);
+          const config = await firstValueFrom(http.get<RemoteOidcConfig>('./oidc-config.json'));
+
+          return {
+            issuerUri: config.issuerUri,
+            clientId: config.clientId,
+            debugLogs: true,
+          };
+        }),
   ],
 };
