@@ -18,6 +18,7 @@
         "start-react-router-framework-example": "bash ./scripts/start-example.sh react-router-framework dev",
         "start-react-router-data-example": "bash ./scripts/start-example.sh react-router-data dev",
         "start-react-router-declarative-example": "bash ./scripts/start-example.sh react-router-declarative dev",
+        "start-next-example": "bash ./scripts/start-example.sh next dev",
         "start-tanstack-start-example": "bash ./scripts/start-example.sh tanstack-start dev",
         "start-tanstack-router-file-router-example": "bash ./scripts/start-example.sh tanstack-router-file-router dev",
         "start-nuxt-spa-example": "bash ./scripts/start-example.sh nuxt-spa dev"

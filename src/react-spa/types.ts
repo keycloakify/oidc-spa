@@ -34,6 +34,7 @@ export namespace UseOidc {
                 extraQueryParams?: Record<string, string | undefined>;
                 redirectUrl?: string;
                 transformUrlBeforeRedirect?: (url: string) => string;
+                doesCurrentHrefRequiresAuth?: boolean;
             }) => Promise<never>;
             autoLogoutState: {
                 shouldDisplayWarning: false;

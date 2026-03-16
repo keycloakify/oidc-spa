@@ -1,0 +1,31 @@
+{
+    "name": "next-example",
+    "version": "0.1.0",
+    "private": true,
+    "scripts": {
+        "prepare": "[ ! -f .env.local ] && cp .env.local.sample .env.local || true",
+        "dev": "next dev --turbopack",
+        "build": "next build",
+        "start": "next start",
+        "typecheck": "tsc --noEmit",
+        "lint": "eslint ."
+    },
+    "dependencies": {
+        "next": "16.0.10",
+        "oidc-spa": "latest",
+        "react": "19.0.0",
+        "react-dom": "19.0.0",
+        "zod": "4.3.6"
+    },
+    "devDependencies": {
+        "@eslint/eslintrc": "^3",
+        "@types/node": "^20",
+        "@types/react": "19.0.10",
+        "@types/react-dom": "19.0.4",
+        "eslint": "^9",
+        "eslint-config-next": "15.5.7",
+        "postcss": "^8",
+        "tailwindcss": "^3.4.1",
+        "typescript": "^5"
+    }
+}
