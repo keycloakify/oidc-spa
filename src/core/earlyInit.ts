@@ -52,6 +52,20 @@ export type ParamsOfEarlyInit = {
      */
     sessionRestorationMethod?: "iframe" | "full page redirect" | "auto";
 
+    /**
+     * **Experimental.** When set to `"window"`, the OIDC instance cache and
+     * earlyInit state are stored on `window` instead of module scope. This
+     * allows multiple bundles of oidc-spa (e.g. from different micro-frontend
+     * remotes) to share a single OIDC instance for the same issuerUri+clientId.
+     *
+     * Only enable this in trusted micro-frontend environments where all remotes
+     * are under your control. When enabled, any script on the page can access
+     * the shared OIDC state.
+     *
+     * Default: `undefined` (module-scoped, current behavior).
+     */
+    sharedScope?: "window";
+
     /** See: https://docs.oidc-spa.dev/v/v10/security-features/token-substitution */
     securityDefenses?: {
         enableBrowserRuntimeFreeze?: () => void;
@@ -60,11 +74,85 @@ export type ParamsOfEarlyInit = {
     };
 };
 
+// These keys must match the ones in createOidc.ts
+const SHARED_MEMO_KEY = "__oidc_spa_shared_prOidcByConfigId__" as const;
+const SHARED_EARLY_INIT_KEY = "__oidc_spa_shared_earlyInit__" as const;
+
+type SharedEarlyInitState = {
+    shouldLoadApp: boolean;
+    evtIframeAuthResponse: Evt<AuthResponse> | undefined;
+    redirectAuthResponse: AuthResponse | undefined;
+    clearRedirectAuthResponse: () => void;
+};
+
+declare global {
+    interface Window {
+        [SHARED_EARLY_INIT_KEY]?: SharedEarlyInitState;
+    }
+}
+
+function getSharedState(): SharedEarlyInitState | undefined {
+    return window[SHARED_EARLY_INIT_KEY];
+}
+
+function setSharedState(state: SharedEarlyInitState): void {
+    window[SHARED_EARLY_INIT_KEY] = state;
+}
+
+function ensureSharedMemoMap(): void {
+    if (!window[SHARED_MEMO_KEY]) {
+        window[SHARED_MEMO_KEY] = new Map();
+    }
+}
+
 let shouldLoadApp: boolean | undefined = undefined;
 
 export function oidcEarlyInit(params?: ParamsOfEarlyInit) {
     if (shouldLoadApp !== undefined) {
         return { shouldLoadApp };
+    }
+
+    if (params?.sharedScope === "window") {
+        // Create shared memoization map synchronously so createOidc
+        // from any bundle can find it immediately.
+        ensureSharedMemoMap();
+
+        const existing = getSharedState();
+        if (existing) {
+            // Another bundle already ran earlyInit. Reuse its state.
+            shouldLoadApp = existing.shouldLoadApp;
+
+            // Still need to register this bundle's exports with its own createOidc module.
+            const exports_earlyInit: import("./createOidc").Exports_earlyInit = shouldLoadApp
+                ? {
+                      shouldLoadApp: true,
+                      getEvtIframeAuthResponse: () => {
+                          return (existing.evtIframeAuthResponse ??= createEvt());
+                      },
+                      getRedirectAuthResponse: () => {
+                          return existing.redirectAuthResponse === undefined
+                              ? { authResponse: undefined }
+                              : {
+                                    authResponse: existing.redirectAuthResponse,
+                                    clearAuthResponse: existing.clearRedirectAuthResponse
+                                };
+                      },
+                      sessionRestorationMethod: params?.sessionRestorationMethod
+                  }
+                : { shouldLoadApp: false };
+
+            prModuleCreateOidc.then(({ registerExports_earlyInit }) => {
+                registerExports_earlyInit(exports_earlyInit);
+            });
+
+            return { shouldLoadApp };
+        }
+
+        // First bundle to init with sharedScope. Proceed normally but store state on window.
+        console.warn(
+            "oidc-spa: Shared scope enabled. OIDC state is accessible to all scripts on this page. " +
+                "Only use this in trusted micro-frontend environments."
+        );
     }
 
     shouldLoadApp = oidcEarlyInit_nonMemoized(params).shouldLoadApp;
@@ -73,7 +161,7 @@ export function oidcEarlyInit(params?: ParamsOfEarlyInit) {
 }
 
 function oidcEarlyInit_nonMemoized(params: ParamsOfEarlyInit | undefined) {
-    const { BASE_URL, sessionRestorationMethod, securityDefenses = {} } = params ?? {};
+    const { BASE_URL, sessionRestorationMethod, sharedScope, securityDefenses = {} } = params ?? {};
 
     if (!isBrowser) {
         return { shouldLoadApp: true };
@@ -178,10 +266,30 @@ function oidcEarlyInit_nonMemoized(params: ParamsOfEarlyInit | undefined) {
             },
             sessionRestorationMethod
         };
+
+        if (sharedScope === "window") {
+            setSharedState({
+                shouldLoadApp: true,
+                evtIframeAuthResponse,
+                redirectAuthResponse,
+                clearRedirectAuthResponse: () => {
+                    redirectAuthResponse = undefined;
+                }
+            });
+        }
     } else {
         exports_earlyInit = {
             shouldLoadApp: false
         };
+
+        if (sharedScope === "window") {
+            setSharedState({
+                shouldLoadApp: false,
+                evtIframeAuthResponse: undefined,
+                redirectAuthResponse: undefined,
+                clearRedirectAuthResponse: () => {}
+            });
+        }
     }
 
     prModuleCreateOidc.then(({ registerExports_earlyInit }) => {

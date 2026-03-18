@@ -266,6 +266,14 @@ export type ParamsOfCreateOidc<
     disableDPoP?: true;
 };
 
+const SHARED_MEMO_KEY = "__oidc_spa_shared_prOidcByConfigId__" as const;
+
+declare global {
+    interface Window {
+        [SHARED_MEMO_KEY]?: Map<string, Promise<Oidc<any>>>;
+    }
+}
+
 const globalContext = {
     prOidcByConfigId: new Map<string, Promise<Oidc<any>>>(),
     hasLogoutBeenCalled: id<boolean>(false),
@@ -273,6 +281,15 @@ const globalContext = {
     dExports_tokenSubstitution: new Deferred<Exports_tokenSubstitution>(),
     dExports_DPoP: new Deferred<Exports_DPoP>()
 };
+
+/**
+ * Returns the OIDC instance memoization map. When shared scope is enabled
+ * (via oidcEarlyInit), a window-scoped map is used so all bundles share
+ * the same instances. Otherwise the module-scoped map is returned.
+ */
+function getOidcMemoMap(): Map<string, Promise<Oidc<any>>> {
+    return window[SHARED_MEMO_KEY] ?? globalContext.prOidcByConfigId;
+}
 
 export type Exports_earlyInit =
     | { shouldLoadApp: false }
@@ -384,7 +401,7 @@ export async function createOidc<
 
     const configId = getConfigId({ issuerUri, clientId });
 
-    const { prOidcByConfigId } = globalContext;
+    const prOidcByConfigId = getOidcMemoMap();
 
     use_previous_instance: {
         const prOidc = prOidcByConfigId.get(configId);
