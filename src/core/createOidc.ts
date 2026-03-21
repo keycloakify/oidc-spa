@@ -7,6 +7,7 @@ import {
 import { type OidcMetadata, fetchOidcMetadata } from "./OidcMetadata";
 import { assert, type Equals } from "../tools/tsafe/assert";
 import { id } from "../tools/tsafe/id";
+import { Reflect } from "../tools/tsafe/Reflect";
 import { Deferred } from "../tools/Deferred";
 import { createEvtIsUserActive } from "./evtIsUserActive";
 import { createStartCountdown } from "../tools/startCountdown";
@@ -266,43 +267,49 @@ export type ParamsOfCreateOidc<
     disableDPoP?: true;
 };
 
+type GlobalContextActual = {
+    prOidcByConfigId: Map<string, Promise<Oidc<any>>>;
+    hasLogoutBeenCalled: boolean;
+    exports_earlyInit: Exports_earlyInit;
+    exports_tokenSubstitution: Exports_tokenSubstitution | undefined;
+    exports_DPoP: Exports_DPoP | undefined;
+};
+
 declare global {
     interface Window {
         "__oidc-spa:globalContext:createOidc": {
             dEarlyInitResolved: Deferred<void>;
-            actual:
-                | {
-                      prOidcByConfigId: Map<string, Promise<Oidc<any>>>;
-                      hasLogoutBeenCalled: boolean;
-                      dExports_earlyInit: Deferred<Exports_earlyInit>;
-                      dExports_tokenSubstitution: Deferred<Exports_tokenSubstitution>;
-                      dExports_DPoP: Deferred<Exports_DPoP>;
-                  }
-                | undefined
-                | null;
+            actual_exposedForMicroFrontendSetup:
+                | GlobalContextActual
+                | "not a micro frontend setup"
+                | undefined;
         };
     }
 }
 
 window["__oidc-spa:globalContext:createOidc"] ??= {
     dEarlyInitResolved: new Deferred(),
-    actual: undefined
+    actual_exposedForMicroFrontendSetup: undefined
 };
+
 const globalContext = window["__oidc-spa:globalContext:createOidc"];
 
-const globalContext_actual_moduleScoped: NonNullable<
-    Window["__oidc-spa:globalContext:createOidc"]["actual"]
-> = {
+const globalContext_actual_moduleScoped: GlobalContextActual = {
     prOidcByConfigId: new Map(),
     hasLogoutBeenCalled: false,
-    dExports_earlyInit: new Deferred(),
-    dExports_tokenSubstitution: new Deferred(),
-    dExports_DPoP: new Deferred()
+    exports_earlyInit: Reflect<Exports_earlyInit>(),
+    exports_tokenSubstitution: undefined,
+    exports_DPoP: undefined
 };
 
-function getGlobalContextActual(): NonNullable<Window["__oidc-spa:globalContext:createOidc"]["actual"]> {
-    assert(globalContext.actual !== undefined);
-    return globalContext.actual ?? globalContext_actual_moduleScoped;
+function getGlobalContextActual(): GlobalContextActual {
+    assert(globalContext.actual_exposedForMicroFrontendSetup !== undefined);
+
+    if (globalContext.actual_exposedForMicroFrontendSetup === "not a micro frontend setup") {
+        return globalContext_actual_moduleScoped;
+    }
+
+    return globalContext.actual_exposedForMicroFrontendSetup;
 }
 
 export type Exports_earlyInit =
@@ -324,15 +331,17 @@ export function registerExports_earlyInit(params: {
 }): void {
     const { exports, isMicroFrontendSetup } = params;
 
-    if (globalContext.actual !== undefined) {
+    if (globalContext.actual_exposedForMicroFrontendSetup !== undefined) {
         throw new Error("oidc-spa: Wrong micro frontend setup");
     }
 
-    globalContext.actual = isMicroFrontendSetup ? globalContext_actual_moduleScoped : null;
+    globalContext.actual_exposedForMicroFrontendSetup = isMicroFrontendSetup
+        ? globalContext_actual_moduleScoped
+        : "not a micro frontend setup";
+
+    globalContext_actual_moduleScoped.exports_earlyInit = exports;
 
     globalContext.dEarlyInitResolved.resolve();
-
-    globalContext_actual_moduleScoped.dExports_earlyInit.resolve(exports);
 }
 
 export type Exports_tokenSubstitution = {
@@ -351,7 +360,8 @@ export namespace Exports_tokenSubstitution {
 }
 
 export function registerExports_tokenSubstitution(exports: Exports_tokenSubstitution): void {
-    globalContext_actual_moduleScoped.dExports_tokenSubstitution.resolve(exports);
+    assert(!globalContext_actual_moduleScoped.exports_earlyInit);
+    globalContext_actual_moduleScoped.exports_tokenSubstitution = exports;
 }
 
 export type Exports_DPoP = {
@@ -383,7 +393,8 @@ export namespace Exports_DPoP {
 }
 
 export function registerExports_DPoP(exports: Exports_DPoP): void {
-    globalContext_actual_moduleScoped.dExports_DPoP.resolve(exports);
+    assert(!globalContext_actual_moduleScoped.exports_earlyInit);
+    globalContext_actual_moduleScoped.exports_DPoP = exports;
 }
 
 /** @see: https://docs.oidc-spa.dev/v/v10/usage */
@@ -403,14 +414,6 @@ export async function createOidc<
     }
 
     const { issuerUri: issuerUri_params, clientId, debugLogs, ...rest } = params;
-
-    {
-        const { dEarlyInitResolved } = globalContext;
-
-        if (!dEarlyInitResolved.getState().hasResolved) {
-            await dEarlyInitResolved.pr;
-        }
-    }
 
     const issuerUri = toFullyQualifiedUrl({
         urlish: issuerUri_params,
@@ -435,6 +438,29 @@ export async function createOidc<
     })();
 
     const configId = getConfigId({ issuerUri, clientId });
+
+    wait_early_init: {
+        const { dEarlyInitResolved } = globalContext;
+
+        if (dEarlyInitResolved.getState().hasResolved) {
+            break wait_early_init;
+        }
+
+        const timer = window.setTimeout(() => {
+            console.warn(
+                [
+                    "oidc-spa: Setup error.",
+                    "oidcEarlyInit() wasn't called.",
+                    "This is supposed to be handled by the oidc-spa Vite plugin",
+                    "or manually in other environments."
+                ].join(" ")
+            );
+        }, 3_000);
+
+        await dEarlyInitResolved.pr;
+
+        window.clearTimeout(timer);
+    }
 
     const { prOidcByConfigId } = getGlobalContextActual();
 
@@ -504,24 +530,7 @@ export async function createOidc_nonMemoized<
         BASE_URL: BASE_URL_params
     } = params;
 
-    const exports_earlyInit = await (async () => {
-        const timer = window.setTimeout(() => {
-            console.warn(
-                [
-                    "oidc-spa: Setup error.",
-                    "oidcEarlyInit() wasn't called.",
-                    "This is supposed to be handled by the oidc-spa Vite plugin",
-                    "or manually in other environments."
-                ].join(" ")
-            );
-        }, 3_000);
-
-        const exports_earlyInit = await getGlobalContextActual().dExports_earlyInit.pr;
-
-        window.clearTimeout(timer);
-
-        return exports_earlyInit;
-    })();
+    const { exports_earlyInit } = getGlobalContextActual();
 
     if (!exports_earlyInit.shouldLoadApp) {
         return new Promise<never>(() => {});
@@ -536,10 +545,9 @@ export async function createOidc_nonMemoized<
     const sessionRestorationMethod =
         sessionRestorationMethod_params ?? sessionRestorationMethod_earlyInit ?? "auto";
 
-    const { value: exports_tokenSubstitution } =
-        getGlobalContextActual().dExports_tokenSubstitution.getState();
+    const { exports_tokenSubstitution } = getGlobalContextActual();
 
-    const { value: exports_DPoP } = getGlobalContextActual().dExports_DPoP.getState();
+    const { exports_DPoP } = getGlobalContextActual();
 
     const scopes = Array.from(new Set(["openid", ...(params.scopes ?? ["profile"])]));
 
