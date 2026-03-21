@@ -1439,6 +1439,16 @@ export async function createOidc_nonMemoized<
             break detect_useless_idleSessionLifetimeInSeconds;
         }
 
+        if (idleSessionLifetimeInSeconds <= 30) {
+            throw new Error(
+                [
+                    `oidc-spa: Setting idleSessionLifetimeInSeconds to anything bellow 5 minutes (300)`,
+                    `is probably a misunderstanding of what this parameter does.`,
+                    `See: https://docs.oidc-spa.dev/v/v10/auto-logout`
+                ].join(" ")
+            );
+        }
+
         if (currentTokens.refreshTokenExpirationTime === undefined) {
             break detect_useless_idleSessionLifetimeInSeconds;
         }
@@ -1448,7 +1458,7 @@ export async function createOidc_nonMemoized<
                 "oidc-spa: You've specified idleSessionLifetimeInSeconds,",
                 "but your auth server issues a refresh_token with a known expiration time.",
                 "idleSessionLifetimeInSeconds should only be used as a fallback",
-                "for auth servers that don't specify when an inactive session expires.",
+                "for auth servers that don't specify when an inactive session expires (Auth0, Clerk, WorkOS).",
                 "The auth server, not your code, is the source of truth.",
                 "See: https://docs.oidc-spa.dev/v/v10/auto-logout"
             ].join(" ")
