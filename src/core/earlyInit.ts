@@ -58,6 +58,9 @@ export type ParamsOfEarlyInit = {
         enableDPoP?: () => void;
         enableTokenSubstitution?: () => void;
     };
+
+    /** Default: false */
+    isMicroFrontendSetup?: boolean;
 };
 
 let shouldLoadApp: boolean | undefined = undefined;
@@ -73,7 +76,12 @@ export function oidcEarlyInit(params?: ParamsOfEarlyInit) {
 }
 
 function oidcEarlyInit_nonMemoized(params: ParamsOfEarlyInit | undefined) {
-    const { BASE_URL, sessionRestorationMethod, securityDefenses = {} } = params ?? {};
+    const {
+        BASE_URL,
+        sessionRestorationMethod,
+        securityDefenses = {},
+        isMicroFrontendSetup = false
+    } = params ?? {};
 
     if (!isBrowser) {
         return { shouldLoadApp: true };
@@ -185,7 +193,7 @@ function oidcEarlyInit_nonMemoized(params: ParamsOfEarlyInit | undefined) {
     }
 
     prModuleCreateOidc.then(({ registerExports_earlyInit }) => {
-        registerExports_earlyInit(exports_earlyInit);
+        registerExports_earlyInit({ exports: exports_earlyInit, isMicroFrontendSetup });
     });
 
     return { shouldLoadApp };

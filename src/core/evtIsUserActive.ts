@@ -3,10 +3,21 @@ import { subscribeToUserInteraction } from "../tools/subscribeToUserInteraction"
 import { assert, is } from "../tools/tsafe/assert";
 import { id } from "../tools/tsafe/id";
 
-const globalContext = {
+declare global {
+    interface Window {
+        "__oidc-spa:globalContext:evtIsUserActive": {
+            appInstanceId: string;
+            evtIsUserActiveBySessionId: Map<string, NonPostableEvt<EventData>>;
+        };
+    }
+}
+
+window["__oidc-spa:globalContext:evtIsUserActive"] ??= {
     appInstanceId: Math.random().toString(36).slice(2),
     evtIsUserActiveBySessionId: new Map<string, NonPostableEvt<EventData>>()
 };
+
+const globalContext = window["__oidc-spa:globalContext:evtIsUserActive"];
 
 type EventData = { isUserActive: true } | { isUserActive: false; hasBeenInactiveForHowLongMs: number };
 

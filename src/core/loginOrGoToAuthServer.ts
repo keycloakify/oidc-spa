@@ -4,15 +4,25 @@ import { assert, type Equals } from "../tools/tsafe/assert";
 import { noUndefined } from "../tools/tsafe/noUndefined";
 import type { StateData } from "./StateData";
 import type { NonPostableEvt } from "../tools/Evt";
-import { createStatefulEvt } from "../tools/StatefulEvt";
+import { createStatefulEvt, StatefulEvt } from "../tools/StatefulEvt";
 import { Deferred } from "../tools/Deferred";
 import { addOrUpdateSearchParam, getAllSearchParams } from "../tools/urlSearchParams";
 import { getIsOnline } from "../tools/getIsOnline";
 import { setStateDataCookieIfEnabled } from "./StateDataCookie";
 
-const globalContext = {
+declare global {
+    interface Window {
+        "__oidc-spa:globalContext:loginOrGoToAuthServer": {
+            evtHasLoginBeenCalled: StatefulEvt<boolean>;
+        };
+    }
+}
+
+window["__oidc-spa:globalContext:loginOrGoToAuthServer"] ??= {
     evtHasLoginBeenCalled: createStatefulEvt(() => false)
 };
+
+const globalContext = window["__oidc-spa:globalContext:loginOrGoToAuthServer"];
 
 type Params = Params.Login | Params.GoToAuthServer;
 

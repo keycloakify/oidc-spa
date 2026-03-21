@@ -266,13 +266,44 @@ export type ParamsOfCreateOidc<
     disableDPoP?: true;
 };
 
-const globalContext = {
-    prOidcByConfigId: new Map<string, Promise<Oidc<any>>>(),
-    hasLogoutBeenCalled: id<boolean>(false),
-    dExports_earlyInit: new Deferred<Exports_earlyInit>(),
-    dExports_tokenSubstitution: new Deferred<Exports_tokenSubstitution>(),
-    dExports_DPoP: new Deferred<Exports_DPoP>()
+declare global {
+    interface Window {
+        "__oidc-spa:globalContext:createOidc": {
+            dEarlyInitResolved: Deferred<void>;
+            actual:
+                | {
+                      prOidcByConfigId: Map<string, Promise<Oidc<any>>>;
+                      hasLogoutBeenCalled: boolean;
+                      dExports_earlyInit: Deferred<Exports_earlyInit>;
+                      dExports_tokenSubstitution: Deferred<Exports_tokenSubstitution>;
+                      dExports_DPoP: Deferred<Exports_DPoP>;
+                  }
+                | undefined
+                | null;
+        };
+    }
+}
+
+window["__oidc-spa:globalContext:createOidc"] ??= {
+    dEarlyInitResolved: new Deferred(),
+    actual: undefined
 };
+const globalContext = window["__oidc-spa:globalContext:createOidc"];
+
+const globalContext_actual_moduleScoped: NonNullable<
+    Window["__oidc-spa:globalContext:createOidc"]["actual"]
+> = {
+    prOidcByConfigId: new Map(),
+    hasLogoutBeenCalled: false,
+    dExports_earlyInit: new Deferred(),
+    dExports_tokenSubstitution: new Deferred(),
+    dExports_DPoP: new Deferred()
+};
+
+function getGlobalContextActual(): NonNullable<Window["__oidc-spa:globalContext:createOidc"]["actual"]> {
+    assert(globalContext.actual !== undefined);
+    return globalContext.actual ?? globalContext_actual_moduleScoped;
+}
 
 export type Exports_earlyInit =
     | { shouldLoadApp: false }
@@ -287,8 +318,21 @@ export type Exports_earlyInit =
           sessionRestorationMethod: "iframe" | "full page redirect" | "auto" | undefined;
       };
 
-export function registerExports_earlyInit(exports: Exports_earlyInit): void {
-    globalContext.dExports_earlyInit.resolve(exports);
+export function registerExports_earlyInit(params: {
+    exports: Exports_earlyInit;
+    isMicroFrontendSetup: boolean;
+}): void {
+    const { exports, isMicroFrontendSetup } = params;
+
+    if (globalContext.actual !== undefined) {
+        throw new Error("oidc-spa: Wrong micro frontend setup");
+    }
+
+    globalContext.actual = isMicroFrontendSetup ? globalContext_actual_moduleScoped : null;
+
+    globalContext.dEarlyInitResolved.resolve();
+
+    globalContext_actual_moduleScoped.dExports_earlyInit.resolve(exports);
 }
 
 export type Exports_tokenSubstitution = {
@@ -307,7 +351,7 @@ export namespace Exports_tokenSubstitution {
 }
 
 export function registerExports_tokenSubstitution(exports: Exports_tokenSubstitution): void {
-    globalContext.dExports_tokenSubstitution.resolve(exports);
+    globalContext_actual_moduleScoped.dExports_tokenSubstitution.resolve(exports);
 }
 
 export type Exports_DPoP = {
@@ -339,7 +383,7 @@ export namespace Exports_DPoP {
 }
 
 export function registerExports_DPoP(exports: Exports_DPoP): void {
-    globalContext.dExports_DPoP.resolve(exports);
+    globalContext_actual_moduleScoped.dExports_DPoP.resolve(exports);
 }
 
 /** @see: https://docs.oidc-spa.dev/v/v10/usage */
@@ -359,6 +403,14 @@ export async function createOidc<
     }
 
     const { issuerUri: issuerUri_params, clientId, debugLogs, ...rest } = params;
+
+    {
+        const { dEarlyInitResolved } = globalContext;
+
+        if (!dEarlyInitResolved.getState().hasResolved) {
+            await dEarlyInitResolved.pr;
+        }
+    }
 
     const issuerUri = toFullyQualifiedUrl({
         urlish: issuerUri_params,
@@ -384,7 +436,7 @@ export async function createOidc<
 
     const configId = getConfigId({ issuerUri, clientId });
 
-    const { prOidcByConfigId } = globalContext;
+    const { prOidcByConfigId } = getGlobalContextActual();
 
     use_previous_instance: {
         const prOidc = prOidcByConfigId.get(configId);
@@ -464,7 +516,7 @@ export async function createOidc_nonMemoized<
             );
         }, 3_000);
 
-        const exports_earlyInit = await globalContext.dExports_earlyInit.pr;
+        const exports_earlyInit = await getGlobalContextActual().dExports_earlyInit.pr;
 
         window.clearTimeout(timer);
 
@@ -484,9 +536,10 @@ export async function createOidc_nonMemoized<
     const sessionRestorationMethod =
         sessionRestorationMethod_params ?? sessionRestorationMethod_earlyInit ?? "auto";
 
-    const { value: exports_tokenSubstitution } = globalContext.dExports_tokenSubstitution.getState();
+    const { value: exports_tokenSubstitution } =
+        getGlobalContextActual().dExports_tokenSubstitution.getState();
 
-    const { value: exports_DPoP } = globalContext.dExports_DPoP.getState();
+    const { value: exports_DPoP } = getGlobalContextActual().dExports_DPoP.getState();
 
     const scopes = Array.from(new Set(["openid", ...(params.scopes ?? ["profile"])]));
 
@@ -1532,12 +1585,12 @@ export async function createOidc_nonMemoized<
         },
         getDecodedIdToken: () => currentTokens.decodedIdToken,
         logout: async params => {
-            if (globalContext.hasLogoutBeenCalled) {
+            if (getGlobalContextActual().hasLogoutBeenCalled) {
                 log?.("logout() has already been called, ignoring the call");
                 return new Promise<never>(() => {});
             }
 
-            globalContext.hasLogoutBeenCalled = true;
+            getGlobalContextActual().hasLogoutBeenCalled = true;
 
             const rootRelativePostLogoutRedirectUrl: string = (() => {
                 switch (params.redirectTo) {
