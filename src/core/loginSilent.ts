@@ -34,6 +34,10 @@ type ResultOfLoginSilent =
               error: string;
               error_description: string | undefined;
           };
+      }
+    | {
+          outcome: "other error";
+          error: Error;
       };
 
 export function createLoginSilent(params: {
@@ -232,9 +236,9 @@ export function createLoginSilent(params: {
                         return;
                     }
 
-                    if (error instanceof ErrorResponse) {
-                        clearTimeouts({ wasSuccess: false });
+                    clearTimeouts({ wasSuccess: false });
 
+                    if (error instanceof ErrorResponse) {
                         assert(error.error !== null, "4033");
 
                         dResult.resolve({
@@ -247,7 +251,12 @@ export function createLoginSilent(params: {
                         return;
                     }
 
-                    assert(false, `This is a bug in oidc-spa, please report: ${error.message}`);
+                    log?.(`loginSilent error: ${error.message}`);
+
+                    dResult.resolve({
+                        outcome: "other error",
+                        error
+                    });
                 }
             );
 

@@ -356,7 +356,10 @@ export function createLoginOrGoToAuthServer(params: {
                 error => {
                     assert(error instanceof Error, "393430");
 
-                    assert(false, `This is a bug in oidc-spa, please report: ${error.message}`);
+                    assert(
+                        false,
+                        `This is a bug in oidc-spa (loginOrGoToAuthServer), please report: ${error.message}`
+                    );
                 }
             );
     }
