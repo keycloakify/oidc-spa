@@ -1137,7 +1137,10 @@ export async function createOidc_nonMemoized<
                     "876996"
                 );
 
-                if (result_loginSilent.outcome === "timeout") {
+                if (
+                    result_loginSilent.outcome === "timeout" ||
+                    result_loginSilent.outcome === "other error"
+                ) {
                     const { authorization_endpoint } = oidcMetadata;
 
                     assert(authorization_endpoint !== undefined, "39447394");
@@ -1720,16 +1723,35 @@ export async function createOidc_nonMemoized<
                         }
                         break;
                     case "got error auth response using refresh token":
+                    case "other error":
                         {
-                            const { authResponse } = result_loginSilent;
+                            switch (result_loginSilent.outcome) {
+                                case "got error auth response using refresh token":
+                                    {
+                                        const { authResponse } = result_loginSilent;
 
-                            log?.(
-                                [
-                                    "Got error response trying to refresh tokens using the refresh token,",
-                                    "token endpoint response:",
-                                    JSON.stringify(authResponse, null, 2)
-                                ].join(" ")
-                            );
+                                        log?.(
+                                            [
+                                                "Got error response trying to refresh tokens using the refresh token,",
+                                                "token endpoint response:",
+                                                JSON.stringify(authResponse, null, 2)
+                                            ].join(" ")
+                                        );
+                                    }
+                                    break;
+                                case "other error":
+                                    {
+                                        const { error } = result_loginSilent;
+
+                                        log?.(
+                                            `Got an unexpected error trying to refresh token: ${error.message}`
+                                        );
+                                    }
+                                    break;
+                                default:
+                                    assert<Equals<typeof result_loginSilent, never>>(false);
+                                    break;
+                            }
 
                             clearPersistedTokensIfSessionStorageIfAny();
 
