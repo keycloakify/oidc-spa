@@ -12,6 +12,7 @@ yarn
 rm -rf node_modules/oidc-spa
 cp -r ../../dist node_modules/oidc-spa
 rm -rf node_modules/.vite
+rm -rf node_modules/.vite-temp
 rm -rf .angular/cache
 
 yarn $2

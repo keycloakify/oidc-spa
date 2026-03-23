@@ -1,9 +1,19 @@
 import { assert, is } from "../tools/tsafe/assert";
 import { Deferred } from "../tools/Deferred";
 
-const globalContext = {
+declare global {
+    interface Window {
+        "__oidc-spa.createOidc.loginPropagationToOtherTabs": {
+            appInstanceId: string;
+        };
+    }
+}
+
+window["__oidc-spa.createOidc.loginPropagationToOtherTabs"] ??= {
     appInstanceId: Math.random().toString(36).slice(2)
 };
+
+const globalContext = window["__oidc-spa.createOidc.loginPropagationToOtherTabs"];
 
 type Message = {
     appInstanceId: string;

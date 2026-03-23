@@ -1,11 +1,21 @@
 import { Deferred } from "../tools/Deferred";
 import { assert } from "../tools/tsafe/assert";
-import { id } from "../tools/tsafe/id";
 
-const globalContext = {
-    prDone_arr: id<Promise<void>[]>([]),
-    prUnlock: id<Promise<void>>(Promise.resolve())
+declare global {
+    interface Window {
+        "__oidc-spa:globalContext:ongoingLoginOrRefreshProcesses": {
+            prDone_arr: Promise<void>[];
+            prUnlock: Promise<void>;
+        };
+    }
+}
+
+window["__oidc-spa:globalContext:ongoingLoginOrRefreshProcesses"] ??= {
+    prDone_arr: [],
+    prUnlock: Promise.resolve()
 };
+
+const globalContext = window["__oidc-spa:globalContext:ongoingLoginOrRefreshProcesses"];
 
 export async function startLoginOrRefreshProcess(): Promise<{
     completeLoginOrRefreshProcess: () => void;
