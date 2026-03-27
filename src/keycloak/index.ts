@@ -3,6 +3,6 @@ export type { KeycloakIssuerUriParsed } from "./keycloakIssuerUriParsed";
 export {
     type KeycloakUtils,
     KeycloakProfile,
-    KeycloakUserInfo,
+    UserInfo as KeycloakUserInfo,
     createKeycloakUtils
 } from "./keycloakUtils";
