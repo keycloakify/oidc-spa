@@ -95,7 +95,7 @@ jobs:
         ref: ${{ github.ref }}
     - uses: actions/setup-node@v3
       with:
-        node-version: '22.x'
+        node-version: '22.12.0'
         registry-url: https://registry.npmjs.org/
     - run: npm install -g npm@latest
     - run: yarn install --frozen-lockfile
