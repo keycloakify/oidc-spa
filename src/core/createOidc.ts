@@ -64,14 +64,19 @@ import {
 import type { Evt } from "../tools/Evt";
 import type { ParamsOfCreateGetServerDateNow } from "../tools/getServerDateNow";
 import { SESSION_STORAGE_GLOBAL_PREFIX } from "../tools/lazySessionStorage";
+import type { MaybeAsync } from "../tools/MaybeAsync";
+import { createGetUser } from "./createGetUser";
 
 // NOTE: Replaced at build time
 const VERSION = "{{OIDC_SPA_VERSION}}";
 
 export type ParamsOfCreateOidc<
     DecodedIdToken extends Record<string, unknown> = Oidc.Tokens.DecodedIdToken_OidcCoreSpec,
-    AutoLogin extends boolean = false
+    AutoLogin extends boolean = false,
+    User = never
 > = {
+    createUser?: ParamsOfCreateOidc.CreateUser<User>;
+
     /**
      * See: https://docs.oidc-spa.dev/v/v10/providers-configuration/provider-configuration
      */
@@ -266,8 +271,21 @@ export type ParamsOfCreateOidc<
     disableDPoP?: true;
 };
 
+export namespace ParamsOfCreateOidc {
+    export type CreateUser<User> = (params: {
+        decodedIdToken: Oidc.Tokens.DecodedIdToken_OidcCoreSpec;
+        accessToken: string;
+        fetchUserInfo: () => Promise<{
+            [key: string]: unknown;
+            sub: string;
+        }>;
+        issuerUri: string;
+        user_current: User | undefined;
+    }) => MaybeAsync<User>;
+}
+
 const globalContext = {
-    prOidcByConfigId: new Map<string, Promise<Oidc<any>>>(),
+    prOidcByConfigId: new Map<string, Promise<Oidc<any, any>>>(),
     hasLogoutBeenCalled: id<boolean>(false),
     dExports_earlyInit: new Deferred<Exports_earlyInit>(),
     dExports_tokenSubstitution: new Deferred<Exports_tokenSubstitution>(),
@@ -345,10 +363,11 @@ export function registerExports_DPoP(exports: Exports_DPoP): void {
 /** @see: https://docs.oidc-spa.dev/v/v10/usage */
 export async function createOidc<
     DecodedIdToken extends Record<string, unknown> = Oidc.Tokens.DecodedIdToken_OidcCoreSpec,
-    AutoLogin extends boolean = false
+    AutoLogin extends boolean = false,
+    User = never
 >(
-    params: ParamsOfCreateOidc<DecodedIdToken, AutoLogin>
-): Promise<AutoLogin extends true ? Oidc.LoggedIn<DecodedIdToken> : Oidc<DecodedIdToken>> {
+    params: ParamsOfCreateOidc<DecodedIdToken, AutoLogin, User>
+): Promise<AutoLogin extends true ? Oidc.LoggedIn<DecodedIdToken, User> : Oidc<DecodedIdToken, User>> {
     for (const name of ["issuerUri", "clientId"] as const) {
         const value = params[name];
         if (!value) {
@@ -407,7 +426,7 @@ export async function createOidc<
         return prOidc;
     }
 
-    const dOidc = new Deferred<Oidc<any>>();
+    const dOidc = new Deferred<Oidc<any, any>>();
 
     prOidcByConfigId.set(configId, dOidc.pr);
 
@@ -425,16 +444,20 @@ export async function createOidc<
 
 export async function createOidc_nonMemoized<
     DecodedIdToken extends Record<string, unknown>,
-    AutoLogin extends boolean
+    AutoLogin extends boolean,
+    User
 >(
-    params: Omit<ParamsOfCreateOidc<DecodedIdToken, AutoLogin>, "issuerUri" | "clientId" | "debugLogs">,
+    params: Omit<
+        ParamsOfCreateOidc<DecodedIdToken, AutoLogin, User>,
+        "issuerUri" | "clientId" | "debugLogs"
+    >,
     preProcessedParams: {
         issuerUri: string;
         clientId: string;
         configId: string;
         log: typeof console.log | undefined;
     }
-): Promise<AutoLogin extends true ? Oidc.LoggedIn<DecodedIdToken> : Oidc<DecodedIdToken>> {
+): Promise<AutoLogin extends true ? Oidc.LoggedIn<DecodedIdToken, User> : Oidc<DecodedIdToken, User>> {
     const {
         transformUrlBeforeRedirect,
         extraQueryParams: extraQueryParamsOrGetter,
@@ -449,7 +472,8 @@ export async function createOidc_nonMemoized<
         __metadata,
         disableDPoP: disableDPoP_params = false,
         sessionRestorationMethod: sessionRestorationMethod_params,
-        BASE_URL: BASE_URL_params
+        BASE_URL: BASE_URL_params,
+        createUser
     } = params;
 
     const exports_earlyInit = await (async () => {
@@ -1441,6 +1465,314 @@ export async function createOidc_nonMemoized<
         decodedIdToken_previous: undefined
     });
 
+    const onTokenChanges = new Set<(tokens: Oidc.Tokens<DecodedIdToken>) => void>();
+
+    const renewTokens = ((): Oidc.LoggedIn<DecodedIdToken>["renewTokens"] => {
+        // NOTE: Cannot throw (or if it does it's our fault)
+        async function renewTokens_nonMutexed(params: {
+            extraTokenParams: Record<string, string | undefined>;
+        }) {
+            const { extraTokenParams } = params;
+
+            const fallbackToFullPageReload = async (): Promise<never> => {
+                persistAuthState({ configId, state: undefined });
+
+                await waitForAllOtherOngoingLoginOrRefreshProcessesToComplete({
+                    prUnlock: new Promise<never>(() => {})
+                });
+
+                await loginOrGoToAuthServer({
+                    action: "login",
+                    redirectUrl: window.location.href,
+                    doForceReloadOnBfCache: true,
+                    extraQueryParams_local: undefined,
+                    transformUrlBeforeRedirect_local: undefined,
+                    doNavigateBackToLastPublicUrlIfTheTheUserNavigateBack: true,
+                    interaction: "directly redirect if active session show login otherwise",
+                    preRedirectHook: undefined
+                });
+                assert(false, "136134");
+            };
+
+            if (!currentTokens.hasRefreshToken && !canUseIframe) {
+                log?.(
+                    [
+                        "Unable to refresh tokens without a full app reload,",
+                        "because no refresh token is available",
+                        "and your app setup prevents silent sign-in via iframe.",
+                        "Your only option to refresh tokens is to call `window.location.reload()`"
+                    ].join(" ")
+                );
+
+                await fallbackToFullPageReload();
+
+                assert(false, "136135");
+            }
+
+            log?.("Renewing tokens");
+
+            const { completeLoginOrRefreshProcess } = await startLoginOrRefreshProcess();
+
+            const result_loginSilent = await loginSilent({
+                extraTokenParams
+            });
+
+            if (result_loginSilent.outcome === "timeout") {
+                log?.(
+                    [
+                        `Silent refresh of the token failed the iframe didn't post a response (timeout).`,
+                        `This isn't recoverable, reloading the page.`
+                    ].join(" ")
+                );
+                window.location.reload();
+                await new Promise<never>(() => {});
+                assert(false);
+            }
+
+            const clearPersistedTokensIfSessionStorageIfAny = () => {
+                let hasRemoved = false;
+
+                for (let i = sessionStorage.length - 1; i >= 0; i--) {
+                    const key = sessionStorage.key(i);
+                    assert(key !== null, "323303");
+                    if (key.startsWith(SESSION_STORAGE_GLOBAL_PREFIX)) {
+                        hasRemoved = true;
+                        sessionStorage.removeItem(key);
+                    }
+                }
+
+                if (hasRemoved) {
+                    log?.("The persisted session in sessionStorage was probably no longer valid");
+                }
+            };
+
+            let oidcClientTsUser: OidcClientTsUser;
+
+            switch (result_loginSilent.outcome) {
+                case "token refreshed using refresh token":
+                    {
+                        log?.("Refresh token used");
+                        oidcClientTsUser = result_loginSilent.oidcClientTsUser;
+                    }
+                    break;
+                case "got error auth response using refresh token":
+                case "other error":
+                    {
+                        switch (result_loginSilent.outcome) {
+                            case "got error auth response using refresh token":
+                                {
+                                    const { authResponse } = result_loginSilent;
+
+                                    log?.(
+                                        [
+                                            "Got error response trying to refresh tokens using the refresh token,",
+                                            "token endpoint response:",
+                                            JSON.stringify(authResponse, null, 2)
+                                        ].join(" ")
+                                    );
+                                }
+                                break;
+                            case "other error":
+                                {
+                                    const { error } = result_loginSilent;
+
+                                    log?.(
+                                        `Got an unexpected error trying to refresh token: ${error.message}`
+                                    );
+                                }
+                                break;
+                            default:
+                                assert<Equals<typeof result_loginSilent, never>>(false);
+                                break;
+                        }
+
+                        clearPersistedTokensIfSessionStorageIfAny();
+
+                        completeLoginOrRefreshProcess();
+
+                        await fallbackToFullPageReload();
+
+                        assert(false, "136135");
+                    }
+                    break;
+                case "got auth response from iframe":
+                    {
+                        const { authResponse } = result_loginSilent;
+
+                        clearStateDataCookie({ stateUrlParamValue: authResponse.state });
+
+                        const authResponse_error = authResponse.error;
+
+                        if (authResponse_error === undefined) {
+                            log?.(
+                                [
+                                    "Tokens refreshed using iframe, authorization endpoint response: ",
+                                    JSON.stringify(authResponse, null, 2)
+                                ].join(" ")
+                            );
+                        } else {
+                            log?.(
+                                [
+                                    "Got error response trying to refresh tokens using iframe,",
+                                    "Authorization endpoint response:",
+                                    JSON.stringify(authResponse, null, 2)
+                                ].join(" ")
+                            );
+                        }
+
+                        let oidcClientTsUser_scope: OidcClientTsUser | undefined = undefined;
+
+                        try {
+                            oidcClientTsUser_scope =
+                                await oidcClientTsUserManager.signinRedirectCallback(
+                                    authResponseToUrl(authResponse)
+                                );
+                        } catch (error) {
+                            if (authResponse_error === undefined) {
+                                console.error(error);
+                                assert(false, `This is a bug in oidc-spa, please report.`);
+                            }
+                        }
+
+                        if (oidcClientTsUser_scope === undefined) {
+                            clearPersistedTokensIfSessionStorageIfAny();
+
+                            completeLoginOrRefreshProcess();
+
+                            log?.(
+                                [
+                                    "The user is probably not logged in anymore,",
+                                    "need to redirect to login pages"
+                                ].join(" ")
+                            );
+
+                            await fallbackToFullPageReload();
+
+                            assert(false, "136135");
+                        }
+
+                        oidcClientTsUser = oidcClientTsUser_scope;
+                    }
+                    break;
+                default:
+                    assert<Equals<typeof result_loginSilent, never>>(false);
+                    break;
+            }
+
+            currentTokens = oidcClientTsUserToTokens({
+                oidcClientTsUser,
+                decodedIdToken_previous: currentTokens.decodedIdToken
+            });
+
+            if (getPersistedAuthState({ configId }) !== undefined) {
+                persistAuthState({
+                    configId,
+                    state: {
+                        stateDescription: "logged in",
+                        refreshTokenExpirationTime: currentTokens.refreshTokenExpirationTime,
+                        serverDateNow: currentTokens.getServerDateNow(),
+                        idleSessionLifetimeInSeconds
+                    }
+                });
+            }
+
+            Array.from(onTokenChanges).forEach(onTokenChange => onTokenChange(currentTokens));
+
+            completeLoginOrRefreshProcess();
+        }
+
+        let ongoingCall:
+            | {
+                  pr: Promise<void>;
+                  extraTokenParams: Record<string, string | undefined>;
+              }
+            | undefined = undefined;
+
+        function handleThen() {
+            assert(ongoingCall !== undefined, "131276");
+
+            const { pr } = ongoingCall;
+
+            pr.then(() => {
+                assert(ongoingCall !== undefined, "549462");
+
+                if (ongoingCall.pr !== pr) {
+                    return;
+                }
+
+                ongoingCall = undefined;
+            });
+        }
+
+        async function renewTokens_mutexed(params: {
+            extraTokenParams?: Record<string, string | undefined>;
+        }) {
+            const { extraTokenParams: extraTokenParams_local } = params;
+
+            const extraTokenParams = {
+                ...getExtraTokenParams?.(),
+                ...extraTokenParams_local
+            };
+
+            if (ongoingCall === undefined) {
+                ongoingCall = {
+                    pr: renewTokens_nonMutexed({ extraTokenParams }),
+                    extraTokenParams
+                };
+
+                handleThen();
+
+                return ongoingCall.pr;
+            }
+
+            if (JSON.stringify(extraTokenParams) === JSON.stringify(ongoingCall.extraTokenParams)) {
+                return ongoingCall.pr;
+            }
+
+            ongoingCall = {
+                pr: (async () => {
+                    await ongoingCall.pr;
+
+                    return renewTokens_nonMutexed({ extraTokenParams });
+                })(),
+                extraTokenParams
+            };
+
+            handleThen();
+
+            return ongoingCall.pr;
+        }
+
+        return params => {
+            const { extraTokenParams } = params ?? {};
+
+            prOngoingTokenRenewal = renewTokens_mutexed({ extraTokenParams });
+
+            prOngoingTokenRenewal.then(() => {
+                prOngoingTokenRenewal = undefined;
+            });
+
+            return prOngoingTokenRenewal;
+        };
+    })();
+
+    const { getUser } = createGetUser({
+        createUser,
+        evtTokensChange: (() => {
+            const evtTokensChange = createEvt<void>();
+
+            onTokenChanges.add(() => {
+                evtTokensChange.post();
+            });
+
+            return evtTokensChange;
+        })(),
+        getCurrentTokens: () => currentTokens,
+        issuerUri,
+        oidcMetadata,
+        renewTokens: () => renewTokens()
+    });
+
     detect_useless_idleSessionLifetimeInSeconds: {
         if (idleSessionLifetimeInSeconds === undefined) {
             break detect_useless_idleSessionLifetimeInSeconds;
@@ -1465,7 +1797,7 @@ export async function createOidc_nonMemoized<
                 "oidc-spa: You've specified idleSessionLifetimeInSeconds,",
                 "but your auth server issues a refresh_token with a known expiration time.",
                 "idleSessionLifetimeInSeconds should only be used as a fallback",
-                "for auth servers that don't specify when an inactive session expires (Auth0, Clerk, WorkOS).",
+                "for auth servers that don't specify when an inactive session expires.",
                 "The auth server, not your code, is the source of truth.",
                 "See: https://docs.oidc-spa.dev/v/v10/auto-logout"
             ].join(" ")
@@ -1494,8 +1826,6 @@ export async function createOidc_nonMemoized<
         (params: { secondsLeft: number | undefined }) => void
     >();
 
-    const onTokenChanges = new Set<(tokens: Oidc.Tokens<DecodedIdToken>) => void>();
-
     const { sid: sessionId, sub: subjectId } = currentTokens.decodedIdToken_original;
 
     assert(subjectId !== undefined, "The 'sub' claim is missing from the id token");
@@ -1505,7 +1835,7 @@ export async function createOidc_nonMemoized<
 
     let prOngoingTokenRenewal: Promise<void> | undefined = undefined;
 
-    const oidc_loggedIn = id<Oidc.LoggedIn<DecodedIdToken>>({
+    const oidc_loggedIn = id<Oidc.LoggedIn<DecodedIdToken, User>>({
         ...oidc_common,
         isUserLoggedIn: true,
         getTokens: async () => {
@@ -1638,294 +1968,7 @@ export async function createOidc_nonMemoized<
 
             return new Promise<never>(() => {});
         },
-        renewTokens: (() => {
-            // NOTE: Cannot throw (or if it does it's our fault)
-            async function renewTokens_nonMutexed(params: {
-                extraTokenParams: Record<string, string | undefined>;
-            }) {
-                const { extraTokenParams } = params;
-
-                const fallbackToFullPageReload = async (): Promise<never> => {
-                    persistAuthState({ configId, state: undefined });
-
-                    await waitForAllOtherOngoingLoginOrRefreshProcessesToComplete({
-                        prUnlock: new Promise<never>(() => {})
-                    });
-
-                    await loginOrGoToAuthServer({
-                        action: "login",
-                        redirectUrl: window.location.href,
-                        doForceReloadOnBfCache: true,
-                        extraQueryParams_local: undefined,
-                        transformUrlBeforeRedirect_local: undefined,
-                        doNavigateBackToLastPublicUrlIfTheTheUserNavigateBack: true,
-                        interaction: "directly redirect if active session show login otherwise",
-                        preRedirectHook: undefined
-                    });
-                    assert(false, "136134");
-                };
-
-                if (!currentTokens.hasRefreshToken && !canUseIframe) {
-                    log?.(
-                        [
-                            "Unable to refresh tokens without a full app reload,",
-                            "because no refresh token is available",
-                            "and your app setup prevents silent sign-in via iframe.",
-                            "Your only option to refresh tokens is to call `window.location.reload()`"
-                        ].join(" ")
-                    );
-
-                    await fallbackToFullPageReload();
-
-                    assert(false, "136135");
-                }
-
-                log?.("Renewing tokens");
-
-                const { completeLoginOrRefreshProcess } = await startLoginOrRefreshProcess();
-
-                const result_loginSilent = await loginSilent({
-                    extraTokenParams
-                });
-
-                if (result_loginSilent.outcome === "timeout") {
-                    log?.(
-                        [
-                            `Silent refresh of the token failed the iframe didn't post a response (timeout).`,
-                            `This isn't recoverable, reloading the page.`
-                        ].join(" ")
-                    );
-                    window.location.reload();
-                    await new Promise<never>(() => {});
-                    assert(false);
-                }
-
-                const clearPersistedTokensIfSessionStorageIfAny = () => {
-                    let hasRemoved = false;
-
-                    for (let i = sessionStorage.length - 1; i >= 0; i--) {
-                        const key = sessionStorage.key(i);
-                        assert(key !== null, "323303");
-                        if (key.startsWith(SESSION_STORAGE_GLOBAL_PREFIX)) {
-                            hasRemoved = true;
-                            sessionStorage.removeItem(key);
-                        }
-                    }
-
-                    if (hasRemoved) {
-                        log?.("The persisted session in sessionStorage was probably no longer valid");
-                    }
-                };
-
-                let oidcClientTsUser: OidcClientTsUser;
-
-                switch (result_loginSilent.outcome) {
-                    case "token refreshed using refresh token":
-                        {
-                            log?.("Refresh token used");
-                            oidcClientTsUser = result_loginSilent.oidcClientTsUser;
-                        }
-                        break;
-                    case "got error auth response using refresh token":
-                    case "other error":
-                        {
-                            switch (result_loginSilent.outcome) {
-                                case "got error auth response using refresh token":
-                                    {
-                                        const { authResponse } = result_loginSilent;
-
-                                        log?.(
-                                            [
-                                                "Got error response trying to refresh tokens using the refresh token,",
-                                                "token endpoint response:",
-                                                JSON.stringify(authResponse, null, 2)
-                                            ].join(" ")
-                                        );
-                                    }
-                                    break;
-                                case "other error":
-                                    {
-                                        const { error } = result_loginSilent;
-
-                                        log?.(
-                                            `Got an unexpected error trying to refresh token: ${error.message}`
-                                        );
-                                    }
-                                    break;
-                                default:
-                                    assert<Equals<typeof result_loginSilent, never>>(false);
-                                    break;
-                            }
-
-                            clearPersistedTokensIfSessionStorageIfAny();
-
-                            completeLoginOrRefreshProcess();
-
-                            await fallbackToFullPageReload();
-
-                            assert(false, "136135");
-                        }
-                        break;
-                    case "got auth response from iframe":
-                        {
-                            const { authResponse } = result_loginSilent;
-
-                            clearStateDataCookie({ stateUrlParamValue: authResponse.state });
-
-                            const authResponse_error = authResponse.error;
-
-                            if (authResponse_error === undefined) {
-                                log?.(
-                                    [
-                                        "Tokens refreshed using iframe, authorization endpoint response: ",
-                                        JSON.stringify(authResponse, null, 2)
-                                    ].join(" ")
-                                );
-                            } else {
-                                log?.(
-                                    [
-                                        "Got error response trying to refresh tokens using iframe,",
-                                        "Authorization endpoint response:",
-                                        JSON.stringify(authResponse, null, 2)
-                                    ].join(" ")
-                                );
-                            }
-
-                            let oidcClientTsUser_scope: OidcClientTsUser | undefined = undefined;
-
-                            try {
-                                oidcClientTsUser_scope =
-                                    await oidcClientTsUserManager.signinRedirectCallback(
-                                        authResponseToUrl(authResponse)
-                                    );
-                            } catch (error) {
-                                if (authResponse_error === undefined) {
-                                    console.error(error);
-                                    assert(false, `This is a bug in oidc-spa, please report.`);
-                                }
-                            }
-
-                            if (oidcClientTsUser_scope === undefined) {
-                                clearPersistedTokensIfSessionStorageIfAny();
-
-                                completeLoginOrRefreshProcess();
-
-                                log?.(
-                                    [
-                                        "The user is probably not logged in anymore,",
-                                        "need to redirect to login pages"
-                                    ].join(" ")
-                                );
-
-                                await fallbackToFullPageReload();
-
-                                assert(false, "136135");
-                            }
-
-                            oidcClientTsUser = oidcClientTsUser_scope;
-                        }
-                        break;
-                    default:
-                        assert<Equals<typeof result_loginSilent, never>>(false);
-                        break;
-                }
-
-                currentTokens = oidcClientTsUserToTokens({
-                    oidcClientTsUser,
-                    decodedIdToken_previous: currentTokens.decodedIdToken
-                });
-
-                if (getPersistedAuthState({ configId }) !== undefined) {
-                    persistAuthState({
-                        configId,
-                        state: {
-                            stateDescription: "logged in",
-                            refreshTokenExpirationTime: currentTokens.refreshTokenExpirationTime,
-                            serverDateNow: currentTokens.getServerDateNow(),
-                            idleSessionLifetimeInSeconds
-                        }
-                    });
-                }
-
-                Array.from(onTokenChanges).forEach(onTokenChange => onTokenChange(currentTokens));
-
-                completeLoginOrRefreshProcess();
-            }
-
-            let ongoingCall:
-                | {
-                      pr: Promise<void>;
-                      extraTokenParams: Record<string, string | undefined>;
-                  }
-                | undefined = undefined;
-
-            function handleThen() {
-                assert(ongoingCall !== undefined, "131276");
-
-                const { pr } = ongoingCall;
-
-                pr.then(() => {
-                    assert(ongoingCall !== undefined, "549462");
-
-                    if (ongoingCall.pr !== pr) {
-                        return;
-                    }
-
-                    ongoingCall = undefined;
-                });
-            }
-
-            async function renewTokens_mutexed(params: {
-                extraTokenParams?: Record<string, string | undefined>;
-            }) {
-                const { extraTokenParams: extraTokenParams_local } = params;
-
-                const extraTokenParams = {
-                    ...getExtraTokenParams?.(),
-                    ...extraTokenParams_local
-                };
-
-                if (ongoingCall === undefined) {
-                    ongoingCall = {
-                        pr: renewTokens_nonMutexed({ extraTokenParams }),
-                        extraTokenParams
-                    };
-
-                    handleThen();
-
-                    return ongoingCall.pr;
-                }
-
-                if (JSON.stringify(extraTokenParams) === JSON.stringify(ongoingCall.extraTokenParams)) {
-                    return ongoingCall.pr;
-                }
-
-                ongoingCall = {
-                    pr: (async () => {
-                        await ongoingCall.pr;
-
-                        return renewTokens_nonMutexed({ extraTokenParams });
-                    })(),
-                    extraTokenParams
-                };
-
-                handleThen();
-
-                return ongoingCall.pr;
-            }
-
-            return params => {
-                const { extraTokenParams } = params ?? {};
-
-                prOngoingTokenRenewal = renewTokens_mutexed({ extraTokenParams });
-
-                prOngoingTokenRenewal.then(() => {
-                    prOngoingTokenRenewal = undefined;
-                });
-
-                return prOngoingTokenRenewal;
-            };
-        })(),
+        renewTokens,
         subscribeToTokensChange: onTokenChange => {
             onTokenChanges.add(onTokenChange);
 
@@ -1961,7 +2004,8 @@ export async function createOidc_nonMemoized<
             log?.(`isNewBrowserSession: ${value}`);
 
             return value;
-        })()
+        })(),
+        getUser
     });
 
     if (resultOfLoginProcess.isRestoredFromSessionStorage) {

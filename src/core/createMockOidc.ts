@@ -9,13 +9,15 @@ import { getBASE_URL_earlyInit } from "../core/earlyInit_BASE_URL";
 
 export type ParamsOfCreateMockOidc<
     DecodedIdToken extends Record<string, unknown> = Record<string, unknown>,
-    AutoLogin extends boolean = false
+    AutoLogin extends boolean = false,
+    User = never
 > = {
     mockedParams?: {
         issuerUri?: string;
         clientId?: string;
     };
     mockedTokens?: Partial<Oidc.Tokens<DecodedIdToken>>;
+    mockedUser?: User;
     /**
      * The URL of the home page of your app.
      * We need to know this so we know where to redirect when you call `logout({ redirectTo: "home"})`.
@@ -38,16 +40,18 @@ const locationHref_moduleEvalTime = location.href;
 
 export async function createMockOidc<
     DecodedIdToken extends Record<string, unknown> = Oidc.Tokens.DecodedIdToken_OidcCoreSpec,
-    AutoLogin extends boolean = false
+    AutoLogin extends boolean = false,
+    User = never
 >(
-    params: ParamsOfCreateMockOidc<DecodedIdToken, AutoLogin>
-): Promise<AutoLogin extends true ? Oidc.LoggedIn<DecodedIdToken> : Oidc<DecodedIdToken>> {
+    params: ParamsOfCreateMockOidc<DecodedIdToken, AutoLogin, User>
+): Promise<AutoLogin extends true ? Oidc.LoggedIn<DecodedIdToken, User> : Oidc<DecodedIdToken, User>> {
     const {
         isUserInitiallyLoggedIn = true,
         mockedParams = {},
         mockedTokens = {},
         autoLogin = false,
-        postLoginRedirectUrl
+        postLoginRedirectUrl,
+        mockedUser
     } = params;
 
     const BASE_URL_params = params.BASE_URL;
@@ -143,7 +147,7 @@ export async function createMockOidc<
         return oidc;
     }
 
-    const oidc: Oidc.LoggedIn<DecodedIdToken> = {
+    const oidc: Oidc.LoggedIn<DecodedIdToken, User> = {
         ...common,
         isUserLoggedIn: true,
         renewTokens: async () => {},
@@ -226,7 +230,20 @@ export async function createMockOidc<
         }),
         goToAuthServer: async ({ redirectUrl }) => loginOrGoToAuthServer({ redirectUrl }),
         isNewBrowserSession: false,
-        backFromAuthServer: undefined
+        backFromAuthServer: undefined,
+        getUser: () => {
+            if (mockedUser === undefined) {
+                throw new Error("oidc-spa: No mock user provided");
+            }
+
+            return Promise.resolve({
+                refreshUser: () => Promise.resolve(mockedUser),
+                subscribeToUserChange: () => {
+                    return { unsubscribeFromUserChange: () => {} };
+                },
+                user: mockedUser
+            });
+        }
     };
 
     return oidc;
