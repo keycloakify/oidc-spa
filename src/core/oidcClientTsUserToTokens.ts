@@ -92,8 +92,7 @@ export function createOidcClientTsUserToTokens<DecodedIdToken extends Record<str
                 let iat: number | undefined;
 
                 try {
-                    const iat_claimValue = decodedIdToken_original.iat;
-                    assert(iat_claimValue === undefined || typeof iat_claimValue === "number");
+                    const iat_claimValue = toNumber(decodedIdToken_original.iat);
                     iat = iat_claimValue;
                 } catch {
                     iat = undefined;
@@ -113,13 +112,11 @@ export function createOidcClientTsUserToTokens<DecodedIdToken extends Record<str
             correct_entra_builtin_skew: {
                 // See: https://github.com/keycloakify/oidc-spa/issues/162
 
-                const { expires_in } = oidcClientTsUser.__oidc_spa_tokenResponse;
+                const expires_in = toNumber(oidcClientTsUser.__oidc_spa_tokenResponse["expires_in"]);
 
                 if (expires_in === undefined) {
                     break correct_entra_builtin_skew;
                 }
-
-                assert(typeof expires_in === "number", "203333425");
 
                 let access_token_iat: number;
                 let access_token_exp: number;
@@ -129,10 +126,11 @@ export function createOidcClientTsUserToTokens<DecodedIdToken extends Record<str
 
                     assert(decodedAccessToken instanceof Object);
 
-                    const { iat, exp } = decodedAccessToken;
+                    const iat = toNumber(decodedAccessToken["iat"]);
+                    const exp = toNumber(decodedAccessToken["exp"]);
 
-                    assert(typeof iat === "number");
-                    assert(typeof exp === "number");
+                    assert(iat !== undefined);
+                    assert(exp !== undefined);
 
                     access_token_iat = iat;
                     access_token_exp = exp;
@@ -184,25 +182,25 @@ export function createOidcClientTsUserToTokens<DecodedIdToken extends Record<str
                           }
 
                           read_from_token_response_expires_at: {
-                              const { expires_at } = oidcClientTsUser.__oidc_spa_tokenResponse;
+                              const expires_at = toNumber(
+                                  oidcClientTsUser.__oidc_spa_tokenResponse["expires_at"]
+                              );
 
                               if (expires_at === undefined) {
                                   break read_from_token_response_expires_at;
                               }
 
-                              assert(typeof expires_at === "number", "2033392");
-
                               return expires_at * 1000;
                           }
 
                           read_from_token_response_expires_in: {
-                              const { expires_in } = oidcClientTsUser.__oidc_spa_tokenResponse;
+                              const expires_in = toNumber(
+                                  oidcClientTsUser.__oidc_spa_tokenResponse["expires_in"]
+                              );
 
                               if (expires_in === undefined) {
                                   break read_from_token_response_expires_in;
                               }
-
-                              assert(typeof expires_in === "number", "203333425");
 
                               return issuedAtTime + expires_in * 1_000;
                           }
@@ -232,13 +230,13 @@ export function createOidcClientTsUserToTokens<DecodedIdToken extends Record<str
                               "refresh_expires_at",
                               "refresh_token_expires_at"
                           ] as const) {
-                              const expiresAt = oidcClientTsUser.__oidc_spa_tokenResponse[propertyName];
+                              const expiresAt = toNumber(
+                                  oidcClientTsUser.__oidc_spa_tokenResponse[propertyName]
+                              );
 
                               if (expiresAt === undefined) {
                                   continue;
                               }
-
-                              assert(typeof expiresAt === "number", "2033392");
 
                               if (expiresAt === 0) {
                                   return INFINITY_TIME;
@@ -251,13 +249,13 @@ export function createOidcClientTsUserToTokens<DecodedIdToken extends Record<str
                               "refresh_expires_in",
                               "refresh_token_expires_in"
                           ] as const) {
-                              const expiresIn = oidcClientTsUser.__oidc_spa_tokenResponse[propertyName];
+                              const expiresIn = toNumber(
+                                  oidcClientTsUser.__oidc_spa_tokenResponse[propertyName]
+                              );
 
                               if (expiresIn === undefined) {
                                   continue;
                               }
-
-                              assert(typeof expiresIn === "number", "2033425330");
 
                               if (expiresIn === 0) {
                                   return INFINITY_TIME;
@@ -317,4 +315,21 @@ export function createOidcClientTsUserToTokens<DecodedIdToken extends Record<str
     }
 
     return { oidcClientTsUserToTokens };
+}
+
+function toNumber(v: unknown): number | undefined {
+    if (v === undefined || v === null) {
+        return undefined;
+    }
+    if (typeof v === "string") {
+        const v_n = parseFloat(v);
+
+        assert(!isNaN(v_n), `3922033 ${v}`);
+
+        return v_n;
+    }
+
+    assert(typeof v === "number", `2932202 ${v}`);
+
+    return v;
 }
