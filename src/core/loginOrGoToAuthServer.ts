@@ -327,7 +327,12 @@ export function createLoginOrGoToAuthServer(params: {
         log?.(`redirectMethod: ${redirectMethod}`);
 
         if (rest.action === "login") {
-            await rest.preRedirectHook?.();
+            try {
+                await rest.preRedirectHook?.();
+            } catch (error) {
+                globalContext.evtHasLoginBeenCalled.current = false;
+                throw error;
+            }
         }
 
         const prompt: string | undefined = (() => {

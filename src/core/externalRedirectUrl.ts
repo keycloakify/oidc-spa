@@ -10,7 +10,12 @@ type PersistedExternalRedirectUrl = {
     createdAt: number;
 };
 
-const externalRedirectUrlByConfigId_memory = new Map<string, string>();
+type ExternalRedirectUrlInMemory = {
+    url: string;
+    ts: number;
+};
+
+const externalRedirectUrlByConfigId_memory = new Map<string, ExternalRedirectUrlInMemory>();
 const initializedConfigIds = new Set<string>();
 const prExternalRedirectUrlInitializationByConfigId = new Map<string, Promise<void>>();
 
@@ -92,13 +97,18 @@ export async function setExternalRedirectUrl(params: {
         return;
     }
 
-    externalRedirectUrlByConfigId_memory.set(configId, url);
+    const now = Date.now();
+
+    externalRedirectUrlByConfigId_memory.set(configId, {
+        url,
+        ts: now
+    });
 
     await adapter.setItem(
         storageKey,
         JSON.stringify({
             url,
-            createdAt: Date.now()
+            createdAt: now
         } satisfies PersistedExternalRedirectUrl)
     );
 }
@@ -112,7 +122,11 @@ export async function peekExternalRedirectUrl(params: {
     const externalRedirectUrl_memory = externalRedirectUrlByConfigId_memory.get(configId);
 
     if (externalRedirectUrl_memory !== undefined) {
-        return externalRedirectUrl_memory;
+        if (Date.now() - externalRedirectUrl_memory.ts <= MAX_AGE_MS) {
+            return externalRedirectUrl_memory.url;
+        }
+
+        externalRedirectUrlByConfigId_memory.delete(configId);
     }
 
     const adapter = tokenStorageAdapter ?? sessionStorageAdapter;
@@ -148,7 +162,10 @@ export async function peekExternalRedirectUrl(params: {
         return undefined;
     }
 
-    externalRedirectUrlByConfigId_memory.set(configId, parsedValue.url);
+    externalRedirectUrlByConfigId_memory.set(configId, {
+        url: parsedValue.url,
+        ts: parsedValue.createdAt
+    });
 
     return parsedValue.url;
 }

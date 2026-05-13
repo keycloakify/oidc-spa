@@ -257,13 +257,22 @@ export class CapacitorNavigator extends BaseNavigator {
 
                 const { configId, tokenStorageAdapter } = this.#getRequiredInitialization();
 
-                await setExternalRedirectUrl({
-                    configId,
-                    url: event.url,
-                    tokenStorageAdapter
-                });
+                try {
+                    await setExternalRedirectUrl({
+                        configId,
+                        url: event.url,
+                        tokenStorageAdapter
+                    });
 
-                await this.#closeBrowserIfNotAndroid();
+                    await this.#closeBrowserIfNotAndroid();
+                } catch (error) {
+                    this.#emitWarning({
+                        code: "CAPACITOR_APP_URL_OPEN_REDIRECT_FAILED",
+                        message: "Failed to complete native redirect flow from appUrlOpen handler.",
+                        error
+                    });
+                    return;
+                }
 
                 window.location.reload();
             })
@@ -284,15 +293,40 @@ export class CapacitorNavigator extends BaseNavigator {
                     })
                 ).remove;
 
-                await Browser.open({ url });
+                try {
+                    await Browser.open({ url });
+                } catch (error) {
+                    this.#clearBrowserFinishedTimeout();
+                    this.#cleanupBrowserFinishedListenerRemove();
+                    this.#cleanupListener();
+
+                    this.#emitWarning({
+                        code: "CAPACITOR_NAVIGATE_OPEN_FAILED",
+                        message: "Failed to open native browser during navigate().",
+                        error
+                    });
+
+                    throw error;
+                }
 
                 return { url };
             },
             close: () => {
                 this.#clearBrowserFinishedTimeout();
-                void this.#closeBrowserIfNotAndroid();
                 this.#cleanupListener();
                 this.#cleanupBrowserFinishedListenerRemove();
+
+                void (async () => {
+                    try {
+                        await this.#closeBrowserIfNotAndroid();
+                    } catch (error) {
+                        this.#emitWarning({
+                            code: "CAPACITOR_CLOSE_BROWSER_FAILED",
+                            message: "Failed to close native browser during close().",
+                            error
+                        });
+                    }
+                })();
             }
         };
     }
@@ -317,13 +351,22 @@ export class CapacitorNavigator extends BaseNavigator {
 
         const { configId, tokenStorageAdapter } = this.#getRequiredInitialization();
 
-        await setExternalRedirectUrl({
-            configId,
-            url,
-            tokenStorageAdapter
-        });
+        try {
+            await setExternalRedirectUrl({
+                configId,
+                url,
+                tokenStorageAdapter
+            });
 
-        await this.#closeBrowserIfNotAndroid();
+            await this.#closeBrowserIfNotAndroid();
+        } catch (error) {
+            this.#emitWarning({
+                code: "CAPACITOR_CALLBACK_REDIRECT_FAILED",
+                message: "Failed to complete native redirect flow from callback().",
+                error
+            });
+            return;
+        }
 
         window.location.reload();
     }

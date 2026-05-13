@@ -663,7 +663,7 @@ export async function createOidc_nonMemoized<
                 issuerUri,
                 clientId,
                 scopes,
-                validRedirectUri: homeUrlAndRedirectUri
+                validRedirectUri: oidcCallbackUrl
             },
             null,
             2
@@ -1080,6 +1080,24 @@ export async function createOidc_nonMemoized<
               isRestoredFromSessionStorage: boolean;
           }
     > => {
+        let pendingExternalRedirectUrl: string | undefined;
+        let hasLoadedPendingExternalRedirectUrl = false;
+
+        const getPendingExternalRedirectUrlIfAny = async () => {
+            if (!hasLoadedPendingExternalRedirectUrl) {
+                await waitForExternalRedirectUrlInitialization({ configId });
+
+                pendingExternalRedirectUrl = await peekExternalRedirectUrl({
+                    configId,
+                    tokenStorageAdapter: effectiveTokenStorageAdapter
+                });
+
+                hasLoadedPendingExternalRedirectUrl = true;
+            }
+
+            return pendingExternalRedirectUrl;
+        };
+
         if (oidcMetadata === undefined) {
             return (
                 await import("./diagnostic")
@@ -1097,6 +1115,14 @@ export async function createOidc_nonMemoized<
                 !shouldPreferLocalRestoreInNative &&
                 !evtIsThereMoreThanOneInstanceThatCantUserIframes.current
             ) {
+                break restore_from_session_storage;
+            }
+
+            const hasPendingNativeCallbackOrExternalRedirect =
+                (await getPendingExternalRedirectUrlIfAny()) !== undefined ||
+                getRedirectAuthResponse().authResponse !== undefined;
+
+            if (hasPendingNativeCallbackOrExternalRedirect) {
                 break restore_from_session_storage;
             }
 
@@ -1159,18 +1185,15 @@ export async function createOidc_nonMemoized<
                 | undefined = undefined;
 
             {
-                await waitForExternalRedirectUrlInitialization({ configId });
-
-                const externalRedirectUrl = await peekExternalRedirectUrl({
-                    configId,
-                    tokenStorageAdapter: effectiveTokenStorageAdapter
-                });
+                const externalRedirectUrl = await getPendingExternalRedirectUrlIfAny();
 
                 if (externalRedirectUrl !== undefined) {
                     await clearExternalRedirectUrl({
                         configId,
                         tokenStorageAdapter: effectiveTokenStorageAdapter
                     });
+
+                    pendingExternalRedirectUrl = undefined;
 
                     const assessment = hasOidcRedirectResponse(externalRedirectUrl);
 
@@ -1582,7 +1605,7 @@ export async function createOidc_nonMemoized<
     const oidc_common: Oidc.Common = {
         issuerUri,
         clientId,
-        validRedirectUri: homeUrlAndRedirectUri
+        validRedirectUri: oidcCallbackUrl
     };
 
     not_loggedIn_case: {
@@ -1665,7 +1688,7 @@ export async function createOidc_nonMemoized<
                                     "IMPORTANT DEBUG INFO:",
                                     "\nWe are about to redirect to your Identity Provider (IdP).",
                                     "\nIf you see an 'Invalid Redirect URI' error on the IdP page, make sure you've added:",
-                                    `\n${homeUrlAndRedirectUri}`,
+                                    `\n${oidcCallbackUrl}`,
                                     "\nto the list of valid redirect URIs in your IdP configuration.",
                                     "\nIf you see a 'Client not found' error make sure you've created the flowing OIDC client:",
                                     `\n${clientId}`
@@ -1914,7 +1937,7 @@ export async function createOidc_nonMemoized<
                     "IMPORTANT DEBUG INFO:",
                     "\nWe are about to redirect to your Identity Provider (IdP).",
                     "\nIf you see an 'Invalid Redirect URI' error on the IdP page, make sure you've added:",
-                    `\n${homeUrlAndRedirectUri}`,
+                    `\n${oidcCallbackUrl}`,
                     "\nto the list of valid post logout redirect URIs in your IdP configuration."
                 ].join(" ")
             );
