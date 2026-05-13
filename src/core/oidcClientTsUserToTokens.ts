@@ -4,9 +4,9 @@ import { id } from "../tools/tsafe/id";
 import { readExpirationTimeInJwt } from "../tools/readExpirationTimeInJwt";
 import { decodeJwt } from "../tools/decodeJwt";
 import type { Oidc } from "./Oidc";
-import { INFINITY_TIME } from "../tools/INFINITY_TIME";
 import { createGetServerDateNow, type ParamsOfCreateGetServerDateNow } from "../tools/getServerDateNow";
 import type { Exports_DPoP, Exports_tokenSubstitution } from "./createOidc";
+import { getRefreshTokenExpirationTime } from "./getRefreshTokenExpirationTime";
 
 export function createOidcClientTsUserToTokens<DecodedIdToken extends Record<string, unknown>>(params: {
     configId: string;
@@ -227,57 +227,11 @@ export function createOidcClientTsUserToTokens<DecodedIdToken extends Record<str
                       ...tokens_common,
                       hasRefreshToken: true,
                       refreshToken,
-                      refreshTokenExpirationTime: (() => {
-                          for (const propertyName of [
-                              "refresh_expires_at",
-                              "refresh_token_expires_at"
-                          ] as const) {
-                              const expiresAt = oidcClientTsUser.__oidc_spa_tokenResponse[propertyName];
-
-                              if (expiresAt === undefined) {
-                                  continue;
-                              }
-
-                              assert(typeof expiresAt === "number", "2033392");
-
-                              if (expiresAt === 0) {
-                                  return INFINITY_TIME;
-                              }
-
-                              return expiresAt * 1000;
-                          }
-
-                          for (const propertyName of [
-                              "refresh_expires_in",
-                              "refresh_token_expires_in"
-                          ] as const) {
-                              const expiresIn = oidcClientTsUser.__oidc_spa_tokenResponse[propertyName];
-
-                              if (expiresIn === undefined) {
-                                  continue;
-                              }
-
-                              assert(typeof expiresIn === "number", "2033425330");
-
-                              if (expiresIn === 0) {
-                                  return INFINITY_TIME;
-                              }
-
-                              return issuedAtTime + expiresIn * 1000;
-                          }
-
-                          read_from_jwt: {
-                              const expirationTime = readExpirationTimeInJwt(refreshToken);
-
-                              if (expirationTime === undefined) {
-                                  break read_from_jwt;
-                              }
-
-                              return expirationTime;
-                          }
-
-                          return undefined;
-                      })()
+                      refreshTokenExpirationTime: getRefreshTokenExpirationTime({
+                          refreshToken,
+                          tokenResponse: oidcClientTsUser.__oidc_spa_tokenResponse,
+                          issuedAtTime
+                      })
                   });
 
         if (exports_DPoP !== undefined) {

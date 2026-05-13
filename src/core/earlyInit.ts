@@ -1,4 +1,4 @@
-import { getStateData, getIsStatQueryParamValue } from "./StateData";
+import { getStateData } from "./StateData";
 import { assert, type Equals } from "../tools/tsafe/assert";
 import type { AuthResponse } from "./AuthResponse";
 import { setBASE_URL_earlyInit } from "./earlyInit_BASE_URL";
@@ -9,6 +9,7 @@ import {
     getRootRelativeOriginalLocationHref_earlyInit
 } from "./earlyInit_rootRelativeOriginalLocationHref";
 import { prModuleCreateOidc } from "./earlyInit_prModuleCreateOidc";
+import { hasOidcRedirectResponse, extractOidcRedirectResponse } from "./parseOidcRedirectUrl";
 
 const IFRAME_MESSAGE_PREFIX = "oidc-spa:cross-window-messaging:";
 
@@ -196,84 +197,20 @@ let redirectAuthResponse: AuthResponse | undefined = undefined;
 function handleOidcCallback(): {
     shouldLoadApp: boolean;
 } {
-    const location_urlObj = new URL(window.location.href);
+    const assessment = hasOidcRedirectResponse(window.location.href);
 
-    const locationHrefAssessment = (() => {
-        fragment: {
-            const stateUrlParamValue = new URLSearchParams(location_urlObj.hash.replace(/^#/, "")).get(
-                "state"
-            );
-
-            if (stateUrlParamValue === null) {
-                break fragment;
-            }
-
-            if (!getIsStatQueryParamValue({ maybeStateUrlParamValue: stateUrlParamValue })) {
-                break fragment;
-            }
-
-            return { hasAuthResponseInUrl: true, responseMode: "fragment" } as const;
-        }
-
-        query: {
-            const stateUrlParamValue = location_urlObj.searchParams.get("state");
-
-            if (stateUrlParamValue === null) {
-                break query;
-            }
-
-            if (!getIsStatQueryParamValue({ maybeStateUrlParamValue: stateUrlParamValue })) {
-                break query;
-            }
-
-            if (
-                location_urlObj.searchParams.get("client_id") !== null &&
-                location_urlObj.searchParams.get("response_type") !== null &&
-                location_urlObj.searchParams.get("redirect_uri") !== null
-            ) {
-                // NOTE: We are probably in a Keycloakify theme and oidc-spa was loaded by mistake.
-                break query;
-            }
-
-            return { hasAuthResponseInUrl: true, responseMode: "query" } as const;
-        }
-
-        return { hasAuthResponseInUrl: false } as const;
-    })();
-
-    if (!locationHrefAssessment.hasAuthResponseInUrl) {
+    if (!assessment.hasAuthResponseInUrl) {
         setGetRootRelativeOriginalLocationHref_earlyInit({
-            rootRelativeOriginalLocationHref: location_urlObj.href.slice(location_urlObj.origin.length)
+            rootRelativeOriginalLocationHref: window.location.href.slice(window.location.origin.length)
         });
         return { shouldLoadApp: true };
     }
 
     setGetRootRelativeOriginalLocationHref_earlyInit({
-        rootRelativeOriginalLocationHref: location_urlObj.pathname
+        rootRelativeOriginalLocationHref: window.location.pathname
     });
 
-    const { authResponse } = (() => {
-        const authResponse: AuthResponse = { state: "" };
-
-        const searchParams = (() => {
-            switch (locationHrefAssessment.responseMode) {
-                case "fragment":
-                    return new URLSearchParams(location_urlObj.hash.replace(/^#/, ""));
-                case "query":
-                    return location_urlObj.searchParams;
-                default:
-                    assert<Equals<typeof locationHrefAssessment, never>>(false);
-            }
-        })();
-
-        for (const [key, value] of searchParams) {
-            authResponse[key] = value;
-        }
-
-        assert(authResponse.state !== "", "063965");
-
-        return { authResponse };
-    })();
+    const authResponse = extractOidcRedirectResponse(window.location.href, assessment.responseMode);
 
     const stateData = getStateData({ stateUrlParamValue: authResponse.state });
 

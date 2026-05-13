@@ -15,6 +15,7 @@
         "size": "bash ./scripts/compute-payload.sh",
         "start-angular-example": "bash ./scripts/start-example.sh angular start",
         "start-angular-kitchensink-example": "bash ./scripts/start-example.sh angular-kitchensink start",
+        "start-capacitor-angular-example": "bash ./scripts/start-example.sh capacitor-angular start",
         "start-react-router-framework-example": "bash ./scripts/start-example.sh react-router-framework dev",
         "start-react-router-data-example": "bash ./scripts/start-example.sh react-router-data dev",
         "start-react-router-declarative-example": "bash ./scripts/start-example.sh react-router-declarative dev",
@@ -47,11 +48,14 @@
         "TanStack Start"
     ],
     "homepage": "https://docs.oidc-spa.dev/",
-    "dependencies": {},
     "peerDependencies": {
         "@angular/common": "*",
         "@angular/core": "*",
         "@angular/router": "*",
+        "@capacitor/app": "*",
+        "@capacitor/browser": "*",
+        "@capacitor/core": "*",
+        "@capacitor/preferences": "*",
         "@nuxt/kit": "*",
         "@tanstack/react-router": "*",
         "@tanstack/react-start": "*",
@@ -60,13 +64,7 @@
         "rxjs": "*"
     },
     "peerDependenciesMeta": {
-        "react": {
-            "optional": true
-        },
-        "@types/react": {
-            "optional": true
-        },
-        "rxjs": {
+        "@angular/common": {
             "optional": true
         },
         "@angular/core": {
@@ -75,7 +73,16 @@
         "@angular/router": {
             "optional": true
         },
-        "@angular/common": {
+        "@capacitor/app": {
+            "optional": true
+        },
+        "@capacitor/browser": {
+            "optional": true
+        },
+        "@capacitor/core": {
+            "optional": true
+        },
+        "@capacitor/preferences": {
             "optional": true
         },
         "@nuxt/kit": {
@@ -85,6 +92,15 @@
             "optional": true
         },
         "@tanstack/react-router": {
+            "optional": true
+        },
+        "@types/react": {
+            "optional": true
+        },
+        "react": {
+            "optional": true
+        },
+        "rxjs": {
             "optional": true
         }
     },
@@ -99,6 +115,10 @@
         "@babel/preset-env": "7.24.8",
         "@babel/traverse": "^7.28.4",
         "@babel/types": "^7.28.4",
+        "@capacitor/app": "^8.1.0",
+        "@capacitor/browser": "^8.0.3",
+        "@capacitor/core": "^8.3.0",
+        "@capacitor/preferences": "^8.0.1",
         "@nuxt/kit": "^4.3.1",
         "@nuxt/schema": "^4.3.1",
         "@tanstack/react-start": "^1.132.0",
@@ -229,6 +249,18 @@
             "module": "./dist/esm/decode-jwt.mjs",
             "import": "./dist/esm/decode-jwt.mjs",
             "default": "./dist/decode-jwt.js"
+        },
+        "./capacitor": {
+            "types": "./dist/esm/capacitor/index.d.ts",
+            "module": "./dist/esm/capacitor/index.mjs",
+            "import": "./dist/esm/capacitor/index.mjs",
+            "default": "./dist/capacitor/index.js"
+        },
+        "./capacitor/angular": {
+            "types": "./dist/esm/capacitor/angular.d.ts",
+            "module": "./dist/esm/capacitor/angular.mjs",
+            "import": "./dist/esm/capacitor/angular.mjs",
+            "default": "./dist/esm/capacitor/angular.mjs"
         }
     }
 }
