@@ -1340,7 +1340,11 @@ export async function createOidc_nonMemoized<
                             sessionId: stateData.sessionId
                         });
 
-                        if (autoLogin) {
+                        if (
+                            autoLogin ||
+                            location.pathname.endsWith(".html") ||
+                            location.pathname.endsWith(".htm")
+                        ) {
                             location.reload();
                             await new Promise<never>(() => {});
                         }
