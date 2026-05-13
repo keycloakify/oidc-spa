@@ -46,7 +46,11 @@ export class ProtectedComponent {
   }
 
   async renewTokens() {
-    await this.oidc.renewTokens();
-    console.log('Tokens renewed');
+    try {
+      await this.oidc.renewTokens();
+      console.log('Tokens renewed');
+    } catch (error) {
+      console.error('Token renewal failed', error);
+    }
   }
 }

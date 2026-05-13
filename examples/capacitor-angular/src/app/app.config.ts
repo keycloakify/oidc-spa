@@ -30,7 +30,7 @@ export const appConfig: ApplicationConfig = {
     Oidc.provide({
       issuerUri: 'https://cloud-iam.oidc-spa.dev/realms/oidc-spa',
       clientId: 'example-angular',
-      postLoginRedirectUrl: 'com-oidcspa-capacitor://auth-callback',
+      postLoginRedirectUrl: isNativeApp ? 'com-oidcspa-capacitor://auth-callback' : undefined,
       debugLogs: true,
       onNavigatorWarning: (warning: unknown) => {
         console.warn('[NavigatorWarning]', warning);
