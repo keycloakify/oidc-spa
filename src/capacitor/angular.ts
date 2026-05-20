@@ -21,7 +21,7 @@ export const CAPACITOR_BROWSER_FINISHED_GRACE_PERIOD_MS = new InjectionToken<num
 );
 export const CAPACITOR_IS_NATIVE_APP = new InjectionToken<boolean>("oidc-spa.capacitor.isNativeApp");
 
-type ParamsOfCapacitorProvide = ParamsOfProvide & {
+export type ParamsOfCapacitorProvide = ParamsOfProvide & {
     callbackUrlPolicy?: CapacitorCallbackUrlPolicy;
     browserFinishedGracePeriodMs?: number;
 };
