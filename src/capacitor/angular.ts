@@ -73,7 +73,9 @@ export abstract class CapacitorOidcService<
                 onNavigatorWarning
             },
             [
-                { provide: CAPACITOR_NAVIGATOR, useValue: effectiveNavigator },
+                ...(effectiveNavigator instanceof CapacitorNavigator
+                    ? [{ provide: CAPACITOR_NAVIGATOR, useValue: effectiveNavigator }]
+                    : []),
                 { provide: CAPACITOR_NAVIGATOR_WARNING_HANDLER, useValue: onNavigatorWarning },
                 { provide: CAPACITOR_CALLBACK_URL_POLICY, useValue: callbackUrlPolicy },
                 {
