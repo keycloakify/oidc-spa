@@ -7,7 +7,8 @@ import {
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { provideRouter } from '@angular/router';
 import { routes } from './app.routes';
-import { CapacitorNavigator, CapacitorPreferencesStorageAdapter } from 'oidc-spa/capacitor';
+import { CapacitorNavigator } from 'oidc-spa/capacitor';
+import { CapacitorPreferencesStorageAdapter } from 'oidc-spa/capacitor/storages';
 import { Oidc } from './services/oidc.service';
 
 const isNativeApp = Capacitor.isNativePlatform();

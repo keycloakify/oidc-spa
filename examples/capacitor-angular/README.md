@@ -47,7 +47,8 @@ npx cap add android
 5. Update `app.config.ts` with your IdP settings:
 
 ```typescript
-import { CapacitorNavigator, CapacitorPreferencesStorageAdapter } from 'oidc-spa/capacitor';
+import { CapacitorNavigator } from 'oidc-spa/capacitor';
+import { CapacitorPreferencesStorageAdapter } from 'oidc-spa/capacitor/storages';
 
 const storage = new CapacitorPreferencesStorageAdapter();
 const navigator = new CapacitorNavigator({
@@ -87,7 +88,8 @@ Note: Capacitor Preferences is not encrypted at rest by default. For production 
 To add biometric authentication, create a custom storage adapter that wraps the Capacitor storage with biometric unlock:
 
 ```typescript
-import { CapacitorNavigator, CapacitorPreferencesStorageAdapter } from 'oidc-spa/capacitor';
+import { CapacitorNavigator } from 'oidc-spa/capacitor';
+import { CapacitorPreferencesStorageAdapter } from 'oidc-spa/capacitor/storages';
 import { MyBiometricStorage } from './my-biometric-storage';
 
 const baseStorage = new CapacitorPreferencesStorageAdapter();

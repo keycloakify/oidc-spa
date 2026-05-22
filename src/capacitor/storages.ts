@@ -1,0 +1,1 @@
+export { CapacitorPreferencesStorageAdapter } from "./CapacitorPreferencesStorage";

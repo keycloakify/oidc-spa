@@ -261,6 +261,12 @@
             "module": "./dist/esm/capacitor/angular.mjs",
             "import": "./dist/esm/capacitor/angular.mjs",
             "default": "./dist/esm/capacitor/angular.mjs"
+        },
+        "./capacitor/storages": {
+            "types": "./dist/esm/capacitor/storages.d.ts",
+            "module": "./dist/esm/capacitor/storages.mjs",
+            "import": "./dist/esm/capacitor/storages.mjs",
+            "default": "./dist/esm/capacitor/storages.mjs"
         }
     }
 }
