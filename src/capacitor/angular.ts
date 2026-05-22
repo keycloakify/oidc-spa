@@ -13,6 +13,11 @@ import type { BaseNavigatorWarning } from "../core/BaseNavigator";
 export const CAPACITOR_NAVIGATOR_WARNING_HANDLER = new InjectionToken<
     (warning: BaseNavigatorWarning) => void
 >("oidc-spa.capacitor.navigator-warning-handler");
+
+export const CAPACITOR_NAVIGATOR = new InjectionToken<CapacitorNavigator>(
+    "oidc-spa.capacitor.navigator"
+);
+
 export const CAPACITOR_CALLBACK_URL_POLICY = new InjectionToken<CapacitorCallbackUrlPolicy>(
     "oidc-spa.capacitor.callback-url-policy"
 );
@@ -68,6 +73,7 @@ export abstract class CapacitorOidcService<
                 onNavigatorWarning
             },
             [
+                { provide: CAPACITOR_NAVIGATOR, useValue: effectiveNavigator },
                 { provide: CAPACITOR_NAVIGATOR_WARNING_HANDLER, useValue: onNavigatorWarning },
                 { provide: CAPACITOR_CALLBACK_URL_POLICY, useValue: callbackUrlPolicy },
                 {

@@ -145,7 +145,20 @@ Oidc.provide({
 
 ## Redirect Handling
 
-In Capacitor environments, oidc-spa does not expose a public event system for auth callback completion.
+In Capacitor environments, you can subscribe to auth-flow abortion events (for example when users close the browser before redirect):
+
+```typescript
+const navigator = new CapacitorNavigator({
+  callbackUrlPolicy: 'tolerant',
+  browserFinishedGracePeriodMs: 1000,
+});
+
+const unsubscribe = navigator.addAuthFlowAbortedListener(() => {
+  console.warn('[AuthFlowAborted] User closed the browser before redirect callback.');
+});
+```
+
+`unsubscribe()` detaches the listener.
 
 Instead, the flow is:
 

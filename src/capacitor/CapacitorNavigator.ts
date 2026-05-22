@@ -24,6 +24,7 @@ export class CapacitorNavigator extends BaseNavigator {
     #listenerRemove: (() => void) | undefined;
     #browserFinishedListenerRemove: (() => void) | undefined;
     #browserFinishedTimeoutId: ReturnType<typeof setTimeout> | undefined;
+    readonly #authFlowAbortedListeners = new Set<() => void>();
 
     constructor(params: CapacitorNavigatorParams = {}) {
         super();
@@ -67,6 +68,38 @@ export class CapacitorNavigator extends BaseNavigator {
         });
 
         console.warn(`oidc-spa: ${message}`);
+    }
+
+    #emitAuthFlowAborted(): void {
+        try {
+            this.onAuthFlowAborted?.();
+        } catch (error) {
+            this.#emitWarning({
+                code: "CAPACITOR_AUTH_FLOW_ABORTED_HANDLER_FAILED",
+                message: "The internal auth flow aborted handler threw an error.",
+                error
+            });
+        }
+
+        for (const listener of this.#authFlowAbortedListeners) {
+            try {
+                listener();
+            } catch (error) {
+                this.#emitWarning({
+                    code: "CAPACITOR_AUTH_FLOW_ABORTED_LISTENER_FAILED",
+                    message: "An auth flow aborted listener threw an error.",
+                    error
+                });
+            }
+        }
+    }
+
+    addAuthFlowAbortedListener(listener: () => void): () => void {
+        this.#authFlowAbortedListeners.add(listener);
+
+        return () => {
+            this.#authFlowAbortedListeners.delete(listener);
+        };
     }
 
     #getCallbackIdentity(params: { url: string }): string | undefined {
@@ -288,7 +321,7 @@ export class CapacitorNavigator extends BaseNavigator {
                         this.#clearBrowserFinishedTimeout();
                         this.#browserFinishedTimeoutId = setTimeout(() => {
                             this.#browserFinishedTimeoutId = undefined;
-                            this.onAuthFlowAborted?.();
+                            this.#emitAuthFlowAborted();
                         }, this.#browserFinishedGracePeriodMs);
                     })
                 ).remove;
