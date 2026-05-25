@@ -3,7 +3,8 @@ import { z } from "zod";
 import avatarFallbackSvgUrl from "./assets/avatarFallback.svg";
 
 // App-level user shape exposed by `useOidc()`.
-type User = {
+// You decide what an user should looks like!
+export type User = {
     id: string;
     username: string;
     displayName: string;
@@ -17,13 +18,15 @@ type User = {
     keycloakUserProfile?: import("oidc-spa/keycloak").KeycloakProfile;
 };
 
+// The function that oidc-spa will call to create the user object,
+// gathering information from different sources.
 const createUser: CreateUser<User> = async ({
     decodedIdToken: decodedIdToken_generic,
     accessToken,
     fetchUserInfo,
     issuerUri
 }) => {
-    /* ===================== Possible source: ID token claims. ========================= */
+    /* ================= Possible source: ID token claims. ====================== */
 
     const DecodedIdToken = z.object({
         sub: z.string(),
@@ -35,7 +38,7 @@ const createUser: CreateUser<User> = async ({
 
     const decodedIdToken = DecodedIdToken.parse(decodedIdToken_generic);
 
-    /* ===================== Possible source: access token claims. ===================== */
+    /* ================== Possible source: access token claims. ================== */
     // This is pragmatic, but not textbook OIDC: clients should usually
     // treat access tokens as opaque, and some providers do not issue JWTs.
 
@@ -50,22 +53,22 @@ const createUser: CreateUser<User> = async ({
         ? undefined
         : DecodedAccessToken.parse(decodeJwt(accessToken));
 
-    /* ===================== Possible source: your own API. ============================ */
+    /* ================= Possible source: your own API. ========================= */
 
     // const userFromApi = await fetchWithAuth("/api/user").then(r => r.json());
 
-    /* ===================== Possible source: the standard OIDC UserInfo endpoint. ===== */
+    /* ================= Possible source: the standard OIDC UserInfo endpoint. == */
 
     const userInfo = await fetchUserInfo();
 
-    /* ===================== Possible source: provider-specific endpoints. ============= */
+    /* ================= Possible source: provider-specific endpoints. ========== */
     const { createKeycloakUtils } = await import("oidc-spa/keycloak");
 
     const keycloakUtils = isKeycloak({ issuerUri }) ? createKeycloakUtils({ issuerUri }) : undefined;
 
     const keycloakUserProfile = await keycloakUtils?.fetchUserProfile({ accessToken });
 
-    /* ===================== Merging ================================================== */
+    /* ================== Merging =============================================== */
     // Merge whichever sources you decided to use into the single
     // `User` shape consumed by the rest of the app.
 
@@ -83,6 +86,18 @@ const createUser: CreateUser<User> = async ({
     return user;
 };
 
+// App-level user returned when the mock implementation is enabled.
+const user_mock: User = {
+    id: "mock-user",
+    username: "john.doe",
+    displayName: "John Doe",
+    email: undefined,
+    avatarImgUrl: avatarFallbackSvgUrl,
+    isRealmAdmin: true,
+    userInfo: { sub: "1234" },
+    keycloakUserProfile: undefined
+};
+
 export const {
     bootstrapOidc,
     useOidc,
@@ -93,22 +108,7 @@ export const {
     // https://docs.oidc-spa.dev/v/v10/features/non-blocking-rendering#react-spas
     OidcInitializationGate
 } = oidcSpa
-    .withUser<User>({
-        // Build the app-level `User` object from whichever token claims
-        // and extra data sources make sense for your application.
-        createUser,
-        // App-level user returned when the mock implementation is enabled.
-        user_mock: {
-            id: "mock-user",
-            username: "john.doe",
-            displayName: "John Doe",
-            email: undefined,
-            avatarImgUrl: avatarFallbackSvgUrl,
-            isRealmAdmin: true,
-            userInfo: { sub: "1234" },
-            keycloakUserProfile: undefined
-        }
-    })
+    .withUser<User>({ createUser, user_mock })
     // See: https://docs.oidc-spa.dev/v/v10/features/auto-login#react-spa
     //.withAutoLogin()
     .createUtils();
