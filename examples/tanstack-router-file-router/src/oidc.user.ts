@@ -1,4 +1,4 @@
-import type { CreateUser } from "oidc-spa/react-spa";
+import type { CreateUser } from "oidc-spa/core";
 import { z } from "zod";
 import avatarFallbackSvgUrl from "./assets/avatarFallback.svg";
 
