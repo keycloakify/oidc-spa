@@ -426,7 +426,7 @@ export namespace ParamsOfBootstrap {
         implementation: "mock";
         issuerUri_mock?: string;
         clientId_mock?: string;
-        decodedIdToken_mock?: DecodedIdToken;
+        accessToken_mock?: string;
     } & (AccessTokenClaims extends undefined
         ? {}
         : {

@@ -902,7 +902,7 @@ export function createOidcSpaUtils<
                 });
             }
 
-            const { accessTokenClaims, accessToken } = resultOfValidate;
+            const { accessTokenClaims } = resultOfValidate;
 
             assert(is<Exclude<AccessTokenClaims, undefined>>(accessTokenClaims));
 
@@ -955,7 +955,9 @@ export function createOidcSpaUtils<
                     oidc: id<OidcServerContext<AccessTokenClaims>>(
                         id<OidcServerContext.LoggedIn<AccessTokenClaims>>({
                             isUserLoggedIn: true,
-                            accessToken,
+                            get accessToken() {
+                                return resultOfValidate.accessToken;
+                            },
                             accessTokenClaims
                         })
                     )
