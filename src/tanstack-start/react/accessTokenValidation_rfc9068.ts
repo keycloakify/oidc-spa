@@ -144,8 +144,10 @@ export function createCreateValidateAndGetAccessTokenClaims_rfc9068<
         > = async params => {
             const validateAndDecodeAccessToken = await prValidateAndDecodeAccessToken;
 
-            const { isSuccess, errorCause, debugErrorMessage, decodedAccessToken, accessToken } =
-                await validateAndDecodeAccessToken(params);
+            const resultOfValidate = await validateAndDecodeAccessToken(params);
+
+            const { isSuccess, errorCause, debugErrorMessage, decodedAccessToken } =
+                resultOfValidate;
 
             if (!isSuccess) {
                 return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
@@ -167,7 +169,9 @@ export function createCreateValidateAndGetAccessTokenClaims_rfc9068<
             return id<ValidateAndGetAccessTokenClaims.ReturnType.Success<AccessTokenClaims>>({
                 isSuccess: true,
                 accessTokenClaims: decodedAccessToken,
-                accessToken
+                get accessToken() {
+                    return resultOfValidate.accessToken;
+                }
             });
         };
 
