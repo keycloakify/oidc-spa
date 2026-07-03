@@ -128,7 +128,7 @@ export async function createIframeTimeoutInitializationError(params: {
                 messageOrCause: new Error(
                     `Unexpected error while trying to diagnose why the silent sign-in process timed out.`,
                     // @ts-expect-error
-                    { cause: cspOrError }
+                    { cause: headersOrError }
                 )
             });
         }
