@@ -127,7 +127,8 @@ export function createCreateValidateAndGetAccessTokenClaims_rfc9068<
                         await bootstrapAuth({
                             implementation: "mock",
                             behavior: "use static identity",
-                            decodedAccessToken_mock
+                            decodedAccessToken_mock,
+                            accessToken_mock: "mock-access-token"
                         });
                     }
                     break;
