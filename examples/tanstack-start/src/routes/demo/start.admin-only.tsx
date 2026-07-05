@@ -27,12 +27,13 @@ export const Route = createFileRoute("/demo/start/admin-only")({
     component: AdminOnly,
     loader: async () => {
         const oidc = await getOidc({ assert: "user logged in" });
+        const { user } = await oidc.getUser();
 
         // NOTE: This is just cosmetic, it doesn't actually protect anything.
         // It's very important that you implement hasRequired claim in the server
         // function and request middleware to check that the user actually have the required
         // authorization.
-        if (!oidc.getDecodedIdToken().realm_access?.roles.includes("realm-admin")) {
+        if (!user.isRealmAdmin) {
             throw new Error("unauthorized");
         }
 
@@ -87,7 +88,7 @@ function AdminOnly() {
                     <h1 className="text-2xl font-semibold">Administration Page</h1>
                 </header>
                 <p className="mb-6 text-white/90">
-                    Access granted. Your ID token includes the
+                    Access granted. Your user has the
                     <span className="mx-2 px-2 py-0.5 rounded bg-white/10 border border-white/20 text-white">
                         realm-admin
                     </span>

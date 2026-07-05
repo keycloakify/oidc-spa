@@ -1,5 +1,7 @@
 import { oidcSpa } from "oidc-spa/react-tanstack-start";
 import { z } from "zod";
+import { type User, createUser, user_mock } from "./oidc.user";
+import { createServerFn } from "@tanstack/react-start";
 
 export const {
     bootstrapOidc,
@@ -12,22 +14,7 @@ export const {
     oidcFnMiddleware,
     oidcRequestMiddleware
 } = oidcSpa
-    .withExpectedDecodedIdTokenShape({
-        decodedIdTokenSchema: z.object({
-            name: z.string(),
-            picture: z.string().optional(),
-            email: z.email().optional(),
-            preferred_username: z.string().optional(),
-            realm_access: z.object({ roles: z.array(z.string()) }).optional()
-        }),
-        decodedIdToken_mock: {
-            name: "John Doe",
-            preferred_username: "john.doe",
-            realm_access: {
-                roles: ["realm-admin"]
-            }
-        }
-    })
+    .withUser<User>({ createUser, user_mock })
     .withAccessTokenValidation({
         type: "RFC 9068: JSON Web Token (JWT) Profile for OAuth 2.0 Access Tokens",
         expectedAudience: (/*{ paramsOfBootstrap, process }*/) => "account",
@@ -36,7 +23,7 @@ export const {
             realm_access: z.object({ roles: z.array(z.string()) }).optional()
         }),
         accessTokenClaims_mock: {
-            sub: "u123",
+            sub: user_mock.id,
             realm_access: {
                 roles: ["realm-admin"]
             }
@@ -61,6 +48,12 @@ bootstrapOidc(({ process }) =>
               debugLogs: true
           }
 );
+
+export const getRealmRoles = createServerFn({ method: "GET" })
+    .middleware([oidcFnMiddleware({ assert: "user logged in" })])
+    .handler(async ({ context: { oidc } }) => {
+        return oidc.accessTokenClaims.realm_access?.roles ?? [];
+    });
 
 export const fetchWithAuth: typeof fetch = async (input, init) => {
     const oidc = await getOidc();
