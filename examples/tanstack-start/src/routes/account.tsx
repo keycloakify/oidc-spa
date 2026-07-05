@@ -10,8 +10,9 @@ export const Route = createFileRoute("/account")({
 
 function Account() {
     // Here we can safely assume that the user is logged in.
-    const { decodedIdToken, goToAuthServer, backFromAuthServer, issuerUri, clientId, validRedirectUri } =
-        useOidc({ assert: "user logged in" });
+    const { user, goToAuthServer, backFromAuthServer, issuerUri, clientId, validRedirectUri } = useOidc({
+        assert: "user logged in"
+    });
 
     // Since oidc-spa is a generic adapter, all Keycloak specific features are provided via a standalone
     // util. And since this example should run as well with other provider we first test if we are integrating
@@ -24,11 +25,9 @@ function Account() {
                 <h1 className="text-2xl font-semibold mb-4">Your Account</h1>
 
                 <dl className="space-y-2 text-white/90">
-                    <InfoRow label="Name">{decodedIdToken.name}</InfoRow>
-                    {decodedIdToken.email && <InfoRow label="Email">{decodedIdToken.email}</InfoRow>}
-                    {decodedIdToken.preferred_username && (
-                        <InfoRow label="Username">{decodedIdToken.preferred_username}</InfoRow>
-                    )}
+                    <InfoRow label="id">{user.id}</InfoRow>
+                    {user.email && <InfoRow label="Email">{user.email}</InfoRow>}
+                    {user.username && <InfoRow label="Username">{user.username}</InfoRow>}
                 </dl>
 
                 {keycloakUtils && (
