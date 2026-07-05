@@ -267,7 +267,7 @@ function App() {
 }
 
 function Greeting() {
-    const { isOidcReady, isUserLoggedIn, decodedIdToken } = useOidc();
+    const { isOidcReady, isUserLoggedIn, user } = useOidc();
 
     if (!isOidcReady) {
         return <>&nbsp;</>;
@@ -275,7 +275,7 @@ function Greeting() {
 
     return (
         <span className="opacity-0 animate-[fadeIn_0.2s_ease-in_forwards]">
-            {isUserLoggedIn ? `Welcome back ${decodedIdToken.name}` : `Hello anonymous visitor!`}
+            {isUserLoggedIn ? `Welcome back ${user.displayName}` : `Hello anonymous visitor!`}
         </span>
     );
 }

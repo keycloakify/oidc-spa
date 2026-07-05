@@ -5,7 +5,8 @@ import type {
     UseOidc,
     GetOidc,
     ParamsOfBootstrap,
-    OidcServerContext
+    OidcServerContext,
+    CreateUser
 } from "./types";
 import type { ZodSchemaLike } from "../../tools/ZodSchemaLike";
 import type { Oidc as Oidc_core } from "../../core";
@@ -13,9 +14,14 @@ import { OidcInitializationError } from "../../core/OidcInitializationError";
 import { Deferred } from "../../tools/Deferred";
 import { isBrowser } from "../../tools/isBrowser";
 import { assert, type Equals, is } from "../../tools/tsafe/assert";
-import { createObjectThatThrowsIfAccessed } from "../../tools/createObjectThatThrowsIfAccessed";
+import {
+    createObjectThatThrowsIfAccessed,
+    createObjectWithSomePropertiesThatThrowIfAccessed,
+    THROW_IF_ACCESSED
+} from "../../tools/createObjectThatThrowsIfAccessed";
 import { createStatefulEvt } from "../../tools/StatefulEvt";
 import { id } from "../../tools/tsafe/id";
+import { typeGuard } from "../../tools/tsafe/typeGuard";
 import type { GetterOrDirectValue } from "../../tools/GetterOrDirectValue";
 import { createServerFn, createMiddleware } from "@tanstack/react-start";
 // @ts-expect-error: Since our module is not labeled as ESM we don't have the types here.
@@ -26,11 +32,11 @@ import { BEFORE_LOAD_FN_BRAND_PROPERTY_NAME } from "./disableSsrIfLoginEnforced"
 import { setDesiredPostLoginRedirectUrl } from "../../core/desiredPostLoginRedirectUrl";
 import type { MaybeAsync } from "../../tools/MaybeAsync";
 import { enableStateDataCookie } from "../../core/StateDataCookie";
-import { publicEnvNames } from "virtual:oidc-spa/tanstack-start-public-env";
 
 export function createOidcSpaUtils<
     AutoLogin extends boolean,
     DecodedIdToken extends Record<string, unknown>,
+    User,
     AccessTokenClaims extends Record<string, unknown> | undefined
 >(params: {
     autoLogin: AutoLogin;
@@ -41,27 +47,37 @@ export function createOidcSpaUtils<
     createValidateAndGetAccessTokenClaims:
         | CreateValidateAndGetAccessTokenClaims<AccessTokenClaims>
         | undefined;
-}): OidcSpaUtils<AutoLogin, DecodedIdToken, AccessTokenClaims> {
+    createUser: CreateUser<User> | undefined;
+    user_mock: User | undefined;
+}): OidcSpaUtils<AutoLogin, DecodedIdToken, User, AccessTokenClaims> {
     const {
         autoLogin,
         decodedIdTokenSchema,
         decodedIdToken_mock,
-        createValidateAndGetAccessTokenClaims
+        createValidateAndGetAccessTokenClaims,
+        createUser,
+        user_mock: user_mock_static
     } = params;
 
     const dParamsOfBootstrap = new Deferred<
-        ParamsOfBootstrap<AutoLogin, DecodedIdToken, AccessTokenClaims>
+        ParamsOfBootstrap<AutoLogin, DecodedIdToken, User, AccessTokenClaims>
     >();
 
     const dOidcCoreOrInitializationError = new Deferred<
-        Oidc_core<DecodedIdToken> | OidcInitializationError
+        Oidc_core<DecodedIdToken, User> | OidcInitializationError
     >();
 
-    const evtAutoLogoutState = createStatefulEvt<UseOidc.Oidc.LoggedIn<unknown>["autoLogoutState"]>(
-        () => ({
-            shouldDisplayWarning: false
-        })
-    );
+    const dResultOfGetUserOrInitializationErrorOrUndefined = new Deferred<
+        | Awaited<ReturnType<Oidc_core.LoggedIn<DecodedIdToken, User>["getUser"]>>
+        | OidcInitializationError
+        | undefined
+    >();
+
+    const evtAutoLogoutState = createStatefulEvt<
+        UseOidc.Oidc.LoggedIn<unknown, unknown>["autoLogoutState"]
+    >(() => ({
+        shouldDisplayWarning: false
+    }));
 
     dOidcCoreOrInitializationError.pr.then(oidcCoreOrInitializationError => {
         const { hasResolved, value: paramsOfBootstrap } = dParamsOfBootstrap.getState();
@@ -89,7 +105,7 @@ export function createOidcSpaUtils<
         }
 
         oidcCore.subscribeToAutoLogoutCountdown(({ secondsLeft }) => {
-            const newState: UseOidc.Oidc.LoggedIn<unknown>["autoLogoutState"] = (() => {
+            const newState: UseOidc.Oidc.LoggedIn<unknown, unknown>["autoLogoutState"] = (() => {
                 if (secondsLeft === undefined) {
                     return {
                         shouldDisplayWarning: false
@@ -118,18 +134,49 @@ export function createOidcSpaUtils<
 
     function useOidc(params?: {
         assert?: "user logged in" | "user not logged in" | "ready";
-    }): UseOidc.Oidc<DecodedIdToken> {
+    }): UseOidc.Oidc<DecodedIdToken, User> {
         const { assert: assert_params } = params ?? {};
 
-        const { hasResolved, value: oidcCoreOrInitializationError } =
-            dOidcCoreOrInitializationError.getState();
+        const {
+            hasResolved,
+            oidcCoreOrInitializationError,
+            resultOfGetUserOrInitializationErrorOrUndefined
+        } = (() => {
+            const { hasResolved: hasResolved_oidcCore, value: oidcCoreOrInitializationError } =
+                dOidcCoreOrInitializationError.getState();
+
+            const {
+                hasResolved: hasResolved_resultOfGetUser,
+                value: resultOfGetUserOrInitializationErrorOrUndefined
+            } = dResultOfGetUserOrInitializationErrorOrUndefined.getState();
+
+            if (!hasResolved_resultOfGetUser) {
+                return {
+                    hasResolved: false as const,
+                    oidcCoreOrInitializationError: undefined,
+                    resultOfGetUserOrInitializationErrorOrUndefined: undefined
+                };
+            }
+
+            assert(hasResolved_oidcCore);
+
+            return {
+                hasResolved: true as const,
+                oidcCoreOrInitializationError,
+                resultOfGetUserOrInitializationErrorOrUndefined
+            };
+        })();
 
         check_assertion: {
             if (assert_params === undefined) {
                 break check_assertion;
             }
 
-            if (!hasResolved || oidcCoreOrInitializationError instanceof Error) {
+            if (
+                !hasResolved ||
+                oidcCoreOrInitializationError instanceof Error ||
+                resultOfGetUserOrInitializationErrorOrUndefined instanceof Error
+            ) {
                 throw new Error(
                     [
                         "oidc-spa: There is a logic error in the application.",
@@ -174,94 +221,166 @@ export function createOidcSpaUtils<
             }
         }
 
-        const [, reRender] = useReducer(n => n + 1, 0);
+        {
+            const [, reRender] = useReducer(n => n + 1, 0);
 
-        useEffect(() => {
-            if (hasResolved) {
-                return;
-            }
-
-            let isActive = true;
-
-            dOidcCoreOrInitializationError.pr.then(() => {
-                if (!isActive) {
+            useEffect(() => {
+                if (hasResolved) {
                     return;
                 }
-                reRender();
-            });
 
-            return () => {
-                isActive = false;
-            };
-        }, []);
+                let isActive = true;
 
-        const [, reRenderIfDecodedIdTokenChanged] = useState<DecodedIdToken | undefined>(() => {
-            if (!hasResolved) {
-                return undefined;
-            }
-
-            if (oidcCoreOrInitializationError instanceof Error) {
-                return undefined;
-            }
-
-            const oidcCore = oidcCoreOrInitializationError;
-
-            if (!oidcCore.isUserLoggedIn) {
-                return undefined;
-            }
-            return oidcCore.getDecodedIdToken();
-        });
-
-        const [evtIsDecodedIdTokenUsed] = useState(() => createStatefulEvt<boolean>(() => false));
-
-        useEffect(() => {
-            if (!hasResolved) {
-                return;
-            }
-
-            if (oidcCoreOrInitializationError instanceof Error) {
-                return;
-            }
-
-            const oidcCore = oidcCoreOrInitializationError;
-
-            if (!oidcCore.isUserLoggedIn) {
-                return;
-            }
-
-            let isActive = true;
-
-            let unsubscribe: (() => void) | undefined = undefined;
-
-            (async () => {
-                if (!evtIsDecodedIdTokenUsed.current) {
-                    const dDecodedIdTokenUsed = new Deferred<void>();
-
-                    const { unsubscribe: unsubscribe_scope } = evtIsDecodedIdTokenUsed.subscribe(() => {
-                        unsubscribe_scope();
-                        dDecodedIdTokenUsed.resolve();
-                    });
-                    unsubscribe = unsubscribe_scope;
-
-                    await dDecodedIdTokenUsed.pr;
-
+                dResultOfGetUserOrInitializationErrorOrUndefined.pr.then(() => {
                     if (!isActive) {
                         return;
                     }
+                    reRender();
+                });
+
+                return () => {
+                    isActive = false;
+                };
+            }, []);
+        }
+
+        const [evtIsUserUsed] = useState(() => createStatefulEvt<boolean>(() => false));
+        {
+            const [, reRenderIfUserChanged] = useState<User | undefined>(() => {
+                if (!hasResolved) {
+                    return undefined;
                 }
 
-                reRenderIfDecodedIdTokenChanged(oidcCore.getDecodedIdToken());
+                if (resultOfGetUserOrInitializationErrorOrUndefined === undefined) {
+                    return undefined;
+                }
 
-                unsubscribe = oidcCore.subscribeToTokensChange(() => {
+                if (resultOfGetUserOrInitializationErrorOrUndefined instanceof Error) {
+                    return undefined;
+                }
+
+                return resultOfGetUserOrInitializationErrorOrUndefined.user;
+            });
+
+            useEffect(() => {
+                if (!hasResolved) {
+                    return;
+                }
+
+                if (resultOfGetUserOrInitializationErrorOrUndefined instanceof Error) {
+                    return;
+                }
+
+                if (resultOfGetUserOrInitializationErrorOrUndefined === undefined) {
+                    return;
+                }
+
+                const resultOfGetUser = resultOfGetUserOrInitializationErrorOrUndefined;
+
+                let isActive = true;
+                let unsubscribe: (() => void) | undefined = undefined;
+
+                (async () => {
+                    if (!evtIsUserUsed.current) {
+                        const dUserUsed = new Deferred<void>();
+
+                        const { unsubscribe: unsubscribe_scope } = evtIsUserUsed.subscribe(() => {
+                            unsubscribe_scope();
+                            dUserUsed.resolve();
+                        });
+                        unsubscribe = unsubscribe_scope;
+
+                        await dUserUsed.pr;
+
+                        if (!isActive) {
+                            return;
+                        }
+                    }
+
+                    reRenderIfUserChanged(resultOfGetUser.user);
+
+                    unsubscribe = resultOfGetUser.subscribeToUserChange(({ user }) => {
+                        reRenderIfUserChanged(user);
+                    }).unsubscribeFromUserChange;
+                })();
+
+                return () => {
+                    isActive = false;
+                    unsubscribe?.();
+                };
+            }, [hasResolved]);
+        }
+
+        const [evtIsDecodedIdTokenUsed] = useState(() => createStatefulEvt<boolean>(() => false));
+        {
+            const [, reRenderIfDecodedIdTokenChanged] = useState<DecodedIdToken | undefined>(() => {
+                if (!hasResolved) {
+                    return undefined;
+                }
+
+                if (oidcCoreOrInitializationError instanceof Error) {
+                    return undefined;
+                }
+
+                const oidcCore = oidcCoreOrInitializationError;
+
+                if (!oidcCore.isUserLoggedIn) {
+                    return undefined;
+                }
+                return oidcCore.getDecodedIdToken();
+            });
+
+            useEffect(() => {
+                if (!hasResolved) {
+                    return;
+                }
+
+                if (oidcCoreOrInitializationError instanceof Error) {
+                    return;
+                }
+
+                const oidcCore = oidcCoreOrInitializationError;
+
+                if (!oidcCore.isUserLoggedIn) {
+                    return;
+                }
+
+                let isActive = true;
+
+                let unsubscribe: (() => void) | undefined = undefined;
+
+                (async () => {
+                    if (!evtIsDecodedIdTokenUsed.current) {
+                        const dDecodedIdTokenUsed = new Deferred<void>();
+
+                        const { unsubscribe: unsubscribe_scope } = evtIsDecodedIdTokenUsed.subscribe(
+                            () => {
+                                unsubscribe_scope();
+                                dDecodedIdTokenUsed.resolve();
+                            }
+                        );
+                        unsubscribe = unsubscribe_scope;
+
+                        await dDecodedIdTokenUsed.pr;
+
+                        if (!isActive) {
+                            return;
+                        }
+                    }
+
                     reRenderIfDecodedIdTokenChanged(oidcCore.getDecodedIdToken());
-                }).unsubscribeFromTokensChange;
-            })();
 
-            return () => {
-                isActive = false;
-                unsubscribe?.();
-            };
-        }, [hasResolved]);
+                    unsubscribe = oidcCore.subscribeToTokensChange(() => {
+                        reRenderIfDecodedIdTokenChanged(oidcCore.getDecodedIdToken());
+                    }).unsubscribeFromTokensChange;
+                })();
+
+                return () => {
+                    isActive = false;
+                    unsubscribe?.();
+                };
+            }, [hasResolved]);
+        }
 
         const [evtIsAutoLogoutStateUsed] = useState(() => createStatefulEvt<boolean>(() => false));
 
@@ -311,7 +430,12 @@ export function createOidcSpaUtils<
             setHasHydratedToTrue();
         }, []);
 
-        if (!hasResolved || oidcCoreOrInitializationError instanceof Error || hasHydrated === false) {
+        if (
+            !hasResolved ||
+            oidcCoreOrInitializationError instanceof Error ||
+            resultOfGetUserOrInitializationErrorOrUndefined instanceof Error ||
+            hasHydrated === false
+        ) {
             return id<UseOidc.Oidc.NotReady>({
                 isOidcReady: false,
                 autoLogoutState: {
@@ -321,13 +445,22 @@ export function createOidcSpaUtils<
                     if (!hasHydrated) {
                         return undefined;
                     }
-                    if (!hasResolved) {
-                        return undefined;
+
+                    if (hasResolved) {
+                        if (oidcCoreOrInitializationError instanceof OidcInitializationError) {
+                            const error = oidcCoreOrInitializationError;
+                            return error;
+                        }
+                        if (
+                            resultOfGetUserOrInitializationErrorOrUndefined instanceof
+                            OidcInitializationError
+                        ) {
+                            const error = resultOfGetUserOrInitializationErrorOrUndefined;
+                            return error;
+                        }
                     }
-                    if (!(oidcCoreOrInitializationError instanceof Error)) {
-                        return undefined;
-                    }
-                    return oidcCoreOrInitializationError;
+
+                    return undefined;
                 })()
             });
         }
@@ -351,31 +484,75 @@ export function createOidcSpaUtils<
             });
         }
 
-        return id<UseOidc.Oidc.LoggedIn<DecodedIdToken>>({
-            isOidcReady: true,
-            isUserLoggedIn: true,
-            get decodedIdToken() {
-                evtIsDecodedIdTokenUsed.current = true;
-                return oidcCore.getDecodedIdToken();
+        const resultOfGetUserOrUndefined = resultOfGetUserOrInitializationErrorOrUndefined;
+
+        const oidc = createObjectWithSomePropertiesThatThrowIfAccessed<
+            UseOidc.Oidc.LoggedIn<DecodedIdToken, User>
+        >(
+            {
+                isOidcReady: true,
+                isUserLoggedIn: true,
+                decodedIdToken: null as any,
+                logout: oidcCore.logout,
+                renewTokens: oidcCore.renewTokens,
+                goToAuthServer: oidcCore.goToAuthServer,
+                backFromAuthServer: oidcCore.backFromAuthServer,
+                isNewBrowserSession: oidcCore.isNewBrowserSession,
+                autoLogoutState: null as any,
+                issuerUri: oidcCore.issuerUri,
+                clientId: oidcCore.clientId,
+                validRedirectUri: oidcCore.validRedirectUri,
+                user: resultOfGetUserOrUndefined === undefined ? THROW_IF_ACCESSED : (null as any),
+                refreshUser: (() => {
+                    if (resultOfGetUserOrUndefined === undefined) {
+                        return THROW_IF_ACCESSED;
+                    }
+
+                    const resultOfGetUser = resultOfGetUserOrUndefined;
+
+                    return resultOfGetUser.refreshUser;
+                })()
             },
-            logout: oidcCore.logout,
-            renewTokens: oidcCore.renewTokens,
-            goToAuthServer: oidcCore.goToAuthServer,
-            backFromAuthServer: oidcCore.backFromAuthServer,
-            isNewBrowserSession: oidcCore.isNewBrowserSession,
-            get autoLogoutState() {
-                evtIsAutoLogoutStateUsed.current = true;
-                return evtAutoLogoutState.current;
+            [
+                "oidc-spa: You must use oidcSpa.withUser() to implement the user abstraction",
+                "See: https://docs.oidc-spa.dev/v/v10/features/user"
+            ].join(" ")
+        );
+
+        Object.defineProperties(oidc, {
+            decodedIdToken: {
+                enumerable: true,
+                get: () => {
+                    evtIsDecodedIdTokenUsed.current = true;
+                    return oidcCore.getDecodedIdToken();
+                }
             },
-            issuerUri: oidcCore.issuerUri,
-            clientId: oidcCore.clientId,
-            validRedirectUri: oidcCore.validRedirectUri
+            autoLogoutState: {
+                enumerable: true,
+                get: () => {
+                    evtIsAutoLogoutStateUsed.current = true;
+                    return evtAutoLogoutState.current;
+                }
+            }
         });
+
+        if (resultOfGetUserOrUndefined !== undefined) {
+            const resultOfGetUser = resultOfGetUserOrUndefined;
+            Object.defineProperty(oidc, "user", {
+                enumerable: true,
+                get: () => {
+                    evtIsUserUsed.current = true;
+                    return resultOfGetUser.user;
+                }
+            });
+        }
+
+        return oidc;
     }
 
     async function getOidc(params?: {
         assert?: "user logged in" | "user not logged in" | "init completed";
-    }): Promise<GetOidc.Oidc<DecodedIdToken>> {
+    }): Promise<GetOidc.Oidc<DecodedIdToken, User>> {
         if (!isBrowser) {
             throw new Error(
                 [
@@ -410,7 +587,7 @@ export function createOidcSpaUtils<
         }
 
         return oidcCore.isUserLoggedIn
-            ? id<GetOidc.Oidc.LoggedIn<DecodedIdToken>>({
+            ? id<GetOidc.Oidc.LoggedIn<DecodedIdToken, User>>({
                   issuerUri: oidcCore.issuerUri,
                   clientId: oidcCore.clientId,
                   validRedirectUri: oidcCore.validRedirectUri,
@@ -455,7 +632,8 @@ export function createOidcSpaUtils<
                       const { unsubscribe } = evtAutoLogoutState.subscribe(next);
 
                       return { unsubscribeFromAutoLogoutState: unsubscribe };
-                  }
+                  },
+                  getUser: oidcCore.getUser
               })
             : id<GetOidc.Oidc.NotLoggedIn>({
                   issuerUri: oidcCore.issuerUri,
@@ -474,7 +652,7 @@ export function createOidcSpaUtils<
     const bootstrapOidc = (
         getParamsOfBootstrapOrDirectValue: GetterOrDirectValue<
             { process: { env: Record<string, string> } },
-            ParamsOfBootstrap<AutoLogin, DecodedIdToken, AccessTokenClaims>
+            ParamsOfBootstrap<AutoLogin, DecodedIdToken, User, AccessTokenClaims>
         >
     ) => {
         if (hasBootstrapBeenCalled) {
@@ -541,57 +719,96 @@ export function createOidcSpaUtils<
             assert(prModuleCore !== undefined);
 
             const paramsOfBootstrap = await (async () => {
-                class OidcSpaServerEnvRetrievalError extends Error {
-                    constructor(params: { envName: string }) {
-                        super(`oidc-spa: Env value ${params.envName} couldn't be pulled from server`);
-                        Object.setPrototypeOf(this, new.target.prototype);
-                    }
-                }
+                let envNamesToPullFromServer = new Set<string>();
 
-                const env_server_proxy = new Proxy(
-                    publicEnvNames.size === 0 ? {} : await fetchServerEnvVariableValues(),
-                    {
-                        get: (target, envName) => {
-                            assert(typeof envName === "string");
+                const env: Record<string, string> = {};
 
-                            if (!Object.prototype.hasOwnProperty.call(target, envName)) {
-                                throw new OidcSpaServerEnvRetrievalError({ envName });
-                            }
+                const env_proxy = new Proxy(env, {
+                    get: (...[, envName]) => {
+                        assert(typeof envName === "string");
 
-                            return target[envName];
-                        },
-                        has: (target, envName) => {
-                            assert(typeof envName === "string");
+                        if (envName in env) {
+                            return env[envName];
+                        }
 
-                            if (!Object.prototype.hasOwnProperty.call(target, envName)) {
-                                throw new OidcSpaServerEnvRetrievalError({ envName });
-                            }
+                        envNamesToPullFromServer.add(envName);
 
+                        return "oidc_spa_probe";
+                    },
+                    has: (...[, envName]) => {
+                        assert(typeof envName === "string");
+
+                        if (envName in env) {
                             return true;
                         }
+
+                        envNamesToPullFromServer.add(envName);
+
+                        return true;
                     }
-                ) as Record<string, string>;
+                });
 
-                let paramsOfBootstrap: ParamsOfBootstrap<AutoLogin, DecodedIdToken, AccessTokenClaims>;
+                let result:
+                    | {
+                          hasThrown: false;
+                          paramsOfBootstrap: ParamsOfBootstrap<
+                              AutoLogin,
+                              DecodedIdToken,
+                              User,
+                              AccessTokenClaims
+                          >;
+                      }
+                    | {
+                          hasThrown: true;
+                          error: unknown;
+                      }
+                    | undefined = undefined;
 
-                try {
-                    paramsOfBootstrap = getParamsOfBootstrap({ process: { env: env_server_proxy } });
-                } catch (error) {
-                    if (error instanceof OidcSpaServerEnvRetrievalError) {
-                        throw error;
+                while (true) {
+                    envNamesToPullFromServer = new Set();
+
+                    result = undefined;
+
+                    try {
+                        const paramsOfBootstrap = getParamsOfBootstrap({ process: { env: env_proxy } });
+                        result = {
+                            hasThrown: false,
+                            paramsOfBootstrap
+                        };
+                    } catch (error) {
+                        result = {
+                            hasThrown: true,
+                            error
+                        };
                     }
 
+                    if (envNamesToPullFromServer.size === 0) {
+                        break;
+                    }
+
+                    Object.entries(
+                        await fetchServerEnvVariableValues({
+                            data: {
+                                envVarNames: Array.from(envNamesToPullFromServer)
+                            }
+                        })
+                    ).forEach(([envName, value]) => {
+                        env[envName] = value;
+                    });
+                }
+
+                if (result.hasThrown) {
                     throw new Error(
                         [
                             "oidc-spa: The function argument passed to bootstrapOidc",
                             "has thrown when invoked."
                         ].join(" "),
                         //@ts-expect-error
-                        { cause: error }
+                        { cause: result.error }
                     );
                 }
 
-                return paramsOfBootstrap;
+                return result.paramsOfBootstrap;
             })();
 
             dParamsOfBootstrap.resolve(paramsOfBootstrap);
@@ -600,6 +817,8 @@ export function createOidcSpaUtils<
                 case "mock":
                     {
                         const { createMockOidc } = await import("../../core/createMockOidc");
+
+                        const user_mock = paramsOfBootstrap.user_mock ?? user_mock_static;
 
                         const oidcCore = await createMockOidc({
                             // NOTE: The `as false` is lying here, it's just to preserve some level of type-safety.
@@ -622,10 +841,27 @@ export function createOidcSpaUtils<
                                             "specify decodedIdToken_mock when calling bootstrapOidc()"
                                         ].join(" ")
                                     })
-                            }
+                            },
+                            mockedUser: user_mock
                         });
 
                         dOidcCoreOrInitializationError.resolve(oidcCore);
+
+                        set_result_of_getUser: {
+                            if (user_mock === undefined) {
+                                dResultOfGetUserOrInitializationErrorOrUndefined.resolve(undefined);
+                                break set_result_of_getUser;
+                            }
+
+                            if (!oidcCore.isUserLoggedIn) {
+                                dResultOfGetUserOrInitializationErrorOrUndefined.resolve(undefined);
+                                break set_result_of_getUser;
+                            }
+
+                            dResultOfGetUserOrInitializationErrorOrUndefined.resolve(
+                                await oidcCore.getUser()
+                            );
+                        }
                     }
                     break;
                 case "real":
@@ -635,7 +871,7 @@ export function createOidcSpaUtils<
                         const { createOidc } = await prModuleCore;
 
                         let oidcCoreOrInitializationError:
-                            | Oidc_core<DecodedIdToken>
+                            | Oidc_core<DecodedIdToken, User>
                             | OidcInitializationError;
 
                         try {
@@ -657,17 +893,62 @@ export function createOidcSpaUtils<
                                 __unsafe_useIdTokenAsAccessToken:
                                     paramsOfBootstrap.__unsafe_useIdTokenAsAccessToken,
                                 autoLogoutParams: paramsOfBootstrap.autoLogoutParams,
-                                disableDPoP: paramsOfBootstrap.disableDPoP
+                                disableDPoP: paramsOfBootstrap.disableDPoP,
+                                createUser
                             });
                         } catch (error) {
                             if (!(error instanceof OidcInitializationError)) {
                                 throw error;
                             }
                             dOidcCoreOrInitializationError.resolve(error);
+                            dResultOfGetUserOrInitializationErrorOrUndefined.resolve(error);
                             return;
                         }
 
                         dOidcCoreOrInitializationError.resolve(oidcCoreOrInitializationError);
+
+                        set_result_of_getUser: {
+                            if (createUser === undefined) {
+                                dResultOfGetUserOrInitializationErrorOrUndefined.resolve(undefined);
+                                break set_result_of_getUser;
+                            }
+
+                            if (!oidcCoreOrInitializationError.isUserLoggedIn) {
+                                dResultOfGetUserOrInitializationErrorOrUndefined.resolve(undefined);
+                                break set_result_of_getUser;
+                            }
+
+                            let resultOfGetUser: Awaited<
+                                ReturnType<Oidc_core.LoggedIn<DecodedIdToken, User>["getUser"]>
+                            >;
+
+                            try {
+                                resultOfGetUser = await oidcCoreOrInitializationError.getUser();
+                            } catch (error) {
+                                dResultOfGetUserOrInitializationErrorOrUndefined.resolve(
+                                    new OidcInitializationError({
+                                        isAuthServerLikelyDown: false,
+                                        messageOrCause: new Error(
+                                            "The initial invocation of createUser threw an error",
+                                            // @ts-expect-error
+                                            {
+                                                cause:
+                                                    error instanceof Error
+                                                        ? error
+                                                        : new Error(`${error}`)
+                                            }
+                                        )
+                                    })
+                                );
+                                break set_result_of_getUser;
+                            }
+
+                            dResultOfGetUserOrInitializationErrorOrUndefined.resolve(resultOfGetUser);
+
+                            resultOfGetUser.subscribeToUserChange(({ user }) => {
+                                resultOfGetUser.user = user;
+                            });
+                        }
                     }
                     break;
             }
@@ -755,7 +1036,7 @@ export function createOidcSpaUtils<
     enforceLogin[BEFORE_LOAD_FN_BRAND_PROPERTY_NAME] = true;
 
     const prValidateAndGetAccessTokenClaims =
-        createValidateAndGetAccessTokenClaims === undefined || isBrowser
+        createValidateAndGetAccessTokenClaims === undefined
             ? undefined
             : dParamsOfBootstrap.pr.then(paramsOfBootstrap =>
                   createValidateAndGetAccessTokenClaims({
@@ -983,8 +1264,26 @@ export function createOidcSpaUtils<
     };
 }
 
-const fetchServerEnvVariableValues = createServerFn({ method: "GET" }).handler(async () =>
-    Object.fromEntries(
-        Array.from(publicEnvNames).map(envVarName => [envVarName, process.env[envVarName] ?? ""])
-    )
-);
+const fetchServerEnvVariableValues = createServerFn({ method: "GET" })
+    .validator((data: { envVarNames: string[] }) => {
+        if (typeof data !== "object" || data === null) {
+            throw new Error("Expected an object");
+        }
+
+        const { envVarNames } = data as Record<string, unknown>;
+
+        assert(
+            typeGuard<string[]>(
+                envVarNames,
+                Array.isArray(envVarNames) && envVarNames.every(name => typeof name === "string")
+            )
+        );
+
+        return { envVarNames };
+    })
+    .handler(async ({ data }) => {
+        const { envVarNames } = data;
+        return Object.fromEntries(
+            envVarNames.map(envVarName => [envVarName, process.env[envVarName] ?? ""])
+        );
+    });

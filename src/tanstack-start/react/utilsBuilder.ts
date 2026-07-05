@@ -1,4 +1,9 @@
-import type { OidcSpaUtils, CreateValidateAndGetAccessTokenClaims, ParamsOfBootstrap } from "./types";
+import type {
+    OidcSpaUtils,
+    CreateValidateAndGetAccessTokenClaims,
+    ParamsOfBootstrap,
+    CreateUser
+} from "./types";
 import type { DecodedAccessToken_RFC9068 as AccessTokenClaims_RFC9068 } from "../../server";
 import type { Oidc as Oidc_core } from "../../core";
 import { assert, type Equals } from "../../tools/tsafe/assert";
@@ -9,10 +14,12 @@ import { createOidcSpaUtils } from "./createOidcSpaUtils";
 export type OidcSpaUtilsBuilder<
     AutoLogin extends boolean = false,
     DecodedIdToken extends Record<string, unknown> = Oidc_core.Tokens.DecodedIdToken_OidcCoreSpec,
+    User = never,
     AccessTokenClaims extends Record<string, unknown> | undefined = undefined,
     ExcludedMethod extends
         | "withAutoLogin"
         | "withExpectedDecodedIdTokenShape"
+        | "withUser"
         | "withAccessTokenValidation"
         | "createUtils" = never
 > = Omit<
@@ -20,6 +27,7 @@ export type OidcSpaUtilsBuilder<
         withAutoLogin: () => OidcSpaUtilsBuilder<
             true,
             DecodedIdToken,
+            User,
             AccessTokenClaims,
             ExcludedMethod | "withAutoLogin"
         >;
@@ -32,8 +40,19 @@ export type OidcSpaUtilsBuilder<
         }) => OidcSpaUtilsBuilder<
             AutoLogin,
             DecodedIdToken,
+            User,
             AccessTokenClaims,
             ExcludedMethod | "withExpectedDecodedIdTokenShape"
+        >;
+        withUser: <User>(params: {
+            createUser: CreateUser<User>;
+            user_mock?: NoInfer<User>;
+        }) => OidcSpaUtilsBuilder<
+            AutoLogin,
+            DecodedIdToken,
+            User,
+            AccessTokenClaims,
+            ExcludedMethod | "withUser"
         >;
         withAccessTokenValidation: {
             <AccessTokenClaims extends Record<string, unknown> = AccessTokenClaims_RFC9068>(params: {
@@ -48,6 +67,7 @@ export type OidcSpaUtilsBuilder<
             }): OidcSpaUtilsBuilder<
                 AutoLogin,
                 DecodedIdToken,
+                User,
                 AccessTokenClaims,
                 ExcludedMethod | "withAccessTokenValidation"
             >;
@@ -57,11 +77,12 @@ export type OidcSpaUtilsBuilder<
             }): OidcSpaUtilsBuilder<
                 AutoLogin,
                 DecodedIdToken,
+                User,
                 AccessTokenClaims,
                 ExcludedMethod | "withAccessTokenValidation"
             >;
         };
-        createUtils: () => OidcSpaUtils<AutoLogin, DecodedIdToken, AccessTokenClaims>;
+        createUtils: () => OidcSpaUtils<AutoLogin, DecodedIdToken, User, AccessTokenClaims>;
     },
     ExcludedMethod
 >;
@@ -69,6 +90,7 @@ export type OidcSpaUtilsBuilder<
 function createOidcSpaUtilsBuilder<
     AutoLogin extends boolean = false,
     DecodedIdToken extends Record<string, unknown> = Oidc_core.Tokens.DecodedIdToken_OidcCoreSpec,
+    User = never,
     AccessTokenClaims extends Record<string, unknown> | undefined = undefined
 >(params: {
     autoLogin: AutoLogin;
@@ -79,27 +101,44 @@ function createOidcSpaUtilsBuilder<
     createValidateAndGetAccessTokenClaims:
         | CreateValidateAndGetAccessTokenClaims<AccessTokenClaims>
         | undefined;
-}): OidcSpaUtilsBuilder<AutoLogin, DecodedIdToken, AccessTokenClaims> {
+    createUser: CreateUser<User> | undefined;
+    user_mock: User | undefined;
+}): OidcSpaUtilsBuilder<AutoLogin, DecodedIdToken, User, AccessTokenClaims> {
     return {
         withAutoLogin: () =>
             createOidcSpaUtilsBuilder({
                 autoLogin: true,
                 decodedIdTokenSchema: params.decodedIdTokenSchema,
                 decodedIdToken_mock: params.decodedIdToken_mock,
-                createValidateAndGetAccessTokenClaims: params.createValidateAndGetAccessTokenClaims
+                createValidateAndGetAccessTokenClaims: params.createValidateAndGetAccessTokenClaims,
+                createUser: params.createUser,
+                user_mock: params.user_mock
             }),
         withExpectedDecodedIdTokenShape: ({ decodedIdTokenSchema, decodedIdToken_mock }) =>
             createOidcSpaUtilsBuilder({
                 autoLogin: params.autoLogin,
                 decodedIdTokenSchema,
                 decodedIdToken_mock: decodedIdToken_mock,
-                createValidateAndGetAccessTokenClaims: params.createValidateAndGetAccessTokenClaims
+                createValidateAndGetAccessTokenClaims: params.createValidateAndGetAccessTokenClaims,
+                createUser: params.createUser,
+                user_mock: params.user_mock
+            }),
+        withUser: ({ createUser, user_mock }) =>
+            createOidcSpaUtilsBuilder({
+                autoLogin: params.autoLogin,
+                decodedIdTokenSchema: params.decodedIdTokenSchema,
+                decodedIdToken_mock: params.decodedIdToken_mock,
+                createValidateAndGetAccessTokenClaims: params.createValidateAndGetAccessTokenClaims,
+                createUser,
+                user_mock
             }),
         withAccessTokenValidation: params_scope =>
             createOidcSpaUtilsBuilder({
                 autoLogin: params.autoLogin,
                 decodedIdTokenSchema: params.decodedIdTokenSchema,
                 decodedIdToken_mock: params.decodedIdToken_mock,
+                createUser: params.createUser,
+                user_mock: params.user_mock,
                 createValidateAndGetAccessTokenClaims: ((): any => {
                     switch (params_scope.type) {
                         case "RFC 9068: JSON Web Token (JWT) Profile for OAuth 2.0 Access Tokens": {
@@ -128,11 +167,13 @@ function createOidcSpaUtilsBuilder<
                 })()
             }),
         createUtils: () =>
-            createOidcSpaUtils<AutoLogin, DecodedIdToken, AccessTokenClaims>({
+            createOidcSpaUtils<AutoLogin, DecodedIdToken, User, AccessTokenClaims>({
                 autoLogin: params.autoLogin,
                 decodedIdTokenSchema: params.decodedIdTokenSchema,
                 decodedIdToken_mock: params.decodedIdToken_mock,
-                createValidateAndGetAccessTokenClaims: params.createValidateAndGetAccessTokenClaims
+                createValidateAndGetAccessTokenClaims: params.createValidateAndGetAccessTokenClaims,
+                createUser: params.createUser,
+                user_mock: params.user_mock
             })
     };
 }
@@ -140,6 +181,8 @@ function createOidcSpaUtilsBuilder<
 export const oidcSpaUtilsBuilder = createOidcSpaUtilsBuilder({
     autoLogin: false,
     createValidateAndGetAccessTokenClaims: undefined,
+    createUser: undefined,
+    user_mock: undefined,
     decodedIdToken_mock: undefined,
     decodedIdTokenSchema: undefined
 });
