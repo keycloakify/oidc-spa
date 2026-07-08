@@ -999,6 +999,15 @@ export async function createOidc_nonMemoized<
                                 });
                             }
 
+                            if (error.message === "Invalid client or Invalid client credentials") {
+                                return (
+                                    await import("./diagnostic")
+                                ).createInvalidClientCredentialsInitializationError({
+                                    clientId,
+                                    issuerUri
+                                });
+                            }
+
                             {
                                 const authResponse_error = authResponse.error;
 
@@ -1191,6 +1200,15 @@ export async function createOidc_nonMemoized<
                         return (
                             await import("./diagnostic")
                         ).createFailedToFetchTokenEndpointInitializationError({
+                            clientId,
+                            issuerUri
+                        });
+                    }
+
+                    if (error.message === "Invalid client or Invalid client credentials") {
+                        return (
+                            await import("./diagnostic")
+                        ).createInvalidClientCredentialsInitializationError({
                             clientId,
                             issuerUri
                         });
