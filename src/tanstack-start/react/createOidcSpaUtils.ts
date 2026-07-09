@@ -1022,7 +1022,7 @@ export function createOidcSpaUtils<
 }
 
 const fetchServerEnvVariableValues = createServerFn({ method: "GET" })
-    .inputValidator((data: { envVarNames: string[] }) => {
+    .validator((data: { envVarNames: string[] }) => {
         if (typeof data !== "object" || data === null) {
             throw new Error("Expected an object");
         }
