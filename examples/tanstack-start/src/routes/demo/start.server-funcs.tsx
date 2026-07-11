@@ -17,7 +17,7 @@ const getTodos = createServerFn({ method: "GET" })
     });
 
 const addTodo = createServerFn({ method: "POST" })
-    .inputValidator((d: string) => d)
+    .validator((d: string) => d)
     .middleware([oidcFnMiddleware({ assert: "user logged in" })])
     .handler(async ({ data, context: { oidc } }) => {
         const userId = oidc.accessTokenClaims.sub;

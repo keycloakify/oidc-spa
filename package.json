@@ -54,7 +54,7 @@
         "@angular/router": "*",
         "@nuxt/kit": "*",
         "@tanstack/react-router": "*",
-        "@tanstack/react-start": "*",
+        "@tanstack/react-start": ">=1.168.25",
         "@types/react": "*",
         "react": "*",
         "rxjs": "*"
@@ -101,7 +101,7 @@
         "@babel/types": "^7.28.4",
         "@nuxt/kit": "^4.3.1",
         "@nuxt/schema": "^4.3.1",
-        "@tanstack/react-start": "^1.132.0",
+        "@tanstack/react-start": "^1.168.25",
         "@types/babel__generator": "^7.6.4",
         "@types/babel__traverse": "^7.28.0",
         "@types/node": "^20.2.1",
