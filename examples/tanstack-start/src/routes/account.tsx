@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { enforceLogin, useOidc } from "@/oidc";
+import { enforceLogin, useOidc } from "#/oidc";
 import { isKeycloak, createKeycloakUtils } from "oidc-spa/keycloak";
 import { ExternalLink } from "lucide-react";
 

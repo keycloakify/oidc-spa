@@ -1,7 +1,9 @@
 import { HeadContent, Scripts, createRootRoute } from "@tanstack/react-router";
+import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
+import { TanStackDevtools } from "@tanstack/react-devtools";
 
-import Header from "@/components/Header";
-import { AutoLogoutWarningOverlay } from "@/components/AutoLogoutWarningOverlay";
+import Header from "#/components/Header";
+import { AutoLogoutWarningOverlay } from "#/components/AutoLogoutWarningOverlay";
 
 import appCss from "../styles.css?url";
 
@@ -49,6 +51,17 @@ function RootDocument({ children }: { children: React.ReactNode }) {
                     </main>
                 </div>
                 <AutoLogoutWarningOverlay />
+                <TanStackDevtools
+                    config={{
+                        position: "bottom-right"
+                    }}
+                    plugins={[
+                        {
+                            name: "Tanstack Router",
+                            render: <TanStackRouterDevtoolsPanel />
+                        }
+                    ]}
+                />
                 <Scripts />
             </body>
         </html>

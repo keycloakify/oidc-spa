@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { oidcRequestMiddleware } from "@/oidc";
-import { getTodosStore } from "@/data/todos";
+import { oidcRequestMiddleware } from "#/oidc";
+import { getTodosStore } from "#/data/todos";
 
 export const Route = createFileRoute("/demo/api/todos")({
     server: {

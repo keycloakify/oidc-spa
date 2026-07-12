@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { createFileRoute } from "@tanstack/react-router";
-import { enforceLogin, getOidc, oidcFnMiddleware, useOidc, fetchWithAuth } from "@/oidc";
-import Spinner from "@/components/Spinner";
+import { enforceLogin, getOidc, oidcFnMiddleware, useOidc, fetchWithAuth } from "#/oidc";
+import Spinner from "#/components/Spinner";
 import { ShieldCheck, ShieldAlert, ExternalLink } from "lucide-react";
 import { createKeycloakUtils } from "oidc-spa/keycloak";
 

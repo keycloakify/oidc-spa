@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Lock, ShieldCheck, ExternalLink, ListTodo, Server, Sparkles } from "lucide-react";
-import { useOidc } from "@/oidc";
+import { useOidc } from "#/oidc";
 
 export const Route = createFileRoute("/")({ component: App });
 
