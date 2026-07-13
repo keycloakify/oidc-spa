@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useOidc } from "~/oidc";
+import { useOidc } from "#/oidc";
 
 export const Route = createFileRoute("/")({
     head: () => ({

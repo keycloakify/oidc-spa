@@ -1,16 +1,16 @@
-import React from "react";
 import ReactDOM from "react-dom/client";
 import { RouterProvider } from "@tanstack/react-router";
 import { getRouter } from "./router";
-import { OidcInitializationGate } from "~/oidc";
-import "./index.css";
+import { OidcInitializationGate } from "#/oidc";
 
 const router = getRouter();
+const rootElement = document.getElementById("app")!;
 
-ReactDOM.createRoot(document.getElementById("root")!).render(
-    <React.StrictMode>
+if (!rootElement.innerHTML) {
+    const root = ReactDOM.createRoot(rootElement);
+    root.render(
         <OidcInitializationGate>
             <RouterProvider router={router} />
         </OidcInitializationGate>
-    </React.StrictMode>
-);
+    );
+}

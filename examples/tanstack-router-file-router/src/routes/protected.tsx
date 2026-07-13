@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useOidc, enforceLogin, fetchWithAuth } from "~/oidc";
+import { useOidc, enforceLogin, fetchWithAuth } from "#/oidc";
 import { isKeycloak, createKeycloakUtils } from "oidc-spa/keycloak";
 
 type DemoPost = { id: number; title: string; body: string };
