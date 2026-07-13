@@ -43,30 +43,10 @@ export function createHandleClientEntrypoint(params: {
         projectType
     });
 
-    async function load_handleClientEntrypoint(params: {
-        id: string;
-        pluginContext: PluginContext;
-    }): Promise<null | string> {
-        const { id, pluginContext } = params;
-        const { path: rawPath, queryParams } = splitId(id);
-
-        const normalizedRequestPath = normalizeRequestPath(rawPath);
-        const isMatch =
-            normalizedRequestPath && normalizedRequestPath === entryResolution.normalizedPath;
-
-        if (!isMatch) {
-            return null;
-        }
-
-        const isOriginalRequest = queryParams.getAll(ORIGINAL_QUERY_PARAM).includes("true");
-
-        if (isOriginalRequest) {
-            entryResolution.watchFiles.forEach(file => pluginContext.addWatchFile(file));
-            return fs.readFile(entryResolution.absolutePath, "utf8");
-        }
-
-        entryResolution.watchFiles.forEach(file => pluginContext.addWatchFile(file));
-
+    function getClientEntrypointSource(params: {
+        applicationEntrypointImportSpecifier: string;
+    }): string {
+        const { applicationEntrypointImportSpecifier } = params;
         const { browserRuntimeFreeze, tokenSubstitution, DPoP, sessionRestorationMethod } =
             oidcSpaVitePluginParams ?? {};
 
@@ -94,8 +74,7 @@ export function createHandleClientEntrypoint(params: {
             `});`,
             ``,
             `if (shouldLoadApp) {`,
-            // prettier-ignore
-            `import("./${path.basename(entryResolution.absolutePath)}?${ORIGINAL_QUERY_PARAM}=true");`,
+            `import(${JSON.stringify(applicationEntrypointImportSpecifier)});`,
             `}`
         ].join("\n");
 
@@ -141,7 +120,42 @@ export function createHandleClientEntrypoint(params: {
         }
     }
 
-    return { load_handleClientEntrypoint };
+    async function load_handleClientEntrypoint(params: {
+        id: string;
+        pluginContext: PluginContext;
+        doUseOriginalEntrypoint: boolean;
+        buildMarker?: string;
+    }): Promise<null | string> {
+        const { id, pluginContext, doUseOriginalEntrypoint, buildMarker } = params;
+        const { path: rawPath, queryParams } = splitId(id);
+
+        const normalizedRequestPath = normalizeRequestPath(rawPath);
+        const isMatch =
+            normalizedRequestPath && normalizedRequestPath === entryResolution.normalizedPath;
+
+        if (!isMatch) {
+            return null;
+        }
+
+        const isOriginalRequest =
+            doUseOriginalEntrypoint || queryParams.getAll(ORIGINAL_QUERY_PARAM).includes("true");
+
+        if (isOriginalRequest) {
+            entryResolution.watchFiles.forEach(file => pluginContext.addWatchFile(file));
+            const originalSource = await fs.readFile(entryResolution.absolutePath, "utf8");
+            return buildMarker === undefined ? originalSource : `${buildMarker}\n${originalSource}`;
+        }
+
+        entryResolution.watchFiles.forEach(file => pluginContext.addWatchFile(file));
+
+        return getClientEntrypointSource({
+            applicationEntrypointImportSpecifier: `./${path.basename(
+                entryResolution.absolutePath
+            )}?${ORIGINAL_QUERY_PARAM}=true`
+        });
+    }
+
+    return { load_handleClientEntrypoint, getClientEntrypointSource };
 }
 
 function resolveEntryForProject({
