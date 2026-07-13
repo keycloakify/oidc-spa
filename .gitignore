@@ -53,3 +53,4 @@ jspm_packages
 /tanstack.com
 /react-router-website
 /oidc-client-ts
+/examples/tanstack-start_legacy/

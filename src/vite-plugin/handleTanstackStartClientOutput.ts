@@ -18,6 +18,14 @@ type MutableOutputChunk = {
     map: Rollup.SourceMap | null;
 };
 
+type OutputChunkWithViteMetadata = {
+    viteMetadata?: {
+        importedAssets: Set<string>;
+        importedCss: Set<string>;
+        __modules?: Rollup.OutputChunk["modules"];
+    };
+};
+
 export function createHandleTanstackStartClientOutput(params: {
     resolvedConfig: ResolvedConfig;
     getClientEntrypointSource: (params: { applicationEntrypointImportSpecifier: string }) => string;
@@ -159,6 +167,10 @@ export function createHandleTanstackStartClientOutput(params: {
                       }
         });
 
+        for (const fileName of [finalizedBootstrapFileName, applicationEntryFileName]) {
+            initializeViteMetadataForPrebuiltChunk({ bundle, fileName });
+        }
+
         const bootstrapImportSpecifier = toRelativeImportSpecifier({
             importerFileName: entryChunk.fileName,
             importedFileName: finalizedBootstrapFileName
@@ -171,6 +183,32 @@ export function createHandleTanstackStartClientOutput(params: {
     }
 
     return { resolveId, load, buildStart, generateBundle, applicationEntryBuildMarker };
+}
+
+function initializeViteMetadataForPrebuiltChunk(params: {
+    bundle: Rollup.OutputBundle;
+    fileName: string;
+}): void {
+    const { bundle, fileName } = params;
+    const output = bundle[fileName];
+
+    if (output === undefined || output.type !== "chunk") {
+        return;
+    }
+
+    const outputWithViteMetadata = output as unknown as OutputChunkWithViteMetadata;
+
+    if (outputWithViteMetadata.viteMetadata !== undefined) {
+        return;
+    }
+
+    // Rollup exposes prebuilt chunks emitted during generateBundle immediately,
+    // after Vite's renderChunk metadata initializer has already run.
+    outputWithViteMetadata.viteMetadata = {
+        importedAssets: new Set(),
+        importedCss: new Set(),
+        __modules: output.modules
+    };
 }
 
 function getApplicationEntryBuildMarker(params: { bootstrapSource: string }): string {
