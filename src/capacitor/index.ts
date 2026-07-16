@@ -1,0 +1,1 @@
+export { CapacitorNavigator } from "./CapacitorNavigator";

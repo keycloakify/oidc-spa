@@ -2,8 +2,10 @@ import {
     UserManager as OidcClientTsUserManager,
     WebStorageStateStore,
     type User as OidcClientTsUser,
-    InMemoryWebStorage
+    InMemoryWebStorage,
+    type INavigator
 } from "../vendor/frontend/oidc-client-ts";
+import { localStorageAdapter } from "../tools/localStorageAdapter";
 import { type OidcMetadata, fetchOidcMetadata } from "./OidcMetadata";
 import { assert, type Equals } from "../tools/tsafe/assert";
 import { id } from "../tools/tsafe/id";
@@ -33,7 +35,10 @@ import {
     createLoginOrGoToAuthServer,
     getPrSafelyRestoredFromBfCacheAfterLoginBackNavigationOrInitializationError
 } from "./loginOrGoToAuthServer";
-import { createLazySessionStorage } from "../tools/lazySessionStorage";
+import {
+    createLazyAsyncSessionStorage,
+    type LazyAsyncSessionStorage
+} from "../tools/lazyAsyncSessionStorage";
 import {
     startLoginOrRefreshProcess,
     waitForAllOtherOngoingLoginOrRefreshProcessesToComplete
@@ -63,7 +68,17 @@ import {
 } from "../tools/loadWebcryptoLinerShim";
 import type { Evt } from "../tools/Evt";
 import type { ParamsOfCreateGetServerDateNow } from "../tools/getServerDateNow";
-import { SESSION_STORAGE_GLOBAL_PREFIX } from "../tools/lazySessionStorage";
+import { SESSION_STORAGE_GLOBAL_PREFIX } from "../tools/lazyAsyncSessionStorage";
+import type { AsyncStorage } from "../vendor/frontend/oidc-client-ts";
+import { sessionStorageAdapter } from "../tools/sessionStorageAdapter";
+import {
+    waitForExternalRedirectUrlInitialization,
+    peekExternalRedirectUrl,
+    clearExternalRedirectUrl
+} from "./externalRedirectUrl";
+import { hasOidcRedirectResponse, extractOidcRedirectResponse } from "./parseOidcRedirectUrl";
+import { BaseNavigator, type BaseNavigatorWarning } from "./BaseNavigator";
+import { getRefreshTokenExpirationTime } from "./getRefreshTokenExpirationTime";
 
 // NOTE: Replaced at build time
 const VERSION = "{{OIDC_SPA_VERSION}}";
@@ -256,6 +271,9 @@ export type ParamsOfCreateOidc<
      *
      * This can make sense if you have multiple clients to talk with different
      * API and no iframe capabilities.
+     *
+     * In native environments (for example Capacitor with `isNativeApp: true`),
+     * this value is used as the OIDC callback URI and should therefore be set.
      */
     postLoginRedirectUrl?: string;
 
@@ -264,11 +282,86 @@ export type ParamsOfCreateOidc<
      * To enable DPoP see: https://docs.oidc-spa.dev/v/v10/security-features/dpop
      * */
     disableDPoP?: true;
+
+    /**
+     * Custom storage adapter for oidc-spa persisted auth meta-state.
+     * If not provided, defaults to browser localStorage.
+     *
+     * In native mode, this adapter is also used for the oidc-client-ts state store.
+     * In browser/web mode, the redirect/callback state store still relies on
+     * localStorage for compatibility with synchronous early-init and iframe-based flows.
+     *
+     * Use this to provide a Capacitor Storage adapter for mobile environments.
+     */
+    storageAdapter?: AsyncStorage;
+
+    /**
+     * Optional separate storage adapter for persisting tokens specifically.
+     * If not provided, defaults to sessionStorage (browser) or equivalent.
+     *
+     * When provided alongside storageAdapter:
+     * - Persisted auth meta-state uses storageAdapter (default: localStorage)
+     * - Token storage uses tokenStorageAdapter (default: sessionStorage)
+     *
+     * In browser/web mode, this does not affect the redirect/callback state store,
+     * which remains on localStorage.
+     *
+     * Useful for mobile environments where you may want to separate
+     * OIDC state (PKCE, nonce) from sensitive tokens.
+     * For production use, choose the persistence strategy based on your
+     * security requirements. If persisted tokens need stronger protection,
+     * prefer a secure storage or biometric-gated wrapper.
+     */
+    tokenStorageAdapter?: AsyncStorage;
+
+    /**
+     * Custom navigator for handling redirects.
+     * If not provided, uses the default browser navigation.
+     *
+     * For Capacitor, import and instantiate CapacitorNavigator from "oidc-spa/capacitor".
+     *
+     * Example:
+     * ```typescript
+     * import { CapacitorNavigator } from "oidc-spa/capacitor";
+     * navigator: new CapacitorNavigator()
+     * ```
+     */
+    navigator?: BaseNavigator | INavigator;
+
+    /**
+     * Optional warning hook for navigator-level warnings.
+     * Useful for forwarding non-fatal native flow issues to your telemetry.
+     */
+    onNavigatorWarning?: (warning: BaseNavigatorWarning) => void;
+
+    /**
+     * Indicates if the app is running as a native mobile app (e.g., Capacitor).
+     * When true, iframe-based session restoration is automatically disabled,
+     * falling back to full-page redirect.
+     *
+     * This is equivalent to setting `sessionRestorationMethod: "full page redirect"`
+     * but with a clearer semantic meaning for mobile apps.
+     *
+     * Note: If you provide a custom navigator (e.g., CapacitorNavigator),
+     * you should also set this to true for optimal behavior.
+     */
+    isNativeApp?: boolean;
+
+    /**
+     * Native-only session restoration behavior.
+     *
+     * - "full-page-redirect" (default): keep redirect-based restoration behavior.
+     * - "prefer-local-restore": first attempt restoring from locally persisted user state,
+     *   then fallback to redirect if no valid local session can be restored.
+     */
+    nativeSessionRestoreMode?: "full-page-redirect" | "prefer-local-restore";
 };
 
 const globalContext = {
     prOidcByConfigId: new Map<string, Promise<Oidc<any>>>(),
-    hasLogoutBeenCalled: id<boolean>(false),
+    // NOTE: Must be per-config to avoid cross-client interference when multiple
+    // OIDC instances coexist in the same runtime.
+    hasLogoutBeenCalledByConfigId: new Map<string, boolean>(),
     dExports_earlyInit: new Deferred<Exports_earlyInit>(),
     dExports_tokenSubstitution: new Deferred<Exports_tokenSubstitution>(),
     dExports_DPoP: new Deferred<Exports_DPoP>()
@@ -449,8 +542,20 @@ export async function createOidc_nonMemoized<
         __metadata,
         disableDPoP: disableDPoP_params = false,
         sessionRestorationMethod: sessionRestorationMethod_params,
-        BASE_URL: BASE_URL_params
+        BASE_URL: BASE_URL_params,
+        storageAdapter,
+        tokenStorageAdapter,
+        navigator,
+        onNavigatorWarning,
+        isNativeApp = false,
+        nativeSessionRestoreMode = "full-page-redirect"
     } = params;
+
+    const effectiveStorageAdapter = storageAdapter ?? localStorageAdapter;
+    const effectiveTokenStorageAdapter = tokenStorageAdapter ?? sessionStorageAdapter;
+
+    const shouldPreferLocalRestoreInNative =
+        isNativeApp && nativeSessionRestoreMode === "prefer-local-restore";
 
     const exports_earlyInit = await (async () => {
         const timer = window.setTimeout(() => {
@@ -492,6 +597,18 @@ export async function createOidc_nonMemoized<
 
     const { issuerUri, clientId, configId, log } = preProcessedParams;
 
+    const getHasLogoutBeenCalledForCurrentConfig = () =>
+        globalContext.hasLogoutBeenCalledByConfigId.get(configId) === true;
+
+    const setHasLogoutBeenCalledForCurrentConfig = (hasBeenCalled: boolean) => {
+        if (hasBeenCalled) {
+            globalContext.hasLogoutBeenCalledByConfigId.set(configId, true);
+            return;
+        }
+
+        globalContext.hasLogoutBeenCalledByConfigId.delete(configId);
+    };
+
     if (window.crypto.subtle === undefined) {
         log?.("window.crypto.subtle not present, lazily loading polyfills.");
         await loadWebcryptoLinerShim();
@@ -523,13 +640,30 @@ export async function createOidc_nonMemoized<
 
     const { homeUrlAndRedirectUri } = getHomeAndRedirectUri({ BASE_URL_params });
 
+    if (isNativeApp && postLoginRedirectUrl_default === undefined) {
+        throw new Error(
+            [
+                "oidc-spa: In native mode (`isNativeApp: true`), `postLoginRedirectUrl` must be configured.",
+                "It is used as the callback URI for your app deep link, for example `myapp://auth-callback`."
+            ].join(" ")
+        );
+    }
+
+    const oidcCallbackUrl =
+        isNativeApp && postLoginRedirectUrl_default !== undefined
+            ? toFullyQualifiedUrl({
+                  urlish: postLoginRedirectUrl_default,
+                  doAssertNoQueryParams: false
+              })
+            : homeUrlAndRedirectUri;
+
     log?.(
         `Calling createOidc v${VERSION} ${JSON.stringify(
             {
                 issuerUri,
                 clientId,
                 scopes,
-                validRedirectUri: homeUrlAndRedirectUri
+                validRedirectUri: oidcCallbackUrl
             },
             null,
             2
@@ -609,6 +743,10 @@ export async function createOidc_nonMemoized<
     })();
 
     const canUseIframe = (() => {
+        if (isNativeApp) {
+            return false;
+        }
+
         switch (sessionRestorationMethod) {
             case "auto":
                 break;
@@ -779,69 +917,114 @@ export async function createOidc_nonMemoized<
         }
     }
 
+    const userStore = canUseIframe
+        ? new InMemoryWebStorage()
+        : await createLazyAsyncSessionStorage({
+              storageId: configId,
+              persistenceStorage: effectiveTokenStorageAdapter
+          });
+
+    if (
+        !canUseIframe &&
+        (shouldPreferLocalRestoreInNative || evtIsThereMoreThanOneInstanceThatCantUserIframes.current)
+    ) {
+        await (userStore as LazyAsyncSessionStorage).persistCurrentStateAndSubsequentChanges();
+    }
+
+    if (!canUseIframe && !shouldPreferLocalRestoreInNative) {
+        evtIsThereMoreThanOneInstanceThatCantUserIframes.subscribe(async () => {
+            await (userStore as LazyAsyncSessionStorage).persistCurrentStateAndSubsequentChanges();
+        });
+    }
+
     const oidcClientTsUserManager =
         oidcMetadata === undefined
             ? createObjectThatThrowsIfAccessed<OidcClientTsUserManager>({
                   debugMessage: "oidc-spa: Wrong assertion 43943"
               })
-            : new OidcClientTsUserManager({
-                  stateUrlParamValue: stateUrlParamValue_instance,
-                  authority: issuerUri,
-                  client_id: clientId,
-                  redirect_uri: homeUrlAndRedirectUri,
-                  silent_redirect_uri: homeUrlAndRedirectUri,
-                  post_logout_redirect_uri: homeUrlAndRedirectUri,
-                  response_mode:
-                      isKeycloak({ issuerUri }) && !getIsStateDataCookieEnabled() ? "fragment" : "query",
-                  response_type: "code",
-                  scope: scopes.join(" "),
-                  userStore: new WebStorageStateStore({
-                      store: (() => {
-                          if (canUseIframe) {
-                              return new InMemoryWebStorage();
+            : new OidcClientTsUserManager(
+                  {
+                      stateUrlParamValue: stateUrlParamValue_instance,
+                      authority: issuerUri,
+                      client_id: clientId,
+                      redirect_uri: homeUrlAndRedirectUri,
+                      silent_redirect_uri: homeUrlAndRedirectUri,
+                      post_logout_redirect_uri: homeUrlAndRedirectUri,
+                      response_mode:
+                          isKeycloak({ issuerUri }) && !getIsStateDataCookieEnabled()
+                              ? "fragment"
+                              : "query",
+                      response_type: "code",
+                      scope: scopes.join(" "),
+                      userStore: new WebStorageStateStore({
+                          store: userStore
+                      }),
+                      stateStore: new WebStorageStateStore({
+                          store: isNativeApp ? effectiveStorageAdapter : localStorageAdapter,
+                          prefix: STATE_STORE_KEY_PREFIX
+                      }),
+                      client_secret: __unsafe_clientSecret,
+                      metadata: oidcMetadata,
+                      dpop: (() => {
+                          if (!shouldEnableDPoP) {
+                              return undefined;
                           }
 
-                          const storage = createLazySessionStorage({ storageId: configId });
+                          assert(exports_DPoP !== undefined, "49240");
 
-                          if (evtIsThereMoreThanOneInstanceThatCantUserIframes.current) {
-                              storage.persistCurrentStateAndSubsequentChanges();
-                          } else {
-                              evtIsThereMoreThanOneInstanceThatCantUserIframes.subscribe(() => {
-                                  storage.persistCurrentStateAndSubsequentChanges();
-                              });
-                          }
-
-                          return storage;
+                          return {
+                              store: exports_DPoP.createDPoPStore({
+                                  implementation: hasLoadWebcryptoLinerShimBeenCalled()
+                                      ? "in memory"
+                                      : "indexedDB",
+                                  configId,
+                                  clientId
+                              })
+                          };
                       })()
-                  }),
-                  stateStore: new WebStorageStateStore({
-                      store: localStorage,
-                      prefix: STATE_STORE_KEY_PREFIX
-                  }),
-                  client_secret: __unsafe_clientSecret,
-                  metadata: oidcMetadata,
-                  dpop: (() => {
-                      if (!shouldEnableDPoP) {
-                          return undefined;
-                      }
+                  },
+                  navigator
+              );
 
-                      assert(exports_DPoP !== undefined, "49240");
+    const getStateDataFromUserManagerStateStore = async (params: {
+        stateUrlParamValue: string;
+    }): Promise<StateData.Redirect | undefined> => {
+        const { stateUrlParamValue } = params;
 
-                      return {
-                          store: exports_DPoP.createDPoPStore({
-                              implementation: hasLoadWebcryptoLinerShimBeenCalled()
-                                  ? "in memory"
-                                  : "indexedDB",
-                              configId,
-                              clientId
-                          })
-                      };
-                  })()
-              });
+        const storedState = await oidcClientTsUserManager.settings.stateStore.get(stateUrlParamValue);
+
+        if (storedState === null) {
+            return undefined;
+        }
+
+        let parsedState: unknown;
+
+        try {
+            parsedState = JSON.parse(storedState);
+        } catch {
+            try {
+                await oidcClientTsUserManager.settings.stateStore.remove(stateUrlParamValue);
+            } catch {}
+
+            return undefined;
+        }
+
+        if (
+            !(parsedState instanceof Object) ||
+            !("data" in parsedState) ||
+            !(parsedState.data instanceof Object) ||
+            !("context" in parsedState.data) ||
+            parsedState.data.context !== "redirect"
+        ) {
+            return undefined;
+        }
+
+        return parsedState.data as StateData.Redirect;
+    };
 
     const evtInitializationOutcomeUserNotLoggedIn = createEvt<void>();
 
-    const { loginOrGoToAuthServer } = createLoginOrGoToAuthServer({
+    const { loginOrGoToAuthServer, resetOngoingAction } = createLoginOrGoToAuthServer({
         configId,
         oidcClientTsUserManager,
         transformUrlBeforeRedirect,
@@ -850,8 +1033,24 @@ export async function createOidc_nonMemoized<
         homeUrl: homeUrlAndRedirectUri,
         stateUrlParamValue_instance,
         evtInitializationOutcomeUserNotLoggedIn,
-        log
+        log,
+        oidcCallbackUrl
     });
+
+    const onAuthFlowAborted = () => {
+        resetOngoingAction({ action: "login" });
+        setHasLogoutBeenCalledForCurrentConfig(false);
+    };
+
+    if (navigator instanceof BaseNavigator) {
+        navigator.initialize({
+            tokenStorageAdapter: effectiveTokenStorageAdapter,
+            configId,
+            callbackUrl: oidcCallbackUrl,
+            onWarning: onNavigatorWarning,
+            onAuthFlowAborted
+        });
+    }
 
     const { loginSilent } = createLoginSilent({
         getEvtIframeAuthResponse,
@@ -881,6 +1080,24 @@ export async function createOidc_nonMemoized<
               isRestoredFromSessionStorage: boolean;
           }
     > => {
+        let pendingExternalRedirectUrl: string | undefined;
+        let hasLoadedPendingExternalRedirectUrl = false;
+
+        const getPendingExternalRedirectUrlIfAny = async () => {
+            if (!hasLoadedPendingExternalRedirectUrl) {
+                await waitForExternalRedirectUrlInitialization({ configId });
+
+                pendingExternalRedirectUrl = await peekExternalRedirectUrl({
+                    configId,
+                    tokenStorageAdapter: effectiveTokenStorageAdapter
+                });
+
+                hasLoadedPendingExternalRedirectUrl = true;
+            }
+
+            return pendingExternalRedirectUrl;
+        };
+
         if (oidcMetadata === undefined) {
             return (
                 await import("./diagnostic")
@@ -894,7 +1111,18 @@ export async function createOidc_nonMemoized<
                 break restore_from_session_storage;
             }
 
-            if (!evtIsThereMoreThanOneInstanceThatCantUserIframes.current) {
+            if (
+                !shouldPreferLocalRestoreInNative &&
+                !evtIsThereMoreThanOneInstanceThatCantUserIframes.current
+            ) {
+                break restore_from_session_storage;
+            }
+
+            const hasPendingNativeCallbackOrExternalRedirect =
+                (await getPendingExternalRedirectUrlIfAny()) !== undefined ||
+                getRedirectAuthResponse().authResponse !== undefined;
+
+            if (hasPendingNativeCallbackOrExternalRedirect) {
                 break restore_from_session_storage;
             }
 
@@ -914,6 +1142,34 @@ export async function createOidc_nonMemoized<
                 break restore_from_session_storage;
             }
 
+            const accessTokenIsStillValid = oidcClientTsUser.expired === false;
+
+            const hasRefreshTokenAndItLooksUsable = (() => {
+                if (oidcClientTsUser.refresh_token === undefined) {
+                    return false;
+                }
+
+                const refreshTokenExpirationTime = getRefreshTokenExpirationTime({
+                    refreshToken: oidcClientTsUser.refresh_token,
+                    tokenResponse: oidcClientTsUser.__oidc_spa_tokenResponse,
+                    issuedAtTime: oidcClientTsUser.__oidc_spa_localTimeWhenTokenIssued
+                });
+
+                if (refreshTokenExpirationTime === undefined) {
+                    return true;
+                }
+
+                return refreshTokenExpirationTime > Date.now();
+            })();
+
+            if (!accessTokenIsStillValid && !hasRefreshTokenAndItLooksUsable) {
+                try {
+                    await oidcClientTsUserManager.removeUser();
+                } catch {}
+
+                break restore_from_session_storage;
+            }
+
             log?.("Session was restored from session storage");
 
             return {
@@ -929,6 +1185,51 @@ export async function createOidc_nonMemoized<
                 | undefined = undefined;
 
             {
+                const externalRedirectUrl = await getPendingExternalRedirectUrlIfAny();
+
+                if (externalRedirectUrl !== undefined) {
+                    await clearExternalRedirectUrl({
+                        configId,
+                        tokenStorageAdapter: effectiveTokenStorageAdapter
+                    });
+
+                    pendingExternalRedirectUrl = undefined;
+
+                    const assessment = hasOidcRedirectResponse(externalRedirectUrl);
+
+                    if (assessment.hasAuthResponseInUrl) {
+                        const authResponse = extractOidcRedirectResponse(
+                            externalRedirectUrl,
+                            assessment.responseMode
+                        );
+
+                        const stateData = await getStateDataFromUserManagerStateStore({
+                            stateUrlParamValue: authResponse.state
+                        });
+
+                        if (stateData !== undefined && stateData.configId === configId) {
+                            stateDataAndAuthResponse = { stateData, authResponse };
+                        }
+                    }
+                }
+            }
+
+            {
+                if (stateDataAndAuthResponse !== undefined) {
+                    const { stateData, authResponse } = stateDataAndAuthResponse;
+
+                    const rootRelativeRedirectUrl = (() => {
+                        if (stateData.action === "login" && authResponse.error === "consent_required") {
+                            return stateData.rootRelativeRedirectUrl_consentRequiredCase;
+                        }
+                        return stateData.rootRelativeRedirectUrl;
+                    })();
+
+                    history.replaceState({}, "", rootRelativeRedirectUrl);
+                }
+            }
+
+            if (stateDataAndAuthResponse === undefined) {
                 const { authResponse, clearAuthResponse } = getRedirectAuthResponse();
 
                 if (authResponse === undefined) {
@@ -1090,7 +1391,10 @@ export async function createOidc_nonMemoized<
         }
 
         silent_login_if_possible_and_auto_login: {
-            const persistedAuthState = getPersistedAuthState({ configId });
+            const persistedAuthState = await getPersistedAuthState({
+                configId,
+                storageAdapter: effectiveStorageAdapter
+            });
 
             if (persistedAuthState === "explicitly logged out" && !autoLogin) {
                 log?.("Skipping session restoration completely, the user is explicitly logged out.");
@@ -1249,7 +1553,7 @@ export async function createOidc_nonMemoized<
                         action: "login",
                         doForceReloadOnBfCache: true,
                         redirectUrl: (() => {
-                            if (postLoginRedirectUrl_default) {
+                            if (!isNativeApp && postLoginRedirectUrl_default) {
                                 return postLoginRedirectUrl_default;
                             }
 
@@ -1273,8 +1577,12 @@ export async function createOidc_nonMemoized<
 
                             return "ensure no interaction";
                         })(),
-                        preRedirectHook: () => {
-                            persistAuthState({ configId, state: undefined });
+                        preRedirectHook: async () => {
+                            await persistAuthState({
+                                configId,
+                                state: undefined,
+                                storageAdapter: effectiveStorageAdapter
+                            });
                         }
                     });
                 }
@@ -1315,7 +1623,7 @@ export async function createOidc_nonMemoized<
     const oidc_common: Oidc.Common = {
         issuerUri,
         clientId,
-        validRedirectUri: homeUrlAndRedirectUri
+        validRedirectUri: oidcCallbackUrl
     };
 
     not_loggedIn_case: {
@@ -1325,8 +1633,16 @@ export async function createOidc_nonMemoized<
 
         evtInitializationOutcomeUserNotLoggedIn.post();
 
-        if (getPersistedAuthState({ configId }) !== "explicitly logged out") {
-            persistAuthState({ configId, state: undefined });
+        const persistedAuthState_check = await getPersistedAuthState({
+            configId,
+            storageAdapter: effectiveStorageAdapter
+        });
+        if (persistedAuthState_check !== "explicitly logged out") {
+            await persistAuthState({
+                configId,
+                state: undefined,
+                storageAdapter: effectiveStorageAdapter
+            });
         }
 
         const oidc_notLoggedIn: Oidc.NotLoggedIn = (() => {
@@ -1390,7 +1706,7 @@ export async function createOidc_nonMemoized<
                                     "IMPORTANT DEBUG INFO:",
                                     "\nWe are about to redirect to your Identity Provider (IdP).",
                                     "\nIf you see an 'Invalid Redirect URI' error on the IdP page, make sure you've added:",
-                                    `\n${homeUrlAndRedirectUri}`,
+                                    `\n${oidcCallbackUrl}`,
                                     "\nto the list of valid redirect URIs in your IdP configuration.",
                                     "\nIf you see a 'Client not found' error make sure you've created the flowing OIDC client:",
                                     `\n${clientId}`
@@ -1398,19 +1714,27 @@ export async function createOidc_nonMemoized<
                             );
                         }
 
+                        const persistedAuthState_interaction = await getPersistedAuthState({
+                            configId,
+                            storageAdapter: effectiveStorageAdapter
+                        });
+                        const interactionType =
+                            persistedAuthState_interaction === "explicitly logged out"
+                                ? "ensure interaction"
+                                : "directly redirect if active session show login otherwise";
+
                         return loginOrGoToAuthServer({
                             action: "login",
                             doNavigateBackToLastPublicUrlIfTheTheUserNavigateBack:
                                 doesCurrentHrefRequiresAuth,
                             doForceReloadOnBfCache: false,
                             redirectUrl:
-                                redirectUrl ?? postLoginRedirectUrl_default ?? window.location.href,
+                                redirectUrl ??
+                                (!isNativeApp ? postLoginRedirectUrl_default : undefined) ??
+                                window.location.href,
                             extraQueryParams_local: extraQueryParams,
                             transformUrlBeforeRedirect_local: transformUrlBeforeRedirect,
-                            interaction:
-                                getPersistedAuthState({ configId }) === "explicitly logged out"
-                                    ? "ensure interaction"
-                                    : "directly redirect if active session show login otherwise",
+                            interaction: interactionType,
                             preRedirectHook: undefined
                         });
                     },
@@ -1491,19 +1815,28 @@ export async function createOidc_nonMemoized<
     }
 
     {
-        if (getPersistedAuthState({ configId }) !== undefined) {
-            persistAuthState({ configId, state: undefined });
+        const persistedAuthState_check = await getPersistedAuthState({
+            configId,
+            storageAdapter: effectiveStorageAdapter
+        });
+        if (persistedAuthState_check !== undefined) {
+            await persistAuthState({
+                configId,
+                state: undefined,
+                storageAdapter: effectiveStorageAdapter
+            });
         }
 
         if (!canUseIframe) {
-            persistAuthState({
+            await persistAuthState({
                 configId,
                 state: {
                     stateDescription: "logged in",
                     refreshTokenExpirationTime: currentTokens.refreshTokenExpirationTime,
                     serverDateNow: currentTokens.getServerDateNow(),
                     idleSessionLifetimeInSeconds
-                }
+                },
+                storageAdapter: effectiveStorageAdapter
             });
         }
     }
@@ -1567,12 +1900,12 @@ export async function createOidc_nonMemoized<
         },
         getDecodedIdToken: () => currentTokens.decodedIdToken,
         logout: async params => {
-            if (globalContext.hasLogoutBeenCalled) {
+            if (getHasLogoutBeenCalledForCurrentConfig()) {
                 log?.("logout() has already been called, ignoring the call");
                 return new Promise<never>(() => {});
             }
 
-            globalContext.hasLogoutBeenCalled = true;
+            setHasLogoutBeenCalledForCurrentConfig(true);
 
             const rootRelativePostLogoutRedirectUrl: string = (() => {
                 switch (params.redirectTo) {
@@ -1595,7 +1928,11 @@ export async function createOidc_nonMemoized<
             if (!oidcMetadata.end_session_endpoint) {
                 log?.("No end session endpoint, managing logging state locally");
 
-                persistAuthState({ configId, state: { stateDescription: "explicitly logged out" } });
+                await persistAuthState({
+                    configId,
+                    state: { stateDescription: "explicitly logged out" },
+                    storageAdapter: effectiveStorageAdapter
+                });
 
                 try {
                     await oidcClientTsUserManager.removeUser();
@@ -1618,7 +1955,7 @@ export async function createOidc_nonMemoized<
                     "IMPORTANT DEBUG INFO:",
                     "\nWe are about to redirect to your Identity Provider (IdP).",
                     "\nIf you see an 'Invalid Redirect URI' error on the IdP page, make sure you've added:",
-                    `\n${homeUrlAndRedirectUri}`,
+                    `\n${oidcCallbackUrl}`,
                     "\nto the list of valid post logout redirect URIs in your IdP configuration."
                 ].join(" ")
             );
@@ -1648,6 +1985,7 @@ export async function createOidc_nonMemoized<
                         action: "logout",
                         sessionId
                     }),
+                    post_logout_redirect_uri: oidcCallbackUrl,
                     redirectMethod: "assign"
                 });
             } catch (error) {
@@ -1664,7 +2002,11 @@ export async function createOidc_nonMemoized<
                 const { extraTokenParams } = params;
 
                 const fallbackToFullPageReload = async (): Promise<never> => {
-                    persistAuthState({ configId, state: undefined });
+                    await persistAuthState({
+                        configId,
+                        state: undefined,
+                        storageAdapter: effectiveStorageAdapter
+                    });
 
                     await waitForAllOtherOngoingLoginOrRefreshProcessesToComplete({
                         prUnlock: new Promise<never>(() => {})
@@ -1853,15 +2195,20 @@ export async function createOidc_nonMemoized<
                     decodedIdToken_previous: currentTokens.decodedIdToken
                 });
 
-                if (getPersistedAuthState({ configId }) !== undefined) {
-                    persistAuthState({
+                const persistedAuthState_check = await getPersistedAuthState({
+                    configId,
+                    storageAdapter: effectiveStorageAdapter
+                });
+                if (persistedAuthState_check !== undefined) {
+                    await persistAuthState({
                         configId,
                         state: {
                             stateDescription: "logged in",
                             refreshTokenExpirationTime: currentTokens.refreshTokenExpirationTime,
                             serverDateNow: currentTokens.getServerDateNow(),
                             idleSessionLifetimeInSeconds
-                        }
+                        },
+                        storageAdapter: effectiveStorageAdapter
                     });
                 }
 

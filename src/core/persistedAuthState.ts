@@ -1,6 +1,8 @@
 import { typeGuard } from "../tools/tsafe/typeGuard";
 import { id } from "../tools/tsafe/id";
 import { INFINITY_TIME } from "../tools/INFINITY_TIME";
+import type { AsyncStorage } from "../vendor/frontend/oidc-client-ts";
+import { localStorageAdapter } from "../tools/localStorageAdapter";
 
 function getKey(params: { configId: string }) {
     const { configId } = params;
@@ -24,7 +26,7 @@ namespace PersistedAuthState {
     };
 }
 
-export function persistAuthState(params: {
+export async function persistAuthState(params: {
     configId: string;
     state:
         | {
@@ -37,84 +39,89 @@ export function persistAuthState(params: {
               stateDescription: "explicitly logged out";
           }
         | undefined;
+    storageAdapter?: AsyncStorage;
 }) {
-    const { configId, state } = params;
+    const { configId, state, storageAdapter } = params;
+
+    const adapter = storageAdapter ?? localStorageAdapter;
 
     const key = getKey({ configId });
 
     if (state === undefined) {
-        localStorage.removeItem(key);
+        await adapter.removeItem(key);
         return;
     }
 
-    localStorage.setItem(
-        key,
-        JSON.stringify(
-            id<PersistedAuthState>(
-                (() => {
-                    switch (state.stateDescription) {
-                        case "logged in":
-                            return id<PersistedAuthState.LoggedIn>({
-                                __brand: "PersistedAuthState-v1",
-                                stateDescription: "logged in",
-                                untilTime: (() => {
-                                    const {
-                                        idleSessionLifetimeInSeconds,
-                                        refreshTokenExpirationTime,
-                                        serverDateNow
-                                    } = state;
+    const serialized = JSON.stringify(
+        id<PersistedAuthState>(
+            (() => {
+                switch (state.stateDescription) {
+                    case "logged in":
+                        return id<PersistedAuthState.LoggedIn>({
+                            __brand: "PersistedAuthState-v1",
+                            stateDescription: "logged in",
+                            untilTime: (() => {
+                                const {
+                                    idleSessionLifetimeInSeconds,
+                                    refreshTokenExpirationTime,
+                                    serverDateNow
+                                } = state;
 
-                                    const untilTime_real = (() => {
-                                        if (refreshTokenExpirationTime === undefined) {
-                                            return undefined;
-                                        }
-
-                                        const msBeforeExpirationOfTheSession =
-                                            refreshTokenExpirationTime - serverDateNow;
-
-                                        return Date.now() + msBeforeExpirationOfTheSession;
-                                    })();
-
-                                    const unitTime_userOverwrite = (() => {
-                                        if (idleSessionLifetimeInSeconds === undefined) {
-                                            return undefined;
-                                        }
-
-                                        return Date.now() + idleSessionLifetimeInSeconds * 1000;
-                                    })();
-
-                                    const untilTime = Math.min(
-                                        untilTime_real ?? INFINITY_TIME,
-                                        unitTime_userOverwrite ?? INFINITY_TIME
-                                    );
-
-                                    if (untilTime === INFINITY_TIME) {
+                                const untilTime_real = (() => {
+                                    if (refreshTokenExpirationTime === undefined) {
                                         return undefined;
                                     }
 
-                                    return untilTime;
-                                })()
-                            });
-                        case "explicitly logged out":
-                            return id<PersistedAuthState.ExplicitlyLoggedOut>({
-                                __brand: "PersistedAuthState-v1",
-                                stateDescription: "explicitly logged out"
-                            });
-                    }
-                })()
-            )
+                                    const msBeforeExpirationOfTheSession =
+                                        refreshTokenExpirationTime - serverDateNow;
+
+                                    return Date.now() + msBeforeExpirationOfTheSession;
+                                })();
+
+                                const unitTime_userOverwrite = (() => {
+                                    if (idleSessionLifetimeInSeconds === undefined) {
+                                        return undefined;
+                                    }
+
+                                    return Date.now() + idleSessionLifetimeInSeconds * 1000;
+                                })();
+
+                                const untilTime = Math.min(
+                                    untilTime_real ?? INFINITY_TIME,
+                                    unitTime_userOverwrite ?? INFINITY_TIME
+                                );
+
+                                if (untilTime === INFINITY_TIME) {
+                                    return undefined;
+                                }
+
+                                return untilTime;
+                            })()
+                        });
+                    case "explicitly logged out":
+                        return id<PersistedAuthState.ExplicitlyLoggedOut>({
+                            __brand: "PersistedAuthState-v1",
+                            stateDescription: "explicitly logged out"
+                        });
+                }
+            })()
         )
     );
+
+    await adapter.setItem(key, serialized);
 }
 
-export function getPersistedAuthState(params: {
+export async function getPersistedAuthState(params: {
     configId: string;
-}): PersistedAuthState["stateDescription"] | undefined {
-    const { configId } = params;
+    storageAdapter?: AsyncStorage;
+}): Promise<PersistedAuthState["stateDescription"] | undefined> {
+    const { configId, storageAdapter } = params;
+
+    const adapter = storageAdapter ?? localStorageAdapter;
 
     const key = getKey({ configId });
 
-    const value = localStorage.getItem(key);
+    const value = await adapter.getItem(key);
 
     if (value === null) {
         return undefined;
@@ -125,7 +132,7 @@ export function getPersistedAuthState(params: {
     try {
         state = JSON.parse(value);
     } catch {
-        localStorage.removeItem(key);
+        await adapter.removeItem(key);
         return undefined;
     }
 
@@ -137,13 +144,13 @@ export function getPersistedAuthState(params: {
                 state.__brand === id<PersistedAuthState["__brand"]>("PersistedAuthState-v1")
         )
     ) {
-        localStorage.removeItem(key);
+        await adapter.removeItem(key);
         return undefined;
     }
 
     if (state.stateDescription === "logged in") {
         if (state.untilTime !== undefined && state.untilTime <= Date.now()) {
-            localStorage.removeItem(key);
+            await adapter.removeItem(key);
             return undefined;
         }
     }
