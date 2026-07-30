@@ -1,14 +1,12 @@
 import { getStateData, getIsStatQueryParamValue } from "./StateData";
 import { assert, type Equals } from "../tools/tsafe/assert";
 import type { AuthResponse } from "./AuthResponse";
-import { setBASE_URL_earlyInit } from "./earlyInit_BASE_URL";
+import { setBASE_URL_earlyInit, getBASE_URL_earlyInit } from "./earlyInit_BASE_URL";
 import { isBrowser } from "../tools/isBrowser";
 import { createEvt, type Evt } from "../tools/Evt";
-import {
-    setGetRootRelativeOriginalLocationHref_earlyInit,
-    getRootRelativeOriginalLocationHref_earlyInit
-} from "./earlyInit_rootRelativeOriginalLocationHref";
+import { setGetRootRelativeOriginalLocationHref_earlyInit } from "./earlyInit_rootRelativeOriginalLocationHref";
 import { prModuleCreateOidc } from "./earlyInit_prModuleCreateOidc";
+import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";
 
 const IFRAME_MESSAGE_PREFIX = "oidc-spa:cross-window-messaging:";
 
@@ -79,6 +77,10 @@ function oidcEarlyInit_nonMemoized(params: ParamsOfEarlyInit | undefined) {
         return { shouldLoadApp: true };
     }
 
+    if (BASE_URL !== undefined) {
+        setBASE_URL_earlyInit({ BASE_URL });
+    }
+
     const { shouldLoadApp } = handleOidcCallback();
 
     let exports_earlyInit: import("./createOidc").Exports_earlyInit;
@@ -147,10 +149,6 @@ function oidcEarlyInit_nonMemoized(params: ParamsOfEarlyInit | undefined) {
                     passive: false
                 }
             );
-        }
-
-        if (BASE_URL !== undefined) {
-            setBASE_URL_earlyInit({ BASE_URL });
         }
 
         {
@@ -248,10 +246,6 @@ function handleOidcCallback(): {
         return { shouldLoadApp: true };
     }
 
-    setGetRootRelativeOriginalLocationHref_earlyInit({
-        rootRelativeOriginalLocationHref: location_urlObj.pathname
-    });
-
     const { authResponse } = (() => {
         const authResponse: AuthResponse = { state: "" };
 
@@ -277,8 +271,80 @@ function handleOidcCallback(): {
 
     const stateData = getStateData({ stateUrlParamValue: authResponse.state });
 
+    const getRootRelativeRedirectUrl_strippedFromAuthResponse = () => {
+        const authResponseParamNames = new Set([
+            "state",
+            "session_state",
+            "code",
+            "iss",
+            "error",
+            "error_description",
+            "error_uri"
+        ]);
+
+        const rootRelativeRedirectUrl = location_urlObj.href.slice(location_urlObj.origin.length);
+
+        const { prefix, delimiter, serializedParams, suffix } = (() => {
+            switch (locationHrefAssessment.responseMode) {
+                case "query": {
+                    const queryStartIndex = rootRelativeRedirectUrl.indexOf("?");
+                    assert(queryStartIndex !== -1);
+
+                    const fragmentStartIndex = rootRelativeRedirectUrl.indexOf("#", queryStartIndex);
+
+                    return {
+                        prefix: rootRelativeRedirectUrl.slice(0, queryStartIndex),
+                        delimiter: "?",
+                        serializedParams: rootRelativeRedirectUrl.slice(
+                            queryStartIndex + 1,
+                            fragmentStartIndex === -1 ? undefined : fragmentStartIndex
+                        ),
+                        suffix:
+                            fragmentStartIndex === -1
+                                ? ""
+                                : rootRelativeRedirectUrl.slice(fragmentStartIndex)
+                    };
+                }
+                case "fragment": {
+                    const fragmentStartIndex = rootRelativeRedirectUrl.indexOf("#");
+                    assert(fragmentStartIndex !== -1);
+
+                    return {
+                        prefix: rootRelativeRedirectUrl.slice(0, fragmentStartIndex),
+                        delimiter: "#",
+                        serializedParams: rootRelativeRedirectUrl.slice(fragmentStartIndex + 1),
+                        suffix: ""
+                    };
+                }
+                default:
+                    assert<Equals<typeof locationHrefAssessment, never>>(false);
+            }
+        })();
+
+        const remainingSerializedParams = serializedParams.split("&").filter(serializedParam => {
+            const paramName = new URLSearchParams(serializedParam).keys().next().value;
+
+            return paramName === undefined || !authResponseParamNames.has(paramName);
+        });
+
+        return [
+            prefix,
+            remainingSerializedParams.some(serializedParam => serializedParam !== "")
+                ? `${delimiter}${remainingSerializedParams.join("&")}`
+                : "",
+            suffix
+        ].join("");
+    };
+
     if (stateData === undefined) {
-        history.replaceState({}, "", getRootRelativeOriginalLocationHref_earlyInit());
+        const rootRelativeRedirectUrl = getRootRelativeRedirectUrl_strippedFromAuthResponse();
+
+        setGetRootRelativeOriginalLocationHref_earlyInit({
+            rootRelativeOriginalLocationHref: rootRelativeRedirectUrl
+        });
+
+        history.replaceState({}, "", rootRelativeRedirectUrl);
+
         return { shouldLoadApp: true };
     }
 
@@ -299,6 +365,42 @@ function handleOidcCallback(): {
             );
             return { shouldLoadApp: false };
         case "redirect": {
+            // See: https://github.com/keycloakify/keycloak-account-ui/issues/10
+            abort_case: {
+                const BASE_URL = getBASE_URL_earlyInit();
+
+                if (BASE_URL === undefined) {
+                    break abort_case;
+                }
+
+                let BASE_URL_fullyQualified: string;
+
+                try {
+                    BASE_URL_fullyQualified = toFullyQualifiedUrl({
+                        urlish: BASE_URL,
+                        doAssertNoQueryParams: true,
+                        doOutputWithTrailingSlash: true
+                    });
+                } catch {
+                    break abort_case;
+                }
+
+                // NOTE: This should ALWAYS be true in normal circumstances.
+                if (new URL(BASE_URL_fullyQualified).pathname === location_urlObj.pathname) {
+                    break abort_case;
+                }
+
+                const rootRelativeRedirectUrl = getRootRelativeRedirectUrl_strippedFromAuthResponse();
+
+                setGetRootRelativeOriginalLocationHref_earlyInit({
+                    rootRelativeOriginalLocationHref: rootRelativeRedirectUrl
+                });
+
+                history.replaceState({}, "", rootRelativeRedirectUrl);
+
+                return { shouldLoadApp: true };
+            }
+
             redirectAuthResponse = authResponse;
             const rootRelativeRedirectUrl = (() => {
                 if (stateData.action === "login" && authResponse.error === "consent_required") {
@@ -306,6 +408,10 @@ function handleOidcCallback(): {
                 }
                 return stateData.rootRelativeRedirectUrl;
             })();
+
+            setGetRootRelativeOriginalLocationHref_earlyInit({
+                rootRelativeOriginalLocationHref: rootRelativeRedirectUrl
+            });
 
             history.replaceState({}, "", rootRelativeRedirectUrl);
             return { shouldLoadApp: true };
