@@ -148,7 +148,7 @@ export namespace GetOidc {
                 ) => {
                     unsubscribeFromUserChange: () => void;
                 };
-                refreshUser: () => void;
+                refreshUser: () => Promise<User>;
             }>;
         };
     }
@@ -376,7 +376,6 @@ export type OidcSpaUtils<AutoLogin, DecodedIdToken, User> = {
               component: ComponentType<Props>
           ) => (props: Props) => ReactNode;
       });
-
 
 export type CreateUser<User> = (params: {
     decodedIdToken: Oidc_core.Tokens.DecodedIdToken_OidcCoreSpec;
