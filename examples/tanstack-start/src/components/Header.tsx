@@ -250,7 +250,7 @@ function AdminOnlyNavLink(props: { onClick: () => void }) {
         return null;
     }
 
-    if (!user.isRealmAdmin) {
+    if (!user.isKeycloakRealmAdmin) {
         return null;
     }
 
