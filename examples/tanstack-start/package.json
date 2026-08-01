@@ -9,7 +9,7 @@
         "prepare": "[ ! -f .env ] && cp .env.sample .env || true",
         "dev": "vite dev --port 3000",
         "generate-routes": "tsr generate",
-        "build": "vite build",
+        "build": "tsc && vite build",
         "preview": "vite preview",
         "test": "vitest run"
     },
