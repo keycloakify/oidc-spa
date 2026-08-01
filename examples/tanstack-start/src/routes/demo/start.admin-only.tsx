@@ -33,7 +33,7 @@ export const Route = createFileRoute("/demo/start/admin-only")({
         // It's very important that you implement hasRequired claim in the server
         // function and request middleware to check that the user actually have the required
         // authorization.
-        if (!user.isRealmAdmin) {
+        if (!user.isKeycloakRealmAdmin) {
             throw new Error("unauthorized");
         }
 
