@@ -9,7 +9,7 @@ export type User = {
     displayName: string;
     email: string | undefined;
     avatarImgUrl: string;
-    isRealmAdmin: boolean;
+    isKeycloakRealmAdmin: boolean;
 };
 
 // The function that oidc-spa will call to create the user object,
@@ -41,7 +41,7 @@ export const createUser: CreateUser<User> = async ({
         displayName: decodedIdToken.name,
         avatarImgUrl: decodedIdToken.picture || avatarFallbackSvgUrl,
         email: decodedIdToken.email,
-        isRealmAdmin: decodedAccessToken?.realm_access?.roles.includes("realm-admin") ?? false
+        isKeycloakRealmAdmin: decodedAccessToken?.realm_access?.roles.includes("realm-admin") ?? false
     };
 
     return user;
@@ -53,5 +53,5 @@ export const user_mock: User = {
     displayName: "John Doe",
     email: undefined,
     avatarImgUrl: avatarFallbackSvgUrl,
-    isRealmAdmin: true
+    isKeycloakRealmAdmin: true
 };

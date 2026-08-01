@@ -25,9 +25,8 @@ function Account() {
                 <h1 className="text-2xl font-semibold mb-4">Your Account</h1>
 
                 <dl className="space-y-2 text-white/90">
-                    <InfoRow label="id">{user.id}</InfoRow>
+                    <InfoRow label="Username">{user.username}</InfoRow>
                     {user.email && <InfoRow label="Email">{user.email}</InfoRow>}
-                    {user.username && <InfoRow label="Username">{user.username}</InfoRow>}
                 </dl>
 
                 {keycloakUtils && (
