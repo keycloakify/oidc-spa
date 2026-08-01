@@ -1,7 +1,6 @@
 import { oidcSpa } from "oidc-spa/react-tanstack-start";
 import { z } from "zod";
 import { type User, createUser, user_mock } from "./oidc.user";
-import { createServerFn } from "@tanstack/react-start";
 
 export const {
     bootstrapOidc,
@@ -23,7 +22,7 @@ export const {
             realm_access: z.object({ roles: z.array(z.string()) }).optional()
         }),
         accessTokenClaims_mock: {
-            sub: user_mock.id,
+            sub: "mock-user-id",
             realm_access: {
                 roles: ["realm-admin"]
             }
@@ -48,12 +47,6 @@ bootstrapOidc(({ process }) =>
               debugLogs: true
           }
 );
-
-export const getRealmRoles = createServerFn({ method: "GET" })
-    .middleware([oidcFnMiddleware({ assert: "user logged in" })])
-    .handler(async ({ context: { oidc } }) => {
-        return oidc.accessTokenClaims.realm_access?.roles ?? [];
-    });
 
 export const fetchWithAuth: typeof fetch = async (input, init) => {
     const oidc = await getOidc();
