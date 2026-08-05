@@ -19,8 +19,9 @@ export const Route = createFileRoute("/protected")({
 
 function Protected() {
     // Safe to assume user is logged in here.
-    const { user, goToAuthServer, backFromAuthServer, issuerUri, clientId, validRedirectUri } =
-        useOidc({ assert: "user logged in" });
+    const { user, goToAuthServer, backFromAuthServer, issuerUri, clientId, validRedirectUri } = useOidc({
+        assert: "user logged in"
+    });
 
     const keycloakUtils = isKeycloak({ issuerUri }) ? createKeycloakUtils({ issuerUri }) : undefined;
 
@@ -40,9 +41,7 @@ function Protected() {
                 <dl className="grid gap-2 text-sm text-slate-400">
                     <InfoRow label="id">{user.id}</InfoRow>
                     {user.email && <InfoRow label="Email">{user.email}</InfoRow>}
-                    {user.username && (
-                        <InfoRow label="Username">{user.username}</InfoRow>
-                    )}
+                    {user.username && <InfoRow label="Username">{user.username}</InfoRow>}
                 </dl>
 
                 {keycloakUtils && (

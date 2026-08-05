@@ -58,7 +58,6 @@ function LoggedInAuthButtons() {
 
     const keycloakUtils = !isKeycloak({ issuerUri }) ? undefined : createKeycloakUtils({ issuerUri });
 
-
     return (
         <div className="flex items-center gap-4">
             <a
