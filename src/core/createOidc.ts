@@ -280,6 +280,8 @@ export namespace ParamsOfCreateOidc {
             sub: string;
         }>;
         issuerUri: string;
+        clientId: string;
+        validRedirectUri: string;
         user_current: User | undefined;
     }) => MaybeAsync<User>;
 }
@@ -1787,6 +1789,8 @@ export async function createOidc_nonMemoized<
         })(),
         getCurrentTokens: () => currentTokens,
         issuerUri,
+        clientId,
+        validRedirectUri: homeUrlAndRedirectUri,
         oidcMetadata,
         renewTokens: () => renewTokens()
     });
