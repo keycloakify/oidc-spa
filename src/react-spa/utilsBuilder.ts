@@ -2,7 +2,6 @@ import type { OidcSpaUtils, CreateUser } from "./types";
 import type { Oidc as Oidc_core } from "../core";
 import type { ZodSchemaLike } from "../tools/ZodSchemaLike";
 import { createOidcSpaUtils } from "./createOidcSpaUtils";
-import type { MaybeAsync } from "../tools/MaybeAsync";
 
 export type OidcSpaUtilsBuilder<
     AutoLogin extends boolean = false,
@@ -52,18 +51,7 @@ function createOidcSpaUtilsBuilder<
         | ZodSchemaLike<Oidc_core.Tokens.DecodedIdToken_OidcCoreSpec, DecodedIdToken>
         | undefined;
     decodedIdToken_mock: DecodedIdToken | undefined;
-    createUser:
-        | ((params: {
-              decodedIdToken: Oidc_core.Tokens.DecodedIdToken_OidcCoreSpec;
-              accessToken: string;
-              fetchUserInfo: () => Promise<{
-                  [key: string]: unknown;
-                  sub: string;
-              }>;
-              issuerUri: string;
-              user_current: User | undefined;
-          }) => MaybeAsync<User>)
-        | undefined;
+    createUser: CreateUser<User> | undefined;
     user_mock: User | undefined;
 }): OidcSpaUtilsBuilder<AutoLogin, DecodedIdToken, User> {
     return {

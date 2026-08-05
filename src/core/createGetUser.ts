@@ -7,6 +7,8 @@ import type { ParamsOfCreateOidc } from "./createOidc";
 
 export function createGetUser<User>(params: {
     issuerUri: string;
+    clientId: string;
+    validRedirectUri: string;
     createUser: ParamsOfCreateOidc.CreateUser<User> | undefined;
     getCurrentTokens: () => Oidc.Tokens<any>;
     evtTokensChange: NonPostableEvt<void>;
@@ -15,8 +17,16 @@ export function createGetUser<User>(params: {
         userinfo_endpoint?: string;
     };
 }) {
-    const { issuerUri, createUser, getCurrentTokens, evtTokensChange, renewTokens, oidcMetadata } =
-        params;
+    const {
+        issuerUri,
+        clientId,
+        validRedirectUri,
+        createUser,
+        getCurrentTokens,
+        evtTokensChange,
+        renewTokens,
+        oidcMetadata
+    } = params;
 
     type GetUser = Oidc.LoggedIn<any, User>["getUser"];
 
@@ -84,6 +94,8 @@ export function createGetUser<User>(params: {
                     accessToken: tokens.accessToken,
                     decodedIdToken: tokens.decodedIdToken_original,
                     issuerUri,
+                    clientId,
+                    validRedirectUri,
                     fetchUserInfo: () => fetchUserInfo({ accessToken: tokens.accessToken }),
                     user_current
                 });

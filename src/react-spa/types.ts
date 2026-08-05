@@ -385,6 +385,8 @@ export type CreateUser<User> = (params: {
         sub: string;
     }>;
     issuerUri: string;
+    clientId: string;
+    validRedirectUri: string;
     user_current: User | undefined;
 }) => MaybeAsync<User>;
 
