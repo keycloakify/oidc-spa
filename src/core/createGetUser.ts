@@ -168,14 +168,15 @@ export function createGetUser<User>(params: {
                         return;
                     }
 
-                    console.warn([
-                        "oidc-spa: Potential deadlock detected.",
-                        "createUser() might be awaiting getUser(), which causes a deadlock",
-                        "because getUser() is already waiting for createUser() to finish.",
-                        "Update createUser() to build the user without (directly or indirectly) calling",
-                        "getUser() from inside createUser()."
-                    ].join(" "));
-
+                    console.warn(
+                        [
+                            "oidc-spa: Potential deadlock detected.",
+                            "createUser() might be awaiting getUser(), which causes a deadlock",
+                            "because getUser() is already waiting for createUser() to finish.",
+                            "Update createUser() to build the user without (directly or indirectly) calling",
+                            "getUser() from inside createUser()."
+                        ].join(" ")
+                    );
                 }, 3_000);
             };
 
