@@ -158,27 +158,3 @@ Project backers, we trust and recommend their services.
 <p align="center">
     <i><a href="https://phasetwo.io/?utm_source=keycloakify"><strong>Keycloak as a Service</strong></a> — Keycloak community contributors of popular <a href="https://github.com/p2-inc#our-extensions-?utm_source=keycloakify">extensions</a> providing free and dedicated <a href="https://phasetwo.io/hosting/?utm_source=keycloakify">Keycloak hosting</a> and enterprise <a href="https://phasetwo.io/support/?utm_source=keycloakify">Keycloak support</a> to businesses of all sizes.</i>
 </p>
-
-<br/>
-<br/>
-<br/>
-
-<div align="center">
-
-![Logo Dark](https://github.com/user-attachments/assets/dd3925fb-a58a-4e91-b360-69c2fa1f1087#gh-dark-mode-only)
-
-</div>
-
-<div align="center">
-
-![Logo Light](https://github.com/user-attachments/assets/6c00c201-eed7-485a-a887-70891559d69b#gh-light-mode-only)
-
-</div>
-
-<br/>
-
-<p align="center">
-  <a href="https://www.zone2.tech/services/keycloak-consulting">
-    <i><strong>Keycloak Consulting Services</strong> — Your partner in Keycloak deployment, configuration, and extension development for optimized identity management solutions.</i>
-  </a>
-</p>
