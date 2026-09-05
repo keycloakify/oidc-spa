@@ -5,8 +5,6 @@ import { ChevronDown, ChevronRight, Home, Menu, Server, X } from "lucide-react";
 import { useOidc } from "#/oidc";
 import { isKeycloak, createKeycloakUtils } from "oidc-spa/keycloak";
 
-import userPictureFallback from "./userPictureFallback.svg";
-
 export default function Header() {
     const [isOpen, setIsOpen] = useState(false);
     const [groupedExpanded, setGroupedExpanded] = useState<Record<string, boolean>>({});
@@ -189,7 +187,7 @@ function AuthButtons(props: { className?: string }) {
 }
 
 function LoggedInAuthButton() {
-    const { decodedIdToken, logout } = useOidc({ assert: "user logged in" });
+    const { user, logout } = useOidc({ assert: "user logged in" });
 
     return (
         <div className="flex items-center gap-4">
@@ -198,8 +196,8 @@ function LoggedInAuthButton() {
                 className="flex items-center gap-3 text-white font-semibold hover:text-cyan-300 transition-colors"
             >
                 <img
-                    src={decodedIdToken.picture || userPictureFallback}
-                    alt={`${decodedIdToken.name}'s avatar`}
+                    src={user.avatarImgUrl}
+                    alt={`${user.displayName}'s avatar`}
                     className="w-10 h-10 rounded-full object-cover border border-cyan-500/60 shadow-lg shrink-0"
                 />
             </Link>
@@ -246,13 +244,13 @@ function NotLoggedInAuthButton() {
 function AdminOnlyNavLink(props: { onClick: () => void }) {
     const { onClick } = props;
 
-    const { isUserLoggedIn, decodedIdToken } = useOidc();
+    const { isUserLoggedIn, user } = useOidc();
 
     if (!isUserLoggedIn) {
         return null;
     }
 
-    if (!decodedIdToken.realm_access?.roles.includes("realm-admin")) {
+    if (!user.isKeycloakRealmAdmin) {
         return null;
     }
 
