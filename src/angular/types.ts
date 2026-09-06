@@ -239,6 +239,9 @@ export type OidcHelpers<AutoLogin extends boolean, User> = {
     ) => Promise<true>;
 };
 
+// NOTE: In the Angular adapter, instead of exposing every util separately we
+// expose them in a single Oidc namespace + Injectable.
+// We keep however the file structure for consistency with the other adapters.
 export type OidcSpaUtils<AutoLogin extends boolean = false, User = never> = {
     Oidc: AbstractType<OidcService<AutoLogin, User>> & OidcHelpers<AutoLogin, User>;
 };

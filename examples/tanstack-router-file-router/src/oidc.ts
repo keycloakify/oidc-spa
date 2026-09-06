@@ -1,8 +1,61 @@
 import { oidcSpa } from "oidc-spa/react-spa";
-import { type User, createUser, user_mock } from "./oidc.user";
+import { z } from "zod";
+import { decodeJwt } from "oidc-spa/decode-jwt";
+import avatarFallbackSvgUrl from "./assets/avatarFallback.svg";
+
+// App-level user shape exposed by `useOidc()`.
+// You decide what an user should looks like!
+export type User = {
+    displayName: string;
+    email: string | undefined;
+    avatarImgUrl: string;
+    canSeeKeycloakAdminNavigation: boolean;
+};
 
 export const { bootstrapOidc, useOidc, getOidc, enforceLogin, OidcInitializationGate } = oidcSpa
-    .withUser<User>({ createUser, user_mock })
+    .withUser<User>({
+        createUser: async ({ decodedIdToken, accessToken }) => {
+            const { name, picture, email } = z
+                .object({
+                    sub: z.string(),
+                    name: z.string(),
+                    picture: z.string().optional(),
+                    email: z.string().optional(),
+                    preferred_username: z.string().optional()
+                })
+                .parse(decodedIdToken);
+
+            const decodedAccessToken = z
+                .object({
+                    resource_access: z
+                        .object({
+                            "realm-management": z.object({
+                                roles: z.array(z.string())
+                            })
+                        })
+                        .optional()
+                })
+                .parse(decodeJwt(accessToken));
+
+            const user: User = {
+                displayName: name,
+                avatarImgUrl: picture || avatarFallbackSvgUrl,
+                email,
+                canSeeKeycloakAdminNavigation:
+                    decodedAccessToken.resource_access?.["realm-management"].roles.includes(
+                        "realm-admin"
+                    ) ?? false
+            };
+
+            return user;
+        },
+        user_mock: {
+            displayName: "John Doe",
+            email: undefined,
+            avatarImgUrl: avatarFallbackSvgUrl,
+            canSeeKeycloakAdminNavigation: true
+        }
+    })
     // See: https://docs.oidc-spa.dev/v/v10/features/auto-login#react-spa
     //.withAutoLogin()
     .createUtils();

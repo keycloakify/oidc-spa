@@ -14,4 +14,8 @@ export class App {
   keycloakUtils = createKeycloakUtils({
     issuerUri: this.oidc.issuerUri,
   });
+  accountUrl = this.keycloakUtils.getAccountUrl({
+    clientId: this.oidc.clientId,
+    validRedirectUri: this.oidc.validRedirectUri,
+  });
 }

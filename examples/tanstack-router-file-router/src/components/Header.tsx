@@ -115,7 +115,7 @@ function AdminOnlyNavLink() {
         return null;
     }
 
-    if (!user.isRealmAdmin) {
+    if (!user.canSeeKeycloakAdminNavigation) {
         return null;
     }
 

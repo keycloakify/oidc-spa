@@ -25,7 +25,7 @@ function Account() {
                 <h1 className="text-2xl font-semibold mb-4">Your Account</h1>
 
                 <dl className="space-y-2 text-white/90">
-                    <InfoRow label="Username">{user.username}</InfoRow>
+                    <InfoRow label="Name">{user.displayName}</InfoRow>
                     {user.email && <InfoRow label="Email">{user.email}</InfoRow>}
                 </dl>
 

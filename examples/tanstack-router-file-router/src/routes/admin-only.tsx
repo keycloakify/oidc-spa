@@ -9,7 +9,7 @@ export const Route = createFileRoute("/admin-only")({
 
         const { user } = await oidc.getUser();
 
-        if (!user.isRealmAdmin) {
+        if (!user.canSeeKeycloakAdminNavigation) {
             throw new Error("unauthorized");
         }
     },
