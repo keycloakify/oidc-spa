@@ -1,7 +1,6 @@
 import { NavLink } from "react-router";
 import { createKeycloakUtils, isKeycloak } from "oidc-spa/keycloak";
 import { useOidc } from "~/oidc";
-import userPictureFallback from "./userPictureFallback.svg";
 
 export function Header() {
     return (
@@ -51,16 +50,11 @@ const primaryButtonClasses =
     "inline-flex items-center rounded-full bg-white/90 px-4 py-2 text-sm font-semibold text-slate-900 transition-colors hover:bg-white";
 
 function LoggedInAuthButtons() {
-    const { decodedIdToken, logout, issuerUri, clientId, validRedirectUri } = useOidc({
+    const { user, logout, issuerUri, clientId, validRedirectUri } = useOidc({
         assert: "user logged in"
     });
 
     const keycloakUtils = !isKeycloak({ issuerUri }) ? undefined : createKeycloakUtils({ issuerUri });
-
-    const profileImageSrc =
-        decodedIdToken.picture && decodedIdToken.picture.trim().length > 0
-            ? decodedIdToken.picture
-            : userPictureFallback;
 
     return (
         <div className="flex items-center gap-4">
@@ -69,8 +63,8 @@ function LoggedInAuthButtons() {
                 className="flex items-center gap-3 text-sm font-medium text-slate-200 hover:text-white"
             >
                 <img
-                    src={profileImageSrc}
-                    alt={`${decodedIdToken.name}'s avatar`}
+                    src={user.avatarImgUrl}
+                    alt={`${user.displayName}'s avatar`}
                     className="h-10 w-10 shrink-0 rounded-full border border-slate-700 object-cover"
                 />
             </a>
@@ -108,10 +102,10 @@ function NotLoggedInAuthButtons() {
 }
 
 function AdminOnlyNavLink() {
-    const { isUserLoggedIn, decodedIdToken } = useOidc();
+    const { isUserLoggedIn, user } = useOidc();
 
     if (!isUserLoggedIn) return null;
-    if (!decodedIdToken.realm_access?.roles.includes("realm-admin")) return null;
+    if (!user.canSeeKeycloakAdminNavigation) return null;
 
     return (
         <NavLink

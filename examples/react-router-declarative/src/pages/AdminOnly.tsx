@@ -4,11 +4,11 @@ import { useOidc, withLoginEnforced } from "~/oidc";
 const REQUIRED_ROLE = "realm-admin";
 
 const AdminOnly = withLoginEnforced(() => {
-    const { decodedIdToken, issuerUri } = useOidc({ assert: "user logged in" });
+    const { user, issuerUri } = useOidc({ assert: "user logged in" });
 
     const keycloakUtils = isKeycloak({ issuerUri }) ? createKeycloakUtils({ issuerUri }) : undefined;
 
-    if (!decodedIdToken.realm_access?.roles.includes(REQUIRED_ROLE)) {
+    if (!user.canSeeKeycloakAdminNavigation) {
         return (
             <section className="rounded-xl border border-rose-500/40 bg-rose-950/30 p-4 text-sm text-rose-100">
                 <p>
@@ -23,7 +23,7 @@ const AdminOnly = withLoginEnforced(() => {
             <div className="space-y-1">
                 <h1 className="text-xl font-semibold text-white">Administration Page</h1>
                 <p className="text-sm text-slate-300">
-                    Access is granted because your ID token includes the <code>{REQUIRED_ROLE}</code>{" "}
+                    Access is granted because your access token includes the <code>{REQUIRED_ROLE}</code>{" "}
                     role.
                 </p>
             </div>
