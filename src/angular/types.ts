@@ -1,4 +1,4 @@
-import type { Signal, InjectionToken, EnvironmentProviders } from "@angular/core";
+import type { Signal, AbstractType, EnvironmentProviders } from "@angular/core";
 import type { HttpInterceptorFn, HttpRequest } from "@angular/common/http";
 import type { CanActivateFn } from "@angular/router";
 import type { Observable } from "rxjs";
@@ -222,13 +222,16 @@ export type OidcService<AutoLogin extends boolean = false, User = never> = {
 };
 
 export type OidcSpaUtils<AutoLogin extends boolean = false, User = never> = {
-    Oidc: InjectionToken<OidcService<AutoLogin, User>>;
-    provideOidc: (params: ValueOrAsyncGetter<ParamsOfProvide>) => EnvironmentProviders;
-    provideMockOidc: (params?: ParamsOfProvideMock<AutoLogin, User>) => EnvironmentProviders;
+    Oidc: AbstractType<OidcService<AutoLogin, User>> & OidcHelpers<AutoLogin, User>;
+};
+
+export type OidcHelpers<AutoLogin extends boolean, User> = {
+    provide: (params: ValueOrAsyncGetter<ParamsOfProvide>) => EnvironmentProviders;
+    provideMock: (params?: ParamsOfProvideMock<AutoLogin, User>) => EnvironmentProviders;
     createBearerInterceptor: (params: {
         /**
          * May inject services. Return false before reading authentication state for
-         * requests used to load provideOidc's configuration. If core is still loading,
+         * requests used to load Oidc.provide's configuration. If core is still loading,
          * a callback that reads authentication state is retried once core is ready.
          * Do not depend on the user model for requests that build that model.
          */

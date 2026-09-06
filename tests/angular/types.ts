@@ -1,16 +1,20 @@
-import { inject, Injector, type InjectionToken } from "@angular/core";
+import { inject, Injector, type AbstractType } from "@angular/core";
 import { oidcSpa, type CreateUser, type OidcService } from "../../src/angular";
 import { assert, type Equals } from "../../src/tools/tsafe/assert";
 
 type User = { displayName: string };
 const createUser: CreateUser<User> = () => ({ displayName: "Alice" });
 const base = oidcSpa.withUser({ createUser, user_mock: { displayName: "Mock" } });
-const utils = base.createUtils();
+const { Oidc } = base.createUtils();
 
 // Never invoked: these assertions check the public API through Angular's own inference.
 export async function checkTypes(injector: Injector) {
-    const oidc = inject(utils.Oidc);
-    const fromInjector = injector.get(utils.Oidc);
+    const oidc = inject(Oidc);
+    const fromInjector = injector.get(Oidc);
+    const optional = inject(Oidc, { optional: true });
+    const optionalFromInjector = injector.get(Oidc, null);
+    assert<Equals<typeof optional, OidcService<false, User> | null>>();
+    assert<Equals<typeof optionalFromInjector, OidcService<false, User> | null>>();
     assert<Equals<typeof oidc, OidcService<false, User>>>();
     assert<Equals<typeof fromInjector, OidcService<false, User>>>();
     assert<Equals<ReturnType<typeof oidc.$user>, User>>();
@@ -20,11 +24,11 @@ export async function checkTypes(injector: Injector) {
     if (result.isUserLoggedIn) {
         assert<Equals<typeof result.accessToken, string>>();
     }
-    const token: InjectionToken<OidcService<false, User>> = utils.Oidc;
+    const token: AbstractType<OidcService<false, User>> = Oidc;
     assert<Equals<ReturnType<typeof token.toString>, string>>();
 
-    const auto = base.withAutoLogin().createUtils();
-    const loggedIn = inject(auto.Oidc);
+    const { Oidc: OidcWithAutoLogin } = base.withAutoLogin().createUtils();
+    const loggedIn = inject(OidcWithAutoLogin);
     assert<Equals<typeof loggedIn.isUserLoggedIn, true>>();
     assert<
         Equals<
@@ -34,13 +38,13 @@ export async function checkTypes(injector: Injector) {
     >();
 
     // @ts-expect-error auto-login cannot start an anonymous mock session
-    auto.provideMockOidc({ isUserInitiallyLoggedIn: false });
+    OidcWithAutoLogin.provideMock({ isUserInitiallyLoggedIn: false });
     // @ts-expect-error user mocks must match the application model
-    utils.provideMockOidc({ user_mock: { displayName: 123 } });
+    Oidc.provideMock({ user_mock: { displayName: 123 } });
     // @ts-expect-error autoLogin is a builder option, not runtime configuration
-    utils.provideOidc({ issuerUri: "", clientId: "", autoLogin: true });
+    Oidc.provide({ issuerUri: "", clientId: "", autoLogin: true });
     // @ts-expect-error Angular no longer accepts decodedIdTokenSchema
-    utils.provideOidc({ issuerUri: "", clientId: "", decodedIdTokenSchema: { parse: () => ({}) } });
+    Oidc.provide({ issuerUri: "", clientId: "", decodedIdTokenSchema: { parse: () => ({}) } });
     // @ts-expect-error withUser can only be called once
     base.withUser({ createUser });
     // @ts-expect-error non-blocking rendering can only be selected once

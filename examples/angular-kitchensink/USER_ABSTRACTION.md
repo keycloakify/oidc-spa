@@ -9,19 +9,18 @@ The Angular adapter uses a builder and a typed injection token. The injected val
 import { oidcSpa } from 'oidc-spa/angular';
 import { createUser, user_mock, type User } from './oidc.user';
 
-export const { Oidc, provideOidc, provideMockOidc, createBearerInterceptor, enforceLoginGuard } =
-  oidcSpa
-    .withUser<User>({ createUser, user_mock })
-    // .withAutoLogin()
-    // .withNonBlockingRendering()
-    .createUtils();
+export const { Oidc } = oidcSpa
+  .withUser<User>({ createUser, user_mock })
+  // .withAutoLogin()
+  // .withNonBlockingRendering()
+  .createUtils();
 ```
 
-Register `provideOidc({ issuerUri, clientId, ... })` in application providers. It also accepts an async callback that can inject services before its first `await`, as shown in [app.config.ts](src/app/app.config.ts). Configuration requests must pass through the interceptor without waiting for authentication.
+Register `Oidc.provide({ issuerUri, clientId, ... })` in application providers. It also accepts an async callback that can inject services before its first `await`, as shown in [app.config.ts](src/app/app.config.ts). Configuration requests must pass through the interceptor without waiting for authentication.
 
-`provideMockOidc({ isUserInitiallyLoggedIn: true })` uses `user_mock` directly, without invoking `createUser`. A `user_mock` passed to `provideMockOidc` overrides the builder default. With auto-login, the mock starts logged in.
+`Oidc.provideMock({ isUserInitiallyLoggedIn: true })` uses `user_mock` directly, without invoking `createUser`. A `user_mock` passed to `Oidc.provideMock` overrides the builder default. With auto-login, the mock starts logged in.
 
-The token and helpers are returned separately because augmenting Angular's `InjectionToken<T>` with helper methods loses type inference in Angular 20. `inject(Oidc)` and `injector.get(Oidc)` infer the application user type without casts or constructor types.
+`Oidc` is both the injection token and the namespace for `provide`, `provideMock`, `createBearerInterceptor`, and `enforceLoginGuard`. Import it wherever you configure or consume authentication. `inject(Oidc)` and `injector.get(Oidc)` infer the application user type without application-side casts.
 
 ## Read and refresh the user
 
@@ -93,14 +92,10 @@ Requests needed to construct the initial user cannot depend on that user in `sho
 | Extend `AbstractOidcService<DecodedIdToken>`     | Configure `oidcSpa.withUser<User>(...)`        |
 | Override `autoLogin`                             | `.withAutoLogin()`                             |
 | Override `providerAwaitsInitialization = false`  | `.withNonBlockingRendering()`                  |
-| `Oidc.provide(...)`                              | `provideOidc(...)`                             |
-| `Oidc.provideMock(...)`                          | `provideMockOidc(...)`                         |
-| `Oidc.createBearerInterceptor(...)`              | `createBearerInterceptor(...)`                 |
-| `Oidc.enforceLoginGuard`                         | `enforceLoginGuard`                            |
 | `$decodedIdToken()` / `decodedIdToken$`          | `$user()` / `user$`                            |
 | `decodedIdTokenSchema` and mocked decoded tokens | Validation inside `createUser` and `user_mock` |
 
-Continue injecting `Oidc` with Angular's `inject()` function. Pass both `(route, state)` when composing `enforceLoginGuard` inside another guard so the complete target URL is available.
+Continue injecting `Oidc` with Angular's `inject()` function. Pass both `(route, state)` when composing `Oidc.enforceLoginGuard` inside another guard so the complete target URL is available.
 
 This adapter remains browser-oriented. Its provider skips OIDC initialization during server rendering; gate browser-dependent content. This change does not introduce Angular SSR authentication.
 
