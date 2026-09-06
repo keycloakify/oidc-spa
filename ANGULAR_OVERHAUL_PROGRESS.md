@@ -26,7 +26,7 @@
 
 ## Verification notes
 
-The adapter is now implemented in `src/angular/`, with `src/angular.ts` as the public entrypoint. Runtime tests pass using Angular's real injector/HTTP testing backend and core's real `createGetUser`; only the OIDC transport is substituted. `scripts/test-angular.ts` bundles the test fixture and runs Node's test runner. Added `@angular/compiler` as a development dependency for Angular JIT in the tests.
+The adapter is now implemented in `src/angular/`, with `src/angular/index.ts` as the public entrypoint. Runtime tests pass using Angular's real injector/HTTP testing backend and core's real `createGetUser`; only the OIDC transport is substituted. `scripts/test-angular.ts` bundles the test fixture and runs Node's test runner. Added `@angular/compiler` as a development dependency for Angular JIT in the tests.
 
 Initial-user rejection tests exposed an existing core timer leak: `getUser` now clears its deadlock-detection timer in `finally`, including when the user promise rejects.
 
@@ -56,3 +56,7 @@ Read this file, inspect the working tree, and continue unchecked items. Existing
 Removed the broad catch around Angular initialization. Only `createOidc()` catches the expected `OidcInitializationError` (core's auto-login escape hatch), rethrowing other errors unchanged. Initial `getUser()` failure handling remains aligned with React. Configuration, module loading, mock construction, and subscription setup are outside catches. Every try block in `src/angular/` contains one statement.
 
 Updated tests require synchronous/asynchronous configuration errors, unexpected core errors, and subscription errors (even an `OidcInitializationError` from that wrong source) to reject Angular bootstrap with the original error. Angular type checks and all 19 integration tests pass. The library build passes. An AST check confirms that all five try blocks in `src/angular/` contain exactly one statement. Changed-file formatting and whitespace checks pass.
+
+## Angular entrypoint alignment
+
+Moved the public entrypoint to `src/angular/index.ts`, matching the React adapter directory layout. Package exports now target `dist/esm/angular/index.d.ts` and `dist/esm/angular/index.mjs`. The build continues to exclude the Angular directory from CommonJS output; the obsolete single-file exclusion is removed. Verification passed: Angular type checks and all 19 integration tests, the library build, public `oidc-spa/angular` import resolution and export target existence, both Angular production builds against the updated package, formatting, and whitespace checks.

@@ -97,7 +97,6 @@ for (const targetFormat of ["cjs", "esm"] as const) {
                         switch (targetFormat) {
                             case "cjs":
                                 return [
-                                    "angular.ts",
                                     "angular",
                                     "tanstack-start",
                                     pathJoin("tools", "inferIsViteDev.ts"),

@@ -192,10 +192,10 @@
             "default": "./dist/esm/tanstack-start/react/index.mjs"
         },
         "./angular": {
-            "types": "./dist/esm/angular.d.ts",
-            "module": "./dist/esm/angular.mjs",
-            "import": "./dist/esm/angular.mjs",
-            "default": "./dist/esm/angular.mjs"
+            "types": "./dist/esm/angular/index.d.ts",
+            "module": "./dist/esm/angular/index.mjs",
+            "import": "./dist/esm/angular/index.mjs",
+            "default": "./dist/esm/angular/index.mjs"
         },
         "./keycloak": {
             "module": "./dist/esm/keycloak/index.mjs",
