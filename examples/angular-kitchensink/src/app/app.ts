@@ -18,6 +18,13 @@ export class App {
     });
   }
 
+  get accountConsoleUrl() {
+    return this.keycloakUtils.getAccountUrl({
+      clientId: this.oidc.clientId,
+      validRedirectUri: this.oidc.validRedirectUri,
+    });
+  }
+
   get canShowAdminLink(): boolean {
     if (this.oidc.initializationError) {
       return false;

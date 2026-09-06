@@ -8,10 +8,6 @@ import { TodoService } from '../services/todo.service';
   standalone: true,
   imports: [AsyncPipe],
   template: `
-    @if(oidc.$user().roles.length > 0){
-    <p>You currently have these roles: {{ oidc.$user().roles.join(', ') }}</p>
-    }
-    <button (click)="oidc.refreshUser()">Refresh user</button>
     <section>
       <p>
         Todos fetched with <code>Authorization: Bearer [access_token]</code> in the request's
