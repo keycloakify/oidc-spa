@@ -60,3 +60,7 @@ Updated tests require synchronous/asynchronous configuration errors, unexpected 
 ## Angular entrypoint alignment
 
 Moved the public entrypoint to `src/angular/index.ts`, matching the React adapter directory layout. Package exports now target `dist/esm/angular/index.d.ts` and `dist/esm/angular/index.mjs`. The build continues to exclude the Angular directory from CommonJS output; the obsolete single-file exclusion is removed. Verification passed: Angular type checks and all 19 integration tests, the library build, public `oidc-spa/angular` import resolution and export target existence, both Angular production builds against the updated package, formatting, and whitespace checks.
+
+## Early-access error API removal
+
+Removed the public early-access error class and its module. Premature application reads throw plain `Error` with the existing diagnostics. Only during interceptor evaluation, pending core reads throw the core readiness promise; the interceptor recognizes that exact promise and waits before retrying. User-read failures and unrelated predicate errors still propagate. The deferred file-consolidation work and proposed `getOidc` utility remain out of scope. Verification passed: Angular type checks and all 19 integration tests (including unchanged propagation of unrelated interceptor predicate errors), the library build, formatting, and whitespace checks.
