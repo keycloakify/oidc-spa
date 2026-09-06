@@ -16,7 +16,6 @@ import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";
 import type { BuilderParams } from "./utilsBuilder";
 import type { OidcService, OidcSpaUtils, OidcHelpers } from "./types";
 import { createOidcService, type InitializationParams } from "./createOidcService";
-import { CoreAccessedTooEarlyError } from "./OidcAccessedTooEarlyError";
 
 export function createOidcSpaUtils<AutoLogin extends boolean, User>(
     builder: BuilderParams<AutoLogin, User>
@@ -57,7 +56,7 @@ export function createOidcSpaUtils<AutoLogin extends boolean, User>(
                 try {
                     decision = evaluate();
                 } catch (error) {
-                    if (!(error instanceof CoreAccessedTooEarlyError)) {
+                    if (error !== runtime.prCore) {
                         throw error;
                     }
                 }

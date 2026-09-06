@@ -7,4 +7,3 @@ export type {
     ParamsOfProvideMock
 } from "./types";
 export type { OidcSpaUtilsBuilder } from "./utilsBuilder";
-export { OidcAccessedTooEarlyError } from "./OidcAccessedTooEarlyError";

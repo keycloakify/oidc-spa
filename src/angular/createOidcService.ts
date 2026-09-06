@@ -7,7 +7,6 @@ import { getBaseHref } from "../tools/getBaseHref";
 import type { ValueOrAsyncGetter } from "../tools/ValueOrAsyncGetter";
 import type { BuilderParams } from "./utilsBuilder";
 import type { OidcService, ParamsOfProvide, ParamsOfProvideMock } from "./types";
-import { CoreAccessedTooEarlyError, OidcAccessedTooEarlyError } from "./OidcAccessedTooEarlyError";
 
 export type InitializationParams<User> =
     | { implementation: "real"; params: ValueOrAsyncGetter<ParamsOfProvide> }
@@ -53,7 +52,12 @@ export function createOidcService<User>(builder: BuilderParams<boolean, User>) {
     function getCore(caller: string): Core {
         const state = dCore.getState();
         if (!state.hasResolved) {
-            throw new CoreAccessedTooEarlyError(
+            // The interceptor can wait for this exact promise and retry its predicate.
+            // Premature reads outside that internal evaluation are application errors.
+            if (isEvaluatingInterceptor) {
+                throw dCore.pr;
+            }
+            throw new Error(
                 `oidc-spa: ${caller} accessed before core authentication is ready. ` +
                     "Gate your UI with @defer (when oidc.prInitialized | async)."
             );
@@ -75,7 +79,7 @@ export function createOidcService<User>(builder: BuilderParams<boolean, User>) {
     function getUserResult(): UserResult {
         const state = $userResult();
         if (state === undefined) {
-            throw new OidcAccessedTooEarlyError(
+            throw new Error(
                 isEvaluatingInterceptor
                     ? "oidc-spa: shouldInjectAccessToken accessed the user before it was ready. " +
                       "Requests made by createUser must depend only on authentication state, not on the user being constructed."
@@ -111,7 +115,7 @@ export function createOidcService<User>(builder: BuilderParams<boolean, User>) {
             }
             const userState = $userResult();
             if (userState === undefined) {
-                throw new OidcAccessedTooEarlyError(
+                throw new Error(
                     "oidc-spa: initializationError accessed before oidc.prInitialized resolved."
                 );
             }

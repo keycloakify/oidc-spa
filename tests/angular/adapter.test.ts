@@ -27,7 +27,7 @@ import {
 import { HttpTestingController, provideHttpClientTesting } from "@angular/common/http/testing";
 import { Router, type ActivatedRouteSnapshot, type RouterStateSnapshot } from "@angular/router";
 import { firstValueFrom } from "rxjs";
-import { oidcSpa, OidcAccessedTooEarlyError, type OidcService } from "../../src/angular";
+import { oidcSpa, type OidcService } from "../../src/angular";
 import { OidcInitializationError } from "../../src/core/OidcInitializationError";
 import { getDesiredPostLoginRedirectUrl } from "../../src/core/desiredPostLoginRedirectUrl";
 import { resetCore } from "./core";
@@ -120,8 +120,8 @@ for (const nonBlocking of [false, true]) {
             const oidc = injector.get(Oidc);
             const seen: string[] = [];
             oidc.user$.subscribe(user => seen.push(user.displayName));
-            assert.throws(() => oidc.$user(), OidcAccessedTooEarlyError);
-            assert.throws(() => oidc.isUserLoggedIn, OidcAccessedTooEarlyError);
+            assert.throws(() => oidc.$user(), /User accessed before oidc.prInitialized resolved/);
+            assert.throws(() => oidc.isUserLoggedIn, /accessed before core authentication is ready/);
             const config = http.expectOne("/oidc-config.json");
             assert.equal(config.request.headers.has("Authorization"), false);
             config.flush(params);
@@ -213,6 +213,7 @@ for (const nonBlocking of [false, true]) {
 test("requests wait for core and re-evaluate inside the injection context, without simulated states", async () => {
     const core = resetCore();
     core.loggedIn = false;
+    const predicateError = new Error("broken predicate");
     let evaluations = 0;
     let builds = 0;
     const utils = oidcSpa
@@ -231,6 +232,9 @@ test("requests wait for core and re-evaluate inside the injection context, witho
             withInterceptors([
                 utils.Oidc.createBearerInterceptor({
                     shouldInjectAccessToken: req => {
+                        if (req.url === "/broken-predicate") {
+                            throw predicateError;
+                        }
                         evaluations++;
                         return predicate(inject(Oidc), req);
                     }
@@ -241,6 +245,11 @@ test("requests wait for core and re-evaluate inside the injection context, witho
     ]);
     const http = injector.get(HttpClient);
     const testing = injector.get(HttpTestingController);
+    await assert.rejects(
+        firstValueFrom(http.get("/broken-predicate")),
+        error => error === predicateError
+    );
+    testing.expectNone("/broken-predicate");
     const result = firstValueFrom(
         http.get("/optional", { context: new HttpContext().set(OPTIONAL, true) })
     );
