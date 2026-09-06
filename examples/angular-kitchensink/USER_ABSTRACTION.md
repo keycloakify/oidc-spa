@@ -45,7 +45,7 @@ async saveProfile() {
 }
 ```
 
-Include Angular's `AsyncPipe` in the component imports for this template. Default rendering waits for initialization. `.withNonBlockingRendering()` renders immediately, so gate user-dependent UI as above. `prInitialized` settles on both success and initialization failure; check `initializationError` before reading the user. Authentication getters alone do not guarantee that the user model is ready.
+Include Angular's `AsyncPipe` in the component imports for this template. Default rendering waits for initialization. `.withNonBlockingRendering()` renders immediately, so gate user-dependent UI as above. `prInitialized` settles on success and handled authentication or initial-user failures; check `initializationError` before reading the user. Configuration errors and unexpected adapter/core errors propagate from initialization instead of being converted into `OidcInitializationError`. Authentication getters alone do not guarantee that the user model is ready.
 
 `$user()` is a read-only signal. `user$` replays the current user to RxJS subscribers and exposes `getValue()`. Subscriptions made during initialization wait for the first user; anonymous or unconfigured user streams complete without emitting. An initial user-build failure errors the stream. Synchronous user reads before readiness, while anonymous, or without user configuration throw an explanatory error.
 

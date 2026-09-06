@@ -3,6 +3,7 @@
 ## Contract and scope
 
 -   Replace `AbstractOidcService` with a functional adapter and typed injection token.
+-   Maintainer rule: every try/catch contains exactly one statement targeting the operation expected to throw. Do not catch surrounding setup/subscription code or convert unexpected bugs into recoverable initialization errors.
 -   Match the user's kitchen sink builder: `oidcSpa.withUser({ createUser, user_mock }).withAutoLogin().withNonBlockingRendering().createUtils()`.
 -   Preserve `inject(Oidc)`. Expose helpers on the token: `Oidc.provide`, `Oidc.provideMock`, `Oidc.createBearerInterceptor`, and `Oidc.enforceLoginGuard`.
 -   Use `src/react-spa/createOidcSpaUtils.ts` and `utilsBuilder.ts` as the user-lifecycle reference. Do not redesign core user management.
@@ -49,3 +50,9 @@ No remaining implementation work. Changes are uncommitted for review.
 ## Resume
 
 Read this file, inspect the working tree, and continue unchecked items. Existing user changes were already present under `examples/angular-kitchensink` before implementation. Do not reset them. No subagents requested.
+
+## Targeted error handling follow-up
+
+Removed the broad catch around Angular initialization. Only `createOidc()` catches the expected `OidcInitializationError` (core's auto-login escape hatch), rethrowing other errors unchanged. Initial `getUser()` failure handling remains aligned with React. Configuration, module loading, mock construction, and subscription setup are outside catches. Every try block in `src/angular/` contains one statement.
+
+Updated tests require synchronous/asynchronous configuration errors, unexpected core errors, and subscription errors (even an `OidcInitializationError` from that wrong source) to reject Angular bootstrap with the original error. Angular type checks and all 19 integration tests pass. The library build passes. An AST check confirms that all five try blocks in `src/angular/` contain exactly one statement. Changed-file formatting and whitespace checks pass.

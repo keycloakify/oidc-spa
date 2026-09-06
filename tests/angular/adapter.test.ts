@@ -265,22 +265,49 @@ test("requests wait for core and re-evaluate inside the injection context, witho
     testing.verify();
 });
 
-test("provider configuration failures settle initialization and token waiters", async () => {
-    resetCore();
-    const cause = new Error("config failed");
-    const utils = oidcSpa.createUtils();
-    const { Oidc } = utils;
-    const { injector, initialization } = app([
-        utils.Oidc.provide(async () => {
+for (const isAsync of [false, true]) {
+    test(`provider configuration failures propagate unchanged, async=${isAsync}`, async () => {
+        const core = resetCore();
+        const cause = new Error("config failed");
+        const { Oidc } = oidcSpa.createUtils();
+        const getParams = () => {
             throw cause;
-        })
-    ]);
-    const oidc = injector.get(Oidc);
-    await initialization.donePromise;
-    await oidc.prInitialized;
-    assert.ok(oidc.initializationError instanceof OidcInitializationError);
-    assert.equal((oidc.initializationError as unknown as Error & { cause: unknown }).cause, cause);
-    await assert.rejects(oidc.getAccessToken(), OidcInitializationError);
+        };
+        const { initialization } = app([Oidc.provide(isAsync ? async () => getParams() : getParams)]);
+        await assert.rejects(initialization.donePromise, error => error === cause);
+        assert.equal(core.calls, 0);
+    });
+}
+
+test("unexpected createOidc errors propagate unchanged", async () => {
+    const core = resetCore();
+    const cause = new Error("unexpected core bug");
+    core.error = cause;
+    const { Oidc } = oidcSpa.withAutoLogin().createUtils();
+    const { initialization } = app([Oidc.provide(params)]);
+    core.ready.resolve();
+    await assert.rejects(initialization.donePromise, error => error === cause);
+});
+
+test("subscription setup errors propagate even when they are OidcInitializationError", async () => {
+    const core = resetCore();
+    const cause = new OidcInitializationError({
+        messageOrCause: "unexpected subscription failure",
+        isAuthServerLikelyDown: false
+    });
+    const createOidc = core.createOidc;
+    core.createOidc = async params => {
+        const oidc = await createOidc(params);
+        assert.ok(oidc.isUserLoggedIn);
+        oidc.subscribeToTokensChange = () => {
+            throw cause;
+        };
+        return oidc;
+    };
+    const { Oidc } = oidcSpa.createUtils();
+    const { initialization } = app([Oidc.provide(params)]);
+    core.ready.resolve();
+    await assert.rejects(initialization.donePromise, error => error === cause);
 });
 
 test("core initialization rejection is handled, including auto-login", async () => {
