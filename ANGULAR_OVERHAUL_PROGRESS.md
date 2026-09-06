@@ -3,6 +3,7 @@
 ## Contract and scope
 
 -   Replace `AbstractOidcService` with a functional adapter and typed injection token.
+-   Keep adapter source layout, naming, parameter conventions, and shared lifecycle logic aligned with `src/react-spa`. Retain differences required for Angular DI, signals, and interceptors.
 -   Maintainer rule: every try/catch contains exactly one statement targeting the operation expected to throw. Do not catch surrounding setup/subscription code or convert unexpected bugs into recoverable initialization errors.
 -   Match the user's kitchen sink builder: `oidcSpa.withUser({ createUser, user_mock }).withAutoLogin().withNonBlockingRendering().createUtils()`.
 -   Preserve `inject(Oidc)`. Expose helpers on the token: `Oidc.provide`, `Oidc.provideMock`, `Oidc.createBearerInterceptor`, and `Oidc.enforceLoginGuard`.
@@ -64,3 +65,9 @@ Moved the public entrypoint to `src/angular/index.ts`, matching the React adapte
 ## Early-access error API removal
 
 Removed the public early-access error class and its module. Premature application reads throw plain `Error` with the existing diagnostics. Only during interceptor evaluation, pending core reads throw the core readiness promise; the interceptor recognizes that exact promise and waits before retrying. User-read failures and unrelated predicate errors still propagate. The deferred file-consolidation work and proposed `getOidc` utility remain out of scope. Verification passed: Angular type checks and all 19 integration tests (including unchanged propagation of unrelated interceptor predicate errors), the library build, formatting, and whitespace checks.
+
+## Adapter source consistency
+
+Consolidated `createOidcService.ts` into `createOidcSpaUtils.ts`. Angular now matches React's four-file layout: `index.ts`, `types.ts`, `utilsBuilder.ts`, and `createOidcSpaUtils.ts`. The service factory is internal to `createOidcSpaUtils`, preserving state per injector. Removed `BuilderParams`; factory and builder arguments are named `params` with inline types. Shared core/user deferred and result names, static user mock naming, and explicit builder parameter forwarding follow React.
+
+Updated the Angular test transport substitution to target the consolidated implementation. Type checks and all 19 integration tests pass. The library build and built public entrypoint import pass. Directory comparison confirms the matching source layout; an AST check confirms all five Angular try blocks contain exactly one statement. Changed-file formatting and whitespace checks pass.
