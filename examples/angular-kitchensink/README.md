@@ -1,5 +1,7 @@
 # Angular
 
+See [the user abstraction and migration guide](USER_ABSTRACTION.md) for this example's builder, injection token, user signals, and authenticated API calls during user initialization.
+
 This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 20.3.2.
 
 ## Development server

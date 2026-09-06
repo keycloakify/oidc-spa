@@ -34,6 +34,7 @@ jobs:
       with:
         node-version: '22.x'
     - uses: bahmutov/npm-install@v1
+    - run: yarn test:angular
     - run: yarn build
 
   check_if_version_upgraded:

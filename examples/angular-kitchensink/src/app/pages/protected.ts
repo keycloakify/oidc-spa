@@ -8,18 +8,10 @@ import { TodoService } from '../services/todo.service';
   standalone: true,
   imports: [AsyncPipe],
   template: `
-    @if(oidc.$decodedIdToken().realm_access){
-    <p>
-      You currently have theses roles: {{ oidc.$decodedIdToken().realm_access!.roles.join(', ') }}
-    </p>
+    @if(oidc.$user().roles.length > 0){
+    <p>You currently have these roles: {{ oidc.$user().roles.join(', ') }}</p>
     }
-    <p>The access/id tokens where issued at: {{ oidc.$decodedIdToken().iat }}</p>
-    <button (click)="oidc.renewTokens()">Renew tokens</button>
-    &nbsp;
-    <small
-      >(NOTE: You don't need to worry about renewing token this button is just to demo
-      reactivity)</small
-    >
+    <button (click)="oidc.refreshUser()">Refresh user</button>
     <section>
       <p>
         Todos fetched with <code>Authorization: Bearer [access_token]</code> in the request's

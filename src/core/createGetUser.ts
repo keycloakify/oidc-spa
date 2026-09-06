@@ -195,17 +195,19 @@ export function createGetUser<User>(params: {
             setTimer();
         }
 
-        const user = await state.prUser;
+        try {
+            const user = await state.prUser;
 
-        if (timer_cycleDetection !== undefined) {
-            clearTimeout(timer_cycleDetection);
+            return id<R_GetUser>({
+                user,
+                refreshUser,
+                subscribeToUserChange
+            });
+        } finally {
+            if (timer_cycleDetection !== undefined) {
+                clearTimeout(timer_cycleDetection);
+            }
         }
-
-        return id<R_GetUser>({
-            user,
-            refreshUser,
-            subscribeToUserChange
-        });
     };
 
     return { getUser };
