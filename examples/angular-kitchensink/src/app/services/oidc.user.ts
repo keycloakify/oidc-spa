@@ -8,7 +8,6 @@ import { z } from 'zod';
 // Shape it around the information the UI needs to render.
 export type User = {
   displayName: string;
-  roles: string[];
   canSeeAdminNavigation: boolean;
 };
 
@@ -17,7 +16,13 @@ const DecodedIdToken = z.object({
 });
 
 const DecodedAccessToken = z.object({
-  realm_access: z.object({ roles: z.array(z.string()) }).optional(),
+  resource_access: z
+    .object({
+      'realm-management': z.object({
+        roles: z.array(z.string()),
+      }),
+    })
+    .optional(),
 });
 
 export const createUser: CreateUser<User> = ({
@@ -26,18 +31,17 @@ export const createUser: CreateUser<User> = ({
 }) => {
   const decodedIdToken = DecodedIdToken.parse(decodedIdToken_generic);
   const decodedAccessToken = DecodedAccessToken.parse(decodeJwt(accessToken));
-  const roles = decodedAccessToken.realm_access?.roles ?? [];
 
   return {
     displayName: decodedIdToken.name,
-    roles,
-    canSeeAdminNavigation: roles.includes('realm-admin'),
+    canSeeAdminNavigation:
+      decodedAccessToken.resource_access?.['realm-management'].roles.includes('realm-admin') ??
+      false,
   };
 };
 
 // App-level user returned when the mock implementation is enabled.
 export const user_mock: User = {
   displayName: 'John Doe',
-  roles: ['realm-admin'],
   canSeeAdminNavigation: true,
 };

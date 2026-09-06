@@ -56,7 +56,7 @@
   >
   } @else if (oidc.isUserLoggedIn) {
   <div>
-    <span>Hello {{ oidc.$user().displayName }}</span>
+    <a href="{{accountConsoleUrl}}">Hello {{ oidc.$user().displayName }}</a>
     &nbsp; &nbsp;
     <button (click)="oidc.logout({ redirectTo: 'home' })">Logout</button>
   </div>
