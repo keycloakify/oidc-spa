@@ -200,120 +200,120 @@ export function createOidcService<User>(builder: BuilderParams<boolean, User>) {
         }
         hasStarted = true;
 
-        try {
-            let core: Core;
-            let shouldGetUser: boolean;
-            let warnUserSecondsBeforeAutoLogout = 60;
+        let core: Core;
+        let shouldGetUser: boolean;
+        let warnUserSecondsBeforeAutoLogout = 60;
 
-            if (initialization.implementation === "mock") {
-                const { createMockOidc } = await import("../core/createMockOidc");
-                const params = initialization.params;
-                const user_mock = params.user_mock ?? builder.user_mock;
-                core = await createMockOidc({
-                    BASE_URL: getBaseHref(),
-                    autoLogin: builder.autoLogin,
-                    isUserInitiallyLoggedIn:
-                        builder.autoLogin || (params.isUserInitiallyLoggedIn ?? true),
-                    mockedParams: { issuerUri: params.mockIssuerUri, clientId: params.mockClientId },
-                    mockedTokens: { accessToken: params.mockAccessToken },
-                    mockedUser: user_mock
-                });
-                shouldGetUser = user_mock !== undefined;
-            } else {
-                const paramsOrGetter = initialization.params;
-                // Invoke the config getter in context, before yielding, just like an Angular initializer.
-                const prParams = (async () => {
-                    isRunningGetParams = true;
-                    try {
-                        return await (typeof paramsOrGetter === "function"
-                            ? runInInjectionContext(injector, paramsOrGetter)
-                            : paramsOrGetter);
-                    } finally {
-                        isRunningGetParams = false;
-                    }
-                })();
-                const [{ createOidc }, { warnUserSecondsBeforeAutoLogout: warning = 60, ...params }] =
-                    await Promise.all([import("../core"), prParams]);
-                warnUserSecondsBeforeAutoLogout = warning;
-                const { createUser } = builder;
-                core = await createOidc({
-                    ...params,
-                    BASE_URL: getBaseHref(),
-                    autoLogin: builder.autoLogin,
-                    createUser:
-                        createUser === undefined
-                            ? undefined
-                            : params => runInInjectionContext(injector, () => createUser(params))
-                });
-                shouldGetUser = createUser !== undefined;
-            }
-
-            dCore.resolve(core);
-            if (destroyed) {
-                setUserResult(undefined);
-                return prInitialized;
-            }
-
-            if (core.isUserLoggedIn) {
-                registerCleanup(
-                    core.subscribeToTokensChange(({ accessToken }) => {
-                        accessTokenRotation.next(accessToken);
-                    }).unsubscribeFromTokensChange
-                );
-                registerCleanup(
-                    core.subscribeToAutoLogoutCountdown(({ secondsLeft }) => {
-                        secondsLeftBeforeAutoLogout.set(
-                            secondsLeft === undefined || secondsLeft > warnUserSecondsBeforeAutoLogout
-                                ? null
-                                : secondsLeft
-                        );
-                    }).unsubscribeFromAutoLogoutCountdown
-                );
-            }
-
-            if (!core.isUserLoggedIn || !shouldGetUser) {
-                setUserResult(undefined);
-                return prInitialized;
-            }
-
-            let result: UserResult;
+        if (initialization.implementation === "mock") {
+            const { createMockOidc } = await import("../core/createMockOidc");
+            const params = initialization.params;
+            const user_mock = params.user_mock ?? builder.user_mock;
+            core = await createMockOidc({
+                BASE_URL: getBaseHref(),
+                autoLogin: builder.autoLogin,
+                isUserInitiallyLoggedIn: builder.autoLogin || (params.isUserInitiallyLoggedIn ?? true),
+                mockedParams: { issuerUri: params.mockIssuerUri, clientId: params.mockClientId },
+                mockedTokens: { accessToken: params.mockAccessToken },
+                mockedUser: user_mock
+            });
+            shouldGetUser = user_mock !== undefined;
+        } else {
+            const paramsOrGetter = initialization.params;
+            // Invoke the config getter in context, before yielding, just like an Angular initializer.
+            const prParams = (async () => {
+                isRunningGetParams = true;
+                try {
+                    return await (typeof paramsOrGetter === "function"
+                        ? runInInjectionContext(injector, paramsOrGetter)
+                        : paramsOrGetter);
+                } finally {
+                    isRunningGetParams = false;
+                }
+            })();
+            const [{ createOidc }, { warnUserSecondsBeforeAutoLogout: warning = 60, ...params }] =
+                await Promise.all([import("../core"), prParams]);
+            warnUserSecondsBeforeAutoLogout = warning;
+            const { createUser } = builder;
+            const paramsOfCreateOidc = {
+                ...params,
+                BASE_URL: getBaseHref(),
+                autoLogin: builder.autoLogin,
+                createUser:
+                    createUser === undefined
+                        ? undefined
+                        : (params: Parameters<typeof createUser>[0]) =>
+                              runInInjectionContext(injector, () => createUser(params))
+            };
             try {
-                result = await core.getUser();
+                core = await createOidc(paramsOfCreateOidc);
             } catch (error) {
-                // Same initial-createUser error contract as the React adapter.
-                setUserResult(
-                    new OidcInitializationError({
-                        isAuthServerLikelyDown: false,
-                        messageOrCause: new Error(
-                            "The initial invocation of createUser threw an error",
-                            // @ts-expect-error ES2022 Error.cause
-                            { cause: error instanceof Error ? error : new Error(`${error}`) }
-                        )
-                    })
-                );
+                // Core throws OidcInitializationError for authentication failure with auto-login.
+                // Programming errors and other unexpected failures must propagate unchanged.
+                if (!(error instanceof OidcInitializationError)) {
+                    throw error;
+                }
+                dCore.resolve(error);
+                setUserResult(error);
                 return prInitialized;
             }
-
-            registerCleanup(
-                result.subscribeToUserChange(({ user }) => {
-                    // React keeps this result current too. Angular's signal only notifies its consumers.
-                    result.user = user;
-                    $userResult.set({ value: result });
-                    userSubject.next(user);
-                }).unsubscribeFromUserChange
-            );
-            setUserResult(result);
-        } catch (error) {
-            const initializationError =
-                error instanceof OidcInitializationError
-                    ? error
-                    : new OidcInitializationError({
-                          isAuthServerLikelyDown: false,
-                          messageOrCause: error instanceof Error ? error : new Error(`${error}`)
-                      });
-            dCore.resolve(initializationError);
-            setUserResult(initializationError);
+            shouldGetUser = createUser !== undefined;
         }
+
+        dCore.resolve(core);
+        if (destroyed) {
+            setUserResult(undefined);
+            return prInitialized;
+        }
+
+        if (core.isUserLoggedIn) {
+            registerCleanup(
+                core.subscribeToTokensChange(({ accessToken }) => {
+                    accessTokenRotation.next(accessToken);
+                }).unsubscribeFromTokensChange
+            );
+            registerCleanup(
+                core.subscribeToAutoLogoutCountdown(({ secondsLeft }) => {
+                    secondsLeftBeforeAutoLogout.set(
+                        secondsLeft === undefined || secondsLeft > warnUserSecondsBeforeAutoLogout
+                            ? null
+                            : secondsLeft
+                    );
+                }).unsubscribeFromAutoLogoutCountdown
+            );
+        }
+
+        if (!core.isUserLoggedIn || !shouldGetUser) {
+            setUserResult(undefined);
+            return prInitialized;
+        }
+
+        let result: UserResult;
+        try {
+            result = await core.getUser();
+        } catch (error) {
+            // Same initial-createUser error contract as the React adapter.
+            setUserResult(
+                new OidcInitializationError({
+                    isAuthServerLikelyDown: false,
+                    messageOrCause: new Error(
+                        "The initial invocation of createUser threw an error",
+                        // @ts-expect-error ES2022 Error.cause
+                        { cause: error instanceof Error ? error : new Error(`${error}`) }
+                    )
+                })
+            );
+            return prInitialized;
+        }
+
+        registerCleanup(
+            result.subscribeToUserChange(({ user }) => {
+                // React keeps this result current too. Angular's signal only notifies its consumers.
+                result.user = user;
+                $userResult.set({ value: result });
+                userSubject.next(user);
+            }).unsubscribeFromUserChange
+        );
+        setUserResult(result);
         return prInitialized;
     }
 

@@ -188,7 +188,7 @@ export type ParamsOfProvideMock<AutoLogin extends boolean = false, User = never>
 
 /** The object returned by inject(Oidc). User reads require successful initialization and login. */
 export type OidcService<AutoLogin extends boolean = false, User = never> = {
-    /** Settles after core authentication and the initial user build, including on initialization failure. */
+    /** Settles after core authentication and the initial user build, including handled authentication or initial-user failures. */
     readonly prInitialized: Promise<true>;
     readonly initializationError: OidcInitializationError | undefined;
     readonly issuerUri: string;
