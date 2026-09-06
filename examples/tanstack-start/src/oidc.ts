@@ -6,7 +6,6 @@ import avatarFallbackSvgUrl from "./components/userPictureFallback.svg";
 // App-specific user model exposed by `useOidc()`.
 // Shape it around the information the UI needs to render.
 export type User = {
-    username: string;
     displayName: string;
     email: string | undefined;
     avatarImgUrl: string;
@@ -26,7 +25,7 @@ export const {
 } = oidcSpa
     .withUser<User>({
         createUser: async ({ decodedIdToken, accessToken }) => {
-            const { sub, name, picture, email, preferred_username } = z
+            const { name, picture, email } = z
                 .object({
                     sub: z.string(),
                     name: z.string(),
@@ -49,7 +48,6 @@ export const {
                 .parse(decodeJwt(accessToken));
 
             const user: User = {
-                username: preferred_username ?? sub,
                 displayName: name,
                 avatarImgUrl: picture || avatarFallbackSvgUrl,
                 email,
@@ -62,7 +60,6 @@ export const {
             return user;
         },
         user_mock: {
-            username: "john.doe",
             displayName: "John Doe",
             email: undefined,
             avatarImgUrl: avatarFallbackSvgUrl,

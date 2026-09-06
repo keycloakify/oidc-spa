@@ -39,9 +39,8 @@ function Protected() {
 
             <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-sm shadow-slate-950/40">
                 <dl className="grid gap-2 text-sm text-slate-400">
-                    <InfoRow label="id">{user.id}</InfoRow>
+                    <InfoRow label="Name">{user.displayName}</InfoRow>
                     {user.email && <InfoRow label="Email">{user.email}</InfoRow>}
-                    {user.username && <InfoRow label="Username">{user.username}</InfoRow>}
                 </dl>
 
                 {keycloakUtils && (
