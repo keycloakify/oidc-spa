@@ -22,10 +22,9 @@ export async function loader(args: {
 
 export default function Protected() {
     // Safe to assume user is logged in here.
-    const { decodedIdToken, goToAuthServer, backFromAuthServer, issuerUri, clientId, validRedirectUri } =
-        useOidc({
-            assert: "user logged in"
-        });
+    const { user, goToAuthServer, backFromAuthServer, issuerUri, clientId, validRedirectUri } = useOidc({
+        assert: "user logged in"
+    });
 
     const keycloakUtils = isKeycloak({ issuerUri }) ? createKeycloakUtils({ issuerUri }) : undefined;
 
@@ -35,7 +34,7 @@ export default function Protected() {
         <section className="space-y-6">
             <div className="space-y-1">
                 <p className="text-sm uppercase tracking-wide text-slate-400">Protected content</p>
-                <h1 className="text-2xl font-semibold text-white">Hello {decodedIdToken.name}</h1>
+                <h1 className="text-2xl font-semibold text-white">Hello {user.displayName}</h1>
                 <p className="text-base text-slate-300">
                     These actions come directly from your identity provider via oidc-spa.
                 </p>
@@ -43,11 +42,8 @@ export default function Protected() {
 
             <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-sm shadow-slate-950/40">
                 <dl className="grid gap-2 text-sm text-slate-400">
-                    <InfoRow label="Subject">{decodedIdToken.sub}</InfoRow>
-                    {decodedIdToken.email && <InfoRow label="Email">{decodedIdToken.email}</InfoRow>}
-                    {decodedIdToken.preferred_username && (
-                        <InfoRow label="Username">{decodedIdToken.preferred_username}</InfoRow>
-                    )}
+                    <InfoRow label="Name">{user.displayName}</InfoRow>
+                    {user.email && <InfoRow label="Email">{user.email}</InfoRow>}
                 </dl>
 
                 {keycloakUtils && (

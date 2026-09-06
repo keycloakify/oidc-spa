@@ -10,7 +10,9 @@ export async function loader(args: {
 
     const oidc = await getOidc({ assert: "user logged in" });
 
-    if (!oidc.getDecodedIdToken().realm_access?.roles.includes("realm-admin")) {
+    const { user } = await oidc.getUser();
+
+    if (!user.canSeeKeycloakAdminNavigation) {
         throw new Error("unauthorized");
     }
 }
@@ -34,7 +36,8 @@ export default function AdminOnly() {
             <div className="space-y-1">
                 <h1 className="text-xl font-semibold text-white">Administration Page</h1>
                 <p className="text-sm text-slate-300">
-                    Access is granted because your ID token includes the <code>realm-admin</code> role.
+                    Access is granted because your access token includes the <code>realm-admin</code>{" "}
+                    role.
                 </p>
             </div>
 

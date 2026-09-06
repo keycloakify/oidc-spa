@@ -10,10 +10,9 @@ import { fetchWithAuth, useOidc, withLoginEnforced } from "~/oidc";
  */
 const Protected = withLoginEnforced(() => {
     // Here we can safely assume that the user is logged in.
-    const { decodedIdToken, goToAuthServer, backFromAuthServer, issuerUri, clientId, validRedirectUri } =
-        useOidc({
-            assert: "user logged in"
-        });
+    const { user, goToAuthServer, backFromAuthServer, issuerUri, clientId, validRedirectUri } = useOidc({
+        assert: "user logged in"
+    });
 
     // Since oidc-spa is a generic adapter, all Keycloak specific features are provided via a standalone
     // util. And since this example should run as well with other provider we first test if we are integrating
@@ -26,7 +25,7 @@ const Protected = withLoginEnforced(() => {
         <section className="space-y-6">
             <div className="space-y-1">
                 <p className="text-sm uppercase tracking-wide text-slate-400">Protected content</p>
-                <h1 className="text-2xl font-semibold text-white">Hello {decodedIdToken.name}</h1>
+                <h1 className="text-2xl font-semibold text-white">Hello {user.displayName}</h1>
                 <p className="text-base text-slate-300">
                     These actions come directly from your identity provider via oidc-spa.
                 </p>
@@ -34,11 +33,8 @@ const Protected = withLoginEnforced(() => {
 
             <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-sm shadow-slate-950/40">
                 <dl className="grid gap-2 text-sm text-slate-400">
-                    <InfoRow label="Subject">{decodedIdToken.sub}</InfoRow>
-                    {decodedIdToken.email && <InfoRow label="Email">{decodedIdToken.email}</InfoRow>}
-                    {decodedIdToken.preferred_username && (
-                        <InfoRow label="Username">{decodedIdToken.preferred_username}</InfoRow>
-                    )}
+                    <InfoRow label="Name">{user.displayName}</InfoRow>
+                    {user.email && <InfoRow label="Email">{user.email}</InfoRow>}
                 </dl>
 
                 {keycloakUtils && (

@@ -29,9 +29,7 @@ export const { bootstrapOidc, useOidc, getOidc, enforceLogin, OidcInitialization
                 .object({
                     resource_access: z
                         .object({
-                            "realm-management": z.object({
-                                roles: z.array(z.string())
-                            })
+                            "realm-management": z.object({ roles: z.array(z.string()) }).optional()
                         })
                         .optional()
                 })
@@ -42,7 +40,7 @@ export const { bootstrapOidc, useOidc, getOidc, enforceLogin, OidcInitialization
                 avatarImgUrl: picture || avatarFallbackSvgUrl,
                 email,
                 canSeeKeycloakAdminNavigation:
-                    decodedAccessToken.resource_access?.["realm-management"].roles.includes(
+                    decodedAccessToken.resource_access?.["realm-management"]?.roles.includes(
                         "realm-admin"
                     ) ?? false
             };

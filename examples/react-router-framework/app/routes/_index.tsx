@@ -32,7 +32,7 @@ export default function Home() {
             <div className="grid gap-4 sm:grid-cols-2">
                 <InfoCard
                     title="Sign in"
-                    body="Header actions reflect your auth state and show the decoded ID token picture claim."
+                    body="Header actions reflect your auth state and show the avatar from your user profile."
                 />
                 <InfoCard
                     title="Visit /protected"
@@ -48,7 +48,7 @@ export default function Home() {
                 />
                 <InfoCard
                     title="Debug log"
-                    body="Pop open devtools to see extra auth state logs from oidc-spa."
+                    body="Set debugLogs to true in oidc.ts to see auth state logs in the console."
                 />
                 <InfoCard
                     title="Early render"
@@ -60,11 +60,11 @@ export default function Home() {
 }
 
 function Greeting() {
-    const { isUserLoggedIn, decodedIdToken } = useOidc();
+    const { isUserLoggedIn, user } = useOidc();
 
     return (
         <div className="inline-flex items-center rounded-full border border-slate-800 bg-slate-900 px-4 py-2 text-sm font-medium text-slate-200">
-            {isUserLoggedIn ? `Signed in as ${decodedIdToken.name}` : `Browsing as a guest`}
+            {isUserLoggedIn ? `Signed in as ${user.displayName}` : `Browsing as a guest`}
         </div>
     );
 }
