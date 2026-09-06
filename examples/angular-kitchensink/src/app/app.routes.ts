@@ -1,14 +1,14 @@
 import { inject } from '@angular/core';
 import { Router, Routes, RedirectCommand } from '@angular/router';
 import { Public } from './pages/public';
-import { Oidc, enforceLoginGuard } from './services/oidc.service';
+import { Oidc } from './services/oidc.service';
 
 export const routes: Routes = [
   { path: '', component: Public },
   {
     path: 'protected',
     loadComponent: () => import('./pages/protected').then((c) => c.Protected),
-    canActivate: [enforceLoginGuard],
+    canActivate: [Oidc.enforceLoginGuard],
   },
   {
     path: 'admin-only',
@@ -18,7 +18,7 @@ export const routes: Routes = [
         const oidc = inject(Oidc);
         const router = inject(Router);
 
-        await enforceLoginGuard(route, state);
+        await Oidc.enforceLoginGuard(route, state);
 
         if (oidc.$user().canSeeAdminNavigation) {
           return true;

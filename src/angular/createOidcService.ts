@@ -91,7 +91,7 @@ export function createOidcService<User>(builder: BuilderParams<boolean, User>) {
         if (state.value === undefined) {
             throw new Error(
                 "oidc-spa: Use oidcSpa.withUser({ createUser }) to implement the user abstraction. " +
-                    "In mock mode, provide user_mock in withUser() or provideMockOidc()."
+                    "In mock mode, provide user_mock in withUser() or Oidc.provideMock()."
             );
         }
         return state.value;

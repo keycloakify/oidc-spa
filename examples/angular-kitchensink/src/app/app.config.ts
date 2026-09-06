@@ -9,9 +9,6 @@ import { provideRouter } from '@angular/router';
 import { routes } from './app.routes';
 import {
   Oidc,
-  provideOidc,
-  provideMockOidc,
-  createBearerInterceptor,
   REQUIRE_ACCESS_TOKEN,
   INCLUDE_ACCESS_TOKEN_IF_LOGGED_IN,
 } from './services/oidc.service';
@@ -29,7 +26,7 @@ export const appConfig: ApplicationConfig = {
     provideZonelessChangeDetection(),
     provideHttpClient(
       withInterceptors([
-        createBearerInterceptor({
+        Oidc.createBearerInterceptor({
           shouldInjectAccessToken: (req) => {
             const oidc = inject(Oidc);
 
@@ -48,10 +45,10 @@ export const appConfig: ApplicationConfig = {
     ),
     provideRouter(routes),
     environment.useMockOidc
-      ? provideMockOidc({
+      ? Oidc.provideMock({
           isUserInitiallyLoggedIn: true,
         })
-      : provideOidc(async () => {
+      : Oidc.provide(async () => {
           const http = inject(HttpClient);
           const config = await firstValueFrom(http.get<RemoteOidcConfig>('./oidc-config.json'));
 

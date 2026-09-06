@@ -105,13 +105,13 @@ for (const nonBlocking of [false, true]) {
             const { injector, initialization } = app([
                 provideHttpClient(
                     withInterceptors([
-                        utils.createBearerInterceptor({
+                        utils.Oidc.createBearerInterceptor({
                             shouldInjectAccessToken: req => predicate(inject(Oidc), req)
                         })
                     ])
                 ),
                 provideHttpClientTesting(),
-                utils.provideOidc(async () => {
+                utils.Oidc.provide(async () => {
                     const http = inject(HttpClient);
                     return firstValueFrom(http.get<typeof params>("/oidc-config.json"));
                 })
@@ -226,10 +226,10 @@ test("requests wait for core and re-evaluate inside the injection context, witho
         .createUtils();
     const { Oidc } = utils;
     const { injector } = app([
-        utils.provideOidc(params),
+        utils.Oidc.provide(params),
         provideHttpClient(
             withInterceptors([
-                utils.createBearerInterceptor({
+                utils.Oidc.createBearerInterceptor({
                     shouldInjectAccessToken: req => {
                         evaluations++;
                         return predicate(inject(Oidc), req);
@@ -271,7 +271,7 @@ test("provider configuration failures settle initialization and token waiters", 
     const utils = oidcSpa.createUtils();
     const { Oidc } = utils;
     const { injector, initialization } = app([
-        utils.provideOidc(async () => {
+        utils.Oidc.provide(async () => {
             throw cause;
         })
     ]);
@@ -291,7 +291,7 @@ test("core initialization rejection is handled, including auto-login", async () 
     });
     const utils = oidcSpa.withAutoLogin().createUtils();
     const { Oidc } = utils;
-    const { injector, initialization } = app([utils.provideOidc(params)]);
+    const { injector, initialization } = app([utils.Oidc.provide(params)]);
     core.ready.resolve();
     await initialization.donePromise;
     const oidc = injector.get(Oidc);
@@ -313,9 +313,9 @@ for (const nonBlocking of [false, true]) {
         });
         const utils = (nonBlocking ? base.withNonBlockingRendering() : base).createUtils();
         const { Oidc } = utils;
-        const first = app([utils.provideMockOidc()]);
+        const first = app([utils.Oidc.provideMock()]);
         const second = app([
-            utils.provideMockOidc({ user_mock: { name: "override" }, mockAccessToken: "custom-token" })
+            utils.Oidc.provideMock({ user_mock: { name: "override" }, mockAccessToken: "custom-token" })
         ]);
         await Promise.all([
             first.injector.get(Oidc).prInitialized,
@@ -336,7 +336,7 @@ for (const nonBlocking of [false, true]) {
 test("no user configuration is valid, but reading User explains the missing configuration", async () => {
     const utils = oidcSpa.createUtils();
     const { Oidc } = utils;
-    const { injector } = app([utils.provideMockOidc()]);
+    const { injector } = app([utils.Oidc.provideMock()]);
     await injector.get(Oidc).prInitialized;
     assert.equal(injector.get(Oidc).initializationError, undefined);
     assert.throws(() => injector.get(Oidc).$user(), /withUser/);
@@ -347,14 +347,14 @@ test("builder branches are independent and auto-login reaches core", async () =>
     const base = oidcSpa.withUser({ createUser: () => "Alice" });
     const utils = base.withAutoLogin().createUtils();
     const { Oidc } = utils;
-    const { injector } = app([utils.provideOidc(params)]);
+    const { injector } = app([utils.Oidc.provide(params)]);
     core.ready.resolve();
     await injector.get(Oidc).prInitialized;
     assert.equal(core.params?.autoLogin, true);
     const otherUtils = base.createUtils();
     const Other = otherUtils.Oidc;
     assert.notEqual(Oidc, Other);
-    const second = app([otherUtils.provideMockOidc({ isUserInitiallyLoggedIn: false })]);
+    const second = app([otherUtils.Oidc.provideMock({ isUserInitiallyLoggedIn: false })]);
     await second.injector.get(Other).prInitialized;
     assert.equal(second.injector.get(Other).isUserLoggedIn, false);
 });
@@ -371,11 +371,14 @@ test("guard waits for User and preserves the complete target URL", async () => {
         })
         .withNonBlockingRendering()
         .createUtils();
-    const { injector } = app([utils.provideOidc(params), { provide: Router, useValue: {} }]);
+    const { injector } = app([utils.Oidc.provide(params), { provide: Router, useValue: {} }]);
     const target = "/nested/protected?tab=profile#details";
     let allowed = false;
     const guard = runInInjectionContext(injector, () =>
-        utils.enforceLoginGuard({} as ActivatedRouteSnapshot, { url: target } as RouterStateSnapshot)
+        utils.Oidc.enforceLoginGuard(
+            {} as ActivatedRouteSnapshot,
+            { url: target } as RouterStateSnapshot
+        )
     );
     void guard.then(() => {
         allowed = true;
@@ -395,7 +398,7 @@ test("server provider does not invoke configuration or start browser OIDC", asyn
     let configCalls = 0;
     const utils = oidcSpa.createUtils();
     const { initialization } = app([
-        utils.provideOidc(async () => {
+        utils.Oidc.provide(async () => {
             configCalls++;
             return params;
         }),
@@ -418,10 +421,11 @@ for (const autoLogin of [false, true]) {
         const utils = (autoLogin ? base.withAutoLogin() : base).createUtils();
         const { Oidc } = utils;
         const { injector, initialization } = app([
-            utils.provideOidc(params),
+            utils.Oidc.provide(params),
             { provide: Router, useValue: {} }
         ]);
-        const oidc = injector.get(Oidc);
+        // This test selects between two token types at runtime.
+        const oidc = injector.get<OidcService<boolean>>(Oidc);
         let observableError: unknown;
         oidc.user$.subscribe({
             error: error => {
@@ -445,7 +449,9 @@ for (const autoLogin of [false, true]) {
             accessToken: "access-token-1"
         });
         await assert.rejects(
-            runInInjectionContext(injector, () => utils.enforceLoginGuard({} as ActivatedRouteSnapshot)),
+            runInInjectionContext(injector, () =>
+                utils.Oidc.enforceLoginGuard({} as ActivatedRouteSnapshot)
+            ),
             error
         );
     });
@@ -462,10 +468,10 @@ test("user-dependent interceptor fails clearly during createUser instead of wait
         .createUtils();
     const { Oidc } = utils;
     const { injector, initialization } = app([
-        utils.provideOidc(params),
+        utils.Oidc.provide(params),
         provideHttpClient(
             withInterceptors([
-                utils.createBearerInterceptor({
+                utils.Oidc.createBearerInterceptor({
                     shouldInjectAccessToken: () => inject(Oidc).$user().displayName !== ""
                 })
             ])
@@ -496,7 +502,7 @@ test("destroying an injector while User is loading does not leak subscriptions",
         .withNonBlockingRendering()
         .createUtils();
     const { Oidc } = utils;
-    const { injector } = app([utils.provideOidc(params)]);
+    const { injector } = app([utils.Oidc.provide(params)]);
     const oidc = injector.get(Oidc);
     core.ready.resolve();
     await tick();
@@ -513,11 +519,11 @@ test("anonymous guard redirects to the requested nested route", async () => {
     core.loggedIn = false;
     const utils = oidcSpa.createUtils();
     const { Oidc } = utils;
-    const { injector } = app([utils.provideOidc(params), { provide: Router, useValue: {} }]);
+    const { injector } = app([utils.Oidc.provide(params), { provide: Router, useValue: {} }]);
     core.ready.resolve();
     await injector.get(Oidc).prInitialized;
     void runInInjectionContext(injector, () =>
-        utils.enforceLoginGuard(
+        utils.Oidc.enforceLoginGuard(
             {} as ActivatedRouteSnapshot,
             {
                 url: "/parent/protected?tab=2#section"

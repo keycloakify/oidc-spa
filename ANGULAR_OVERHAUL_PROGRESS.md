@@ -4,7 +4,7 @@
 
 -   Replace `AbstractOidcService` with a functional adapter and typed injection token.
 -   Match the user's kitchen sink builder: `oidcSpa.withUser({ createUser, user_mock }).withAutoLogin().withNonBlockingRendering().createUtils()`.
--   Preserve `inject(Oidc)`. Return helpers separately: `provideOidc`, `provideMockOidc`, `createBearerInterceptor`, and `enforceLoginGuard` (see the type-inference decision below).
+-   Preserve `inject(Oidc)`. Expose helpers on the token: `Oidc.provide`, `Oidc.provideMock`, `Oidc.createBearerInterceptor`, and `Oidc.enforceLoginGuard`.
 -   Use `src/react-spa/createOidcSpaUtils.ts` and `utilsBuilder.ts` as the user-lifecycle reference. Do not redesign core user management.
 -   Keep separate core-authentication and initial-user results. Token acquisition and authentication getters depend only on core; UI initialization includes the initial user result.
 -   Wrap every real `createUser` invocation in the provider's Angular injection context. `inject()` must occur before the callback's first await.
@@ -17,11 +17,11 @@
 
 -   [x] Read existing Angular adapter and both Angular examples.
 -   [x] Trace React core/user readiness, user errors, mocks, refresh delegation, and subscriptions.
--   [ ] Implement functional Angular adapter and builder.
--   [ ] Migrate both Angular examples and write migration/usage documentation.
--   [ ] Verify authenticated HTTP from injectable createUser, including refresh and both rendering modes.
--   [ ] Verify mocks, errors, anonymous state, type propagation, guards, and cleanup.
--   [ ] Build library and Angular examples; review final diff.
+-   [x] Implement functional Angular adapter and builder.
+-   [x] Migrate both Angular examples and write migration/usage documentation.
+-   [x] Verify authenticated HTTP from injectable createUser, including refresh and both rendering modes.
+-   [x] Verify mocks, errors, anonymous state, type propagation, guards, and cleanup.
+-   [x] Build library and Angular examples; review final diff.
 
 ## Verification notes
 
@@ -29,7 +29,7 @@ The adapter is now implemented in `src/angular/`, with `src/angular.ts` as the p
 
 Initial-user rejection tests exposed an existing core timer leak: `getUser` now clears its deadlock-detection timer in `finally`, including when the user promise rejects.
 
-**API adjustment (asked asynchronously; proceeded with the recommended default after waiting):** Angular's `InjectionToken<T>` is structurally phantom in T. Attaching helpers via an intersection or subclass makes `inject(Oidc)` and `injector.get(Oidc)` infer unknown. Return a plain typed token plus separate helpers. This preserves honest types and inference without pretending the token is a constructor. The user has not requested the alternative. The change was explained in commentary before proceeding.
+**Namespaced API follow-up (requested by user):** Keep the real `InjectionToken` at runtime, attach the helpers, and expose it as `AbstractType<OidcService<AutoLogin, User>> & OidcHelpers`. A documented internal assertion preserves Angular inference without declaring a class. Both Angular examples and the migration guide now use a single `Oidc` import. Follow-up verification passed: Angular type checks (including optional injection and auto-login), all 16 integration tests, the library build, and both Angular production builds against the updated local package. Changed-file formatting and whitespace checks also pass.
 
 Completed verification:
 

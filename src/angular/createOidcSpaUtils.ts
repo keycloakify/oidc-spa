@@ -14,7 +14,7 @@ import { defer, finalize, from, switchMap } from "rxjs";
 import { setDesiredPostLoginRedirectUrl } from "../core/desiredPostLoginRedirectUrl";
 import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";
 import type { BuilderParams } from "./utilsBuilder";
-import type { OidcService, OidcSpaUtils } from "./types";
+import type { OidcService, OidcSpaUtils, OidcHelpers } from "./types";
 import { createOidcService, type InitializationParams } from "./createOidcService";
 import { CoreAccessedTooEarlyError } from "./OidcAccessedTooEarlyError";
 
@@ -40,9 +40,9 @@ export function createOidcSpaUtils<AutoLogin extends boolean, User>(
         ]);
     }
 
-    const helpers: Omit<OidcSpaUtils<AutoLogin, User>, "Oidc"> = {
-        provideOidc: params => provide({ implementation: "real", params }),
-        provideMockOidc: (params = {}) => provide({ implementation: "mock", params }),
+    const helpers: OidcHelpers<AutoLogin, User> = {
+        provide: params => provide({ implementation: "real", params }),
+        provideMock: (params = {}) => provide({ implementation: "mock", params }),
         createBearerInterceptor: ({ shouldInjectAccessToken }) => {
             const interceptor: HttpInterceptorFn = (req, next) => {
                 const runtime = inject(runtimeToken);
@@ -74,7 +74,7 @@ export function createOidcSpaUtils<AutoLogin extends boolean, User>(
                         }
                         console.warn(
                             `oidc-spa: Probable deadlock: ${req.method} ${req.urlWithParams} is waiting for authentication ` +
-                                "while provideOidc's configuration is loading. Requests used to load that configuration " +
+                                "while Oidc.provide's configuration is loading. Requests used to load that configuration " +
                                 "must return false from shouldInjectAccessToken before reading authentication state."
                         );
                     }, 4_000);
@@ -164,5 +164,11 @@ export function createOidcSpaUtils<AutoLogin extends boolean, User>(
         }
     };
 
-    return { Oidc: token, ...helpers };
+    // Augmenting InjectionToken<T> loses Angular's inference because T is phantom.
+    // AbstractType<T> preserves it through its prototype property. This assertion is
+    // only for inference: the runtime value remains an InjectionToken, resolved by
+    // identity through useFactory above. It is never constructed or used as a prototype.
+    return {
+        Oidc: Object.assign(token, helpers) as unknown as OidcSpaUtils<AutoLogin, User>["Oidc"]
+    };
 }
