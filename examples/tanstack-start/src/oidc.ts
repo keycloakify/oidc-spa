@@ -1,6 +1,17 @@
 import { oidcSpa } from "oidc-spa/react-tanstack-start";
 import { z } from "zod";
-import { type User, createUser, user_mock } from "./oidc.user";
+import { decodeJwt } from "oidc-spa/decode-jwt";
+import avatarFallbackSvgUrl from "./components/userPictureFallback.svg";
+
+// App-specific user model exposed by `useOidc()`.
+// Shape it around the information the UI needs to render.
+export type User = {
+    username: string;
+    displayName: string;
+    email: string | undefined;
+    avatarImgUrl: string;
+    canSeeKeycloakAdminNavigation: boolean;
+};
 
 export const {
     bootstrapOidc,
@@ -13,7 +24,51 @@ export const {
     oidcFnMiddleware,
     oidcRequestMiddleware
 } = oidcSpa
-    .withUser<User>({ createUser, user_mock })
+    .withUser<User>({
+        createUser: async ({ decodedIdToken, accessToken }) => {
+            const { sub, name, picture, email, preferred_username } = z
+                .object({
+                    sub: z.string(),
+                    name: z.string(),
+                    picture: z.string().optional(),
+                    email: z.string().optional(),
+                    preferred_username: z.string().optional()
+                })
+                .parse(decodedIdToken);
+
+            const decodedAccessToken = z
+                .object({
+                    resource_access: z
+                        .object({
+                            "realm-management": z.object({
+                                roles: z.array(z.string())
+                            })
+                        })
+                        .optional()
+                })
+                .parse(decodeJwt(accessToken));
+
+            const user: User = {
+                username: preferred_username ?? sub,
+                displayName: name,
+                avatarImgUrl: picture || avatarFallbackSvgUrl,
+                email,
+                canSeeKeycloakAdminNavigation:
+                    decodedAccessToken.resource_access?.["realm-management"].roles.includes(
+                        "realm-admin"
+                    ) ?? false
+            };
+
+            return user;
+        },
+        user_mock: {
+            username: "john.doe",
+            displayName: "John Doe",
+            email: undefined,
+            avatarImgUrl: avatarFallbackSvgUrl,
+            canSeeKeycloakAdminNavigation: true
+        }
+    })
     .withAccessTokenValidation({
         type: "RFC 9068: JSON Web Token (JWT) Profile for OAuth 2.0 Access Tokens",
         expectedAudience: (/*{ paramsOfBootstrap, process }*/) => "account",
