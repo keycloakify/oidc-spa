@@ -9,6 +9,7 @@
     "scripts": {
         "prepare": "patch-package",
         "build": "tsx scripts/build.ts",
+        "test:angular": "tsc --project tests/angular/tsconfig.json && tsx scripts/test-angular.ts",
         "_format": "prettier '**/*.{ts,tsx,json,md}'",
         "format": "yarn _format --write",
         "format:check": "yarn _format --list-different",
@@ -90,6 +91,7 @@
     },
     "devDependencies": {
         "@angular/common": "^20.3.1",
+        "@angular/compiler": "^20.3.1",
         "@angular/core": "^20.3.1",
         "@angular/platform-browser": "^20.3.1",
         "@angular/router": "^20.3.1",

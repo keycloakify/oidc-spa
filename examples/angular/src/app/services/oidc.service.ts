@@ -1,15 +1,9 @@
-import { Injectable } from '@angular/core';
-import { AbstractOidcService } from 'oidc-spa/angular';
+import { oidcSpa } from 'oidc-spa/angular';
+import { createUser, user_mock, type User } from './oidc.user';
 
-export type DecodedIdToken = {
-  name: string;
-  realm_access?: {
-    roles: string[];
-  };
-};
-
-@Injectable({ providedIn: 'root' })
-export class Oidc extends AbstractOidcService<DecodedIdToken> {
-  // For AutoLogin see: https://docs.oidc-spa.dev/v/v10/features/auto-login#angular
-  // For Non blocking rendering see: https://docs.oidc-spa.dev/v/v10/features/non-blocking-rendering#react-spas
-}
+export const { Oidc, provideOidc, provideMockOidc, createBearerInterceptor, enforceLoginGuard } =
+  oidcSpa
+    .withUser<User>({ createUser, user_mock })
+    // .withAutoLogin()
+    // .withNonBlockingRendering()
+    .createUtils();

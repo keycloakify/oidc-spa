@@ -17,6 +17,13 @@
   dependencies:
     tslib "^2.3.0"
 
+"@angular/compiler@^20.3.1":
+  version "20.3.30"
+  resolved "https://registry.yarnpkg.com/@angular/compiler/-/compiler-20.3.30.tgz#f0267e11b97a3e0b7293c58523eb567805c011f2"
+  integrity sha512-0nvYF7u4AmSFGWUbkm4xWgZ5m4wLr1wo6YbflZzKZfxQ2EGOqEF0jgdBoB/oSU6cFi8EqgQ+vY24g8wAKAwxmA==
+  dependencies:
+    tslib "^2.3.0"
+
 "@angular/core@^20.3.1":
   version "20.3.26"
   resolved "https://registry.yarnpkg.com/@angular/core/-/core-20.3.26.tgz#1d4b75e40112e7ca4f55d888c62ab3fe0325eb35"

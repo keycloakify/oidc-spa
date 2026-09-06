@@ -19,11 +19,13 @@ export class App {
   }
 
   get canShowAdminLink(): boolean {
+    if (this.oidc.initializationError) {
+      return false;
+    }
     if (!this.oidc.isUserLoggedIn) {
       return true;
     }
 
-    const roles = this.oidc.$decodedIdToken().realm_access?.roles ?? [];
-    return roles.includes('admin');
+    return this.oidc.$user().canSeeAdminNavigation;
   }
 }

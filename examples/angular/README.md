@@ -1,5 +1,7 @@
 # Angular
 
+This example uses the functional Angular adapter and the application user model in `src/app/services/oidc.user.ts`. See the [Angular user abstraction and migration guide](../angular-kitchensink/USER_ABSTRACTION.md) for configuration, refreshes, and authenticated API calls inside `createUser`.
+
 This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 20.3.2.
 
 ## Development server

@@ -6,7 +6,7 @@ import {
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { provideRouter } from '@angular/router';
 import { routes } from './app.routes';
-import { Oidc } from './services/oidc.service';
+import { provideOidc, createBearerInterceptor } from './services/oidc.service';
 
 export const appConfig: ApplicationConfig = {
   providers: [
@@ -14,7 +14,7 @@ export const appConfig: ApplicationConfig = {
     provideZonelessChangeDetection(),
     provideHttpClient(
       withInterceptors([
-        Oidc.createBearerInterceptor({
+        createBearerInterceptor({
           shouldInjectAccessToken: (req) =>
             // NOTE: This is the legacy and familiar pattern but we do not recommend it.
             // Prefer using per request context token: https://github.com/keycloakify/oidc-spa/blob/c0f13614c59d38e111bf0af6f6b36c71b74018f1/examples/angular-kitchensink/src/app/app.config.ts#L30-L42
@@ -23,7 +23,7 @@ export const appConfig: ApplicationConfig = {
       ])
     ),
     provideRouter(routes),
-    Oidc.provide({
+    provideOidc({
       issuerUri: 'https://phasetwo.oidc-spa.dev/realms/demo-realm',
       clientId: 'example-app',
       debugLogs: true,
