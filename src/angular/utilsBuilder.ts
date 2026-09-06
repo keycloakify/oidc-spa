@@ -22,23 +22,41 @@ export type OidcSpaUtilsBuilder<
     ExcludedMethod
 >;
 
-export type BuilderParams<AutoLogin extends boolean, User> = {
+function createOidcSpaUtilsBuilder<AutoLogin extends boolean, User>(params: {
     autoLogin: AutoLogin;
     providerAwaitsInitialization: boolean;
     createUser: CreateUser<User> | undefined;
     user_mock: User | undefined;
-};
-
-function createOidcSpaUtilsBuilder<AutoLogin extends boolean, User>(
-    params: BuilderParams<AutoLogin, User>
-): OidcSpaUtilsBuilder<AutoLogin, User> {
+}): OidcSpaUtilsBuilder<AutoLogin, User> {
     return {
-        withAutoLogin: () => createOidcSpaUtilsBuilder({ ...params, autoLogin: true }),
+        withAutoLogin: () =>
+            createOidcSpaUtilsBuilder({
+                autoLogin: true,
+                providerAwaitsInitialization: params.providerAwaitsInitialization,
+                createUser: params.createUser,
+                user_mock: params.user_mock
+            }),
         withUser: ({ createUser, user_mock }) =>
-            createOidcSpaUtilsBuilder({ ...params, createUser, user_mock }),
+            createOidcSpaUtilsBuilder({
+                autoLogin: params.autoLogin,
+                providerAwaitsInitialization: params.providerAwaitsInitialization,
+                createUser,
+                user_mock
+            }),
         withNonBlockingRendering: () =>
-            createOidcSpaUtilsBuilder({ ...params, providerAwaitsInitialization: false }),
-        createUtils: () => createOidcSpaUtils(params)
+            createOidcSpaUtilsBuilder({
+                autoLogin: params.autoLogin,
+                providerAwaitsInitialization: false,
+                createUser: params.createUser,
+                user_mock: params.user_mock
+            }),
+        createUtils: () =>
+            createOidcSpaUtils({
+                autoLogin: params.autoLogin,
+                providerAwaitsInitialization: params.providerAwaitsInitialization,
+                createUser: params.createUser,
+                user_mock: params.user_mock
+            })
     };
 }
 

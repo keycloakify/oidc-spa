@@ -221,10 +221,6 @@ export type OidcService<AutoLogin extends boolean = false, User = never> = {
     refreshUser: () => Promise<User>;
 };
 
-export type OidcSpaUtils<AutoLogin extends boolean = false, User = never> = {
-    Oidc: AbstractType<OidcService<AutoLogin, User>> & OidcHelpers<AutoLogin, User>;
-};
-
 export type OidcHelpers<AutoLogin extends boolean, User> = {
     provide: (params: ValueOrAsyncGetter<ParamsOfProvide>) => EnvironmentProviders;
     provideMock: (params?: ParamsOfProvideMock<AutoLogin, User>) => EnvironmentProviders;
@@ -241,4 +237,8 @@ export type OidcHelpers<AutoLogin extends boolean, User> = {
         route: Parameters<CanActivateFn>[0],
         state?: Parameters<CanActivateFn>[1]
     ) => Promise<true>;
+};
+
+export type OidcSpaUtils<AutoLogin extends boolean = false, User = never> = {
+    Oidc: AbstractType<OidcService<AutoLogin, User>> & OidcHelpers<AutoLogin, User>;
 };
