@@ -5,14 +5,14 @@ import { Oidc } from '../services/oidc.service';
 
 @Component({
   selector: 'app-public',
-  standalone: true,
   imports: [AsyncPipe],
   template: `
     <h4>This is a page that do not requires the user to be authenticated</h4>
     <section>
       <p>
         Public todos fetched @defer (when oidc.prInitialized | async) {
-        {{ oidc.isUserLoggedIn ? 'with' : 'without' }} } @placeholder { ... }
+        {{ oidc.isUserLoggedIn ? 'with' : 'without' }}
+        } @placeholder { ... }
         <code>Authorization: Bearer [access_token]</code> in the request's headers:
       </p>
       @if (todos$ | async; as todos) {

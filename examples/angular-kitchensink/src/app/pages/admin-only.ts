@@ -5,7 +5,6 @@ import { Oidc } from '../services/oidc.service';
 
 @Component({
   selector: 'app-admin-only',
-  standalone: true,
   template: `
     <h2>Admin zone</h2>
     <p>If you can read this, you are admin of the Keycloak realm: "{{ realm }}".</p>
