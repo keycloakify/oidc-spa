@@ -5,7 +5,6 @@ import { TodoService } from '../services/todo.service';
 
 @Component({
   selector: 'app-protected',
-  standalone: true,
   imports: [AsyncPipe],
   template: `
     <section>
