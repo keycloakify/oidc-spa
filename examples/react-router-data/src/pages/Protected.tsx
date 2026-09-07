@@ -1,3 +1,4 @@
+import type { LoaderFunctionArgs } from "react-router";
 import type { ReactNode } from "react";
 import { useLoaderData } from "react-router";
 import { useOidc, enforceLogin, fetchWithAuth } from "~/oidc";
@@ -5,11 +6,7 @@ import { isKeycloak, createKeycloakUtils } from "oidc-spa/keycloak";
 
 type DemoPost = { id: number; title: string; body: string };
 
-export async function loader(args: {
-    request?: { url?: string };
-    cause?: "preload" | string;
-    location?: { href?: string };
-}) {
+export async function loader(args: LoaderFunctionArgs) {
     // Ensure only logged-in users access this route; redirect to IdP if needed.
     await enforceLogin(args);
 
@@ -28,7 +25,7 @@ export default function Protected() {
 
     const keycloakUtils = isKeycloak({ issuerUri }) ? createKeycloakUtils({ issuerUri }) : undefined;
 
-    const { demoPosts } = useLoaderData() as { demoPosts: DemoPost[] };
+    const { demoPosts } = useLoaderData<typeof loader>();
 
     return (
         <section className="space-y-6">
@@ -40,7 +37,7 @@ export default function Protected() {
                 </p>
             </div>
 
-            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-sm shadow-slate-950/40">
+            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-xs shadow-slate-950/40">
                 <dl className="grid gap-2 text-sm text-slate-400">
                     <InfoRow label="Name">{user.displayName}</InfoRow>
                     {user.email && <InfoRow label="Email">{user.email}</InfoRow>}
@@ -80,7 +77,7 @@ export default function Protected() {
                                 Delete account
                             </button>
                             <a
-                                className="group inline-flex items-center gap-2 rounded-full border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-200 transition-colors hover:border-slate-500 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-200/40 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+                                className="group inline-flex items-center gap-2 rounded-full border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-200 transition-colors hover:border-slate-500 hover:text-white focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-slate-200/40 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
                                 href={keycloakUtils.getAccountUrl({
                                     clientId,
                                     validRedirectUri,
@@ -126,7 +123,7 @@ export default function Protected() {
                 )}
             </div>
 
-            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-sm shadow-slate-950/40">
+            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-xs shadow-slate-950/40">
                 <div className="space-y-2 text-sm text-slate-300">
                     <p>
                         The list below was fetched during the loader with{" "}
@@ -146,7 +143,7 @@ export default function Protected() {
                     {demoPosts.map(post => (
                         <li
                             key={post.id}
-                            className="rounded-xl border border-slate-800/80 bg-slate-950/50 p-4 shadow-inner shadow-black/20"
+                            className="rounded-xl border border-slate-800/80 bg-slate-950/50 p-4 inset-shadow-sm inset-shadow-black/20"
                         >
                             <p className="text-sm font-semibold text-white">{post.title}</p>
                             <p className="mt-1 text-sm text-slate-400">{post.body}</p>

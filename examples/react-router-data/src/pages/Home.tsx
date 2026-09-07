@@ -59,7 +59,7 @@ function Greeting() {
 
 function InfoCard({ title, body }: { title: string; body: string }) {
     return (
-        <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4 shadow-sm shadow-slate-950/40">
+        <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4 shadow-xs shadow-slate-950/40">
             <p className="text-sm font-semibold text-white">{title}</p>
             <p className="mt-1 text-sm text-slate-300">{body}</p>
         </div>

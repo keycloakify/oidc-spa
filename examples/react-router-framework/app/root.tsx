@@ -3,7 +3,7 @@ import type { Route } from "./+types/root";
 import { AutoLogoutWarningOverlay } from "./components/AutoLogoutWarningOverlay";
 import { Header } from "./components/Header";
 import { OidcInitializationGate } from "~/oidc";
-import "./tailwind.css";
+import "./app.css";
 
 export function Layout({ children }: { children: React.ReactNode }) {
     return (

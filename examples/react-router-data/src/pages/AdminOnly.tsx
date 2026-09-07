@@ -1,11 +1,9 @@
+import { useRouteError } from "react-router";
+import type { LoaderFunctionArgs } from "react-router";
 import { enforceLogin, getOidc, useOidc } from "~/oidc";
 import { isKeycloak, createKeycloakUtils } from "oidc-spa/keycloak";
 
-export async function loader(args: {
-    request?: { url?: string };
-    cause?: "preload" | string;
-    location?: { href?: string };
-}) {
+export async function loader(args: LoaderFunctionArgs) {
     await enforceLogin(args);
 
     const oidc = await getOidc({ assert: "user logged in" });
@@ -18,6 +16,12 @@ export async function loader(args: {
 }
 
 export function ErrorBoundary() {
+    const error = useRouteError();
+
+    if (!(error instanceof Error) || error.message !== "unauthorized") {
+        throw error;
+    }
+
     return (
         <section className="rounded-xl border border-rose-500/40 bg-rose-950/30 p-4 text-sm text-rose-100">
             <p>
