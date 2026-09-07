@@ -59,7 +59,7 @@ function OidcInitializationGate_inner(props: { children: ReactNode }) {
         if (backFromAuthServer !== undefined) {
             router.replace(`${location.pathname}${location.search}${location.hash}`, { scroll: false });
         }
-    }, []);
+    }, [backFromAuthServer, router]);
 
     return children;
 }
@@ -92,7 +92,7 @@ export function withLoginEnforced<Props extends Record<string, unknown>>(
                     doesCurrentHrefRequiresAuth: true
                 });
             }
-        }, []);
+        }, [isUserLoggedIn, login]);
 
         if (!hasRunEffect) {
             return null;

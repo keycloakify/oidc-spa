@@ -12,7 +12,7 @@ const primaryButtonClasses =
 export function DemoShell({ children }: { children: ReactNode }) {
     return (
         <>
-            <header className="fixed inset-x-0 top-0 z-40 border-b border-white/10 bg-slate-950/80 backdrop-blur">
+            <header className="fixed inset-x-0 top-0 z-40 border-b border-white/10 bg-slate-950/80 backdrop-blur-sm">
                 <div className="mx-auto grid h-16 w-full max-w-4xl grid-cols-[auto_1fr_auto] items-center gap-4 px-6">
                     <div className="flex flex-col leading-tight">
                         <span className="text-xs uppercase tracking-[0.3em] text-slate-500">
@@ -49,7 +49,8 @@ function AppNavLink({ children, href }: { children: ReactNode; href: string }) {
     return (
         <Link
             href={href}
-            className={`transition-colors ${isActive ? "text-white" : "hover:text-white"}`}
+            aria-current={isActive ? "page" : undefined}
+            className={`transition-colors ${isActive ? "font-semibold text-white" : "hover:text-white"}`}
         >
             {children}
         </Link>
