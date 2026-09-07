@@ -30,7 +30,7 @@ export function ProtectedPage() {
                 </p>
             </div>
 
-            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-sm shadow-slate-950/40">
+            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-xs shadow-slate-950/40">
                 <dl className="grid gap-2 text-sm text-slate-400">
                     <InfoRow label="Subject">{decodedIdToken.sub}</InfoRow>
                     {decodedIdToken.email && <InfoRow label="Email">{decodedIdToken.email}</InfoRow>}
@@ -73,7 +73,7 @@ export function ProtectedPage() {
                                 Delete account
                             </button>
                             <a
-                                className="group inline-flex items-center gap-2 rounded-full border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-200 transition-colors hover:border-slate-500 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-200/40 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+                                className="group inline-flex items-center gap-2 rounded-full border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-200 transition-colors hover:border-slate-500 hover:text-white focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-slate-200/40 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
                                 href={keycloakUtils.getAccountUrl({
                                     clientId,
                                     validRedirectUri,
@@ -119,7 +119,7 @@ export function ProtectedPage() {
                 )}
             </div>
 
-            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-sm shadow-slate-950/40">
+            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-xs shadow-slate-950/40">
                 <div className="space-y-2 text-sm text-slate-300">
                     <p>
                         The list below was fetched during component mount with{" "}
@@ -143,7 +143,7 @@ export function ProtectedPage() {
                     <ul className="mt-4 space-y-3">
                         {demoPosts.map(post => (
                             <li
-                                className="rounded-xl border border-slate-800/80 bg-slate-950/50 p-4 shadow-inner shadow-black/20"
+                                className="rounded-xl border border-slate-800/80 bg-slate-950/50 p-4 inset-shadow-sm shadow-black/20"
                                 key={post.id}
                             >
                                 <p className="text-sm font-semibold text-white">{post.title}</p>
