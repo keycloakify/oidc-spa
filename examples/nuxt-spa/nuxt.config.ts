@@ -1,10 +1,8 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
-import tailwindcss from "@tailwindcss/vite";
-
 export default defineNuxtConfig({
-    compatibilityDate: "2025-07-15",
+    compatibilityDate: "2026-06-30",
     devtools: { enabled: true },
-    modules: ["@nuxt/eslint", "@nuxt/ui", "@nuxt/icon", "oidc-spa/nuxt-spa"],
+    modules: ["@nuxt/eslint", "@nuxt/ui", "oidc-spa/nuxt-spa"],
     colorMode: {
         preference: "system"
     },
@@ -16,10 +14,5 @@ export default defineNuxtConfig({
             oidcUseMock: false
         }
     },
-    css: ["./app/assets/css/main.css"],
-    vite: {
-        // @ts-expect-error Type mismatch between Vite's plugin type and Nuxt's expected plugin type
-        plugins: [tailwindcss()]
-    },
-    oidcSpa: {}
+    css: ["~/assets/css/main.css"]
 });
