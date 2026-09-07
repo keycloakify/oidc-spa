@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import type { DropdownMenuItem } from "@nuxt/ui";
+
 const { isAuthenticated, idToken, keycloakUtils, login, register, logout } = useAuth();
 const colorMode = useColorMode();
 
@@ -14,7 +16,7 @@ function setColorMode(preference: "light" | "dark" | "system") {
     colorMode.preference = preference;
 }
 
-const colorModeItems = computed(() => {
+const colorModeItems = computed<DropdownMenuItem[][]>(() => {
     return [
         [
             {
