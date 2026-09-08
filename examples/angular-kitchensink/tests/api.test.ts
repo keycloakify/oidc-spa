@@ -89,21 +89,16 @@ for (const mock of [false, true]) {
       const { bootstrapAuth } = await import('../src/server/auth');
       const { createApiRouter } = await import('../src/server/api');
       const app = express();
-      app.use(
-        '/api',
-        createApiRouter({
-          initializeAuth: () =>
-            bootstrapAuth(
-              mock
-                ? {
-                    implementation: 'mock',
-                    behavior: 'use static identity',
-                    decodedAccessToken_mock: { sub: 'mock-user', name: 'John Doe' },
-                  }
-                : { implementation: 'real', issuerUri, expectedAudience: 'account' }
-            ),
-        })
+      bootstrapAuth(
+        mock
+          ? {
+              implementation: 'mock',
+              behavior: 'use static identity',
+              decodedAccessToken_mock: { sub: 'mock-user', name: 'John Doe' },
+            }
+          : { implementation: 'real', issuerUri, expectedAudience: 'account' }
       );
+      app.use('/api', createApiRouter());
       ({ server, origin } = await listen(app));
     });
     afterAll(async () => {

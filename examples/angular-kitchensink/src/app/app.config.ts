@@ -11,9 +11,9 @@ import {
   INCLUDE_ACCESS_TOKEN_IF_LOGGED_IN,
 } from './services/oidc.service';
 import { firstValueFrom } from 'rxjs';
-import { environment } from '../environments/environment';
 
 type RemoteOidcConfig = {
+  useMock: boolean;
   issuerUri: string;
   clientId: string;
 };
@@ -41,16 +41,16 @@ export const appConfig: ApplicationConfig = {
     provideRouter(routes),
     provideClientHydration(),
     provideOidc(async () => {
-      if (environment.useMockOidc) {
+      const http = inject(HttpClient);
+      // No auth context flag: configuration must load before authentication can start.
+      const config = await firstValueFrom(http.get<RemoteOidcConfig>('/api/oidc-config'));
+
+      if (config.useMock) {
         return {
           implementation: 'mock',
           isUserInitiallyLoggedIn: true,
         };
       }
-
-      const http = inject(HttpClient);
-      // No auth context flag: configuration must load before authentication can start.
-      const config = await firstValueFrom(http.get<RemoteOidcConfig>('./oidc-config.json'));
 
       return {
         implementation: 'real',

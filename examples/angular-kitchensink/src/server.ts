@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import {
   AngularNodeAppEngine,
   createNodeRequestHandler,
@@ -5,69 +6,47 @@ import {
   writeResponseToNodeResponse,
 } from '@angular/ssr/node';
 import express from 'express';
-import { join, resolve } from 'node:path';
-import { existsSync } from 'node:fs';
-import { readFile } from 'node:fs/promises';
-import { z } from 'zod';
+import { join } from 'node:path';
 import { bootstrapAuth } from './server/auth';
 import { createApiRouter } from './server/api';
-import { environment } from './environments/environment';
 
 const browserDistFolder = join(import.meta.dirname, '../browser');
 
 const app = express();
 const angularApp = new AngularNodeAppEngine();
 
-// Trust forwarded URLs only when explicitly configured for your reverse proxy.
-// Used when validating a DPoP proof's target URL.
-app.set('trust proxy', process.env['TRUST_PROXY'] === 'true');
+const useMock = process.env['OIDC_USE_MOCK'] === 'true';
 
-const OidcConfig = z.object({
-  issuerUri: z.url(),
-  clientId: z.string(),
-  accessTokenExpectedAudience: z.string().min(1),
-});
-
-// Production assets live beside the server bundle. ng serve uses the source public folder.
-const configPath = existsSync(join(browserDistFolder, 'oidc-config.json'))
-  ? join(browserDistFolder, 'oidc-config.json')
-  : resolve('public/oidc-config.json');
-
-async function readOidcConfig() {
-  return OidcConfig.parse(JSON.parse(await readFile(configPath, 'utf8')));
-}
-
-app.get('/oidc-config.json', async (_req, res) => {
-  res.setHeader('Cache-Control', 'no-store');
-  res.json(await readOidcConfig());
-});
-
-app.use(
-  '/api',
-  createApiRouter({
-    initializeAuth: async () => {
-      if (environment.useMockOidc) {
-        await bootstrapAuth({
-          implementation: 'mock',
-          behavior: 'use static identity',
-          decodedAccessToken_mock: {
-            sub: 'mock-user',
-            name: 'John Doe',
-            email: 'john.doe@example.com',
-          },
-        });
-        return;
+// Start validation setup as soon as the server loads, including under ng serve
+// and in a serverless function. Token validation waits for readiness internally.
+bootstrapAuth(
+  useMock
+    ? {
+        implementation: 'mock',
+        behavior: 'use static identity',
+        decodedAccessToken_mock: {
+          sub: 'mock-user',
+          name: 'John Doe',
+          email: 'john.doe@example.com',
+        },
       }
-
-      const { issuerUri, accessTokenExpectedAudience } = await readOidcConfig();
-      await bootstrapAuth({
+    : {
         implementation: 'real',
-        issuerUri,
-        expectedAudience: accessTokenExpectedAudience,
-      });
-    },
-  })
+        issuerUri: process.env['OIDC_ISSUER_URI']!,
+        expectedAudience: process.env['OIDC_ACCESS_TOKEN_EXPECTED_AUDIENCE']!,
+      }
 );
+
+app.get('/api/oidc-config', (_req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  res.json({
+    useMock,
+    issuerUri: process.env['OIDC_ISSUER_URI']!,
+    clientId: process.env['OIDC_BROWSER_APP_CLIENT_ID']!,
+  });
+});
+
+app.use('/api', createApiRouter());
 
 /**
  * Serve static files from /browser
@@ -106,6 +85,6 @@ if (isMainModule(import.meta.url) || process.env['pm_id']) {
 }
 
 /**
- * Request handler used by the Angular CLI (for dev-server and during build) or Firebase Cloud Functions.
+ * Request handler used by the Angular CLI (for dev-server and during build) or a serverless function.
  */
 export const reqHandler = createNodeRequestHandler(app);

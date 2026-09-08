@@ -15,19 +15,17 @@ npm start
 
 Open http://localhost:4200. Yarn and pnpm work too: use `yarn install` / `yarn start` or `pnpm install` / `pnpm start`.
 
-Configure the issuer, client, and `accessTokenExpectedAudience` in `public/oidc-config.json`. The Express API validates tokens against this issuer and audience (the example uses `account`). Restart the server after changing authentication configuration. The application loads this configuration at startup with `HttpClient`. Define the application user in `src/app/services/oidc.service.ts` with `oidcSpa.withUser()`. See the [user abstraction documentation](https://docs.oidc-spa.dev/features/user).
+Installation creates `.env` from `.env.sample` if it does not already exist (using `postinstall`, supported by npm, Yarn, and pnpm). Configure the issuer, browser client, and expected API audience there. `.env` is ignored by Git. `src/server.ts` loads it with `dotenv/config`; environment variables supplied by your hosting platform take precedence. Restart the server after changing configuration.
+
+The server calls `bootstrapAuth()` when its module loads, without awaiting it. Token validation waits for readiness internally. The browser fetches `/api/oidc-config` inside `provideOidc()` to obtain the same configuration. Define the application user in `src/app/services/oidc.service.ts` with `oidcSpa.withUser()`. See the [user abstraction documentation](https://docs.oidc-spa.dev/features/user).
 
 `src/main.ts` runs `oidcEarlyInit()` before dynamically loading Angular through `src/main.lazy.ts`. Keep this browser-only boundary so OIDC callback handling can finish before the application boots. The server bootstraps Angular separately through `src/main.server.ts`.
 
 This example also demonstrates non-blocking initialization, per-request bearer-token configuration, and an admin-only route. See [the Angular user abstraction guide](USER_ABSTRACTION.md) for details.
 
-To develop with a mocked, signed-in user and no identity provider:
+To develop with a mocked, signed-in user and no identity provider, set `OIDC_USE_MOCK=true` in `.env` and run `npm start`.
 
-```bash
-npm start -- --configuration mock
-```
-
-The mock configuration replaces `src/environments/environment.ts` with `environment.mock.ts` in both the browser and server builds. The browser signs in as John Doe; the API uses the documented **Static Identity** mode with the same name. Protected API requests still require credentials, but mock validation ignores the supplied token. Requests without credentials remain anonymous. Mock development uses the normal development build settings.
+This single setting selects both the browser mock and the API's **Static Identity** mode. Both use John Doe. Protected API requests still require credentials, but mock validation ignores the supplied token. Requests without credentials remain anonymous. Switching modes requires a server restart, not a rebuild.
 
 ## Commands
 
@@ -46,6 +44,7 @@ The mock configuration replaces `src/environments/environment.ts` with `environm
 
 | Endpoint                | Authentication | Result                                   |
 | ----------------------- | -------------- | ---------------------------------------- |
+| `GET /api/oidc-config`  | None           | Browser authentication configuration     |
 | `GET /api/greet`        | Optional       | `Hello Anonymous user` or `Hello <name>` |
 | `GET /api/todos`        | Required       | The current user's todos                 |
 | `POST /api/todos`       | Required       | Create a todo from `{ "title": "..." }`  |
@@ -56,7 +55,7 @@ Todos belong to the validated token's `sub`; callers cannot select another user'
 
 The public page demonstrates optional authentication. The protected page lets you add, complete, and delete your todos. All requests use the same-origin `/api` paths in development and production. Data resets on server restart (including server reloads while developing) and is not shared across server processes.
 
-DPoP remains enabled in `src/main.ts`; the API validates both ordinary bearer tokens and DPoP proofs. Behind a trusted reverse proxy, set `TRUST_PROXY=true` only when the proxy sanitizes forwarded headers and direct client access to the backend is prevented. This lets validation reconstruct the external URL for DPoP; local development uses the direct request URL.
+DPoP remains enabled in `src/main.ts`; the API validates both ordinary bearer tokens and DPoP proofs. The `getUser()` helper follows the Express guide with `trustProxy: true`, allowing it to reconstruct the public request URL behind Vercel's proxy. If you host it elsewhere, your proxy must sanitize forwarded headers; disable this option when serving untrusted requests directly.
 
 ## Server rendering
 
@@ -69,13 +68,27 @@ The setup follows a fresh `ng new --ssr` project from Angular CLI 22.1.7. `src/a
 
 Routes that use `enforceLoginGuard` must use `RenderMode.Client`; the guard explains this if a protected route is accidentally configured for SSR.
 
-To preview a production build without an identity provider:
+To preview a production build:
 
 ```bash
-npm run build -- --configuration production,mock
+npm run build
 npm run serve:ssr:angular
 ```
 
-For deployment, run the generated Node server and deploy both output folders. Add your deployment hostname to `projects.angular.architect.build.options.security.allowedHosts` in `angular.json` before building, following [Angular's host validation guidance](https://angular.dev/guide/ssr). This example now requires a server runtime for request-time SSR; copying only the browser folder to a static host does not provide that behavior.
+The server reads `.env` at startup, including `OIDC_USE_MOCK`. Both output folders are needed when deploying the standalone Node server. Set `NG_ALLOWED_HOSTS` to your deployment hostnames (comma-separated), following [Angular's host validation guidance](https://angular.dev/guide/ssr). Localhost is already allowed in `angular.json`.
+
+## Vercel
+
+Set the Vercel project's Root Directory to `examples/angular-kitchensink` (or the root of your copied example) and use Node.js 24.x. The included `vercel.json` builds Angular, serves browser assets from the CDN, and routes API requests and page rendering to the Node function in `api/index.mjs`. That entry point exports the compiled Express handler; no separate API server is needed.
+
+In the Vercel project's environment settings:
+
+- Add the four `OIDC_*` variables from `.env.sample`. Use `OIDC_USE_MOCK=true` to try the whole app without an identity provider.
+- Set `NG_ALLOWED_HOSTS` to the domains you serve, including preview domains if used (comma-separated hostnames, without `https://`).
+- Set `NG_TRUST_PROXY_HEADERS=x-forwarded-proto,x-forwarded-host` so Angular reconstructs the public URL behind the proxy.
+
+For real authentication, allow your deployed URL in the OIDC client's redirect URIs and web origins. Vercel supplies environment variables directly; the function does not need a `.env` file. See [Vercel's Node runtime documentation](https://vercel.com/docs/functions/runtimes/node-js).
+
+Todo storage remains intentionally in memory: separate function instances have separate lists, and replacing an instance clears its data.
 
 Direct dependencies are pinned to compatible versions from the current Angular CLI setup; `oidc-spa` stays on `latest`. No lockfile or package manager is imposed on users. `pnpm-workspace.yaml` allows the native build scripts used by Angular CLI (pnpm 10.26+). Transitive dependencies can still change between fresh installations.
