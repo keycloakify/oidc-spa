@@ -1,5 +1,6 @@
 import { ApplicationConfig, inject, provideBrowserGlobalErrorListeners } from '@angular/core';
 import { HttpClient, provideHttpClient, withInterceptors } from '@angular/common/http';
+import { provideClientHydration } from '@angular/platform-browser';
 import { provideRouter } from '@angular/router';
 import { routes } from './app.routes';
 import {
@@ -38,6 +39,7 @@ export const appConfig: ApplicationConfig = {
       ])
     ),
     provideRouter(routes),
+    provideClientHydration(),
     provideOidc(async () => {
       if (environment.useMockOidc) {
         return {

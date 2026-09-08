@@ -46,6 +46,15 @@ This section supersedes the historical progress notes below.
 -   Real Angular 20.3.26 `renderApplication` smoke test against built adapter: public routed HTML and auth placeholder returned for two sequential requests in each initialization mode, with zero configuration/User calls. Temporary fixture and matching platform-server package are in ignored `node_modules/.cache/angular-ssr-smoke`; no dependency manifest changes.
 -   Existing examples remain SPA projects; no changes to their rendering configuration or the separate documentation repository in this follow-up.
 
+## Kitchen-sink SSR example — completed (2026-09-08)
+
+-   Generated a fresh Angular CLI 22.1.7 SSR project for reference. Added its server entry point, standalone server bootstrap/configuration, hydration provider, and server build settings to `examples/angular-kitchensink`; kept browser `main.ts` / `main.lazy.ts` OIDC early-init boundary intact.
+-   Server routes use `RenderMode.Server` for public content and `RenderMode.Client` for `/protected` and `/admin-only`. Deferred the public todo subscription until auth readiness so its optional-token interceptor does not wait forever during SSR.
+-   Pinned added SSR/Express/type dependencies, retained `oidc-spa: latest`, and updated README with preview/deployment instructions. Local builds use the copied branch library as in the repository start-example workflow.
+-   Production builds pass for normal and mock configurations; existing component tests pass (2). Formatting and diff checks pass.
+-   Actual production HTTP responses for all three routes verified in both configurations. Chrome checks pass in mock development and mock production: public hydration, direct protected/admin visits, client navigation, bearer headers, and no console/page errors. Todo API responses were intercepted with a deterministic fixture during browser checks; live IdP login was not exercised.
+-   Mock development preview left running at http://localhost:4201/. Normal production test server was stopped. Browser check script is outside the repository at `/tmp/oidc-ssr-browser/check.cjs`.
+
 ## Historical notes (previous API, for reference only)
 
 # Angular user abstraction overhaul
