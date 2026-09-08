@@ -2,7 +2,7 @@ import { ApplicationInitStatus } from '@angular/core';
 import { DeferBlockBehavior, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { App } from './app';
-import { Oidc } from './services/oidc.service';
+import { provideOidc, injectOidc } from './services/oidc.service';
 
 describe('App', () => {
   // The test DOM does not load index.html; oidc-spa reads its base URL.
@@ -14,13 +14,16 @@ describe('App', () => {
   async function renderApp(isUserInitiallyLoggedIn: boolean) {
     await TestBed.configureTestingModule({
       imports: [App],
-      providers: [provideRouter([]), Oidc.provideMock({ isUserInitiallyLoggedIn })],
+      providers: [
+        provideRouter([]),
+        provideOidc({ implementation: 'mock', isUserInitiallyLoggedIn }),
+      ],
       deferBlockBehavior: DeferBlockBehavior.Playthrough,
     }).compileComponents();
 
     const initialization = TestBed.inject(ApplicationInitStatus);
     await initialization.donePromise;
-    await TestBed.inject(Oidc).prInitialized;
+    await TestBed.runInInjectionContext(() => injectOidc().prInitialized);
 
     const fixture = TestBed.createComponent(App);
     await fixture.whenStable();
@@ -43,6 +46,5 @@ describe('App', () => {
 
     expect(element.textContent).toContain('Hello John Doe');
     expect(element.querySelector('button')?.textContent).toBe('Logout');
-    expect(element.querySelector('[role="alert"]')).toBeNull();
   });
 });

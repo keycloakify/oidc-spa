@@ -276,11 +276,11 @@ export namespace OidcRequestMiddleware {
 }
 
 export type ParamsOfBootstrap<AutoLogin, DecodedIdToken, User, AccessTokenClaims> =
-    | ParamsOfBootstrap.Real<AutoLogin>
+    | ParamsOfBootstrap.Real
     | ParamsOfBootstrap.Mock<AutoLogin, DecodedIdToken, User, AccessTokenClaims>;
 
 export namespace ParamsOfBootstrap {
-    export type Real<AutoLogin> = {
+    export type Real = {
         implementation: "real";
 
         /**
@@ -437,7 +437,17 @@ export namespace ParamsOfBootstrap {
          * To enable DPoP see: https://docs.oidc-spa.dev/v/v10/security-features/dpop
          * */
         disableDPoP?: true;
-    } & (AutoLogin extends true ? {} : {});
+    };
+
+    assert<
+        Equals<
+            Omit<Real, "implementation" | "warnUserSecondsBeforeAutoLogout">,
+            Omit<
+                ParamsOfCreateOidc<any, boolean>,
+                "BASE_URL" | "decodedIdTokenSchema" | "createUser" | "autoLogin" | "postLoginRedirectUrl"
+            >
+        >
+    >;
 
     export type Mock<AutoLogin, DecodedIdToken, User, AccessTokenClaims> = {
         implementation: "mock";

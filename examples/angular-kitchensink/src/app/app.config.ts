@@ -3,7 +3,9 @@ import { HttpClient, provideHttpClient, withInterceptors } from '@angular/common
 import { provideRouter } from '@angular/router';
 import { routes } from './app.routes';
 import {
-  Oidc,
+  provideOidc,
+  injectOidc,
+  createOidcInterceptor,
   REQUIRE_ACCESS_TOKEN,
   INCLUDE_ACCESS_TOKEN_IF_LOGGED_IN,
 } from './services/oidc.service';
@@ -20,16 +22,14 @@ export const appConfig: ApplicationConfig = {
     provideBrowserGlobalErrorListeners(),
     provideHttpClient(
       withInterceptors([
-        Oidc.createBearerInterceptor({
+        createOidcInterceptor({
           shouldInjectAccessToken: (req) => {
-            const oidc = inject(Oidc);
-
             if (req.context.get(REQUIRE_ACCESS_TOKEN)) {
               return true;
             }
 
             if (req.context.get(INCLUDE_ACCESS_TOKEN_IF_LOGGED_IN)) {
-              return oidc.isUserLoggedIn;
+              return injectOidc().isUserLoggedIn;
             }
 
             return false;
@@ -38,19 +38,24 @@ export const appConfig: ApplicationConfig = {
       ])
     ),
     provideRouter(routes),
-    environment.useMockOidc
-      ? Oidc.provideMock({
+    provideOidc(async () => {
+      if (environment.useMockOidc) {
+        return {
+          implementation: 'mock',
           isUserInitiallyLoggedIn: true,
-        })
-      : Oidc.provide(async () => {
-          const http = inject(HttpClient);
-          const config = await firstValueFrom(http.get<RemoteOidcConfig>('./oidc-config.json'));
+        };
+      }
 
-          return {
-            issuerUri: config.issuerUri,
-            clientId: config.clientId,
-            debugLogs: true,
-          };
-        }),
+      const http = inject(HttpClient);
+      // No auth context flag: configuration must load before authentication can start.
+      const config = await firstValueFrom(http.get<RemoteOidcConfig>('./oidc-config.json'));
+
+      return {
+        implementation: 'real',
+        issuerUri: config.issuerUri,
+        clientId: config.clientId,
+        debugLogs: true,
+      };
+    }),
   ],
 };

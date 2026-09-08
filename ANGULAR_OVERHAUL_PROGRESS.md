@@ -1,3 +1,53 @@
+# Angular API redesign — completed (2026-09-08)
+
+This section supersedes the historical progress notes below.
+
+## Agreed contract
+
+-   Implement the user's `src/angular/types.ts` proposal, mirroring React SPA's lifecycle and naming.
+-   Export `provideOidc`, `injectOidc`, `getOidc`, `createOidcInterceptor`, and (without auto-login) `enforceLoginGuard`.
+-   `injectOidc` supports login-state assertions; signals are `user` and `autoLogoutState`. No decoded-ID-token UI API or built-in RxJS user stream.
+-   `provideOidc` accepts real/mock parameters or an async injectable getter. Mock user comes from the builder or provider override.
+-   UI `prInitialized` includes initial User; imperative `getOidc` and interceptors wait only for core authentication. Never block authenticated createUser requests on User readiness.
+-   Preserve injectable createUser on initial build and refresh. Core owns rebuild detection and subsequent failure behavior.
+-   Initial core auto-login errors and initial user-build errors are accessible as `initializationError`; other operations requiring failed initialization throw. Do not swallow unexpected errors. One statement per try block.
+-   Keep examples free of explicit initialization-error UI. Their proposed-API migration is already in the working tree; preserve it and the user's React/TanStack type edits.
+-   User confirmed one active app injector per createUtils. Independent apps use separate createUtils instances; destroying the injector permits reuse.
+
+## Verification checklist
+
+-   [x] Implement runtime and public exports; fix the agreed autoLogoutState signal typo.
+-   [x] Migrate type and runtime tests; 30 tests pass covering assertions, getOidc readiness, errors, signals, auto-login interceptors, and lifecycle.
+-   [x] Library build and both Angular examples: production builds and existing component tests against the real new adapter.
+-   [x] Review formatting, try-block scope, legacy references, and final diff.
+
+## Results and handoff
+
+-   `npm run test:angular`: public type checks and 30 integration tests pass. The fixture uses the real core user lifecycle and Angular injector/HTTP testing backend.
+-   `INCREMENTAL=true npm run build`: library build passes. Two TanStack references to `ParamsOfBootstrap.Real<boolean>` were changed to `Real` to accommodate the user's pre-existing type simplification; React/TanStack runtime behavior was not changed.
+-   Both examples have the built local package copied into `node_modules/oidc-spa`, matching the repository's start-example workflow. Production builds pass for both examples.
+-   `npm test -- --watch=false` passes in both examples: two component tests each, exercising actual adapter mock initialization and templates.
+-   Changed source/test formatting and `git diff --check` pass. An AST check verifies one statement in every try block in Angular source and tests (six total).
+-   Public legacy token/service APIs and RxJS user streams are gone; negative type/runtime tests confirm their removal.
+-   Browser-only `getOidc` follows React: it waits for core, not User, and remains pending on a core auto-login initialization error. The injected view exposes that error so applications can handle it. Initial user-build errors preserve usable tokens.
+-   Injection and configuration are synchronous-context operations; the async configuration result is awaited afterward. Initial and refreshed createUser callbacks retain Angular DI.
+-   No live identity-provider roundtrip was exercised. The OIDC transport is unchanged and is substituted in integration tests.
+-   No documentation changes in this implementation pass, as requested. The older example migration guide and historical notes below describe the superseded API and should not be used as its current contract.
+-   Work is uncommitted for review. No outstanding implementation steps.
+
+## SSR follow-up — completed (2026-09-08)
+
+-   Unasserted `injectOidc()` now works during SSR. Its runtime belongs to the request injector, and `prInitialized` stays pending because the server provider skips initialization. Public templates can use `@defer (when oidc.prInitialized | async)` with a placeholder.
+-   Authentication getters and asserted injection still require initialized authentication. `getOidc()` remains browser-only.
+-   `enforceLoginGuard` rejects immediately on the server, before injecting Router or waiting on initialization, with instructions to configure the protected route using `renderMode: RenderMode.Client` in `app.routes.server.ts`. This replaces the old adapter's indefinite guard wait; it does not automatically switch rendering modes.
+-   Added public type comments for the SSR contract.
+-   `npm run test:angular`: 36 tests and type checks pass. Added coverage for blocking/nonblocking providers with/without auto-login, request isolation alongside an active browser runtime, early access/assertions, and prompt guard rejection.
+-   `INCREMENTAL=true npm run build`: passes.
+-   Real Angular 20.3.26 `renderApplication` smoke test against built adapter: public routed HTML and auth placeholder returned for two sequential requests in each initialization mode, with zero configuration/User calls. Temporary fixture and matching platform-server package are in ignored `node_modules/.cache/angular-ssr-smoke`; no dependency manifest changes.
+-   Existing examples remain SPA projects; no changes to their rendering configuration or the separate documentation repository in this follow-up.
+
+## Historical notes (previous API, for reference only)
+
 # Angular user abstraction overhaul
 
 ## Contract and scope
