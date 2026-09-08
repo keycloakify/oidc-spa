@@ -1,6 +1,6 @@
 import { AsyncPipe } from '@angular/common';
 import { Component, inject } from '@angular/core';
-import { Oidc } from '../services/oidc.service';
+import { injectOidc } from '../services/oidc.service';
 import { TodoService } from '../services/todo.service';
 
 @Component({
@@ -29,7 +29,7 @@ import { TodoService } from '../services/todo.service';
   `,
 })
 export class Protected {
-  oidc = inject(Oidc);
+  oidc = injectOidc({ assert: 'user logged in' });
   private readonly todoService = inject(TodoService);
   readonly todos$ = this.todoService.getTodos();
 }

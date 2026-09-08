@@ -13,17 +13,11 @@ import {
 } from "@angular/core";
 import type { HttpInterceptorFn } from "@angular/common/http";
 import { Router } from "@angular/router";
-import { defer, finalize, from, ReplaySubject, Subject, switchMap } from "rxjs";
+import { defer, finalize, from, switchMap } from "rxjs";
 import { setDesiredPostLoginRedirectUrl } from "../core/desiredPostLoginRedirectUrl";
 import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";
-import type {
-    CreateUser,
-    OidcService,
-    OidcSpaUtils,
-    OidcHelpers,
-    ParamsOfProvide,
-    ParamsOfProvideMock
-} from "./types";
+import type { CreateUser, InjectOidc, GetOidc, OidcSpaUtils, ParamsOfProvide } from "./types";
+import { createStatefulEvt } from "../tools/StatefulEvt";
 import type { Oidc as Oidc_core } from "../core";
 import { OidcInitializationError } from "../core/OidcInitializationError";
 import { Deferred } from "../tools/Deferred";
@@ -38,16 +32,19 @@ export function createOidcSpaUtils<AutoLogin extends boolean, User>(params: {
 }): OidcSpaUtils<AutoLogin, User> {
     const { autoLogin, providerAwaitsInitialization, createUser, user_mock: user_mock_static } = params;
 
-    type InitializationParams =
-        | { implementation: "real"; params: ValueOrAsyncGetter<ParamsOfProvide> }
-        | { implementation: "mock"; params: ParamsOfProvideMock<boolean, User> };
+    // Like React's bootstrap, imperative access belongs to one active application.
+    // Destroying the injector releases it so tests or a remounted app can initialize again.
+    let dRuntime = new Deferred<Runtime>();
+    let activeRuntime: Runtime | undefined;
 
     // Each provider creates its own state in its Angular injection context.
-    function createOidcService() {
+    function createRuntime() {
         const injector = inject(Injector);
         const destroyRef = inject(DestroyRef);
         type Core = Oidc_core<Oidc_core.Tokens.DecodedIdToken_OidcCoreSpec, User>;
-        type ResultOfGetUser = Awaited<ReturnType<OidcService<boolean, User>["getUser"]>>;
+        type ResultOfGetUser = Awaited<
+            ReturnType<Oidc_core.LoggedIn<Oidc_core.Tokens.DecodedIdToken_OidcCoreSpec, User>["getUser"]>
+        >;
 
         // Match React's separate core and user results. Authenticated HTTP must not wait for User.
         const dOidcCoreOrInitializationError = new Deferred<Core | OidcInitializationError>();
@@ -57,9 +54,11 @@ export function createOidcSpaUtils<AutoLogin extends boolean, User>(params: {
         const $resultOfGetUser = signal<
             { value: ResultOfGetUser | OidcInitializationError | undefined } | undefined
         >(undefined);
-        const userSubject = new ReplaySubject<User>(1);
-        const accessTokenRotation = new Subject<string>();
-        const secondsLeftBeforeAutoLogout = signal<number | null>(null);
+        type AutoLogoutState = ReturnType<InjectOidc.Oidc.LoggedIn<User>["autoLogoutState"]>;
+        const evtAutoLogoutState = createStatefulEvt<AutoLogoutState>(() => ({
+            shouldDisplayWarning: false
+        }));
+        const autoLogoutState = signal(evtAutoLogoutState.current);
         const cleanups = new Set<() => void>();
         let hasStarted = false;
         let isRunningGetParams = false;
@@ -70,16 +69,22 @@ export function createOidcSpaUtils<AutoLogin extends boolean, User>(params: {
             destroyed = true;
             cleanups.forEach(cleanup => cleanup());
             cleanups.clear();
-            userSubject.complete();
-            accessTokenRotation.complete();
         });
 
-        function registerCleanup(cleanup: () => void) {
-            if (destroyed) {
+        function registerCleanup(cleanup: () => void): () => void {
+            let active = true;
+            const unsubscribe = () => {
+                if (!active) return;
+                active = false;
+                cleanups.delete(unsubscribe);
                 cleanup();
-                return;
+            };
+            if (destroyed) {
+                unsubscribe();
+            } else {
+                cleanups.add(unsubscribe);
             }
-            cleanups.add(cleanup);
+            return unsubscribe;
         }
 
         function getCore(caller: string): Core {
@@ -128,7 +133,7 @@ export function createOidcSpaUtils<AutoLogin extends boolean, User>(params: {
             if (state.value === undefined) {
                 throw new Error(
                     "oidc-spa: Use oidcSpa.withUser({ createUser }) to implement the user abstraction. " +
-                        "In mock mode, provide user_mock in withUser() or Oidc.provideMock()."
+                        'In mock mode, provide user_mock in withUser() or provideOidc({ implementation: "mock", ... }).'
                 );
             }
             return state.value;
@@ -138,11 +143,10 @@ export function createOidcSpaUtils<AutoLogin extends boolean, User>(params: {
             dOidcCoreOrInitializationError.pr,
             dResultOfGetUserOrInitializationErrorOrUndefined.pr
         ]).then(() => true as const);
-        const user$ = Object.assign(userSubject.asObservable(), {
-            getValue: () => getResultOfGetUser().user
-        });
-
-        const oidc: OidcService<boolean, User> = {
+        const oidc: Omit<InjectOidc.Oidc.LoggedIn<User>, "isUserLoggedIn"> & {
+            isUserLoggedIn: boolean;
+            login: InjectOidc.Oidc.NotLoggedIn["login"];
+        } = {
             prInitialized,
             get initializationError() {
                 const coreState = dOidcCoreOrInitializationError.getState();
@@ -187,7 +191,7 @@ export function createOidcSpaUtils<AutoLogin extends boolean, User>(params: {
                         "oidc-spa: login() called while already logged in. Use goToAuthServer() instead."
                     );
                 }
-                return oidcCore.login({ ...params, doesCurrentHrefRequiresAuth: false });
+                return oidcCore.login({ doesCurrentHrefRequiresAuth: false, ...params });
             },
             async logout(params) {
                 await dOidcCoreOrInitializationError.pr;
@@ -203,19 +207,11 @@ export function createOidcSpaUtils<AutoLogin extends boolean, User>(params: {
             },
             async getAccessToken() {
                 await dOidcCoreOrInitializationError.pr;
-                const oidcCore = getCore("getAccessToken");
-                return oidcCore.isUserLoggedIn
-                    ? { isUserLoggedIn: true, accessToken: (await oidcCore.getTokens()).accessToken }
-                    : { isUserLoggedIn: false };
+                const { accessToken } = await getLoggedInCore("getAccessToken").getTokens();
+                return accessToken;
             },
-            accessTokenRotation$: accessTokenRotation.asObservable(),
-            $secondsLeftBeforeAutoLogout: secondsLeftBeforeAutoLogout.asReadonly(),
-            $user: computed(() => getResultOfGetUser().user),
-            user$,
-            async getUser() {
-                await dOidcCoreOrInitializationError.pr;
-                return getLoggedInCore("getUser").getUser();
-            },
+            autoLogoutState: autoLogoutState.asReadonly(),
+            user: computed(() => getResultOfGetUser().user),
             async refreshUser() {
                 await prInitialized;
                 return getResultOfGetUser().refreshUser();
@@ -225,16 +221,11 @@ export function createOidcSpaUtils<AutoLogin extends boolean, User>(params: {
         function setResultOfGetUser(value: ResultOfGetUser | OidcInitializationError | undefined) {
             dResultOfGetUserOrInitializationErrorOrUndefined.resolve(value);
             $resultOfGetUser.set({ value });
-            if (value instanceof OidcInitializationError) {
-                userSubject.error(value);
-            } else if (value === undefined) {
-                userSubject.complete();
-            } else {
-                userSubject.next(value.user);
-            }
         }
 
-        async function initialize(initialization: InitializationParams): Promise<true> {
+        async function initialize(
+            paramsOrGetter: ValueOrAsyncGetter<ParamsOfProvide<AutoLogin, User>>
+        ): Promise<true> {
             if (hasStarted) {
                 return prInitialized;
             }
@@ -244,35 +235,39 @@ export function createOidcSpaUtils<AutoLogin extends boolean, User>(params: {
             let shouldGetUser: boolean;
             let warnUserSecondsBeforeAutoLogout = 60;
 
-            if (initialization.implementation === "mock") {
+            // Invoke the config callback synchronously in Angular's injection context.
+            isRunningGetParams = true;
+            let paramsOfProvide: ParamsOfProvide<AutoLogin, User>;
+            try {
+                paramsOfProvide = await (typeof paramsOrGetter === "function"
+                    ? runInInjectionContext(injector, paramsOrGetter)
+                    : paramsOrGetter);
+            } finally {
+                isRunningGetParams = false;
+            }
+
+            if (paramsOfProvide.implementation === "mock") {
                 const { createMockOidc } = await import("../core/createMockOidc");
-                const params = initialization.params;
-                const user_mock = params.user_mock ?? user_mock_static;
+                const user_mock = paramsOfProvide.user_mock ?? user_mock_static;
                 oidcCore = await createMockOidc({
                     BASE_URL: getBaseHref(),
-                    // Same type-only narrowing as React: runtime autoLogin is unchanged.
                     autoLogin: autoLogin as false,
-                    isUserInitiallyLoggedIn: autoLogin || (params.isUserInitiallyLoggedIn ?? true),
-                    mockedParams: { issuerUri: params.mockIssuerUri, clientId: params.mockClientId },
-                    mockedTokens: { accessToken: params.mockAccessToken },
+                    isUserInitiallyLoggedIn:
+                        autoLogin || (paramsOfProvide.isUserInitiallyLoggedIn ?? false),
+                    mockedParams: {
+                        issuerUri: paramsOfProvide.issuerUri_mock,
+                        clientId: paramsOfProvide.clientId_mock
+                    },
                     mockedUser: user_mock
                 });
                 shouldGetUser = user_mock !== undefined;
             } else {
-                const paramsOrGetter = initialization.params;
-                // Invoke the config getter in context, before yielding, just like an Angular initializer.
-                const prParams = (async () => {
-                    isRunningGetParams = true;
-                    try {
-                        return await (typeof paramsOrGetter === "function"
-                            ? runInInjectionContext(injector, paramsOrGetter)
-                            : paramsOrGetter);
-                    } finally {
-                        isRunningGetParams = false;
-                    }
-                })();
-                const [{ createOidc }, { warnUserSecondsBeforeAutoLogout: warning = 60, ...params }] =
-                    await Promise.all([import("../core"), prParams]);
+                const { createOidc } = await import("../core");
+                const {
+                    implementation,
+                    warnUserSecondsBeforeAutoLogout: warning = 60,
+                    ...params
+                } = paramsOfProvide;
                 warnUserSecondsBeforeAutoLogout = warning;
                 const paramsOfCreateOidc = {
                     ...params,
@@ -307,17 +302,22 @@ export function createOidcSpaUtils<AutoLogin extends boolean, User>(params: {
 
             if (oidcCore.isUserLoggedIn) {
                 registerCleanup(
-                    oidcCore.subscribeToTokensChange(({ accessToken }) => {
-                        accessTokenRotation.next(accessToken);
-                    }).unsubscribeFromTokensChange
-                );
-                registerCleanup(
                     oidcCore.subscribeToAutoLogoutCountdown(({ secondsLeft }) => {
-                        secondsLeftBeforeAutoLogout.set(
+                        const newState: AutoLogoutState =
                             secondsLeft === undefined || secondsLeft > warnUserSecondsBeforeAutoLogout
-                                ? null
-                                : secondsLeft
-                        );
+                                ? { shouldDisplayWarning: false }
+                                : {
+                                      shouldDisplayWarning: true,
+                                      secondsLeftBeforeAutoLogout: secondsLeft
+                                  };
+                        if (
+                            !newState.shouldDisplayWarning &&
+                            !evtAutoLogoutState.current.shouldDisplayWarning
+                        ) {
+                            return;
+                        }
+                        autoLogoutState.set(newState);
+                        evtAutoLogoutState.current = newState;
                     }).unsubscribeFromAutoLogoutCountdown
                 );
             }
@@ -350,16 +350,65 @@ export function createOidcSpaUtils<AutoLogin extends boolean, User>(params: {
                     // React keeps this result current too. Angular's signal only notifies its consumers.
                     resultOfGetUser.user = user;
                     $resultOfGetUser.set({ value: resultOfGetUser });
-                    userSubject.next(user);
                 }).unsubscribeFromUserChange
             );
             setResultOfGetUser(resultOfGetUser);
             return prInitialized;
         }
 
+        // Same imperative surface and token readiness as React's getOidc.
+        async function getOidc(params?: {
+            assert?: "user logged in" | "user not logged in";
+        }): Promise<GetOidc.Oidc<User>> {
+            const oidcCore = await dOidcCoreOrInitializationError.pr;
+            if (oidcCore instanceof OidcInitializationError) {
+                return new Promise<never>(() => {});
+            }
+            checkAssertion(oidcCore.isUserLoggedIn, params?.assert, "getOidc");
+            const common = {
+                issuerUri: oidcCore.issuerUri,
+                clientId: oidcCore.clientId,
+                validRedirectUri: oidcCore.validRedirectUri
+            };
+            return oidcCore.isUserLoggedIn
+                ? {
+                      ...common,
+                      isUserLoggedIn: true,
+                      getAccessToken: async () => (await oidcCore.getTokens()).accessToken,
+                      subscribeToAccessTokenRotation: next => {
+                          const { unsubscribeFromTokensChange } = oidcCore.subscribeToTokensChange(
+                              ({ accessToken }) => next(accessToken)
+                          );
+                          return {
+                              unsubscribeFromAccessTokenRotation: registerCleanup(
+                                  unsubscribeFromTokensChange
+                              )
+                          };
+                      },
+                      logout: oidcCore.logout,
+                      renewTokens: oidcCore.renewTokens,
+                      goToAuthServer: oidcCore.goToAuthServer,
+                      backFromAuthServer: oidcCore.backFromAuthServer,
+                      isNewBrowserSession: oidcCore.isNewBrowserSession,
+                      subscribeToAutoLogoutState: next => {
+                          next(evtAutoLogoutState.current);
+                          const { unsubscribe } = evtAutoLogoutState.subscribe(next);
+                          return { unsubscribeFromAutoLogoutState: registerCleanup(unsubscribe) };
+                      },
+                      getUser: oidcCore.getUser
+                  }
+                : {
+                      ...common,
+                      isUserLoggedIn: false,
+                      initializationError: oidcCore.initializationError,
+                      login: oidcCore.login
+                  };
+        }
+
         return {
             oidc,
             initialize,
+            getOidc,
             getCore,
             prCore: dOidcCoreOrInitializationError.pr,
             get isRunningGetParams() {
@@ -377,29 +426,77 @@ export function createOidcSpaUtils<AutoLogin extends boolean, User>(params: {
         };
     }
 
-    type Runtime = ReturnType<typeof createOidcService>;
+    type Runtime = ReturnType<typeof createRuntime>;
     const runtimeToken = new InjectionToken<Runtime>("oidc-spa runtime");
-    const token = new InjectionToken<OidcService<AutoLogin, User>>("Oidc");
+    function checkAssertion(
+        isUserLoggedIn: boolean,
+        assertion: "user logged in" | "user not logged in" | undefined,
+        caller: string
+    ) {
+        if (assertion === undefined) return;
+        if (isUserLoggedIn !== (assertion === "user logged in")) {
+            throw new Error(
+                `oidc-spa: Called ${caller}({ assert: '${assertion}' }), but the user is ${
+                    isUserLoggedIn ? "logged in" : "not logged in"
+                }.`
+            );
+        }
+    }
 
-    function provide(initialization: InitializationParams) {
+    function provideOidc(params: ValueOrAsyncGetter<ParamsOfProvide<AutoLogin, User>>) {
         return makeEnvironmentProviders([
-            { provide: runtimeToken, useFactory: createOidcService },
-            { provide: token, useFactory: () => inject(runtimeToken).oidc },
+            { provide: runtimeToken, useFactory: createRuntime },
             provideAppInitializer(() => {
-                if (!isPlatformBrowser(inject(PLATFORM_ID))) {
-                    return;
-                }
+                if (!isPlatformBrowser(inject(PLATFORM_ID))) return;
                 const runtime = inject(runtimeToken);
-                const prInitialized = runtime.initialize(initialization);
+                if (activeRuntime !== undefined && activeRuntime !== runtime) {
+                    throw new Error(
+                        "oidc-spa: Each createUtils() instance supports one active application injector. Call createUtils() separately for independent applications."
+                    );
+                }
+                if (activeRuntime === undefined) {
+                    activeRuntime = runtime;
+                    dRuntime.resolve(runtime);
+                    inject(DestroyRef).onDestroy(() => {
+                        activeRuntime = undefined;
+                        dRuntime = new Deferred<Runtime>();
+                    });
+                }
+                const prInitialized = runtime.initialize(params);
                 return providerAwaitsInitialization ? prInitialized : undefined;
             })
         ]);
     }
 
-    const helpers: OidcHelpers<AutoLogin, User> = {
-        provide: params => provide({ implementation: "real", params }),
-        provideMock: (params = {}) => provide({ implementation: "mock", params }),
-        createBearerInterceptor: ({ shouldInjectAccessToken }) => {
+    function injectOidc(params?: {
+        assert?: "user logged in" | "user not logged in";
+    }): InjectOidc.Oidc<User> {
+        const { oidc } = inject(runtimeToken);
+        if (params?.assert !== undefined) {
+            checkAssertion(oidc.isUserLoggedIn, params.assert, "injectOidc");
+        }
+        // Also available during SSR, where prInitialized stays pending and auth UI is deferred.
+        // The getters enforce readiness; merely injecting the object does not read auth state.
+        return oidc as unknown as InjectOidc.Oidc<User>;
+    }
+
+    async function getOidc(params?: {
+        assert?: "user logged in" | "user not logged in";
+    }): Promise<GetOidc.Oidc<User>> {
+        if (typeof window === "undefined" || typeof window.document === "undefined") {
+            throw new Error("oidc-spa: getOidc() cannot be used on the server.");
+        }
+        const runtime = await dRuntime.pr;
+        return runtime.getOidc(params);
+    }
+
+    const utils = {
+        provideOidc,
+        injectOidc,
+        getOidc,
+        createOidcInterceptor: ({
+            shouldInjectAccessToken
+        }: Parameters<OidcSpaUtils<AutoLogin, User>["createOidcInterceptor"]>[0]) => {
             const interceptor: HttpInterceptorFn = (req, next) => {
                 const runtime = inject(runtimeToken);
                 const injector = inject(Injector);
@@ -430,7 +527,7 @@ export function createOidcSpaUtils<AutoLogin extends boolean, User>(params: {
                         }
                         console.warn(
                             `oidc-spa: Probable deadlock: ${req.method} ${req.urlWithParams} is waiting for authentication ` +
-                                "while Oidc.provide's configuration is loading. Requests used to load that configuration " +
+                                "while provideOidc's configuration is loading. Requests used to load that configuration " +
                                 "must return false from shouldInjectAccessToken before reading authentication state."
                         );
                     }, 4_000);
@@ -440,22 +537,20 @@ export function createOidcSpaUtils<AutoLogin extends boolean, User>(params: {
                             if (!(decision ?? evaluate())) {
                                 return next(req);
                             }
-                            return from(runtime.oidc.getAccessToken()).pipe(
-                                switchMap(result => {
-                                    if (!result.isUserLoggedIn) {
-                                        throw new Error(
-                                            `oidc-spa: Attempted to attach an access token to ${req.method} ${req.urlWithParams}, ` +
-                                                "but the user is not logged in."
-                                        );
-                                    }
-                                    return next(
+                            const oidcCore = runtime.getCore("createOidcInterceptor");
+                            if (!oidcCore.isUserLoggedIn) {
+                                throw new Error(
+                                    `oidc-spa: Attempted to attach an access token to ${req.method} ${req.urlWithParams}, but the user is not logged in.`
+                                );
+                            }
+                            return from(oidcCore.getTokens()).pipe(
+                                switchMap(({ accessToken }) =>
+                                    next(
                                         req.clone({
-                                            setHeaders: {
-                                                Authorization: `Bearer ${result.accessToken}`
-                                            }
+                                            setHeaders: { Authorization: `Bearer ${accessToken}` }
                                         })
-                                    );
-                                })
+                                    )
+                                )
                             );
                         }),
                         finalize(() => clearTimeout(timer))
@@ -464,12 +559,18 @@ export function createOidcSpaUtils<AutoLogin extends boolean, User>(params: {
             };
             return interceptor;
         },
-        enforceLoginGuard: async (route, state) => {
+        enforceLoginGuard: async (
+            route: Parameters<import("@angular/router").CanActivateFn>[0],
+            state?: Parameters<import("@angular/router").CanActivateFn>[1]
+        ): Promise<true> => {
+            if (!isPlatformBrowser(inject(PLATFORM_ID))) {
+                throw new Error(
+                    "oidc-spa: enforceLoginGuard cannot run during server-side rendering. " +
+                        "Configure this route with renderMode: RenderMode.Client in your server routes configuration (app.routes.server.ts)."
+                );
+            }
             const runtime = inject(runtimeToken);
             const router = inject(Router);
-            if (!isPlatformBrowser(inject(PLATFORM_ID))) {
-                throw new Error("oidc-spa: enforceLoginGuard cannot be used on the server.");
-            }
 
             await runtime.oidc.prInitialized;
             const oidcCore = runtime.getCore("enforceLoginGuard");
@@ -520,11 +621,9 @@ export function createOidcSpaUtils<AutoLogin extends boolean, User>(params: {
         }
     };
 
-    // Augmenting InjectionToken<T> loses Angular's inference because T is phantom.
-    // AbstractType<T> preserves it through its prototype property. This assertion is
-    // only for inference: the runtime value remains an InjectionToken, resolved by
-    // identity through useFactory above. It is never constructed or used as a prototype.
-    return {
-        Oidc: Object.assign(token, helpers) as unknown as OidcSpaUtils<AutoLogin, User>["Oidc"]
-    };
+    if (autoLogin) {
+        const { enforceLoginGuard, ...utilsWithAutoLogin } = utils;
+        return utilsWithAutoLogin as OidcSpaUtils<AutoLogin, User>;
+    }
+    return utils as OidcSpaUtils<AutoLogin, User>;
 }

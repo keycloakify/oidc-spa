@@ -1,7 +1,6 @@
 import { Component } from '@angular/core';
 import { createKeycloakUtils } from 'oidc-spa/keycloak';
-import { inject } from '@angular/core';
-import { Oidc } from '../services/oidc.service';
+import { injectOidc } from '../services/oidc.service';
 
 @Component({
   selector: 'app-admin-only',
@@ -12,7 +11,7 @@ import { Oidc } from '../services/oidc.service';
   `,
 })
 export class AdminOnly {
-  oidc = inject(Oidc);
+  oidc = injectOidc({ assert: 'user logged in' });
 
   keycloakUtils = createKeycloakUtils({ issuerUri: this.oidc.issuerUri });
 

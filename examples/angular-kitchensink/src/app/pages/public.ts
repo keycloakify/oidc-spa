@@ -1,7 +1,7 @@
 import { AsyncPipe } from '@angular/common';
 import { Component, inject } from '@angular/core';
 import { TodoService } from '../services/todo.service';
-import { Oidc } from '../services/oidc.service';
+import { injectOidc } from '../services/oidc.service';
 
 @Component({
   selector: 'app-public',
@@ -32,7 +32,7 @@ import { Oidc } from '../services/oidc.service';
   `,
 })
 export class Public {
-  oidc = inject(Oidc);
+  oidc = injectOidc();
   private readonly todoService = inject(TodoService);
   readonly todos$ = this.todoService.getPublicAndUserTodos();
 }

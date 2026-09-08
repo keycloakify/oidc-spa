@@ -2,6 +2,7 @@
 import type { Oidc, ParamsOfCreateOidc } from "../../src/core";
 import { createGetUser } from "../../src/core/createGetUser";
 import { createEvt } from "../../src/tools/Evt";
+import { OidcInitializationError } from "../../src/core/OidcInitializationError";
 import { Deferred } from "../../src/tools/Deferred";
 
 export function createCoreController() {
@@ -62,17 +63,21 @@ export function createCoreController() {
             controller.calls++;
             controller.params = params;
             await ready.pr;
-            if (controller.error) throw controller.error;
+            const initializationError =
+                controller.error instanceof OidcInitializationError && !params.autoLogin
+                    ? controller.error
+                    : undefined;
+            if (controller.error && !initializationError) throw controller.error;
             const common = {
                 issuerUri: params.issuerUri,
                 clientId: params.clientId,
                 validRedirectUri: "https://app.test/"
             };
-            if (!controller.loggedIn)
+            if (!controller.loggedIn || initializationError !== undefined)
                 return {
                     ...common,
                     isUserLoggedIn: false,
-                    initializationError: undefined,
+                    initializationError,
                     login: async params => {
                         controller.loginParams = params;
                         return new Promise<never>(() => {});

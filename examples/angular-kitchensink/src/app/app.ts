@@ -1,9 +1,8 @@
 import { Component } from '@angular/core';
 import { AsyncPipe } from '@angular/common';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
-import { Oidc } from './services/oidc.service';
+import { injectOidc } from './services/oidc.service';
 import { createKeycloakUtils } from 'oidc-spa/keycloak';
-import { inject } from '@angular/core';
 
 @Component({
   selector: 'app-root',
@@ -11,7 +10,7 @@ import { inject } from '@angular/core';
   templateUrl: './app.html',
 })
 export class App {
-  oidc = inject(Oidc);
+  oidc = injectOidc();
   get keycloakUtils() {
     return createKeycloakUtils({
       issuerUri: this.oidc.issuerUri,
@@ -25,14 +24,11 @@ export class App {
     });
   }
 
-  get canShowAdminLink(): boolean {
-    if (this.oidc.initializationError) {
-      return false;
-    }
+  get shouldShowAdminLink(): boolean {
     if (!this.oidc.isUserLoggedIn) {
       return true;
     }
 
-    return this.oidc.$user().canSeeAdminNavigation;
+    return this.oidc.user().canSeeAdminNavigation;
   }
 }

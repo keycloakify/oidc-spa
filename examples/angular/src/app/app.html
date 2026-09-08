@@ -30,29 +30,25 @@
       >My protected page</a
     >
   </div>
-  @if (oidc.initializationError) {
-  <span role="alert"
-    >Authentication initialization failed: {{ oidc.initializationError.message }}</span
-  >
-  } @else if (oidc.isUserLoggedIn) {
-  <div>
-    <a href="{{accountUrl}}">Hello {{ oidc.$user().displayName }}</a>
-    &nbsp; &nbsp;
-    <button (click)="oidc.logout({ redirectTo: 'home' })">Logout</button>
-  </div>
+  @if (oidc.isUserLoggedIn) {
+    <div>
+      <a href="{{ accountUrl }}">Hello {{ oidc.user().displayName }}</a>
+      &nbsp; &nbsp;
+      <button (click)="oidc.logout({ redirectTo: 'home' })">Logout</button>
+    </div>
   } @else {
-  <div>
-    <button (click)="oidc.login()">Login</button>
-    <button
-      (click)="
-            oidc.login({
-              transformUrlBeforeRedirect: keycloakUtils.transformUrlBeforeRedirectForRegister,
-            })
-          "
-    >
-      Register
-    </button>
-  </div>
+    <div>
+      <button (click)="oidc.login()">Login</button>
+      <button
+        (click)="
+          oidc.login({
+            transformUrlBeforeRedirect: keycloakUtils.transformUrlBeforeRedirectForRegister,
+          })
+        "
+      >
+        Register
+      </button>
+    </div>
   }
 </header>
 
@@ -60,10 +56,11 @@
 
 <router-outlet />
 
-@if (oidc.$secondsLeftBeforeAutoLogout() !== null) {
-<!-- Full screen overlay, blurred background -->
-<div
-  [style]="{
+@let autoLogoutState = oidc.autoLogoutState();
+@if (autoLogoutState.shouldDisplayWarning) {
+  <!-- Full screen overlay, blurred background -->
+  <div
+    [style]="{
       position: 'fixed',
       top: 0,
       left: 0,
@@ -76,10 +73,10 @@
       alignItems: 'center',
       zIndex: 1000,
     }"
->
-  <div>
-    <p>Are you still there?</p>
-    <p>You will be logged out in {{ oidc.$secondsLeftBeforeAutoLogout() }}</p>
+  >
+    <div>
+      <p>Are you still there?</p>
+      <p>You will be logged out in {{ autoLogoutState.secondsLeftBeforeAutoLogout }}</p>
+    </div>
   </div>
-</div>
 }

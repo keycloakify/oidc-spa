@@ -61,7 +61,7 @@ export type OidcSpaUtilsBuilder<
                 accessTokenClaims_mock?: NoInfer<AccessTokenClaims>;
 
                 expectedAudience?: (params: {
-                    paramsOfBootstrap: ParamsOfBootstrap.Real<boolean>;
+                    paramsOfBootstrap: ParamsOfBootstrap.Real;
                     process: { env: Record<string, string> };
                 }) => string;
             }): OidcSpaUtilsBuilder<

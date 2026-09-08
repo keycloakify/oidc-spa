@@ -1,12 +1,20 @@
 import { oidcSpa } from 'oidc-spa/angular';
 
-// App-specific user model exposed by `oidc.$user()`.
+// App-specific user model exposed by `oidc.user()`.
 // Shape it around the information the UI needs to render.
 export type User = {
   displayName: string;
 };
 
-export const { Oidc } = oidcSpa
+export const {
+  provideOidc,
+  injectOidc,
+  // getOidc() asynchronously returns the imperative OIDC API for code outside
+  // Angular's injection context, such as standalone functions or API clients.
+  getOidc,
+  createOidcInterceptor,
+  enforceLoginGuard,
+} = oidcSpa
   .withUser<User>({
     createUser: async ({ decodedIdToken }) => {
       const { name } = decodedIdToken;
