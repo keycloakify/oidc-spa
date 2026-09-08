@@ -2,8 +2,6 @@ import { oidcSpa, extractRequestAuthContext } from 'oidc-spa/server';
 import { z } from 'zod';
 import type { Request, Response } from 'express';
 
-console.log('===>', process.env['HELLO']);
-
 // Follows the Express guide: validate the token, then expose the application's user.
 // https://docs.oidc-spa.dev/integration-guides/backend-token-validation/express.js
 const { bootstrapAuth, validateAndDecodeAccessToken } = oidcSpa
