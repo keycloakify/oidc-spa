@@ -5,24 +5,69 @@ import {
   writeResponseToNodeResponse,
 } from '@angular/ssr/node';
 import express from 'express';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
+import { existsSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
+import { z } from 'zod';
+import { bootstrapAuth } from './server/auth';
+import { createApiRouter } from './server/api';
+import { environment } from './environments/environment';
 
 const browserDistFolder = join(import.meta.dirname, '../browser');
 
 const app = express();
 const angularApp = new AngularNodeAppEngine();
 
-/**
- * Example Express Rest API endpoints can be defined here.
- * Uncomment and define endpoints as necessary.
- *
- * Example:
- * ```ts
- * app.get('/api/{*splat}', (req, res) => {
- *   // Handle API request
- * });
- * ```
- */
+// Trust forwarded URLs only when explicitly configured for your reverse proxy.
+// Used when validating a DPoP proof's target URL.
+app.set('trust proxy', process.env['TRUST_PROXY'] === 'true');
+
+const OidcConfig = z.object({
+  issuerUri: z.url(),
+  clientId: z.string(),
+  accessTokenExpectedAudience: z.string().min(1),
+});
+
+// Production assets live beside the server bundle. ng serve uses the source public folder.
+const configPath = existsSync(join(browserDistFolder, 'oidc-config.json'))
+  ? join(browserDistFolder, 'oidc-config.json')
+  : resolve('public/oidc-config.json');
+
+async function readOidcConfig() {
+  return OidcConfig.parse(JSON.parse(await readFile(configPath, 'utf8')));
+}
+
+app.get('/oidc-config.json', async (_req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  res.json(await readOidcConfig());
+});
+
+app.use(
+  '/api',
+  createApiRouter({
+    initializeAuth: async () => {
+      if (environment.useMockOidc) {
+        await bootstrapAuth({
+          implementation: 'mock',
+          behavior: 'use static identity',
+          decodedAccessToken_mock: {
+            sub: 'mock-user',
+            name: 'John Doe',
+            email: 'john.doe@example.com',
+          },
+        });
+        return;
+      }
+
+      const { issuerUri, accessTokenExpectedAudience } = await readOidcConfig();
+      await bootstrapAuth({
+        implementation: 'real',
+        issuerUri,
+        expectedAudience: accessTokenExpectedAudience,
+      });
+    },
+  })
+);
 
 /**
  * Serve static files from /browser

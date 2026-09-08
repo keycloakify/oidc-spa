@@ -55,6 +55,17 @@ This section supersedes the historical progress notes below.
 -   Actual production HTTP responses for all three routes verified in both configurations. Chrome checks pass in mock development and mock production: public hydration, direct protected/admin visits, client navigation, bearer headers, and no console/page errors. Todo API responses were intercepted with a deterministic fixture during browser checks; live IdP login was not exercised.
 -   Mock development preview left running at http://localhost:4201/. Normal production test server was stopped. Browser check script is outside the repository at `/tmp/oidc-ssr-browser/check.cjs`.
 
+## Kitchen-sink Express API — completed (2026-09-08)
+
+-   Preserved the user's removal of token substitution from `src/main.ts`; DPoP remains enabled.
+-   Added server auth helper following the Express documentation and an in-memory CRUD router. Todo ownership comes from validated `sub`; optional `/api/greet` distinguishes absent credentials from invalid credentials. Mounted-router validation uses `req.originalUrl` to preserve the `/api` prefix in DPoP proofs.
+-   Shared `public/oidc-config.json` supplies issuer, frontend client, and `accessTokenExpectedAudience: "account"`. Backend loads source assets in dev and built assets in production; configuration response bypasses static asset caching. Auth initializes on the first request carrying credentials, so public SSR and anonymous requests do not depend on the IdP.
+-   Existing environment file replacement selects frontend mock and backend Static Identity together. Mock user is John Doe. Express trusts forwarded URLs only with `TRUST_PROXY=true`, documented for deployment behind a trusted proxy.
+-   Replaced JSONPlaceholder calls: public page displays API greeting; protected page supports add/complete/delete with server data retained across page reloads. No persistence across server restarts/processes.
+-   Added `npm run test:api` using Vitest's Node environment. Seven integration tests exercise actual signature/issuer/audience/expiry validation through a local test issuer, DPoP URL/method/binding/replay checks, CRUD validation, user isolation, and static mocks. Existing Angular component tests pass (2).
+-   Normal and mock production builds pass. Browser checks against the real Express API in development and production mock mode verify greeting, CRUD, reload persistence, logout, and SSR without console errors. Real production configuration also serves anonymous requests and rejects an invalid token after issuer discovery; no live IdP login was performed.
+-   Mock dev preview left running at http://localhost:4201/. Temporary browser script: `/tmp/oidc-ssr-browser/api-check.cjs`. Production test server stopped. No commits made.
+
 ## Historical notes (previous API, for reference only)
 
 # Angular user abstraction overhaul
