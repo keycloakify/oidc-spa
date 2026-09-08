@@ -32,6 +32,7 @@ export namespace AnyRequest {
         };
         method?: string;
         url?: string;
+        originalUrl?: string;
         socket: Record<string, any>;
     };
 
@@ -149,7 +150,7 @@ function anyRequestToUnified(req: AnyRequest): AnyRequest.Unified {
                 ":scheme":
                     getHeaderValue(":scheme") || (req.socket.encrypted === true ? "https" : "http"),
                 ":authority": getHeaderValue(":authority") || getHeaderValue("host") || "localhost",
-                ":path": req.url
+                ":path": req.originalUrl ?? req.url
             },
             headers: objectFromEntries(
                 (
