@@ -34,11 +34,17 @@ From the oidc-spa repository root, `yarn start-next-example` builds and copies t
 See the [Next.js integration guide](https://docs.oidc-spa.dev/integration-guides/next.js).
 
 -   `instrumentation-client.ts` runs `oidcEarlyInit()` before the application becomes interactive.
--   `lib/oidc.tsx` configures authentication and adapts `OidcInitializationGate` and `withLoginEnforced` to the App Router.
+-   `lib/oidc.tsx` defines the application `User` with `oidcSpa.withUser()`, configures authentication, and adapts `OidcInitializationGate` and `withLoginEnforced` to the App Router.
 -   `app/layout.tsx` wraps the application in `OidcInitializationGate`.
 -   Protected route layouts use `withLoginEnforced`; components that consume authentication are Client Components.
 
 Authentication happens in the browser. The Next.js server cannot use this client session to authorize server-rendered content. This example therefore uses a SPA authentication model inside the App Router. APIs must validate access tokens independently.
+
+## Application user
+
+`useOidc()` exposes `user` when logged in. The model matches the TanStack Router example: `displayName`, `email`, `avatarImgUrl`, and `canSeeKeycloakAdminNavigation`. Token validation and profile derivation live in `createUser`; components consume this model directly. Mock mode supplies `user_mock` with the same shape.
+
+The admin permission comes from `resource_access["realm-management"].roles` in the access token. Both the admin navigation link and the admin page use `user.canSeeKeycloakAdminNavigation`. A missing picture uses the shared fallback avatar.
 
 ## Routes
 

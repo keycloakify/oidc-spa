@@ -21,7 +21,7 @@ export function HomePage() {
 
             <div className="grid gap-4 sm:grid-cols-2">
                 <InfoCard
-                    body="Header actions reflect your auth state and show the decoded ID token picture claim."
+                    body="Header actions reflect your auth state and show the avatar from your user profile."
                     title="Sign in"
                 />
                 <InfoCard
@@ -54,7 +54,7 @@ function Greeting() {
 
     return (
         <div className="inline-flex items-center rounded-full border border-slate-800 bg-slate-900 px-4 py-2 text-sm font-medium text-slate-200">
-            {oidc.isUserLoggedIn ? `Signed in as ${oidc.decodedIdToken.name}` : "Browsing as a guest"}
+            {oidc.isUserLoggedIn ? `Signed in as ${oidc.user.displayName}` : "Browsing as a guest"}
         </div>
     );
 }
