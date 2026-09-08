@@ -64,7 +64,7 @@ function AuthButtons() {
 }
 
 function LoggedInAuthButtons() {
-    const { decodedIdToken, logout, issuerUri, clientId, validRedirectUri } = useOidc({
+    const { user, logout, issuerUri, clientId, validRedirectUri } = useOidc({
         assert: "user logged in"
     });
 
@@ -76,7 +76,15 @@ function LoggedInAuthButtons() {
         locale: undefined
     });
 
-    const avatar = <Avatar picture={decodedIdToken.picture} name={decodedIdToken.name} />;
+    const avatar = (
+        // The avatar can come from any configured identity provider.
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+            src={user.avatarImgUrl}
+            alt={`${user.displayName}'s avatar`}
+            className="h-10 w-10 shrink-0 rounded-full border border-slate-700 object-cover"
+        />
+    );
 
     return (
         <div className="flex items-center gap-4">
@@ -133,33 +141,9 @@ function AdminOnlyNavLink() {
         return null;
     }
 
-    if (!oidc.decodedIdToken.realm_access?.roles.includes("realm-admin")) {
+    if (!oidc.user.canSeeKeycloakAdminNavigation) {
         return null;
     }
 
     return <AppNavLink href="/admin-only">Admin</AppNavLink>;
-}
-
-function Avatar({ picture, name }: { picture?: string; name: string }) {
-    if (picture && picture.trim().length > 0) {
-        return (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-                alt={`${name}'s avatar`}
-                className="h-10 w-10 shrink-0 rounded-full border border-slate-700 object-cover"
-                src={picture}
-            />
-        );
-    }
-
-    return (
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-700 bg-slate-900 text-sm font-semibold text-slate-200">
-            {name
-                .split(" ")
-                .map(part => part[0])
-                .join("")
-                .slice(0, 2)
-                .toUpperCase()}
-        </div>
-    );
 }
