@@ -8,7 +8,8 @@
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
     "serve:ssr:angular": "node dist/angular/server/server.mjs",
-    "test:api": "vitest run --config vitest.api.config.mts"
+    "test:api": "vitest run --config vitest.api.config.mts",
+    "postinstall": "node -e \"const fs = require('node:fs'); if (!fs.existsSync('.env')) fs.copyFileSync('.env.sample', '.env');\""
   },
   "private": true,
   "dependencies": {
@@ -20,6 +21,7 @@
     "@angular/platform-server": "22.1.5",
     "@angular/router": "22.1.5",
     "@angular/ssr": "22.1.7",
+    "dotenv": "17.4.2",
     "express": "5.2.1",
     "oidc-spa": "latest",
     "rxjs": "7.8.2",

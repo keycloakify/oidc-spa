@@ -141,3 +141,16 @@ Removed the public early-access error class and its module. Premature applicatio
 Consolidated `createOidcService.ts` into `createOidcSpaUtils.ts`. Angular now matches React's four-file layout: `index.ts`, `types.ts`, `utilsBuilder.ts`, and `createOidcSpaUtils.ts`. The service factory is internal to `createOidcSpaUtils`, preserving state per injector. Removed `BuilderParams`; factory and builder arguments are named `params` with inline types. Shared core/user deferred and result names, static user mock naming, and explicit builder parameter forwarding follow React.
 
 Updated the Angular test transport substitution to target the consolidated implementation. Type checks and all 19 integration tests pass. The library build and built public entrypoint import pass. Directory comparison confirms the matching source layout; an AST check confirms all five Angular try blocks contain exactly one statement. Changed-file formatting and whitespace checks pass.
+
+## Kitchen-sink runtime configuration simplification (complete)
+
+-   Replaced public JSON and Angular environment file replacements with `.env.sample`, non-overwriting `postinstall`, and `dotenv/config`.
+-   Server starts `bootstrapAuth()` at module load without awaiting it; removed initialization-on-request middleware.
+-   Browser obtains real/mock settings from `/api/oidc-config`.
+-   Added a Vercel Node handler for the compiled Express server and static browser output configuration.
+-   Verified: npm installation, 7 API tests (JWT/DPoP and Static Identity), 2 Angular component tests, production build, formatting, and whitespace checks.
+-   Browser checks passed in dev and production: SSR placeholder, authenticated/anonymous greetings, todo CRUD and reload persistence, logout, no console errors. A build made with real configuration also runs in mock mode using only a runtime environment override.
+-   Vercel's official `@vercel/node` builder produced a Node 24 function containing all Angular server chunks and excluding `.env`. Materialized that function in isolation and repeated browser/API checks with static assets served separately. Forwarded HTTPS/host SSR passed. Actual cloud deployment was not performed.
+-   Default `.env` loads real configuration through the compiled handler; environment overrides select mock mode without a rebuild. Small isolated installation fixtures confirmed npm, Yarn, and pnpm run the copy hook and preserve existing `.env` files.
+-   Added deployment instructions for Vercel root directory, OIDC variables, Angular allowed hosts/proxy headers, and per-instance in-memory storage. No remaining implementation work.
+-   Preserve the user's unrelated change to `examples/tanstack-start/package.json`.

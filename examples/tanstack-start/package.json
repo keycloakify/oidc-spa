@@ -6,7 +6,7 @@
         "#/*": "./src/*"
     },
     "scripts": {
-        "prepare": "[ ! -f .env ] && cp .env.sample .env || true",
+        "postinstall": "[ ! -f .env ] && cp .env.sample .env || true",
         "dev": "vite dev --port 3000",
         "generate-routes": "tsr generate",
         "build": "tsc && vite build",

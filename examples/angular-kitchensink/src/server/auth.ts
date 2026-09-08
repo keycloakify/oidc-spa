@@ -22,22 +22,17 @@ export type User = {
   email: string | undefined;
 };
 
-export function getUser(params: {
-  req: Request;
-  res: Response;
-  allowAnonymous: true;
-}): Promise<User | undefined>;
-export function getUser(params: {
-  req: Request;
-  res: Response;
-  allowAnonymous?: false;
-}): Promise<User>;
-export async function getUser(params: {
-  req: Request;
-  res: Response;
-  allowAnonymous?: boolean;
-}): Promise<User | undefined> {
-  const { req, res, allowAnonymous = false } = params;
+export function isAnonymousRequest(req: Request) {
+  const requestAuthContext = extractRequestAuthContext({
+    request: req,
+    trustProxy: true,
+  });
+
+  return requestAuthContext === undefined;
+}
+
+export async function getUser(params: { req: Request; res: Response }): Promise<User> {
+  const { req, res } = params;
 
   const bail = (statusCode: 400 | 401) => {
     res.sendStatus(statusCode);
@@ -46,13 +41,11 @@ export async function getUser(params: {
 
   const requestAuthContext = extractRequestAuthContext({
     request: req,
-    // Express's trusted-proxy setting is configured in server.ts.
-    //trustProxy: req.app.get('trust proxy') === true,
     trustProxy: true,
   });
 
-  if (!requestAuthContext) {
-    return allowAnonymous ? undefined : bail(401);
+  if (requestAuthContext === undefined) {
+    return bail(401);
   }
 
   if (!requestAuthContext.isWellFormed) {

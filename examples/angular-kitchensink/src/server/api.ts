@@ -1,7 +1,7 @@
 import express from 'express';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import { getUser } from './auth';
+import { getUser, isAnonymousRequest } from './auth';
 
 const TodoInput = z.object({ title: z.string().trim().min(1).max(200) }).strict();
 const TodoUpdate = z
@@ -14,31 +14,28 @@ const TodoUpdate = z
 
 type Todo = { id: string; title: string; completed: boolean };
 
-export function createApiRouter(params: { initializeAuth: () => Promise<void> }) {
+export function createApiRouter() {
   const api = express.Router();
   // Each user's list belongs to their validated subject, never to a caller-supplied user ID.
   // This demo has no database: restarting the server clears all lists.
   const todosByUser = new Map<string, Map<string, Todo>>();
-  let prInitialized: Promise<void> | undefined;
 
   api.use((_req, res, next) => {
     res.setHeader('Cache-Control', 'no-store');
     next();
   });
   api.use(express.json({ limit: '16kb' }));
-  api.use(async (req, _res, next) => {
-    if (req.headers.authorization === undefined) {
-      next();
-      return;
-    }
-    // Initialize on the first authenticated request, not during build/route extraction.
-    await (prInitialized ??= params.initializeAuth());
-    next();
-  });
-
   api.get('/greet', async (req, res) => {
-    const user = await getUser({ req, res, allowAnonymous: true });
-    res.type('text/plain').send(`Hello ${user?.name ?? 'Anonymous user'}`);
+    let message: string;
+
+    if (isAnonymousRequest(req)) {
+      message = 'Hello Anonymous user';
+    } else {
+      const user = await getUser({ req, res });
+      message = `Hello ${user.name}`;
+    }
+
+    res.type('text/plain').send(message);
   });
 
   api.get('/todos', async (req, res) => {

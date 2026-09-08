@@ -1,5 +1,0 @@
-{
-  "issuerUri": "https://phasetwo.oidc-spa.dev/realms/demo-realm",
-  "clientId": "example-app",
-  "accessTokenExpectedAudience": "account"
-}
