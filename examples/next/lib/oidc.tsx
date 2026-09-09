@@ -1,8 +1,6 @@
 "use client";
 
-import { type ComponentType, type ReactNode, useEffect, useReducer } from "react";
-import { useRouter } from "next/navigation";
-import { oidcSpa } from "oidc-spa/react-spa";
+import { oidcSpa } from "oidc-spa/react-nextjs";
 import { z } from "zod";
 import { decodeJwt } from "oidc-spa/decode-jwt";
 import avatarFallbackSvg from "@/assets/avatarFallback.svg";
@@ -18,12 +16,7 @@ export type User = {
     canSeeKeycloakAdminNavigation: boolean;
 };
 
-const {
-    bootstrapOidc,
-    useOidc,
-    getOidc,
-    OidcInitializationGate: OidcInitializationGate_base
-} = oidcSpa
+const { bootstrapOidc, useOidc, getOidc, OidcInitializationGate, withLoginEnforced } = oidcSpa
     .withUser<User>({
         createUser: async ({ decodedIdToken, accessToken }) => {
             const { name, picture, email } = z
@@ -69,7 +62,7 @@ const {
     //.withAutoLogin()
     .createUtils();
 
-export { useOidc, getOidc };
+export { useOidc, getOidc, OidcInitializationGate, withLoginEnforced };
 
 bootstrapOidc(
     process.env.NEXT_PUBLIC_OIDC_USE_MOCK === "true"
@@ -84,69 +77,6 @@ bootstrapOidc(
               debugLogs: process.env.NODE_ENV === "development"
           }
 );
-
-function OidcInitializationGate_inner(props: { children: ReactNode }) {
-    const { children } = props;
-
-    const { backFromAuthServer } = useOidc();
-    const router = useRouter();
-
-    useEffect(() => {
-        if (backFromAuthServer !== undefined) {
-            router.replace(`${location.pathname}${location.search}${location.hash}`, { scroll: false });
-        }
-    }, [backFromAuthServer, router]);
-
-    return children;
-}
-
-export function OidcInitializationGate(props: { fallback?: ReactNode; children: ReactNode }) {
-    const { children, fallback } = props;
-
-    return (
-        <OidcInitializationGate_base fallback={fallback}>
-            <OidcInitializationGate_inner>{children}</OidcInitializationGate_inner>
-        </OidcInitializationGate_base>
-    );
-}
-
-export function withLoginEnforced<Props extends Record<string, unknown>>(
-    component: ComponentType<Props>
-): (props: Props) => ReactNode {
-    const Component = component;
-
-    function ComponentWithLoginEnforced(props: Props) {
-        const { isUserLoggedIn, login } = useOidc();
-
-        const [hasRunEffect, notifyEffectRun] = useReducer(() => true, false);
-
-        useEffect(() => {
-            notifyEffectRun();
-
-            if (!isUserLoggedIn) {
-                login({
-                    doesCurrentHrefRequiresAuth: true
-                });
-            }
-        }, [isUserLoggedIn, login]);
-
-        if (!hasRunEffect) {
-            return null;
-        }
-
-        if (!isUserLoggedIn) {
-            return null;
-        }
-
-        return <Component {...props} />;
-    }
-
-    ComponentWithLoginEnforced.displayName = `${
-        Component.displayName ?? Component.name ?? "Component"
-    }WithLoginEnforced`;
-
-    return ComponentWithLoginEnforced;
-}
 
 export const fetchWithAuth: typeof fetch = async (input, init) => {
     const oidc = await getOidc();

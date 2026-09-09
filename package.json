@@ -10,6 +10,7 @@
         "prepare": "patch-package",
         "build": "tsx scripts/build.ts",
         "test:angular": "tsc --project tests/angular/tsconfig.json && tsx scripts/test-angular.ts",
+        "test:react-nextjs": "tsc --project tests/react-nextjs/tsconfig.json",
         "_format": "prettier '**/*.{ts,tsx,json,md}'",
         "format": "yarn _format --write",
         "format:check": "yarn _format --list-different",
@@ -57,10 +58,14 @@
         "@tanstack/react-router": "*",
         "@tanstack/react-start": ">=1.168.25",
         "@types/react": "*",
+        "next": "*",
         "react": "*",
         "rxjs": "*"
     },
     "peerDependenciesMeta": {
+        "next": {
+            "optional": true
+        },
         "react": {
             "optional": true
         },
@@ -118,6 +123,7 @@
         "js2mjs": "^1.0.1",
         "lint-staged": "^11.1.1",
         "magic-string": "^0.30.19",
+        "next": "16.3.4",
         "oidc-client-ts": "3.1.0",
         "patch-package": "^8.0.0",
         "prettier": "^2.8.8",
@@ -190,6 +196,12 @@
             "module": "./dist/esm/tanstack-start/react/index.mjs",
             "import": "./dist/esm/tanstack-start/react/index.mjs",
             "default": "./dist/esm/tanstack-start/react/index.mjs"
+        },
+        "./react-nextjs": {
+            "types": "./dist/esm/react-nextjs/index.d.ts",
+            "module": "./dist/esm/react-nextjs/index.mjs",
+            "import": "./dist/esm/react-nextjs/index.mjs",
+            "default": "./dist/esm/react-nextjs/index.mjs"
         },
         "./angular": {
             "types": "./dist/esm/angular/index.d.ts",
