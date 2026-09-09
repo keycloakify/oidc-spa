@@ -94,6 +94,7 @@ for (const targetFormat of ["cjs", "esm"] as const) {
                                 return [
                                     "angular",
                                     "tanstack-start",
+                                    "react-nextjs",
                                     pathJoin("tools", "inferIsViteDev.ts"),
                                     pathJoin("tools", "getThisCodebaseRootDirPath_esm.ts"),
                                     "vite-plugin",

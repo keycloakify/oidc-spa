@@ -34,7 +34,7 @@ From the oidc-spa repository root, `yarn start-next-example` builds and copies t
 See the [Next.js integration guide](https://docs.oidc-spa.dev/integration-guides/next.js).
 
 -   `instrumentation-client.ts` runs `oidcEarlyInit()` before the application becomes interactive.
--   `lib/oidc.tsx` defines the application `User` with `oidcSpa.withUser()`, configures authentication, and adapts `OidcInitializationGate` and `withLoginEnforced` to the App Router.
+-   `lib/oidc.tsx` uses `oidc-spa/react-nextjs` to define the application `User` with `oidcSpa.withUser()`, configure authentication, and export the App Router-compatible `OidcInitializationGate` and `withLoginEnforced`.
 -   `app/layout.tsx` wraps the application in `OidcInitializationGate`.
 -   Protected route layouts use `withLoginEnforced`; components that consume authentication are Client Components.
 
