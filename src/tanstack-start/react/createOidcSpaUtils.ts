@@ -454,6 +454,8 @@ export function createOidcSpaUtils<
         return oidc;
     }
 
+    let oidc_cached: GetOidc.Oidc<User> | undefined = undefined;
+
     async function getOidc(params?: {
         assert?: "user logged in" | "user not logged in" | "init completed";
     }): Promise<GetOidc.Oidc<User>> {
@@ -490,7 +492,11 @@ export function createOidcSpaUtils<
             );
         }
 
-        return oidcCore.isUserLoggedIn
+        if (oidc_cached !== undefined) {
+            return oidc_cached;
+        }
+
+        oidc_cached = oidcCore.isUserLoggedIn
             ? id<GetOidc.Oidc.LoggedIn<User>>({
                   issuerUri: oidcCore.issuerUri,
                   clientId: oidcCore.clientId,
@@ -529,6 +535,8 @@ export function createOidcSpaUtils<
                   initializationError: oidcCore.initializationError,
                   login: oidcCore.login
               });
+
+        return oidc_cached;
     }
 
     let hasBootstrapBeenCalled = false;

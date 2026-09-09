@@ -353,6 +353,8 @@ export function createOidcSpaUtils<User, AutoLogin extends boolean>(params: {
         }
 
         // Same imperative surface and token readiness as React's getOidc.
+        let oidc_cached: GetOidc.Oidc<User> | undefined = undefined;
+
         async function getOidc(params?: {
             assert?: "user logged in" | "user not logged in";
         }): Promise<GetOidc.Oidc<User>> {
@@ -361,12 +363,15 @@ export function createOidcSpaUtils<User, AutoLogin extends boolean>(params: {
                 return new Promise<never>(() => {});
             }
             checkAssertion(oidcCore.isUserLoggedIn, params?.assert, "getOidc");
+            if (oidc_cached !== undefined) {
+                return oidc_cached;
+            }
             const common = {
                 issuerUri: oidcCore.issuerUri,
                 clientId: oidcCore.clientId,
                 validRedirectUri: oidcCore.validRedirectUri
             };
-            return oidcCore.isUserLoggedIn
+            oidc_cached = oidcCore.isUserLoggedIn
                 ? {
                       ...common,
                       isUserLoggedIn: true,
@@ -400,6 +405,8 @@ export function createOidcSpaUtils<User, AutoLogin extends boolean>(params: {
                       initializationError: oidcCore.initializationError,
                       login: oidcCore.login
                   };
+
+            return oidc_cached;
         }
 
         return {

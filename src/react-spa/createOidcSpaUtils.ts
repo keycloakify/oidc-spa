@@ -319,6 +319,8 @@ export function createOidcSpaUtils<User, AutoLogin extends boolean>(params: {
         return oidc;
     }
 
+    let oidc_cached: GetOidc.Oidc<User> | undefined = undefined;
+
     async function getOidc(params?: {
         assert?: "user logged in" | "user not logged in";
     }): Promise<GetOidc.Oidc<User>> {
@@ -349,13 +351,17 @@ export function createOidcSpaUtils<User, AutoLogin extends boolean>(params: {
             );
         }
 
+        if (oidc_cached !== undefined) {
+            return oidc_cached;
+        }
+
         const common = {
             issuerUri: oidcCore.issuerUri,
             clientId: oidcCore.clientId,
             validRedirectUri: oidcCore.validRedirectUri
         };
 
-        return oidcCore.isUserLoggedIn
+        oidc_cached = oidcCore.isUserLoggedIn
             ? id<GetOidc.Oidc.LoggedIn<User>>({
                   ...common,
                   isUserLoggedIn: true,
@@ -390,6 +396,8 @@ export function createOidcSpaUtils<User, AutoLogin extends boolean>(params: {
                   initializationError: oidcCore.initializationError,
                   login: oidcCore.login
               });
+
+        return oidc_cached;
     }
 
     const prModuleCore = !isBrowser ? undefined : import("../core");

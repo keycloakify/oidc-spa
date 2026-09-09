@@ -593,6 +593,10 @@ for (const loggedIn of [false, true]) {
         await initialization.donePromise;
         const correct = loggedIn ? "user logged in" : "user not logged in";
         const wrong = loggedIn ? "user not logged in" : "user logged in";
+        const [first, second] = await Promise.all([utils.getOidc(), utils.getOidc()]);
+        assert.equal(first, second);
+        const extended = Object.assign(first, { customMethod: () => "custom" });
+        assert.equal(await utils.getOidc(), extended);
         // The assertion is selected dynamically only in this test.
         assert.equal(
             runInInjectionContext(injector, () =>
@@ -607,10 +611,7 @@ for (const loggedIn of [false, true]) {
                 ),
             /Called injectOidc/
         );
-        assert.equal(
-            (await utils.getOidc({ assert: correct as "user logged in" })).isUserLoggedIn,
-            loggedIn
-        );
+        assert.equal(await utils.getOidc({ assert: correct as "user logged in" }), first);
         await assert.rejects(utils.getOidc({ assert: wrong as "user logged in" }), /Called getOidc/);
         assert.throws(() => utils.injectOidc(), /injection context/);
         if (loggedIn) {
@@ -781,6 +782,7 @@ test("one active app per utilities, with reuse after injector destruction", asyn
     const utils = oidcSpa.withUser({ createUser: () => "real", user_mock: "first" }).createUtils();
     const first = app([utils.provideOidc({ implementation: "mock", isUserInitiallyLoggedIn: true })]);
     await first.initialization.donePromise;
+    const firstOidc = await utils.getOidc();
     assert.throws(
         () => app([utils.provideOidc({ implementation: "mock", isUserInitiallyLoggedIn: true })]),
         /one active application injector/
@@ -791,7 +793,10 @@ test("one active app per utilities, with reuse after injector destruction", asyn
         utils.provideOidc({ implementation: "mock", isUserInitiallyLoggedIn: true, user_mock: "third" })
     ]);
     await third.initialization.donePromise;
-    assert.equal((await (await pending).getUser()).user, "third");
+    const thirdOidc = await pending;
+    assert.notEqual(thirdOidc, firstOidc);
+    assert.equal(await utils.getOidc(), thirdOidc);
+    assert.equal((await thirdOidc.getUser()).user, "third");
 });
 
 test("without auto-login, authentication failure remains a logged-out result", async () => {
