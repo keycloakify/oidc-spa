@@ -166,7 +166,7 @@ export class KeycloakAuthorization {
 
                 request.setRequestHeader(
                     "Authorization",
-                    "Bearer " + (await this.keycloak.oidc.getTokens()).accessToken
+                    "Bearer " + (await this.keycloak.oidc.getAccessToken())
                 );
 
                 request.onreadystatechange = () => {
@@ -267,7 +267,7 @@ export class KeycloakAuthorization {
 
             request.setRequestHeader(
                 "Authorization",
-                "Bearer " + (await this.keycloak.oidc.getTokens()).accessToken
+                "Bearer " + (await this.keycloak.oidc.getAccessToken())
             );
 
             request.onreadystatechange = () => {

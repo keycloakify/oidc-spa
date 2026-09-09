@@ -3,6 +3,7 @@ import { test, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import {
     ApplicationInitStatus,
+    computed,
     createEnvironmentInjector,
     EnvironmentInjector,
     inject,
@@ -149,7 +150,7 @@ for (const nonBlocking of [false, true]) {
             );
 
             const rotations: string[] = [];
-            imperative.subscribeToAccessTokenRotation(token => rotations.push(token));
+            imperative.subscribeToTokenRotation(({ accessToken }) => rotations.push(accessToken));
             core.rotate(); // Routine rotation must not rebuild User.
             await tick();
             assert.equal(builds, 1);
@@ -690,10 +691,11 @@ test("imperative subscriptions match the signal and detach on unsubscribe or inj
         assert.equal(oidc.autoLogoutState(), state);
         states.push(state);
     });
-    const rotations: string[] = [];
-    const { unsubscribeFromAccessTokenRotation } = imperative.subscribeToAccessTokenRotation(token =>
-        rotations.push(token)
-    );
+    const rotations: unknown[] = [];
+    const { unsubscribeFromTokenRotation } = imperative.subscribeToTokenRotation(tokens => {
+        assert.equal(tokens.decodedIdToken, imperative.getDecodedIdToken());
+        rotations.push(tokens);
+    });
     const countdown = [...core.countdownListeners][0];
     countdown({ secondsLeft: 11 });
     assert.equal(states.length, 1);
@@ -701,14 +703,26 @@ test("imperative subscriptions match the signal and detach on unsubscribe or inj
     assert.deepEqual(states[1], { shouldDisplayWarning: true, secondsLeftBeforeAutoLogout: 10 });
     assert.equal(states[1], oidc.autoLogoutState());
     core.rotate();
-    assert.deepEqual(rotations, ["access-token-2"]);
-    unsubscribeFromAccessTokenRotation();
-    unsubscribeFromAccessTokenRotation();
+    assert.deepEqual(rotations, [
+        {
+            accessToken: "access-token-2",
+            decodedIdToken: {
+                iss: "https://issuer.test",
+                sub: "alice",
+                aud: "client",
+                exp: 9999999999,
+                iat: 2,
+                name: "Alice"
+            }
+        }
+    ]);
+    unsubscribeFromTokenRotation();
+    unsubscribeFromTokenRotation();
     unsubscribeFromAutoLogoutState();
     countdown({ secondsLeft: undefined });
     assert.equal(states.length, 2);
     assert.equal(core.tokenListeners.size, 0);
-    imperative.subscribeToAccessTokenRotation(() => {});
+    imperative.subscribeToTokenRotation(() => {});
     injector.destroy();
     assert.equal(core.tokenListeners.size, 0);
     assert.equal(core.countdownListeners.size, 0);
@@ -938,4 +952,73 @@ test("imperative getOidc rejects outside the browser", async () => {
     } finally {
         globalThis.window = previousWindow;
     }
+});
+
+test("equal user refreshes preserve the signal value and do not recompute consumers", async () => {
+    const core = resetCore();
+    let displayName = "Alice";
+    let builds = 0;
+    const utils = oidcSpa
+        .withUser({
+            createUser: () => {
+                builds++;
+                return { displayName, roles: ["member"] };
+            }
+        })
+        .createUtils();
+    const { injector, initialization } = app([utils.provideOidc(params)]);
+    core.ready.resolve();
+    await initialization.donePromise;
+    const oidc = runInInjectionContext(injector, () => utils.injectOidc({ assert: "user logged in" }));
+    let computations = 0;
+    const label = computed(() => {
+        computations++;
+        return oidc.user().displayName;
+    });
+    const initial = oidc.user();
+    assert.equal(label(), "Alice");
+    assert.equal(await oidc.refreshUser(), initial);
+    assert.equal(builds, 2);
+    assert.equal(oidc.user(), initial);
+    assert.equal(label(), "Alice");
+    assert.equal(computations, 1);
+    displayName = "Bob";
+    await oidc.refreshUser();
+    assert.equal(label(), "Bob");
+    assert.equal(computations, 2);
+});
+
+test("raw mock claims remain separate from the application user", async () => {
+    const decodedIdToken = {
+        iss: "https://issuer.test",
+        sub: "mock-subject",
+        aud: "client",
+        exp: 9999999999,
+        iat: 1,
+        name: "Raw name"
+    };
+    const utils = oidcSpa
+        .withUser({
+            createUser: (): { displayName: string } => {
+                throw new Error("must not create users in mock mode");
+            },
+            user_mock: { displayName: "Application name" }
+        })
+        .createUtils();
+    const { injector, initialization } = app([
+        utils.provideOidc({
+            implementation: "mock",
+            isUserInitiallyLoggedIn: true,
+            decodedIdToken_mock: decodedIdToken
+        })
+    ]);
+    await initialization.donePromise;
+    const oidc = await utils.getOidc({ assert: "user logged in" });
+    assert.deepEqual(oidc.getDecodedIdToken(), decodedIdToken);
+    assert.equal((await oidc.getUser()).user.displayName, "Application name");
+    assert.equal(
+        runInInjectionContext(injector, () => utils.injectOidc({ assert: "user logged in" })).user()
+            .displayName,
+        "Application name"
+    );
 });

@@ -70,11 +70,7 @@ import { createGetUser } from "./createGetUser";
 // NOTE: Replaced at build time
 const VERSION = "{{OIDC_SPA_VERSION}}";
 
-export type ParamsOfCreateOidc<
-    DecodedIdToken extends Record<string, unknown> = Oidc.Tokens.DecodedIdToken_OidcCoreSpec,
-    AutoLogin extends boolean = false,
-    User = never
-> = {
+export type ParamsOfCreateOidc<User, AutoLogin extends boolean> = {
     createUser?: ParamsOfCreateOidc.CreateUser<User>;
 
     /**
@@ -123,10 +119,6 @@ export type ParamsOfCreateOidc<
      *          extraTokenParams: { selectedCustomer: "xxx" }
      */
     extraTokenParams?: Record<string, string | undefined> | (() => Record<string, string | undefined>);
-
-    decodedIdTokenSchema?: {
-        parse: (decodedIdToken_original: Oidc.Tokens.DecodedIdToken_OidcCoreSpec) => DecodedIdToken;
-    };
 
     /**
      * This parameter defines after how many seconds of inactivity the user should be
@@ -273,7 +265,7 @@ export type ParamsOfCreateOidc<
 
 export namespace ParamsOfCreateOidc {
     export type CreateUser<User> = (params: {
-        decodedIdToken: Oidc.Tokens.DecodedIdToken_OidcCoreSpec;
+        decodedIdToken: Oidc.Tokens.DecodedIdToken;
         accessToken: string;
         fetchUserInfo: () => Promise<{
             [key: string]: unknown;
@@ -287,7 +279,7 @@ export namespace ParamsOfCreateOidc {
 }
 
 const globalContext = {
-    prOidcByConfigId: new Map<string, Promise<Oidc<any, any>>>(),
+    prOidcByConfigId: new Map<string, Promise<Oidc<any>>>(),
     hasLogoutBeenCalled: id<boolean>(false),
     dExports_earlyInit: new Deferred<Exports_earlyInit>(),
     dExports_tokenSubstitution: new Deferred<Exports_tokenSubstitution>(),
@@ -363,13 +355,9 @@ export function registerExports_DPoP(exports: Exports_DPoP): void {
 }
 
 /** @see: https://docs.oidc-spa.dev/v/v10/usage */
-export async function createOidc<
-    DecodedIdToken extends Record<string, unknown> = Oidc.Tokens.DecodedIdToken_OidcCoreSpec,
-    AutoLogin extends boolean = false,
-    User = never
->(
-    params: ParamsOfCreateOidc<DecodedIdToken, AutoLogin, User>
-): Promise<AutoLogin extends true ? Oidc.LoggedIn<DecodedIdToken, User> : Oidc<DecodedIdToken, User>> {
+export async function createOidc<User = never, AutoLogin extends boolean = false>(
+    params: ParamsOfCreateOidc<User, AutoLogin>
+): Promise<AutoLogin extends true ? Oidc.LoggedIn<User> : Oidc<User>> {
     for (const name of ["issuerUri", "clientId"] as const) {
         const value = params[name];
         if (!value) {
@@ -428,7 +416,7 @@ export async function createOidc<
         return prOidc;
     }
 
-    const dOidc = new Deferred<Oidc<any, any>>();
+    const dOidc = new Deferred<Oidc<any>>();
 
     prOidcByConfigId.set(configId, dOidc.pr);
 
@@ -444,27 +432,19 @@ export async function createOidc<
     return oidc;
 }
 
-export async function createOidc_nonMemoized<
-    DecodedIdToken extends Record<string, unknown>,
-    AutoLogin extends boolean,
-    User
->(
-    params: Omit<
-        ParamsOfCreateOidc<DecodedIdToken, AutoLogin, User>,
-        "issuerUri" | "clientId" | "debugLogs"
-    >,
+export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(
+    params: Omit<ParamsOfCreateOidc<User, AutoLogin>, "issuerUri" | "clientId" | "debugLogs">,
     preProcessedParams: {
         issuerUri: string;
         clientId: string;
         configId: string;
         log: typeof console.log | undefined;
     }
-): Promise<AutoLogin extends true ? Oidc.LoggedIn<DecodedIdToken, User> : Oidc<DecodedIdToken, User>> {
+): Promise<AutoLogin extends true ? Oidc.LoggedIn<User> : Oidc<User>> {
     const {
         transformUrlBeforeRedirect,
         extraQueryParams: extraQueryParamsOrGetter,
         extraTokenParams: extraTokenParamsOrGetter,
-        decodedIdTokenSchema,
         idleSessionLifetimeInSeconds,
         autoLogoutParams = { redirectTo: "current page" },
         autoLogin = false,
@@ -1473,7 +1453,6 @@ export async function createOidc_nonMemoized<
 
     const { oidcClientTsUserToTokens } = createOidcClientTsUserToTokens({
         configId,
-        decodedIdTokenSchema,
         __unsafe_useIdTokenAsAccessToken,
         exports_DPoP: shouldEnableDPoP ? exports_DPoP : undefined,
         exports_tokenSubstitution,
@@ -1481,13 +1460,12 @@ export async function createOidc_nonMemoized<
     });
 
     let currentTokens = oidcClientTsUserToTokens({
-        oidcClientTsUser: resultOfLoginProcess.oidcClientTsUser,
-        decodedIdToken_previous: undefined
+        oidcClientTsUser: resultOfLoginProcess.oidcClientTsUser
     });
 
-    const onTokenChanges = new Set<(tokens: Oidc.Tokens<DecodedIdToken>) => void>();
+    const onTokenChanges = new Set<(tokens: Oidc.Tokens) => void>();
 
-    const renewTokens = ((): Oidc.LoggedIn<DecodedIdToken>["renewTokens"] => {
+    const renewTokens = ((): Oidc.LoggedIn["renewTokens"] => {
         // NOTE: Cannot throw (or if it does it's our fault)
         async function renewTokens_nonMutexed(params: {
             extraTokenParams: Record<string, string | undefined>;
@@ -1680,8 +1658,7 @@ export async function createOidc_nonMemoized<
             }
 
             currentTokens = oidcClientTsUserToTokens({
-                oidcClientTsUser,
-                decodedIdToken_previous: currentTokens.decodedIdToken
+                oidcClientTsUser
             });
 
             if (getPersistedAuthState({ configId }) !== undefined) {
@@ -1848,7 +1825,7 @@ export async function createOidc_nonMemoized<
         (params: { secondsLeft: number | undefined }) => void
     >();
 
-    const { sid: sessionId, sub: subjectId } = currentTokens.decodedIdToken_original;
+    const { sid: sessionId, sub: subjectId } = currentTokens.decodedIdToken;
 
     assert(subjectId !== undefined, "The 'sub' claim is missing from the id token");
     assert(sessionId === undefined || typeof sessionId === "string");
@@ -1857,7 +1834,7 @@ export async function createOidc_nonMemoized<
 
     let prOngoingTokenRenewal: Promise<void> | undefined = undefined;
 
-    const oidc_loggedIn = id<Oidc.LoggedIn<DecodedIdToken, User>>({
+    const oidc_loggedIn = id<Oidc.LoggedIn<User>>({
         ...oidc_common,
         isUserLoggedIn: true,
         getTokens: async () => {
@@ -1900,6 +1877,10 @@ export async function createOidc_nonMemoized<
             return currentTokens;
         },
         getDecodedIdToken: () => currentTokens.decodedIdToken,
+        getAccessToken: async (): Promise<string> => {
+            const { accessToken } = await oidc_loggedIn.getTokens();
+            return accessToken;
+        },
         logout: async params => {
             if (globalContext.hasLogoutBeenCalled) {
                 log?.("logout() has already been called, ignoring the call");

@@ -24,12 +24,12 @@ import { Deferred } from "../tools/Deferred";
 import { getBaseHref } from "../tools/getBaseHref";
 import type { ValueOrAsyncGetter } from "../tools/ValueOrAsyncGetter";
 
-export function createOidcSpaUtils<AutoLogin extends boolean, User>(params: {
+export function createOidcSpaUtils<User, AutoLogin extends boolean>(params: {
     autoLogin: AutoLogin;
     providerAwaitsInitialization: boolean;
     createUser: CreateUser<User> | undefined;
     user_mock: User | undefined;
-}): OidcSpaUtils<AutoLogin, User> {
+}): OidcSpaUtils<User, AutoLogin> {
     const { autoLogin, providerAwaitsInitialization, createUser, user_mock: user_mock_static } = params;
 
     // Like React's bootstrap, imperative access belongs to one active application.
@@ -41,10 +41,8 @@ export function createOidcSpaUtils<AutoLogin extends boolean, User>(params: {
     function createRuntime() {
         const injector = inject(Injector);
         const destroyRef = inject(DestroyRef);
-        type Core = Oidc_core<Oidc_core.Tokens.DecodedIdToken_OidcCoreSpec, User>;
-        type ResultOfGetUser = Awaited<
-            ReturnType<Oidc_core.LoggedIn<Oidc_core.Tokens.DecodedIdToken_OidcCoreSpec, User>["getUser"]>
-        >;
+        type Core = Oidc_core<User>;
+        type ResultOfGetUser = Awaited<ReturnType<Oidc_core.LoggedIn<User>["getUser"]>>;
 
         // Match React's separate core and user results. Authenticated HTTP must not wait for User.
         const dOidcCoreOrInitializationError = new Deferred<Core | OidcInitializationError>();
@@ -207,8 +205,7 @@ export function createOidcSpaUtils<AutoLogin extends boolean, User>(params: {
             },
             async getAccessToken() {
                 await dOidcCoreOrInitializationError.pr;
-                const { accessToken } = await getLoggedInCore("getAccessToken").getTokens();
-                return accessToken;
+                return getLoggedInCore("getAccessToken").getAccessToken();
             },
             autoLogoutState: autoLogoutState.asReadonly(),
             user: computed(() => getResultOfGetUser().user),
@@ -224,7 +221,7 @@ export function createOidcSpaUtils<AutoLogin extends boolean, User>(params: {
         }
 
         async function initialize(
-            paramsOrGetter: ValueOrAsyncGetter<ParamsOfProvide<AutoLogin, User>>
+            paramsOrGetter: ValueOrAsyncGetter<ParamsOfProvide<User, AutoLogin>>
         ): Promise<true> {
             if (hasStarted) {
                 return prInitialized;
@@ -237,7 +234,7 @@ export function createOidcSpaUtils<AutoLogin extends boolean, User>(params: {
 
             // Invoke the config callback synchronously in Angular's injection context.
             isRunningGetParams = true;
-            let paramsOfProvide: ParamsOfProvide<AutoLogin, User>;
+            let paramsOfProvide: ParamsOfProvide<User, AutoLogin>;
             try {
                 paramsOfProvide = await (typeof paramsOrGetter === "function"
                     ? runInInjectionContext(injector, paramsOrGetter)
@@ -254,11 +251,10 @@ export function createOidcSpaUtils<AutoLogin extends boolean, User>(params: {
                     autoLogin: autoLogin as false,
                     isUserInitiallyLoggedIn:
                         autoLogin || (paramsOfProvide.isUserInitiallyLoggedIn ?? false),
-                    mockedParams: {
-                        issuerUri: paramsOfProvide.issuerUri_mock,
-                        clientId: paramsOfProvide.clientId_mock
-                    },
-                    mockedUser: user_mock
+                    issuerUri_mock: paramsOfProvide.issuerUri_mock,
+                    clientId_mock: paramsOfProvide.clientId_mock,
+                    decodedIdToken_mock: paramsOfProvide.decodedIdToken_mock,
+                    user_mock
                 });
                 shouldGetUser = user_mock !== undefined;
             } else {
@@ -374,15 +370,16 @@ export function createOidcSpaUtils<AutoLogin extends boolean, User>(params: {
                 ? {
                       ...common,
                       isUserLoggedIn: true,
-                      getAccessToken: async () => (await oidcCore.getTokens()).accessToken,
-                      subscribeToAccessTokenRotation: next => {
+                      getAccessToken: oidcCore.getAccessToken,
+                      getDecodedIdToken: oidcCore.getDecodedIdToken,
+                      subscribeToTokenRotation: next => {
                           const { unsubscribeFromTokensChange } = oidcCore.subscribeToTokensChange(
-                              ({ accessToken }) => next(accessToken)
+                              ({ accessToken, decodedIdToken }) => {
+                                  next({ accessToken, decodedIdToken });
+                              }
                           );
                           return {
-                              unsubscribeFromAccessTokenRotation: registerCleanup(
-                                  unsubscribeFromTokensChange
-                              )
+                              unsubscribeFromTokenRotation: registerCleanup(unsubscribeFromTokensChange)
                           };
                       },
                       logout: oidcCore.logout,
@@ -443,7 +440,7 @@ export function createOidcSpaUtils<AutoLogin extends boolean, User>(params: {
         }
     }
 
-    function provideOidc(params: ValueOrAsyncGetter<ParamsOfProvide<AutoLogin, User>>) {
+    function provideOidc(params: ValueOrAsyncGetter<ParamsOfProvide<User, AutoLogin>>) {
         return makeEnvironmentProviders([
             { provide: runtimeToken, useFactory: createRuntime },
             provideAppInitializer(() => {
@@ -496,7 +493,7 @@ export function createOidcSpaUtils<AutoLogin extends boolean, User>(params: {
         getOidc,
         createOidcInterceptor: ({
             shouldInjectAccessToken
-        }: Parameters<OidcSpaUtils<AutoLogin, User>["createOidcInterceptor"]>[0]) => {
+        }: Parameters<OidcSpaUtils<User, AutoLogin>["createOidcInterceptor"]>[0]) => {
             const interceptor: HttpInterceptorFn = (req, next) => {
                 const runtime = inject(runtimeToken);
                 const injector = inject(Injector);
@@ -543,8 +540,8 @@ export function createOidcSpaUtils<AutoLogin extends boolean, User>(params: {
                                     `oidc-spa: Attempted to attach an access token to ${req.method} ${req.urlWithParams}, but the user is not logged in.`
                                 );
                             }
-                            return from(oidcCore.getTokens()).pipe(
-                                switchMap(({ accessToken }) =>
+                            return from(oidcCore.getAccessToken()).pipe(
+                                switchMap(accessToken =>
                                     next(
                                         req.clone({
                                             setHeaders: { Authorization: `Bearer ${accessToken}` }
@@ -623,7 +620,7 @@ export function createOidcSpaUtils<AutoLogin extends boolean, User>(params: {
 
     if (autoLogin) {
         const { enforceLoginGuard, ...utilsWithAutoLogin } = utils;
-        return utilsWithAutoLogin as OidcSpaUtils<AutoLogin, User>;
+        return utilsWithAutoLogin as OidcSpaUtils<User, AutoLogin>;
     }
-    return utils as OidcSpaUtils<AutoLogin, User>;
+    return utils as OidcSpaUtils<User, AutoLogin>;
 }
