@@ -2,32 +2,32 @@ import type { CreateUser, OidcSpaUtils } from "./types";
 import { createOidcSpaUtils } from "./createOidcSpaUtils";
 
 export type OidcSpaUtilsBuilder<
-    AutoLogin extends boolean = false,
     User = never,
+    AutoLogin extends boolean = false,
     ExcludedMethod extends "withAutoLogin" | "withUser" | "withNonBlockingRendering" = never
 > = Omit<
     {
-        withAutoLogin: () => OidcSpaUtilsBuilder<true, User, ExcludedMethod | "withAutoLogin">;
+        withAutoLogin: () => OidcSpaUtilsBuilder<User, true, ExcludedMethod | "withAutoLogin">;
         withUser: <User>(params: {
             createUser: CreateUser<User>;
             user_mock?: NoInfer<User>;
-        }) => OidcSpaUtilsBuilder<AutoLogin, User, ExcludedMethod | "withUser">;
+        }) => OidcSpaUtilsBuilder<User, AutoLogin, ExcludedMethod | "withUser">;
         withNonBlockingRendering: () => OidcSpaUtilsBuilder<
-            AutoLogin,
             User,
+            AutoLogin,
             ExcludedMethod | "withNonBlockingRendering"
         >;
-        createUtils: () => OidcSpaUtils<AutoLogin, User>;
+        createUtils: () => OidcSpaUtils<User, AutoLogin>;
     },
     ExcludedMethod
 >;
 
-function createOidcSpaUtilsBuilder<AutoLogin extends boolean, User>(params: {
+function createOidcSpaUtilsBuilder<User = never, AutoLogin extends boolean = false>(params: {
     autoLogin: AutoLogin;
     providerAwaitsInitialization: boolean;
     createUser: CreateUser<User> | undefined;
     user_mock: User | undefined;
-}): OidcSpaUtilsBuilder<AutoLogin, User> {
+}): OidcSpaUtilsBuilder<User, AutoLogin> {
     return {
         withAutoLogin: () =>
             createOidcSpaUtilsBuilder({
@@ -60,7 +60,7 @@ function createOidcSpaUtilsBuilder<AutoLogin extends boolean, User>(params: {
     };
 }
 
-export const oidcSpaUtilsBuilder = createOidcSpaUtilsBuilder<false, never>({
+export const oidcSpaUtilsBuilder = createOidcSpaUtilsBuilder<never, false>({
     autoLogin: false,
     providerAwaitsInitialization: true,
     createUser: undefined,

@@ -36,10 +36,13 @@ The development, build, generation, preview, and type-check commands load `.env.
 See the [Nuxt integration guide](https://docs.oidc-spa.dev/integration-guides/nuxt).
 
 -   `nuxt.config.ts` sets `ssr: false` and enables `oidc-spa/nuxt-spa` for early client initialization.
--   `app/plugins/01.oidc.client.ts` creates and provides `$oidc` before the application renders.
--   `app/composables/useAuth.ts` exposes authentication, account actions, authenticated requests, and the auto-logout warning.
--   `app/middleware/auth.ts` protects routes and checks required roles.
--   `app/types/` declares the injected client and route metadata types.
+-   `app/oidc.user.ts` defines the application `User`, `createUser`, and `user_mock`. Token validation and provider-specific claims stay in this file; components consume `displayName`, `email`, `avatarImgUrl`, and `canSeeKeycloakAdminNavigation`.
+-   `app/plugins/01.oidc.client.ts` creates `$oidc`, awaits its initial user, and subscribes once to user changes and the auto-logout countdown. Nuxt infers the injected types from the plugin's return value.
+-   User state uses a [shallow ref](https://vuejs.org/api/reactivity-advanced.html#shallowref) to preserve core's user objects. Changes from token renewal or `refreshUser()` update every consumer.
+-   `app/composables/useAuth.ts` exposes the reactive `user`, `refreshUser()`, authentication and account actions, the auto-logout warning, and authenticated requests using `oidc.getAccessToken()`.
+-   `app/middleware/auth.ts` enforces login. The admin link and page use `user.canSeeKeycloakAdminNavigation`; they do not read token claims.
+
+In mock mode, the plugin passes `user_mock` directly to core, without constructing fake tokens or invoking `createUser`. The mock user is John Doe with admin navigation enabled. For real Keycloak sessions, the admin capability comes from the access token's `resource_access["realm-management"].roles`. Other providers do not need JWT access tokens for this example.
 
 This example authenticates in the browser and requires `ssr: false`. Its route guards control client navigation; APIs must validate access tokens independently.
 
@@ -55,7 +58,7 @@ Public runtime configuration uses these environment variables:
 
 -   `/` — public landing page.
 -   `/protected` — guarded page with authenticated API requests.
--   `/admin-only` — guarded page with a role check.
+-   `/admin-only` — guarded page with an application-user capability check.
 
 For static hosting, run `npm run generate` and deploy `.output/public`. Configure the host to serve `index.html` for application routes (Nuxt also generates `200.html` and `404.html` fallbacks). Public runtime configuration is baked into static output, so set it before generation.
 

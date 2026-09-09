@@ -102,7 +102,8 @@ export namespace GetOidc {
     export type Oidc<User> =
         | (Oidc.NotLoggedIn & {
               getAccessToken?: never;
-              subscribeToAccessTokenRotation?: never;
+              subscribeToTokenRotation?: never;
+              getDecodedIdToken?: never;
               logout?: never;
               renewTokens?: never;
               goToAuthServer?: never;
@@ -131,8 +132,14 @@ export namespace GetOidc {
         export type LoggedIn<User> = Common & {
             isUserLoggedIn: true;
             getAccessToken: () => Promise<string>;
-            subscribeToAccessTokenRotation: (next: (accessToken: string) => void) => {
-                unsubscribeFromAccessTokenRotation: () => void;
+            getDecodedIdToken: () => Oidc_core.Tokens.DecodedIdToken;
+            subscribeToTokenRotation: (
+                next: (params: {
+                    accessToken: string;
+                    decodedIdToken: Oidc_core.Tokens.DecodedIdToken;
+                }) => void
+            ) => {
+                unsubscribeFromTokenRotation: () => void;
             };
             logout: Oidc_core.LoggedIn["logout"];
             renewTokens: Oidc_core.LoggedIn["renewTokens"];
@@ -164,9 +171,9 @@ export namespace GetOidc {
     }
 }
 
-export type ParamsOfProvide<AutoLogin, User> =
+export type ParamsOfProvide<User, AutoLogin> =
     | ParamsOfProvide.Real
-    | ParamsOfProvide.Mock<AutoLogin, User>;
+    | ParamsOfProvide.Mock<User, AutoLogin>;
 
 export namespace ParamsOfProvide {
     export type Real = {
@@ -332,16 +339,17 @@ export namespace ParamsOfProvide {
         Equals<
             Omit<Real, "implementation" | "warnUserSecondsBeforeAutoLogout">,
             Omit<
-                import("../core").ParamsOfCreateOidc<any, boolean>,
-                "BASE_URL" | "decodedIdTokenSchema" | "createUser" | "autoLogin" | "postLoginRedirectUrl"
+                ParamsOfCreateOidc<any, boolean>,
+                "BASE_URL" | "createUser" | "autoLogin" | "postLoginRedirectUrl"
             >
         >
     >;
 
-    export type Mock<AutoLogin, User> = {
+    export type Mock<User, AutoLogin> = {
         implementation: "mock";
         issuerUri_mock?: string;
         clientId_mock?: string;
+        decodedIdToken_mock?: Oidc_core.Tokens.DecodedIdToken;
         user_mock?: User;
     } & (AutoLogin extends true
         ? {
@@ -352,8 +360,8 @@ export namespace ParamsOfProvide {
           });
 }
 
-export type OidcSpaUtils<AutoLogin, User> = {
-    provideOidc: (params: ValueOrAsyncGetter<ParamsOfProvide<AutoLogin, User>>) => EnvironmentProviders;
+export type OidcSpaUtils<User, AutoLogin> = {
+    provideOidc: (params: ValueOrAsyncGetter<ParamsOfProvide<User, AutoLogin>>) => EnvironmentProviders;
     /**
      * Can be injected during SSR; prInitialized stays pending on the server.
      * Gate auth UI with @defer (when oidc.prInitialized | async).
@@ -384,7 +392,7 @@ export type OidcSpaUtils<AutoLogin, User> = {
       });
 
 export type CreateUser<User> = (params: {
-    decodedIdToken: Oidc_core.Tokens.DecodedIdToken_OidcCoreSpec;
+    decodedIdToken: Oidc_core.Tokens.DecodedIdToken;
     accessToken: string;
     fetchUserInfo: () => Promise<{
         [key: string]: unknown;

@@ -22,14 +22,6 @@ export function createCoreController() {
             iat: 1,
             name: "Alice"
         },
-        decodedIdToken_original: {
-            iss: "https://issuer.test",
-            sub: "alice",
-            aud: "client",
-            exp: 9999999999,
-            iat: 1,
-            name: "Alice"
-        },
         issuedAtTime: Date.now(),
         getServerDateNow: () => Date.now()
     };
@@ -41,7 +33,7 @@ export function createCoreController() {
         calls: 0,
         renewals: 0,
         userSubscriptions: 0,
-        params: undefined as ParamsOfCreateOidc<any, boolean, any> | undefined,
+        params: undefined as ParamsOfCreateOidc<any, boolean> | undefined,
         loginParams: undefined as Parameters<Oidc.NotLoggedIn["login"]>[0],
         logoutParams: undefined as Parameters<Oidc.LoggedIn["logout"]>[0] | undefined,
         tokenListeners,
@@ -50,8 +42,8 @@ export function createCoreController() {
             tokens = {
                 ...tokens,
                 accessToken: `access-token-${++controller.renewals + 1}`,
-                decodedIdToken_original: {
-                    ...tokens.decodedIdToken_original,
+                decodedIdToken: {
+                    ...tokens.decodedIdToken,
                     iat: controller.renewals + 1,
                     ...(name === undefined ? {} : { name })
                 }
@@ -59,7 +51,7 @@ export function createCoreController() {
             tokenListeners.forEach(next => next(tokens));
             evtTokensChange.post();
         },
-        async createOidc(params: ParamsOfCreateOidc<any, boolean, any>): Promise<Oidc<any, any>> {
+        async createOidc(params: ParamsOfCreateOidc<any, boolean>): Promise<Oidc<any>> {
             controller.calls++;
             controller.params = params;
             await ready.pr;
@@ -95,6 +87,7 @@ export function createCoreController() {
                 ...common,
                 isUserLoggedIn: true,
                 getTokens: async () => tokens,
+                getAccessToken: async () => tokens.accessToken,
                 getDecodedIdToken: () => tokens.decodedIdToken,
                 renewTokens: async () => controller.rotate(),
                 logout: async params => {

@@ -8,34 +8,24 @@ import { INFINITY_TIME } from "../tools/INFINITY_TIME";
 import { createGetServerDateNow, type ParamsOfCreateGetServerDateNow } from "../tools/getServerDateNow";
 import type { Exports_DPoP, Exports_tokenSubstitution } from "./createOidc";
 
-export function createOidcClientTsUserToTokens<DecodedIdToken extends Record<string, unknown>>(params: {
+export function createOidcClientTsUserToTokens(params: {
     configId: string;
-    decodedIdTokenSchema?: {
-        parse: (decodedIdToken_original: Oidc.Tokens.DecodedIdToken_OidcCoreSpec) => DecodedIdToken;
-    };
     __unsafe_useIdTokenAsAccessToken: boolean;
-
     exports_DPoP: Pick<Exports_DPoP, "registerAccessTokenForDPoP"> | undefined;
     exports_tokenSubstitution: Pick<Exports_tokenSubstitution, "getTokensPlaceholders"> | undefined;
-
     log: typeof console.log | undefined;
 }) {
-    const {
-        configId,
-        decodedIdTokenSchema,
-        __unsafe_useIdTokenAsAccessToken,
-        exports_DPoP,
-        exports_tokenSubstitution,
-        log
-    } = params;
+    const { configId, __unsafe_useIdTokenAsAccessToken, exports_DPoP, exports_tokenSubstitution, log } =
+        params;
 
-    function oidcClientTsUserToTokens(params: {
-        oidcClientTsUser: OidcClientTsUser;
-        decodedIdToken_previous: DecodedIdToken | undefined;
-    }): Oidc.Tokens<DecodedIdToken> {
-        const { oidcClientTsUser, decodedIdToken_previous } = params;
+    let isFirstCall_next = true;
 
-        const isFirstInit = decodedIdToken_previous === undefined;
+    function oidcClientTsUserToTokens(params: { oidcClientTsUser: OidcClientTsUser }): Oidc.Tokens {
+        const isFirstCall = isFirstCall_next;
+
+        isFirstCall_next = false;
+
+        const { oidcClientTsUser } = params;
 
         const accessToken = oidcClientTsUser.access_token;
 
@@ -45,54 +35,18 @@ export function createOidcClientTsUserToTokens<DecodedIdToken extends Record<str
 
         assert(idToken !== undefined, "No id token provided by the oidc server");
 
-        const decodedIdToken_original = decodeJwt<Oidc.Tokens.DecodedIdToken_OidcCoreSpec>(idToken);
+        const decodedIdToken = decodeJwt<Oidc.Tokens.DecodedIdToken>(idToken);
 
-        if (isFirstInit) {
-            log?.(
-                [
-                    `Decoded ID token`,
-                    decodedIdTokenSchema === undefined ? "" : " before `decodedIdTokenSchema.parse()`\n",
-                    JSON.stringify(decodedIdToken_original, null, 2)
-                ].join("")
-            );
+        if (isFirstCall) {
+            log?.([`Decoded ID token`, JSON.stringify(decodedIdToken, null, 2)].join(""));
         }
-
-        const decodedIdToken = (() => {
-            let decodedIdToken: DecodedIdToken;
-
-            if (decodedIdTokenSchema !== undefined) {
-                decodedIdToken = decodedIdTokenSchema.parse(decodedIdToken_original);
-
-                if (isFirstInit) {
-                    log?.(
-                        [
-                            "Decoded ID token after `decodedIdTokenSchema.parse()`\n",
-                            JSON.stringify(decodedIdToken, null, 2)
-                        ].join("")
-                    );
-                }
-            } else {
-                // @ts-expect-error
-                decodedIdToken = decodedIdToken_original;
-            }
-
-            if (
-                decodedIdToken_previous !== undefined &&
-                JSON.stringify(decodedIdToken) === JSON.stringify(decodedIdToken_previous)
-            ) {
-                // NOTE: For stable ref, prevent re-render for component that would memoize
-                return decodedIdToken_previous;
-            }
-
-            return decodedIdToken;
-        })();
 
         const issuedAtTime = (() => {
             let id_token_iat = (() => {
                 let iat: number | undefined;
 
                 try {
-                    const iat_claimValue = toNumber(decodedIdToken_original.iat);
+                    const iat_claimValue = toNumber(decodedIdToken.iat);
                     iat = iat_claimValue;
                 } catch {
                     iat = undefined;
@@ -153,7 +107,7 @@ export function createOidcClientTsUserToTokens<DecodedIdToken extends Record<str
             issuedAtTime
         };
 
-        const tokens_common: Oidc.Tokens.Common<DecodedIdToken> = {
+        const tokens_common: Oidc.Tokens.Common = {
             ...(__unsafe_useIdTokenAsAccessToken
                 ? {
                       accessToken: idToken,
@@ -210,18 +164,17 @@ export function createOidcClientTsUserToTokens<DecodedIdToken extends Record<str
                   }),
             idToken,
             decodedIdToken,
-            decodedIdToken_original,
             issuedAtTime,
             getServerDateNow: createGetServerDateNow(paramsOfCreateGetServerDateNow)
         };
 
-        const tokens: Oidc.Tokens<DecodedIdToken> =
+        const tokens: Oidc.Tokens =
             refreshToken === undefined
-                ? id<Oidc.Tokens.WithoutRefreshToken<DecodedIdToken>>({
+                ? id<Oidc.Tokens.WithoutRefreshToken>({
                       ...tokens_common,
                       hasRefreshToken: false
                   })
-                : id<Oidc.Tokens.WithRefreshToken<DecodedIdToken>>({
+                : id<Oidc.Tokens.WithRefreshToken>({
                       ...tokens_common,
                       hasRefreshToken: true,
                       refreshToken,
@@ -298,7 +251,7 @@ export function createOidcClientTsUserToTokens<DecodedIdToken extends Record<str
         }
 
         if (
-            isFirstInit &&
+            isFirstCall &&
             tokens.hasRefreshToken &&
             tokens.refreshTokenExpirationTime !== undefined &&
             tokens.refreshTokenExpirationTime < tokens.accessTokenExpirationTime

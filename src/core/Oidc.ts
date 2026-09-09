@@ -1,9 +1,6 @@
 import type { OidcInitializationError } from "./OidcInitializationError";
 
-export declare type Oidc<
-    DecodedIdToken extends Record<string, unknown> = Oidc.Tokens.DecodedIdToken_OidcCoreSpec,
-    User = never
-> = Oidc.LoggedIn<DecodedIdToken, User> | Oidc.NotLoggedIn;
+export declare type Oidc<User = never> = Oidc.LoggedIn<User> | Oidc.NotLoggedIn;
 
 export declare namespace Oidc {
     export type Common = {
@@ -37,17 +34,15 @@ export declare namespace Oidc {
         initializationError: OidcInitializationError | undefined;
     };
 
-    export type LoggedIn<
-        DecodedIdToken extends Record<string, unknown> = Record<string, unknown>,
-        User = never
-    > = Common & {
+    export type LoggedIn<User = never> = Common & {
         isUserLoggedIn: true;
         renewTokens(params?: { extraTokenParams?: Record<string, string | undefined> }): Promise<void>;
-        getTokens: () => Promise<Tokens<DecodedIdToken>>;
-        subscribeToTokensChange: (onTokenChange: (tokens: Tokens<DecodedIdToken>) => void) => {
+        subscribeToTokensChange: (onTokenChange: (tokens: Tokens) => void) => {
             unsubscribeFromTokensChange: () => void;
         };
-        getDecodedIdToken: () => DecodedIdToken;
+        getTokens: () => Promise<Tokens>;
+        getDecodedIdToken: () => Tokens.DecodedIdToken;
+        getAccessToken: () => Promise<string>;
         logout: (
             params: { redirectTo: "home" | "current page" } | { redirectTo: "specific url"; url: string }
         ) => Promise<never>;
@@ -99,28 +94,15 @@ export declare namespace Oidc {
         }>;
     };
 
-    export type Tokens<
-        DecodedIdToken extends Record<string, unknown> = Tokens.DecodedIdToken_OidcCoreSpec
-    > = Tokens.WithRefreshToken<DecodedIdToken> | Tokens.WithoutRefreshToken<DecodedIdToken>;
+    export type Tokens = Tokens.WithRefreshToken | Tokens.WithoutRefreshToken;
 
     export namespace Tokens {
-        export type Common<DecodedIdToken> = {
+        export type Common = {
             accessToken: string;
             /** Millisecond epoch in the server's time */
             accessTokenExpirationTime: number;
             idToken: string;
             decodedIdToken: DecodedIdToken;
-            /**
-             * decodedIdToken_original = decodeJwt(idToken);
-             * decodedIdToken = decodedIdTokenSchema.parse(decodedIdToken_original)
-             *
-             * The idea here is that if you have provided a zod schema as `decodedIdTokenSchema`
-             * it will strip out every claim that you haven't specified.
-             * You might even be applying some transformation.
-             *
-             * `decodedIdToken_original` is the actual decoded payload of the  id_token, untransformed.
-             * */
-            decodedIdToken_original: DecodedIdToken_OidcCoreSpec;
             /** Millisecond epoch in the server's time, read from id_token's JWT, iat claim value */
             issuedAtTime: number;
 
@@ -128,19 +110,19 @@ export declare namespace Oidc {
             getServerDateNow: () => number;
         };
 
-        export type WithRefreshToken<DecodedIdToken> = Common<DecodedIdToken> & {
+        export type WithRefreshToken = Common & {
             hasRefreshToken: true;
             refreshToken: string;
             refreshTokenExpirationTime: number | undefined;
         };
 
-        export type WithoutRefreshToken<DecodedIdToken> = Common<DecodedIdToken> & {
+        export type WithoutRefreshToken = Common & {
             hasRefreshToken: false;
             refreshToken?: never;
             refreshTokenExpirationTime?: never;
         };
 
-        export type DecodedIdToken_OidcCoreSpec = {
+        export type DecodedIdToken = {
             // REQUIRED
             iss: string; // Issuer Identifier
             sub: string; // Subject Identifier

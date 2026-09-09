@@ -1,8 +1,11 @@
 import type { Signal } from "@angular/core";
+import type { GetOidc as GetOidc_react } from "../../src/react-spa/types";
+import type { Oidc as Oidc_core } from "../../src/core";
 import { oidcSpa, type CreateUser, type InjectOidc, type GetOidc } from "../../src/angular";
 import { assert, type Equals } from "../../src/tools/tsafe/assert";
 
 type User = { displayName: string };
+assert<Equals<GetOidc<User>, GetOidc_react<User>>>();
 const createUser: CreateUser<User> = () => ({ displayName: "Alice" });
 const base = oidcSpa.withUser({ createUser, user_mock: { displayName: "Mock" } });
 const { injectOidc, getOidc, provideOidc } = base.createUtils();
@@ -37,7 +40,22 @@ export async function checkTypes() {
 
     const imperative = await getOidc();
     assert<Equals<typeof imperative, GetOidc.Oidc<User>>>();
+    const { isUserLoggedIn: isLoggedIn, subscribeToTokenRotation } = imperative;
+    if (isLoggedIn) {
+        const { unsubscribeFromTokenRotation } = subscribeToTokenRotation(
+            ({ accessToken, decodedIdToken }) => {
+                assert<Equals<typeof accessToken, string>>();
+                assert<Equals<typeof decodedIdToken, Oidc_core.Tokens.DecodedIdToken>>();
+            }
+        );
+        unsubscribeFromTokenRotation();
+    }
     const imperativeLoggedIn = await getOidc({ assert: "user logged in" });
+    assert<
+        Equals<ReturnType<typeof imperativeLoggedIn.getDecodedIdToken>, Oidc_core.Tokens.DecodedIdToken>
+    >();
+    // @ts-expect-error token rotation replaces the access-token-only subscription
+    imperativeLoggedIn.subscribeToAccessTokenRotation;
     const result = await imperativeLoggedIn.getUser();
     assert<Equals<typeof result.user, User>>();
     const imperativeLoggedOut = await getOidc({ assert: "user not logged in" });
@@ -48,6 +66,12 @@ export async function checkTypes() {
     assert<Equals<typeof alwaysLoggedIn.isUserLoggedIn, true>>();
     assert<Equals<Awaited<ReturnType<typeof autoLogin.getOidc>>, GetOidc.Oidc.LoggedIn<User>>>();
     autoLogin.createOidcInterceptor({ shouldInjectAccessToken: () => true });
+    const reordered = oidcSpa
+        .withNonBlockingRendering()
+        .withAutoLogin()
+        .withUser({ createUser })
+        .createUtils();
+    assert<Equals<ReturnType<typeof reordered.injectOidc>, InjectOidc.Oidc.LoggedIn<User>>>();
     // @ts-expect-error auto-login has no login guard
     autoLogin.enforceLoginGuard;
     // @ts-expect-error auto-login cannot start an anonymous mock session

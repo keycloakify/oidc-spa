@@ -346,7 +346,7 @@ export class Keycloak {
 
         assert(tokens !== undefined);
 
-        return tokens.decodedIdToken_original.sub;
+        return tokens.decodedIdToken.sub;
     }
 
     /**
@@ -392,9 +392,9 @@ export class Keycloak {
         }
 
         assert(tokens !== undefined);
-        assert(is<KeycloakTokenParsed>(tokens.decodedIdToken_original));
+        assert(is<KeycloakTokenParsed>(tokens.decodedIdToken));
 
-        return tokens.decodedIdToken_original.realm_access;
+        return tokens.decodedIdToken.realm_access;
     }
 
     /**
@@ -417,9 +417,9 @@ export class Keycloak {
         }
 
         assert(tokens !== undefined);
-        assert(is<KeycloakTokenParsed>(tokens.decodedIdToken_original));
+        assert(is<KeycloakTokenParsed>(tokens.decodedIdToken));
 
-        return tokens.decodedIdToken_original.resource_access;
+        return tokens.decodedIdToken.resource_access;
     }
 
     /**
@@ -585,9 +585,9 @@ export class Keycloak {
         }
 
         assert(tokens !== undefined);
-        assert(is<KeycloakTokenParsed>(tokens.decodedIdToken_original));
+        assert(is<KeycloakTokenParsed>(tokens.decodedIdToken));
 
-        return tokens.decodedIdToken_original;
+        return tokens.decodedIdToken;
     }
 
     /**
@@ -704,7 +704,7 @@ export class Keycloak {
 
         assert(tokens !== undefined);
 
-        const { sid } = tokens.decodedIdToken_original;
+        const { sid } = tokens.decodedIdToken;
 
         assert(typeof sid === "string");
 
@@ -1095,7 +1095,7 @@ export class Keycloak {
 
         assert(oidc.isUserLoggedIn, "Can't load userProfile if user not authenticated");
 
-        const { accessToken } = await oidc.getTokens();
+        const accessToken = await oidc.getAccessToken();
 
         return (this.#state.profile = await keycloakUtils.fetchUserProfile({ accessToken }));
     }
@@ -1115,7 +1115,7 @@ export class Keycloak {
 
         assert(oidc.isUserLoggedIn, "Can't load userInfo if user not authenticated");
 
-        const { accessToken } = await oidc.getTokens();
+        const accessToken = await oidc.getAccessToken();
 
         return (this.#state.userInfo = await keycloakUtils.fetchUserInfo({ accessToken }));
     }
