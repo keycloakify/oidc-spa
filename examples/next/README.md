@@ -51,7 +51,7 @@ The admin permission comes from `resource_access["realm-management"].roles` in t
 
 -   `/` — public landing page with login/logout controls.
 -   `/protected` — guarded page with profile information and authenticated API requests.
--   `/admin-only` — guarded page with a role check.
+-   `/admin-only` — Keycloak admin page showing all saved todo lists, grouped by user.
 -   `/todos` — personal todo app with add, complete, and delete actions.
 -   `/api/trpc/[trpc]` — authenticated tRPC API.
 
@@ -59,7 +59,7 @@ The admin permission comes from `resource_access["realm-management"].roles` in t
 
 [`lib/server/auth.ts`](lib/server/auth.ts) validates tokens against `NEXT_PUBLIC_OIDC_ISSUER_URI` and `NEXT_PUBLIC_OIDC_ACCESS_TOKEN_EXPECTED_AUDIENCE`. The default is Phase Two’s Keycloak demo with audience `account`. Setting `NEXT_PUBLIC_OIDC_USE_MOCK=true` enables both browser mocks and the API’s static `mock-user-id` identity; requests still need an Authorization header.
 
-[`lib/server/trpc.ts`](lib/server/trpc.ts) scopes each list to the authenticated user. [`lib/trpc.ts`](lib/trpc.ts) sends access tokens using `fetchWithAuth`.
+[`lib/server/trpc.ts`](lib/server/trpc.ts) scopes each list to the authenticated user. Its `todos.listAllUserTodos` query requires `realm-admin` in `resource_access["realm-management"].roles`. [`lib/trpc.ts`](lib/trpc.ts) sends access tokens using `fetchWithAuth`.
 
 Storage follows the TanStack Start example: set both `KV_REST_API_URL` and `KV_REST_API_TOKEN` for Upstash Redis, or use the ignored `.todos/` directory locally. Use Redis on deployments without persistent writable storage. Each save replaces the user’s list.
 

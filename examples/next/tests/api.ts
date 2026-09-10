@@ -59,9 +59,17 @@ export function testApi(mock: boolean) {
         async t => {
             const directory = await mkdtemp(join(tmpdir(), "next-todos-api-"));
             t.after(() => rm(directory, { recursive: true, force: true }));
-            const store = createNodeFsTodoStore(directory);
-            const { createAppRouter } = await import("../lib/server/trpc");
-            const router = createAppRouter({ getTodosStore: () => store });
+            t.mock.method(process, "cwd", () => directory);
+            for (const key of ["KV_REST_API_URL", "KV_REST_API_TOKEN"]) {
+                const previous = process.env[key];
+                delete process.env[key];
+                t.after(() => {
+                    if (previous !== undefined) {
+                        process.env[key] = previous;
+                    }
+                });
+            }
+            const { appRouter: router } = await import("../lib/server/trpc");
             let cacheControl: string | null = null;
             const client = (authorization?: string) =>
                 createTRPCClient<typeof router>({
@@ -92,6 +100,7 @@ export function testApi(mock: boolean) {
                     error => error instanceof TRPCClientError && error.data?.code === code
                 );
             await rejects(client().todos.list.query(), "UNAUTHORIZED");
+            await rejects(client().todos.listAllUserTodos.query(), "UNAUTHORIZED");
             await rejects(client().todos.save.mutate([]), "UNAUTHORIZED");
             await rejects(client("Basic credentials").todos.list.query(), "BAD_REQUEST");
 
@@ -104,10 +113,58 @@ export function testApi(mock: boolean) {
             assert.deepEqual(await alice.todos.list.query(), saved);
             assert.equal(cacheControl, "private, no-store");
             assert.deepEqual(
-                await createNodeFsTodoStore(directory).readTodos(mock ? "mock-user-id" : "alice"),
+                await createNodeFsTodoStore(join(directory, ".todos")).readTodos(
+                    mock ? "mock-user-id" : "alice"
+                ),
                 saved
             );
             assert.deepEqual(await bob.todos.list.query(), mock ? saved : []);
+            const admin = client(
+                `Bearer ${
+                    mock
+                        ? "mock-token"
+                        : token("admin", {
+                              resource_access: { "realm-management": { roles: ["realm-admin"] } }
+                          })
+                }`
+            );
+            if (!mock) {
+                await rejects(alice.todos.listAllUserTodos.query(), "UNAUTHORIZED");
+                await rejects(
+                    client(
+                        `Bearer ${token("realm-role-only", {
+                            realm_access: { roles: ["realm-admin"] }
+                        })}`
+                    ).todos.listAllUserTodos.query(),
+                    "UNAUTHORIZED"
+                );
+                await rejects(
+                    client(
+                        `Bearer ${token("other-client-admin", {
+                            resource_access: { "another-client": { roles: ["realm-admin"] } }
+                        })}`
+                    ).todos.listAllUserTodos.query(),
+                    "UNAUTHORIZED"
+                );
+                await rejects(
+                    client(
+                        `Bearer ${token("view-only", {
+                            resource_access: { "realm-management": { roles: ["view-users"] } }
+                        })}`
+                    ).todos.listAllUserTodos.query(),
+                    "UNAUTHORIZED"
+                );
+                await bob.todos.save.mutate([{ ...saved[0], completed: true }]);
+            }
+            assert.deepEqual(
+                await admin.todos.listAllUserTodos.query(),
+                mock
+                    ? [{ userId: "mock-user-id", todos: saved }]
+                    : [
+                          { userId: "alice", todos: saved },
+                          { userId: "bob", todos: [{ ...saved[0], completed: true }] }
+                      ]
+            );
             await rejects(alice.todos.save.mutate([{ ...item, name: " " }]), "BAD_REQUEST");
             await rejects(alice.todos.save.mutate([item, item]), "BAD_REQUEST");
             await rejects(
@@ -132,6 +189,10 @@ export function testApi(mock: boolean) {
                     token("alice", { cnf: { jkt: "proof-required" } })
                 ]) {
                     await rejects(client(`Bearer ${invalid}`).todos.list.query(), "UNAUTHORIZED");
+                    await rejects(
+                        client(`Bearer ${invalid}`).todos.listAllUserTodos.query(),
+                        "UNAUTHORIZED"
+                    );
                 }
             }
         }
