@@ -14,8 +14,8 @@ export function HomePage() {
                     <Greeting />
                 </div>
                 <p className="text-base text-slate-300">
-                    Use the header actions to authenticate, then explore the protected page to see how
-                    user information and account actions surface in the UI.
+                    Use the header actions to authenticate, then explore your profile and account actions
+                    or try the Todo app to save your personal tasks.
                 </p>
             </div>
 
@@ -27,6 +27,10 @@ export function HomePage() {
                 <InfoCard
                     body="Try the protected link; unauthenticated sessions are redirected to log in."
                     title="Visit /protected"
+                />
+                <InfoCard
+                    body="Add tasks, mark them complete, and find them waiting when you return."
+                    title="Try the Todo app"
                 />
                 <InfoCard
                     body="Inactivity-triggered logouts display a gentle overlay warning first."

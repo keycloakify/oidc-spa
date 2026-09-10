@@ -8,13 +8,18 @@
         "start": "next start",
         "lint": "eslint",
         "prepare": "node scripts/setup-env.mjs",
-        "typecheck": "next typegen && tsc --noEmit"
+        "typecheck": "next typegen && tsc --noEmit",
+        "test": "node --conditions=react-server --import tsx --test tests/*.test.ts"
     },
     "dependencies": {
+        "@trpc/client": "11.18.0",
+        "@trpc/server": "11.18.0",
+        "@upstash/redis": "1.38.4",
         "next": "16.3.4",
+        "oidc-spa": "latest",
         "react": "19.2.8",
         "react-dom": "19.2.8",
-        "oidc-spa": "latest",
+        "server-only": "0.0.1",
         "zod": "4.5.4"
     },
     "devDependencies": {
@@ -25,6 +30,7 @@
         "eslint": "9.39.5",
         "eslint-config-next": "16.3.4",
         "tailwindcss": "4.3.3",
+        "tsx": "4.20.6",
         "typescript": "5.9.3"
     },
     "engines": {
