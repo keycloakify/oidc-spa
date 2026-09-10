@@ -7,7 +7,7 @@ import Spinner from "#/components/Spinner";
 import { getTodosStore } from "#/data/todos";
 
 const getTodos = createServerFn({ method: "GET" })
-    .middleware([oidcFnMiddleware({ assert: "user logged in" })])
+    .middleware([oidcFnMiddleware({ require: "authed request" })])
     .handler(async ({ context: { oidc } }) => {
         const userId = oidc.accessTokenClaims.sub;
 
@@ -18,7 +18,7 @@ const getTodos = createServerFn({ method: "GET" })
 
 const addTodo = createServerFn({ method: "POST" })
     .validator((d: string) => d)
-    .middleware([oidcFnMiddleware({ assert: "user logged in" })])
+    .middleware([oidcFnMiddleware({ require: "authed request" })])
     .handler(async ({ data, context: { oidc } }) => {
         const userId = oidc.accessTokenClaims.sub;
 

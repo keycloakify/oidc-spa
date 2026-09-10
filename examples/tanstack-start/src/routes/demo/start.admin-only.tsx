@@ -8,8 +8,8 @@ import { createKeycloakUtils } from "oidc-spa/keycloak";
 const getAdminOnlyData = createServerFn({ method: "GET" })
     .middleware([
         oidcFnMiddleware({
-            assert: "user logged in",
-            hasRequiredClaims: ({ accessTokenClaims }) =>
+            require: "authed request",
+            hasAuthorization: ({ accessTokenClaims }) =>
                 accessTokenClaims.realm_access?.roles.includes("realm-admin")
         })
     ])
@@ -30,9 +30,8 @@ export const Route = createFileRoute("/demo/start/admin-only")({
         const { user } = await oidc.getUser();
 
         // NOTE: This is just cosmetic, it doesn't actually protect anything.
-        // It's very important that you implement hasRequired claim in the server
-        // function and request middleware to check that the user actually have the required
-        // authorization.
+        // Use hasAuthorization in the server function and request middleware
+        // to check that the user has the required authorization.
         if (!user.canSeeKeycloakAdminNavigation) {
             throw new Error("unauthorized");
         }

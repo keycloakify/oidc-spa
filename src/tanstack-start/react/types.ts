@@ -182,16 +182,16 @@ export namespace GetOidc {
 
 export type OidcFnMiddleware<AccessTokenClaims> = {
     (params?: {
-        assert?: undefined;
-        hasRequiredClaims?: (params: {
+        require?: undefined;
+        hasAuthorization?: (params: {
             accessTokenClaims: AccessTokenClaims;
         }) => MaybeAsync<boolean | undefined>;
     }): OidcFnMiddleware.TanStackFnMiddleware<{
         oidc: OidcServerContext<AccessTokenClaims>;
     }>;
     (params?: {
-        assert?: "user logged in";
-        hasRequiredClaims?: (params: {
+        require?: "authed request";
+        hasAuthorization?: (params: {
             accessTokenClaims: AccessTokenClaims;
         }) => MaybeAsync<boolean | undefined>;
     }): OidcFnMiddleware.TanStackFnMiddleware<{
@@ -201,8 +201,8 @@ export type OidcFnMiddleware<AccessTokenClaims> = {
 
 export namespace OidcFnMiddleware {
     export type WithAutoLogin<AccessTokenClaims> = (params?: {
-        assert?: "user logged in";
-        hasRequiredClaims?: (params: {
+        require?: "authed request";
+        hasAuthorization?: (params: {
             accessTokenClaims: AccessTokenClaims;
         }) => MaybeAsync<boolean | undefined>;
     }) => TanStackFnMiddleware<{
@@ -241,16 +241,16 @@ export namespace OidcServerContext {
 
 export type OidcRequestMiddleware<AccessTokenClaims> = {
     (params?: {
-        assert?: undefined;
-        hasRequiredClaims?: (params: {
+        require?: undefined;
+        hasAuthorization?: (params: {
             accessTokenClaims: AccessTokenClaims;
         }) => MaybeAsync<boolean | undefined>;
     }): OidcRequestMiddleware.TanstackRequestMiddleware<{
         oidc: OidcServerContext<AccessTokenClaims>;
     }>;
     (params?: {
-        assert?: "user logged in";
-        hasRequiredClaims?: (params: {
+        require?: "authed request";
+        hasAuthorization?: (params: {
             accessTokenClaims: AccessTokenClaims;
         }) => MaybeAsync<boolean | undefined>;
     }): OidcRequestMiddleware.TanstackRequestMiddleware<{
@@ -260,8 +260,8 @@ export type OidcRequestMiddleware<AccessTokenClaims> = {
 
 export namespace OidcRequestMiddleware {
     export type WithAutoLogin<AccessTokenClaims> = (params?: {
-        assert?: "user logged in";
-        hasRequiredClaims?: (params: {
+        require?: "authed request";
+        hasAuthorization?: (params: {
             accessTokenClaims: AccessTokenClaims;
         }) => MaybeAsync<boolean | undefined>;
     }) => TanstackRequestMiddleware<{

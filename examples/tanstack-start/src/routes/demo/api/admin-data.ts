@@ -5,8 +5,8 @@ export const Route = createFileRoute("/demo/api/admin-data")({
     server: {
         middleware: [
             oidcRequestMiddleware({
-                assert: "user logged in",
-                hasRequiredClaims: ({ accessTokenClaims }) =>
+                require: "authed request",
+                hasAuthorization: ({ accessTokenClaims }) =>
                     accessTokenClaims.realm_access?.roles.includes("realm-admin")
             })
         ],
