@@ -5,33 +5,25 @@ import { trpc } from "@/lib/trpc";
 import { createKeycloakUtils, isKeycloak } from "oidc-spa/keycloak";
 import { useOidc } from "@/lib/oidc";
 
-const REQUIRED_ROLE = "realm-admin";
-
 export function AdminOnlyPage() {
-    const { user, issuerUri } = useOidc({ assert: "user logged in" });
-
-    const keycloakUtils = isKeycloak({ issuerUri }) ? createKeycloakUtils({ issuerUri }) : undefined;
+    const { user, issuerUri } = useOidc({
+        assert: "user logged in"
+    });
 
     if (!user.canSeeKeycloakAdminNavigation) {
         return (
             <section className="rounded-xl border border-rose-500/40 bg-rose-950/30 p-4 text-sm text-rose-100">
                 <p>
-                    You need the <code>{REQUIRED_ROLE}</code> role to view this page.
+                    You need the <code>realm-admin</code> role to view this page.
                 </p>
             </section>
         );
     }
 
+    const keycloakUtils = isKeycloak({ issuerUri }) ? createKeycloakUtils({ issuerUri }) : undefined;
+
     return (
         <section className="space-y-6">
-            <div className="space-y-1">
-                <h1 className="text-xl font-semibold text-white">Administration Page</h1>
-                <p className="text-sm text-slate-300">
-                    Access is granted because your access token includes the <code>{REQUIRED_ROLE}</code>{" "}
-                    role.
-                </p>
-            </div>
-
             <AllUserTodos />
 
             {keycloakUtils && (
@@ -85,9 +77,9 @@ function AllUserTodos() {
         <section className="space-y-4" aria-labelledby="all-user-todos">
             <div className="flex items-center justify-between gap-4">
                 <div className="space-y-1">
-                    <h2 id="all-user-todos" className="text-xl font-semibold text-white">
+                    <h1 id="all-user-todos" className="text-xl font-semibold text-white">
                         Todos by user
-                    </h2>
+                    </h1>
                     <p className="text-sm text-slate-300">
                         All todos item of all users, you can list it because you are admin
                     </p>

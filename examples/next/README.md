@@ -50,10 +50,12 @@ The admin permission comes from `resource_access["realm-management"].roles` in t
 ## Routes
 
 -   `/` — public landing page with login/logout controls.
--   `/protected` — guarded page with profile information and authenticated API requests.
--   `/admin-only` — Keycloak admin page showing all saved todo lists, grouped by user.
+-   `/account` — profile and account actions, accessible from the avatar.
+-   `/admin-only` — Todo Admin: all saved todo lists grouped by user and a Keycloak administration-console link.
 -   `/todos` — personal todo app with add, complete, and delete actions.
 -   `/api/trpc/[trpc]` — authenticated tRPC API.
+
+The avatar opens `/account` for every signed-in user. Keycloak users also have account actions and a link to the Keycloak account console on that page.
 
 ## Todo API
 
