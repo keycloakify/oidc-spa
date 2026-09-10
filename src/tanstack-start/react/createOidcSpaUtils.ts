@@ -917,8 +917,8 @@ export function createOidcSpaUtils<
               );
 
     function createFunctionMiddlewareServerFn(params?: {
-        assert?: "user logged in";
-        hasRequiredClaims?: (params: {
+        require?: "authed request";
+        hasAuthorization?: (params: {
             accessTokenClaims: AccessTokenClaims;
         }) => MaybeAsync<boolean | undefined>;
     }) {
@@ -968,13 +968,13 @@ export function createOidcSpaUtils<
             });
 
             if (requestAuthContext === undefined) {
-                if (params?.assert === "user logged in") {
+                if (params?.require === "authed request") {
                     throw createError({
                         code: 401,
                         wwwAuthenticateResponseHeaderValue:
                             'Bearer error="invalid_request", error_description="Missing access token"',
                         debugErrorMessage: [
-                            "Asserted user logged in for that serverFn request",
+                            "Authentication required for this request",
                             "but no access token was attached to the request"
                         ].join(" ")
                     });
@@ -1020,11 +1020,11 @@ export function createOidcSpaUtils<
 
             assert(is<Exclude<AccessTokenClaims, undefined>>(accessTokenClaims));
 
-            check_required_claims: {
-                const getHasRequiredClaims = params?.hasRequiredClaims;
+            check_authorization: {
+                const getHasAuthorization = params?.hasAuthorization;
 
-                if (getHasRequiredClaims === undefined) {
-                    break check_required_claims;
+                if (getHasAuthorization === undefined) {
+                    break check_authorization;
                 }
 
                 const accessedClaimNames = new Set<string>();
@@ -1045,12 +1045,12 @@ export function createOidcSpaUtils<
                     }
                 });
 
-                const hasRequiredClaims = await getHasRequiredClaims({
+                const hasAuthorization = await getHasAuthorization({
                     accessTokenClaims: accessTokenClaims_proxy
                 });
 
-                if (hasRequiredClaims) {
-                    break check_required_claims;
+                if (hasAuthorization) {
+                    break check_authorization;
                 }
 
                 throw createError({
@@ -1079,8 +1079,8 @@ export function createOidcSpaUtils<
     }
 
     function oidcRequestMiddleware(params?: {
-        assert?: "user logged in";
-        hasRequiredClaims?: (params: {
+        require?: "authed request";
+        hasAuthorization?: (params: {
             accessTokenClaims: AccessTokenClaims;
         }) => MaybeAsync<boolean | undefined>;
     }) {
@@ -1090,8 +1090,8 @@ export function createOidcSpaUtils<
     }
 
     function oidcFnMiddleware(params?: {
-        assert?: "user logged in";
-        hasRequiredClaims?: (params: {
+        require?: "authed request";
+        hasAuthorization?: (params: {
             accessTokenClaims: AccessTokenClaims;
         }) => MaybeAsync<boolean | undefined>;
     }) {
@@ -1099,10 +1099,10 @@ export function createOidcSpaUtils<
             .client(async ({ next }) => {
                 const oidc = await getOidc();
 
-                if (params?.assert === "user logged in" && !oidc.isUserLoggedIn) {
+                if (params?.require === "authed request" && !oidc.isUserLoggedIn) {
                     throw new Error(
                         [
-                            "oidc-spa: You used oidcFnMiddleware({ assert: 'user logged in' })",
+                            "oidc-spa: You used oidcFnMiddleware({ require: 'authed request' })",
                             "but the server function the middleware was attached to was called",
                             "while the user is not logged in."
                         ].join(" ")

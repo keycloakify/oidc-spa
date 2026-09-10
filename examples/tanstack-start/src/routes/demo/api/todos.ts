@@ -4,7 +4,7 @@ import { getTodosStore } from "#/data/todos";
 
 export const Route = createFileRoute("/demo/api/todos")({
     server: {
-        middleware: [oidcRequestMiddleware({ assert: "user logged in" })],
+        middleware: [oidcRequestMiddleware({ require: "authed request" })],
         handlers: {
             GET: async ({ context: { oidc } }) => {
                 const userId = oidc.accessTokenClaims.sub;
