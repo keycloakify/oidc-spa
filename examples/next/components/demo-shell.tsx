@@ -13,8 +13,8 @@ export function DemoShell({ children }: { children: ReactNode }) {
     return (
         <>
             <header className="fixed inset-x-0 top-0 z-40 border-b border-white/10 bg-slate-950/80 backdrop-blur-sm">
-                <div className="mx-auto grid h-16 w-full max-w-4xl grid-cols-[auto_1fr_auto] items-center gap-4 px-6">
-                    <div className="flex flex-col leading-tight">
+                <div className="mx-auto grid w-full max-w-4xl grid-cols-[1fr_auto] items-center gap-4 px-6 py-3 sm:h-16 sm:grid-cols-[auto_1fr_auto] sm:py-0">
+                    <div className="col-start-1 row-start-1 flex flex-col leading-tight">
                         <span className="text-xs uppercase tracking-[0.3em] text-slate-500">
                             Example
                         </span>
@@ -23,19 +23,20 @@ export function DemoShell({ children }: { children: ReactNode }) {
                         </span>
                     </div>
 
-                    <nav className="flex items-center justify-center gap-4 text-sm font-medium text-slate-400">
+                    <nav className="col-span-2 col-start-1 row-start-2 flex items-center justify-center gap-4 text-sm font-medium text-slate-400 sm:col-span-1 sm:col-start-2 sm:row-start-1">
                         <AppNavLink href="/">Home</AppNavLink>
                         <AppNavLink href="/protected">Protected</AppNavLink>
+                        <AppNavLink href="/todos">Todo app</AppNavLink>
                         <AdminOnlyNavLink />
                     </nav>
 
-                    <div className="flex min-w-40 justify-end sm:min-w-[220px]">
+                    <div className="col-start-2 row-start-1 flex justify-end sm:col-start-3 sm:min-w-[180px]">
                         <AuthButtons />
                     </div>
                 </div>
             </header>
 
-            <main className="mx-auto flex min-h-screen w-full max-w-4xl flex-col gap-10 px-6 pb-16 pt-28">
+            <main className="mx-auto flex min-h-screen w-full max-w-4xl flex-col gap-10 px-6 pb-16 pt-36 sm:pt-28">
                 {children}
             </main>
         </>

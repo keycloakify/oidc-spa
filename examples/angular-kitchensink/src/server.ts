@@ -7,7 +7,6 @@ import {
 } from '@angular/ssr/node';
 import express from 'express';
 import { join } from 'node:path';
-import { bootstrapAuth } from './server/auth';
 import { createApiRouter } from './server/api';
 
 const browserDistFolder = join(import.meta.dirname, '../browser');
@@ -15,32 +14,10 @@ const browserDistFolder = join(import.meta.dirname, '../browser');
 const app = express();
 const angularApp = new AngularNodeAppEngine();
 
-const useMock = process.env['OIDC_USE_MOCK'] === 'true';
-
-// Start validation setup as soon as the server loads, including under ng serve
-// and in a serverless function. Token validation waits for readiness internally.
-bootstrapAuth(
-  useMock
-    ? {
-        implementation: 'mock',
-        behavior: 'use static identity',
-        decodedAccessToken_mock: {
-          sub: 'mock-user',
-          name: 'John Doe',
-          email: 'john.doe@example.com',
-        },
-      }
-    : {
-        implementation: 'real',
-        issuerUri: process.env['OIDC_ISSUER_URI']!,
-        expectedAudience: process.env['OIDC_ACCESS_TOKEN_EXPECTED_AUDIENCE']!,
-      }
-);
-
 app.get('/api/oidc-config', (_req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   res.json({
-    useMock,
+    useMock: process.env['OIDC_USE_MOCK'] === 'true',
     issuerUri: process.env['OIDC_ISSUER_URI']!,
     clientId: process.env['OIDC_BROWSER_APP_CLIENT_ID']!,
   });
