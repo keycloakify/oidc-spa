@@ -28,7 +28,7 @@ export type TodosStore = {
     listAllUserTodos: () => Promise<UserTodos[]>;
 };
 
-export function createNodeFsTodoStore(dirPath: string): TodosStore {
+function createNodeFsTodoStore(dirPath: string): TodosStore {
     // OIDC subjects can contain slashes; never use a claim directly as a file path.
     const filePath = (userId: string) =>
         join(dirPath, `todos_${createHash("sha256").update(userId).digest("hex")}.json`);
@@ -87,7 +87,7 @@ export function createNodeFsTodoStore(dirPath: string): TodosStore {
     return store;
 }
 
-export function createRedisTodoStore(config: { url: string; token: string }): TodosStore {
+function createRedisTodoStore(config: { url: string; token: string }): TodosStore {
     const redis = new Redis(config);
     const prefix = "oidc-spa:next:todos:";
     const key = (userId: string) => `${prefix}${userId}`;
@@ -120,3 +120,10 @@ export function createRedisTodoStore(config: { url: string; token: string }): To
         }
     };
 }
+
+export const todosStore = process.env.KV_REST_API_TOKEN
+    ? createRedisTodoStore({
+          url: process.env.KV_REST_API_URL!,
+          token: process.env.KV_REST_API_TOKEN
+      })
+    : createNodeFsTodoStore(join(process.cwd(), ".todos"));

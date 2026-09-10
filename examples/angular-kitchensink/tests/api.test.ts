@@ -86,24 +86,18 @@ for (const mock of [false, true]) {
         })
       );
       ({ server: idp, origin: issuerUri } = await listen(provider));
-      const { bootstrapAuth } = await import('../src/server/auth');
+      vi.stubEnv('OIDC_USE_MOCK', String(mock));
+      vi.stubEnv('OIDC_ISSUER_URI', issuerUri);
+      vi.stubEnv('OIDC_ACCESS_TOKEN_EXPECTED_AUDIENCE', 'account');
       const { createApiRouter } = await import('../src/server/api');
       const app = express();
-      bootstrapAuth(
-        mock
-          ? {
-              implementation: 'mock',
-              behavior: 'use static identity',
-              decodedAccessToken_mock: { sub: 'mock-user', name: 'John Doe' },
-            }
-          : { implementation: 'real', issuerUri, expectedAudience: 'account' }
-      );
       app.use('/api', createApiRouter());
       ({ server, origin } = await listen(app));
     });
     afterAll(async () => {
       await close(server);
       await close(idp);
+      vi.unstubAllEnvs();
     });
 
     it('distinguishes anonymous greetings and missing credentials on protected routes', async () => {

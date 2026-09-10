@@ -14,7 +14,23 @@ const { bootstrapAuth, validateAndDecodeAccessToken } = oidcSpa
   })
   .createUtils();
 
-export { bootstrapAuth };
+bootstrapAuth(
+  process.env['OIDC_USE_MOCK'] === 'true'
+    ? {
+        implementation: 'mock',
+        behavior: 'use static identity',
+        decodedAccessToken_mock: {
+          sub: 'mock-user',
+          name: 'John Doe',
+          email: 'john.doe@example.com',
+        },
+      }
+    : {
+        implementation: 'real',
+        issuerUri: process.env['OIDC_ISSUER_URI']!,
+        expectedAudience: process.env['OIDC_ACCESS_TOKEN_EXPECTED_AUDIENCE']!,
+      }
+);
 
 export type User = {
   id: string;

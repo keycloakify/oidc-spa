@@ -2,7 +2,6 @@ import express from 'express';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { getUser, isAnonymousRequest } from './auth';
-import { bootstrapAuth } from './auth';
 
 const TodoInput = z.object({ title: z.string().trim().min(1).max(200) }).strict();
 const TodoUpdate = z
@@ -16,24 +15,6 @@ const TodoUpdate = z
 type Todo = { id: string; title: string; completed: boolean };
 
 export function createApiRouter() {
-  bootstrapAuth(
-    process.env['OIDC_USE_MOCK'] === 'true'
-      ? {
-          implementation: 'mock',
-          behavior: 'use static identity',
-          decodedAccessToken_mock: {
-            sub: 'mock-user',
-            name: 'John Doe',
-            email: 'john.doe@example.com',
-          },
-        }
-      : {
-          implementation: 'real',
-          issuerUri: process.env['OIDC_ISSUER_URI']!,
-          expectedAudience: process.env['OIDC_ACCESS_TOKEN_EXPECTED_AUDIENCE']!,
-        }
-  );
-
   const api = express.Router();
   // Each user's list belongs to their validated subject, never to a caller-supplied user ID.
   // This demo has no database: restarting the server clears all lists.

@@ -1,13 +1,12 @@
 import { strict as assert } from "node:assert";
 import { after, before, test } from "node:test";
 import { createServer } from "node:http";
-import { generateKeyPairSync, randomUUID, sign } from "node:crypto";
-import { mkdtemp, rm } from "node:fs/promises";
+import { createHash, generateKeyPairSync, randomUUID, sign } from "node:crypto";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createTRPCClient, httpBatchLink, TRPCClientError } from "@trpc/client";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
-import { createNodeFsTodoStore } from "../lib/server/todos";
 
 export function testApi(mock: boolean) {
     const keys = generateKeyPairSync("rsa", { modulusLength: 2048 });
@@ -112,12 +111,12 @@ export function testApi(mock: boolean) {
             assert.equal(saved[0].name, "Buy groceries");
             assert.deepEqual(await alice.todos.list.query(), saved);
             assert.equal(cacheControl, "private, no-store");
-            assert.deepEqual(
-                await createNodeFsTodoStore(join(directory, ".todos")).readTodos(
-                    mock ? "mock-user-id" : "alice"
-                ),
-                saved
-            );
+            const userId = mock ? "mock-user-id" : "alice";
+            const filename = `todos_${createHash("sha256").update(userId).digest("hex")}.json`;
+            assert.deepEqual(JSON.parse(await readFile(join(directory, ".todos", filename), "utf8")), {
+                userId,
+                todos: saved
+            });
             assert.deepEqual(await bob.todos.list.query(), mock ? saved : []);
             const admin = client(
                 `Bearer ${
