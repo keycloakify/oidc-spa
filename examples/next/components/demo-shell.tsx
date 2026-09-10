@@ -25,7 +25,6 @@ export function DemoShell({ children }: { children: ReactNode }) {
 
                     <nav className="col-span-2 col-start-1 row-start-2 flex items-center justify-center gap-4 text-sm font-medium text-slate-400 sm:col-span-1 sm:col-start-2 sm:row-start-1">
                         <AppNavLink href="/">Home</AppNavLink>
-                        <AppNavLink href="/protected">Protected</AppNavLink>
                         <AppNavLink href="/todos">Todo app</AppNavLink>
                         <AdminOnlyNavLink />
                     </nav>
@@ -65,16 +64,8 @@ function AuthButtons() {
 }
 
 function LoggedInAuthButtons() {
-    const { user, logout, issuerUri, clientId, validRedirectUri } = useOidc({
+    const { user, logout } = useOidc({
         assert: "user logged in"
-    });
-
-    const keycloakUtils = isKeycloak({ issuerUri }) ? createKeycloakUtils({ issuerUri }) : undefined;
-
-    const accountUrl = keycloakUtils?.getAccountUrl({
-        clientId,
-        validRedirectUri,
-        locale: undefined
     });
 
     const avatar = (
@@ -89,18 +80,14 @@ function LoggedInAuthButtons() {
 
     return (
         <div className="flex items-center gap-4">
-            {accountUrl ? (
-                <a
-                    className="flex items-center gap-3 text-sm font-medium text-slate-200 hover:text-white"
-                    href={accountUrl}
-                >
-                    {avatar}
-                </a>
-            ) : (
-                <div className="flex items-center gap-3 text-sm font-medium text-slate-200">
-                    {avatar}
-                </div>
-            )}
+            <Link
+                className="flex items-center gap-3 text-sm font-medium text-slate-200 hover:text-white"
+                href="/account"
+                aria-label="Open your account"
+                title="Open your account"
+            >
+                {avatar}
+            </Link>
             <button className={primaryButtonClasses} onClick={() => logout({ redirectTo: "home" })}>
                 Logout
             </button>
@@ -146,5 +133,5 @@ function AdminOnlyNavLink() {
         return null;
     }
 
-    return <AppNavLink href="/admin-only">Admin</AppNavLink>;
+    return <AppNavLink href="/admin-only">Todo Admin</AppNavLink>;
 }
