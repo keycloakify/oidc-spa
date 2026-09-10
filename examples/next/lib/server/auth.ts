@@ -16,7 +16,22 @@ const { bootstrapAuth, validateAndDecodeAccessToken } = oidcSpa
     })
     .createUtils();
 
-export { bootstrapAuth };
+bootstrapAuth(
+    process.env.NEXT_PUBLIC_OIDC_USE_MOCK === "true"
+        ? {
+              implementation: "mock",
+              behavior: "use static identity",
+              decodedAccessToken_mock: {
+                  sub: "mock-user-id",
+                  resource_access: { "realm-management": { roles: ["realm-admin"] } }
+              }
+          }
+        : {
+              implementation: "real",
+              issuerUri: process.env.NEXT_PUBLIC_OIDC_ISSUER_URI!,
+              expectedAudience: process.env.NEXT_PUBLIC_OIDC_ACCESS_TOKEN_EXPECTED_AUDIENCE!
+          }
+);
 
 export type User = {
     id: string;
