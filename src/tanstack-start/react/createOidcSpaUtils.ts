@@ -1,12 +1,12 @@
 import { useState, useEffect, useReducer } from "react";
 import type {
-    CreateValidateAndGetAccessTokenClaims,
     OidcSpaUtils,
     UseOidc,
     GetOidc,
     ParamsOfBootstrap,
     OidcServerContext,
-    CreateUser
+    CreateUser,
+    ParamsOfWithAccessTokenValidation
 } from "./types";
 import type { Oidc as Oidc_core } from "../../core";
 import { OidcInitializationError } from "../../core/OidcInitializationError";
@@ -30,6 +30,7 @@ import { BEFORE_LOAD_FN_BRAND_PROPERTY_NAME } from "./disableSsrIfLoginEnforced"
 import { setDesiredPostLoginRedirectUrl } from "../../core/desiredPostLoginRedirectUrl";
 import type { MaybeAsync } from "../../tools/MaybeAsync";
 import { enableStateDataCookie } from "../../core/StateDataCookie";
+import { createValidateAndGetAccessTokenClaims_rfc9068 } from "./accessTokenValidation_rfc9068";
 
 export function createOidcSpaUtils<
     User,
@@ -37,15 +38,13 @@ export function createOidcSpaUtils<
     AccessTokenClaims extends Record<string, unknown> | undefined
 >(params: {
     autoLogin: AutoLogin;
-    createValidateAndGetAccessTokenClaims:
-        | CreateValidateAndGetAccessTokenClaims<AccessTokenClaims>
-        | undefined;
+    paramsOfWithAccessTokenValidation: ParamsOfWithAccessTokenValidation<AccessTokenClaims> | undefined;
     createUser: CreateUser<User> | undefined;
     user_mock: User | undefined;
 }): OidcSpaUtils<User, AutoLogin, AccessTokenClaims> {
     const {
         autoLogin,
-        createValidateAndGetAccessTokenClaims,
+        paramsOfWithAccessTokenValidation,
         createUser,
         user_mock: user_mock_static
     } = params;
@@ -907,14 +906,17 @@ export function createOidcSpaUtils<
     enforceLogin[BEFORE_LOAD_FN_BRAND_PROPERTY_NAME] = true;
 
     const prValidateAndGetAccessTokenClaims =
-        createValidateAndGetAccessTokenClaims === undefined
+        paramsOfWithAccessTokenValidation === undefined
             ? undefined
-            : dParamsOfBootstrap.pr.then(paramsOfBootstrap =>
-                  createValidateAndGetAccessTokenClaims({
-                      // @ts-expect-error
-                      paramsOfBootstrap
-                  })
-              );
+            : dParamsOfBootstrap.pr.then(async paramsOfBootstrap => {
+                  const { validateAndGetAccessTokenClaims } =
+                      await createValidateAndGetAccessTokenClaims_rfc9068<any>({
+                          paramsOfWithAccessTokenValidation,
+                          paramsOfBootstrap
+                      });
+
+                  return { validateAndGetAccessTokenClaims };
+              });
 
     function createFunctionMiddlewareServerFn(params?: {
         require?: "authed request";
