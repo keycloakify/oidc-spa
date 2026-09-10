@@ -4,6 +4,8 @@ import type { GetterOrDirectValue } from "../../tools/GetterOrDirectValue";
 import type { OidcMetadata } from "../../core/OidcMetadata";
 import type { MaybeAsync } from "../../tools/MaybeAsync";
 import { assert, type Equals } from "../../tools/tsafe/assert";
+import type { DecodedAccessToken_RFC9068 as AccessTokenClaims_RFC9068 } from "../../server";
+import type { ZodSchemaLike } from "../../tools/ZodSchemaLike";
 
 export type UseOidc<User> = {
     (params?: { assert?: undefined }): UseOidc.Oidc<User>;
@@ -495,35 +497,15 @@ export type OidcSpaUtils<User, AutoLogin, AccessTokenClaims> = {
               }) => Promise<void | never>;
           });
 
-export type CreateValidateAndGetAccessTokenClaims<AccessTokenClaims> = (params: {
-    paramsOfBootstrap: ParamsOfBootstrap<unknown, boolean, AccessTokenClaims>;
-}) => {
-    validateAndGetAccessTokenClaims: ValidateAndGetAccessTokenClaims<AccessTokenClaims>;
+export type ParamsOfWithAccessTokenValidation<AccessTokenClaims> = {
+    type: "RFC 9068: JSON Web Token (JWT) Profile for OAuth 2.0 Access Tokens";
+    accessTokenClaimsSchema?: ZodSchemaLike<AccessTokenClaims_RFC9068, AccessTokenClaims>;
+    accessTokenClaims_mock?: NoInfer<AccessTokenClaims>;
+    expectedAudience?: (params: {
+        paramsOfBootstrap: ParamsOfBootstrap.Real;
+        process: { env: Record<string, string> };
+    }) => string;
 };
-
-export type ValidateAndGetAccessTokenClaims<AccessTokenClaims> = (
-    params: import("../../server/types").ValidateAndDecodeAccessToken.Params
-) => Promise<ValidateAndGetAccessTokenClaims.ReturnType<AccessTokenClaims>>;
-
-export namespace ValidateAndGetAccessTokenClaims {
-    export type ReturnType<AccessTokenClaims> =
-        | ReturnType.Success<AccessTokenClaims>
-        | ReturnType.Errored;
-
-    export namespace ReturnType {
-        export type Success<AccessTokenClaims> = {
-            isSuccess: true;
-            accessTokenClaims: AccessTokenClaims;
-            accessToken: string;
-        };
-
-        export type Errored = {
-            isSuccess: false;
-            debugErrorMessage: string;
-            wwwAuthenticateResponseHeaderValue: string;
-        };
-    }
-}
 
 export type CreateUser<User> = (params: {
     decodedIdToken: Oidc_core.Tokens.DecodedIdToken;
