@@ -1,6 +1,6 @@
 {
     "name": "oidc-spa",
-    "version": "10.3.0-rc.4",
+    "version": "11.0.0-rc.2",
     "description": "OpenID Connect / OAuth2 solution for client-first Web Applications",
     "repository": {
         "type": "git",
@@ -9,6 +9,8 @@
     "scripts": {
         "prepare": "patch-package",
         "build": "tsx scripts/build.ts",
+        "test:angular": "tsc --project tests/angular/tsconfig.json && tsx scripts/test-angular.ts",
+        "test:react-nextjs": "tsc --project tests/react-nextjs/tsconfig.json",
         "_format": "prettier '**/*.{ts,tsx,json,md}'",
         "format": "yarn _format --write",
         "format:check": "yarn _format --list-different",
@@ -56,10 +58,14 @@
         "@tanstack/react-router": "*",
         "@tanstack/react-start": ">=1.168.25",
         "@types/react": "*",
+        "next": "*",
         "react": "*",
         "rxjs": "*"
     },
     "peerDependenciesMeta": {
+        "next": {
+            "optional": true
+        },
         "react": {
             "optional": true
         },
@@ -90,6 +96,7 @@
     },
     "devDependencies": {
         "@angular/common": "^20.3.1",
+        "@angular/compiler": "^20.3.1",
         "@angular/core": "^20.3.1",
         "@angular/platform-browser": "^20.3.1",
         "@angular/router": "^20.3.1",
@@ -116,6 +123,7 @@
         "js2mjs": "^1.0.1",
         "lint-staged": "^11.1.1",
         "magic-string": "^0.30.19",
+        "next": "16.3.4",
         "oidc-client-ts": "3.1.0",
         "patch-package": "^8.0.0",
         "prettier": "^2.8.8",
@@ -189,11 +197,17 @@
             "import": "./dist/esm/tanstack-start/react/index.mjs",
             "default": "./dist/esm/tanstack-start/react/index.mjs"
         },
+        "./react-nextjs": {
+            "types": "./dist/esm/react-nextjs/index.d.ts",
+            "module": "./dist/esm/react-nextjs/index.mjs",
+            "import": "./dist/esm/react-nextjs/index.mjs",
+            "default": "./dist/esm/react-nextjs/index.mjs"
+        },
         "./angular": {
-            "types": "./dist/esm/angular.d.ts",
-            "module": "./dist/esm/angular.mjs",
-            "import": "./dist/esm/angular.mjs",
-            "default": "./dist/esm/angular.mjs"
+            "types": "./dist/esm/angular/index.d.ts",
+            "module": "./dist/esm/angular/index.mjs",
+            "import": "./dist/esm/angular/index.mjs",
+            "default": "./dist/esm/angular/index.mjs"
         },
         "./keycloak": {
             "module": "./dist/esm/keycloak/index.mjs",

@@ -5,25 +5,22 @@ import type { OidcMetadata } from "../../core/OidcMetadata";
 import type { MaybeAsync } from "../../tools/MaybeAsync";
 import { assert, type Equals } from "../../tools/tsafe/assert";
 
-export type UseOidc<DecodedIdToken, User> = {
-    (params?: { assert?: undefined }): UseOidc.Oidc<DecodedIdToken, User>;
-    (params: { assert: "user logged in" }): UseOidc.Oidc.LoggedIn<DecodedIdToken, User>;
+export type UseOidc<User> = {
+    (params?: { assert?: undefined }): UseOidc.Oidc<User>;
+    (params: { assert: "user logged in" }): UseOidc.Oidc.LoggedIn<User>;
     (params: { assert: "user not logged in" }): UseOidc.Oidc.NotLoggedIn;
 };
 
 export namespace UseOidc {
-    export type WithAutoLogin<DecodedIdToken, User> = (params?: {
-        assert: "ready";
-    }) => Oidc.LoggedIn<DecodedIdToken, User>;
+    export type WithAutoLogin<User> = (params?: { assert: "ready" }) => Oidc.LoggedIn<User>;
 
-    export type Oidc<DecodedIdToken, User> =
+    export type Oidc<User> =
         | (Oidc.NotReady & {
               isUserLoggedIn?: never;
               issuerUri?: never;
               clientId?: never;
               validRedirectUri?: never;
 
-              decodedIdToken?: never;
               logout?: never;
               renewTokens?: never;
               goToAuthServer?: never;
@@ -35,7 +32,6 @@ export namespace UseOidc {
               refreshUser?: never;
           })
         | (Oidc.NotLoggedIn & {
-              decodedIdToken?: never;
               logout?: never;
               renewTokens?: never;
               goToAuthServer?: never;
@@ -44,7 +40,7 @@ export namespace UseOidc {
               user?: never;
               refreshUser?: never;
           })
-        | (Oidc.LoggedIn<DecodedIdToken, User> & {
+        | (Oidc.LoggedIn<User> & {
               login?: never;
               oidcInitializationError?: never;
           });
@@ -75,13 +71,12 @@ export namespace UseOidc {
             oidcInitializationError: OidcInitializationError | undefined;
         };
 
-        export type LoggedIn<DecodedIdToken, User> = {
+        export type LoggedIn<User> = {
             isOidcReady: true;
             isUserLoggedIn: true;
             issuerUri: string;
             clientId: string;
             validRedirectUri: string;
-            decodedIdToken: DecodedIdToken;
             logout: Oidc_core.LoggedIn["logout"];
             renewTokens: Oidc_core.LoggedIn["renewTokens"];
             goToAuthServer: Oidc_core.LoggedIn["goToAuthServer"];
@@ -101,23 +96,22 @@ export namespace UseOidc {
     }
 }
 
-export type GetOidc<DecodedIdToken, User> = {
-    (params?: { assert?: undefined }): Promise<GetOidc.Oidc<DecodedIdToken, User>>;
-    (params: { assert: "user logged in" }): Promise<GetOidc.Oidc.LoggedIn<DecodedIdToken, User>>;
+export type GetOidc<User> = {
+    (params?: { assert?: undefined }): Promise<GetOidc.Oidc<User>>;
+    (params: { assert: "user logged in" }): Promise<GetOidc.Oidc.LoggedIn<User>>;
     (params: { assert: "user not logged in" }): Promise<GetOidc.Oidc.NotLoggedIn>;
 };
 
 export namespace GetOidc {
-    export type WithAutoLogin<DecodedIdToken, User> = (params?: {
+    export type WithAutoLogin<User> = (params?: {
         assert: "user logged in";
-    }) => Promise<Oidc.LoggedIn<DecodedIdToken, User>>;
+    }) => Promise<Oidc.LoggedIn<User>>;
 
-    export type Oidc<DecodedIdToken, User> =
+    export type Oidc<User> =
         | (Oidc.NotLoggedIn & {
               getAccessToken?: never;
-              subscribeToAccessTokenRotation?: never;
+              subscribeToTokenRotation?: never;
               getDecodedIdToken?: never;
-              subscribeToDecodedIdTokenChange?: never;
               logout?: never;
               renewTokens?: never;
               goToAuthServer?: never;
@@ -126,7 +120,7 @@ export namespace GetOidc {
               subscribeToAutoLogoutState?: never;
               getUser?: never;
           })
-        | (Oidc.LoggedIn<DecodedIdToken, User> & {
+        | (Oidc.LoggedIn<User> & {
               initializationError?: never;
               login?: never;
           });
@@ -144,15 +138,17 @@ export namespace GetOidc {
             login: Oidc_core.NotLoggedIn["login"];
         };
 
-        export type LoggedIn<DecodedIdToken, User> = Common & {
+        export type LoggedIn<User> = Common & {
             isUserLoggedIn: true;
             getAccessToken: () => Promise<string>;
-            subscribeToAccessTokenRotation: (next: (accessToken: string) => void) => {
-                unsubscribeFromAccessTokenRotation: () => void;
-            };
-            getDecodedIdToken: () => DecodedIdToken;
-            subscribeToDecodedIdTokenChange: (next: (decodedIdToken: DecodedIdToken) => void) => {
-                unsubscribeFromDecodedIdTokenChange: () => void;
+            getDecodedIdToken: () => Oidc_core.Tokens.DecodedIdToken;
+            subscribeToTokenRotation: (
+                next: (params: {
+                    accessToken: string;
+                    decodedIdToken: Oidc_core.Tokens.DecodedIdToken;
+                }) => void
+            ) => {
+                unsubscribeFromTokenRotation: () => void;
             };
             logout: Oidc_core.LoggedIn["logout"];
             renewTokens: Oidc_core.LoggedIn["renewTokens"];
@@ -275,12 +271,12 @@ export namespace OidcRequestMiddleware {
     export type TanstackRequestMiddleware<T> = RequestMiddlewareAfterServer<{}, undefined, T>;
 }
 
-export type ParamsOfBootstrap<AutoLogin, DecodedIdToken, User, AccessTokenClaims> =
-    | ParamsOfBootstrap.Real<AutoLogin>
-    | ParamsOfBootstrap.Mock<AutoLogin, DecodedIdToken, User, AccessTokenClaims>;
+export type ParamsOfBootstrap<User, AutoLogin, AccessTokenClaims> =
+    | ParamsOfBootstrap.Real
+    | ParamsOfBootstrap.Mock<User, AutoLogin, AccessTokenClaims>;
 
 export namespace ParamsOfBootstrap {
-    export type Real<AutoLogin> = {
+    export type Real = {
         implementation: "real";
 
         /**
@@ -437,13 +433,23 @@ export namespace ParamsOfBootstrap {
          * To enable DPoP see: https://docs.oidc-spa.dev/v/v10/security-features/dpop
          * */
         disableDPoP?: true;
-    } & (AutoLogin extends true ? {} : {});
+    };
 
-    export type Mock<AutoLogin, DecodedIdToken, User, AccessTokenClaims> = {
+    assert<
+        Equals<
+            Omit<Real, "implementation" | "warnUserSecondsBeforeAutoLogout">,
+            Omit<
+                ParamsOfCreateOidc<any, boolean>,
+                "BASE_URL" | "createUser" | "autoLogin" | "postLoginRedirectUrl"
+            >
+        >
+    >;
+
+    export type Mock<User, AutoLogin, AccessTokenClaims> = {
         implementation: "mock";
         issuerUri_mock?: string;
         clientId_mock?: string;
-        decodedIdToken_mock?: DecodedIdToken;
+        decodedIdToken_mock?: Oidc_core.Tokens.DecodedIdToken;
         user_mock?: User;
     } & (AccessTokenClaims extends undefined
         ? {}
@@ -459,19 +465,15 @@ export namespace ParamsOfBootstrap {
               });
 }
 
-export type OidcSpaUtils<AutoLogin, DecodedIdToken, User, AccessTokenClaims> = {
+export type OidcSpaUtils<User, AutoLogin, AccessTokenClaims> = {
     bootstrapOidc: (
         params: GetterOrDirectValue<
             { process: { env: Record<string, string> } },
-            ParamsOfBootstrap<AutoLogin, DecodedIdToken, User, AccessTokenClaims>
+            ParamsOfBootstrap<User, AutoLogin, AccessTokenClaims>
         >
     ) => void;
-    useOidc: AutoLogin extends true
-        ? UseOidc.WithAutoLogin<DecodedIdToken, User>
-        : UseOidc<DecodedIdToken, User>;
-    getOidc: AutoLogin extends true
-        ? GetOidc.WithAutoLogin<DecodedIdToken, User>
-        : GetOidc<DecodedIdToken, User>;
+    useOidc: AutoLogin extends true ? UseOidc.WithAutoLogin<User> : UseOidc<User>;
+    getOidc: AutoLogin extends true ? GetOidc.WithAutoLogin<User> : GetOidc<User>;
 } & (AccessTokenClaims extends undefined
     ? {}
     : {
@@ -494,7 +496,7 @@ export type OidcSpaUtils<AutoLogin, DecodedIdToken, User, AccessTokenClaims> = {
           });
 
 export type CreateValidateAndGetAccessTokenClaims<AccessTokenClaims> = (params: {
-    paramsOfBootstrap: ParamsOfBootstrap<boolean, Record<string, unknown>, unknown, AccessTokenClaims>;
+    paramsOfBootstrap: ParamsOfBootstrap<unknown, boolean, AccessTokenClaims>;
 }) => {
     validateAndGetAccessTokenClaims: ValidateAndGetAccessTokenClaims<AccessTokenClaims>;
 };
@@ -524,7 +526,7 @@ export namespace ValidateAndGetAccessTokenClaims {
 }
 
 export type CreateUser<User> = (params: {
-    decodedIdToken: Oidc_core.Tokens.DecodedIdToken_OidcCoreSpec;
+    decodedIdToken: Oidc_core.Tokens.DecodedIdToken;
     accessToken: string;
     fetchUserInfo: () => Promise<{
         [key: string]: unknown;

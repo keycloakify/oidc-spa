@@ -1,7 +1,6 @@
-import { HttpClient, HttpContext } from '@angular/common/http';
+import { HttpClient } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import type { Observable } from 'rxjs';
-import { Oidc } from '../services/oidc.service';
 
 export interface Todo {
   userId: number;

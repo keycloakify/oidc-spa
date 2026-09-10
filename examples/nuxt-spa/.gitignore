@@ -22,3 +22,8 @@ logs
 .env
 .env.*
 !.env.local.sample
+
+# Users can choose npm, Yarn, or pnpm.
+/package-lock.json
+/yarn.lock
+/pnpm-lock.yaml

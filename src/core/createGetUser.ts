@@ -1,6 +1,7 @@
 import type { Oidc } from "./Oidc";
 import { id } from "../tools/tsafe/id";
 import { assert } from "../tools/tsafe/assert";
+import { areDeepEqual } from "../tools/areDeepEqual";
 import type { NonPostableEvt } from "../tools/Evt";
 import { decodeJwt } from "../tools/decodeJwt";
 import type { ParamsOfCreateOidc } from "./createOidc";
@@ -10,7 +11,7 @@ export function createGetUser<User>(params: {
     clientId: string;
     validRedirectUri: string;
     createUser: ParamsOfCreateOidc.CreateUser<User> | undefined;
-    getCurrentTokens: () => Oidc.Tokens<any>;
+    getCurrentTokens: () => Oidc.Tokens;
     evtTokensChange: NonPostableEvt<void>;
     renewTokens(): Promise<void>;
     oidcMetadata: {
@@ -28,7 +29,7 @@ export function createGetUser<User>(params: {
         oidcMetadata
     } = params;
 
-    type GetUser = Oidc.LoggedIn<any, User>["getUser"];
+    type GetUser = Oidc.LoggedIn<User>["getUser"];
 
     type R_GetUser = Awaited<ReturnType<GetUser>>;
 
@@ -74,7 +75,7 @@ export function createGetUser<User>(params: {
 
         const hash_new = computeHash({
             accessToken: tokens.accessToken,
-            decodedIdToken: tokens.decodedIdToken_original
+            decodedIdToken: tokens.decodedIdToken
         });
 
         const prUser_new = (async () => {
@@ -85,14 +86,14 @@ export function createGetUser<User>(params: {
                 return prUser_current;
             }
 
-            const user_current = await prUser_current;
+            const user_current: User | undefined = await prUser_current;
 
             let user_new: User;
 
             try {
                 user_new = await createUser({
                     accessToken: tokens.accessToken,
-                    decodedIdToken: tokens.decodedIdToken_original,
+                    decodedIdToken: tokens.decodedIdToken,
                     issuerUri,
                     clientId,
                     validRedirectUri,
@@ -115,6 +116,10 @@ export function createGetUser<User>(params: {
                 // NOTE: This will be handled as an initialization error by the
                 // higher level adapters.
                 throw error;
+            }
+
+            if (user_current !== undefined && areDeepEqual(user_new, user_current)) {
+                return user_current;
             }
 
             onUserChanges.forEach(onUserChange =>
@@ -195,24 +200,26 @@ export function createGetUser<User>(params: {
             setTimer();
         }
 
-        const user = await state.prUser;
+        try {
+            const user = await state.prUser;
 
-        if (timer_cycleDetection !== undefined) {
-            clearTimeout(timer_cycleDetection);
+            return id<R_GetUser>({
+                user,
+                refreshUser,
+                subscribeToUserChange
+            });
+        } finally {
+            if (timer_cycleDetection !== undefined) {
+                clearTimeout(timer_cycleDetection);
+            }
         }
-
-        return id<R_GetUser>({
-            user,
-            refreshUser,
-            subscribeToUserChange
-        });
     };
 
     return { getUser };
 }
 
 function computeHash(params: {
-    decodedIdToken: Oidc.Tokens.DecodedIdToken_OidcCoreSpec;
+    decodedIdToken: Oidc.Tokens.DecodedIdToken;
     accessToken: string;
 }): string {
     const { decodedIdToken, accessToken } = params;

@@ -10,7 +10,7 @@ type DemoPost = {
 };
 
 const {
-    idToken,
+    user,
     keycloakUtils,
     clientId,
     validRedirectUri,
@@ -37,7 +37,7 @@ const {
                 >
                     <div>
                         <p class="text-xs uppercase tracking-wide text-muted">Protected content</p>
-                        <h1 class="text-2xl font-semibold">Hello {{ idToken?.name ?? "user" }}</h1>
+                        <h1 class="text-2xl font-semibold">Hello {{ user?.displayName ?? "user" }}</h1>
                     </div>
                     <UBadge color="primary" variant="soft" size="lg">Authenticated</UBadge>
                 </div>
@@ -48,17 +48,9 @@ const {
             </p>
 
             <dl class="mt-4 grid gap-2 text-sm">
-                <div class="flex flex-wrap justify-between gap-2">
-                    <dt class="text-muted">Subject</dt>
-                    <dd class="font-medium">{{ idToken?.sub }}</dd>
-                </div>
-                <div v-if="idToken?.email" class="flex flex-wrap justify-between gap-2">
+                <div v-if="user?.email" class="flex flex-wrap justify-between gap-2">
                     <dt class="text-muted">Email</dt>
-                    <dd class="font-medium">{{ idToken.email }}</dd>
-                </div>
-                <div v-if="idToken?.preferred_username" class="flex flex-wrap justify-between gap-2">
-                    <dt class="text-muted">Username</dt>
-                    <dd class="font-medium">{{ idToken.preferred_username }}</dd>
+                    <dd class="font-medium">{{ user.email }}</dd>
                 </div>
             </dl>
 

@@ -1,21 +1,27 @@
+import { useRouteError } from "react-router";
+import type { LoaderFunctionArgs } from "react-router";
 import { enforceLogin, getOidc, useOidc } from "~/oidc";
 import { isKeycloak, createKeycloakUtils } from "oidc-spa/keycloak";
 
-export async function loader(args: {
-    request?: { url?: string };
-    cause?: "preload" | string;
-    location?: { href?: string };
-}) {
+export async function loader(args: LoaderFunctionArgs) {
     await enforceLogin(args);
 
     const oidc = await getOidc({ assert: "user logged in" });
 
-    if (!oidc.getDecodedIdToken().realm_access?.roles.includes("realm-admin")) {
+    const { user } = await oidc.getUser();
+
+    if (!user.canSeeKeycloakAdminNavigation) {
         throw new Error("unauthorized");
     }
 }
 
 export function ErrorBoundary() {
+    const error = useRouteError();
+
+    if (!(error instanceof Error) || error.message !== "unauthorized") {
+        throw error;
+    }
+
     return (
         <section className="rounded-xl border border-rose-500/40 bg-rose-950/30 p-4 text-sm text-rose-100">
             <p>
@@ -34,7 +40,8 @@ export default function AdminOnly() {
             <div className="space-y-1">
                 <h1 className="text-xl font-semibold text-white">Administration Page</h1>
                 <p className="text-sm text-slate-300">
-                    Access is granted because your ID token includes the <code>realm-admin</code> role.
+                    Access is granted because your access token includes the <code>realm-admin</code>{" "}
+                    role.
                 </p>
             </div>
 

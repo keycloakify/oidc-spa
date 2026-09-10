@@ -8,14 +8,12 @@ import type {
     OidcServerContext,
     CreateUser
 } from "./types";
-import type { ZodSchemaLike } from "../../tools/ZodSchemaLike";
 import type { Oidc as Oidc_core } from "../../core";
 import { OidcInitializationError } from "../../core/OidcInitializationError";
 import { Deferred } from "../../tools/Deferred";
 import { isBrowser } from "../../tools/isBrowser";
 import { assert, type Equals, is } from "../../tools/tsafe/assert";
 import {
-    createObjectThatThrowsIfAccessed,
     createObjectWithSomePropertiesThatThrowIfAccessed,
     THROW_IF_ACCESSED
 } from "../../tools/createObjectThatThrowsIfAccessed";
@@ -34,50 +32,37 @@ import type { MaybeAsync } from "../../tools/MaybeAsync";
 import { enableStateDataCookie } from "../../core/StateDataCookie";
 
 export function createOidcSpaUtils<
-    AutoLogin extends boolean,
-    DecodedIdToken extends Record<string, unknown>,
     User,
+    AutoLogin extends boolean,
     AccessTokenClaims extends Record<string, unknown> | undefined
 >(params: {
     autoLogin: AutoLogin;
-    decodedIdTokenSchema:
-        | ZodSchemaLike<Oidc_core.Tokens.DecodedIdToken_OidcCoreSpec, DecodedIdToken>
-        | undefined;
-    decodedIdToken_mock: DecodedIdToken | undefined;
     createValidateAndGetAccessTokenClaims:
         | CreateValidateAndGetAccessTokenClaims<AccessTokenClaims>
         | undefined;
     createUser: CreateUser<User> | undefined;
     user_mock: User | undefined;
-}): OidcSpaUtils<AutoLogin, DecodedIdToken, User, AccessTokenClaims> {
+}): OidcSpaUtils<User, AutoLogin, AccessTokenClaims> {
     const {
         autoLogin,
-        decodedIdTokenSchema,
-        decodedIdToken_mock,
         createValidateAndGetAccessTokenClaims,
         createUser,
         user_mock: user_mock_static
     } = params;
 
-    const dParamsOfBootstrap = new Deferred<
-        ParamsOfBootstrap<AutoLogin, DecodedIdToken, User, AccessTokenClaims>
-    >();
+    const dParamsOfBootstrap = new Deferred<ParamsOfBootstrap<User, AutoLogin, AccessTokenClaims>>();
 
-    const dOidcCoreOrInitializationError = new Deferred<
-        Oidc_core<DecodedIdToken, User> | OidcInitializationError
-    >();
+    const dOidcCoreOrInitializationError = new Deferred<Oidc_core<User> | OidcInitializationError>();
 
     const dResultOfGetUserOrInitializationErrorOrUndefined = new Deferred<
-        | Awaited<ReturnType<Oidc_core.LoggedIn<DecodedIdToken, User>["getUser"]>>
-        | OidcInitializationError
-        | undefined
+        Awaited<ReturnType<Oidc_core.LoggedIn<User>["getUser"]>> | OidcInitializationError | undefined
     >();
 
-    const evtAutoLogoutState = createStatefulEvt<
-        UseOidc.Oidc.LoggedIn<unknown, unknown>["autoLogoutState"]
-    >(() => ({
-        shouldDisplayWarning: false
-    }));
+    const evtAutoLogoutState = createStatefulEvt<UseOidc.Oidc.LoggedIn<unknown>["autoLogoutState"]>(
+        () => ({
+            shouldDisplayWarning: false
+        })
+    );
 
     dOidcCoreOrInitializationError.pr.then(oidcCoreOrInitializationError => {
         const { hasResolved, value: paramsOfBootstrap } = dParamsOfBootstrap.getState();
@@ -105,7 +90,7 @@ export function createOidcSpaUtils<
         }
 
         oidcCore.subscribeToAutoLogoutCountdown(({ secondsLeft }) => {
-            const newState: UseOidc.Oidc.LoggedIn<unknown, unknown>["autoLogoutState"] = (() => {
+            const newState: UseOidc.Oidc.LoggedIn<unknown>["autoLogoutState"] = (() => {
                 if (secondsLeft === undefined) {
                     return {
                         shouldDisplayWarning: false
@@ -134,7 +119,7 @@ export function createOidcSpaUtils<
 
     function useOidc(params?: {
         assert?: "user logged in" | "user not logged in" | "ready";
-    }): UseOidc.Oidc<DecodedIdToken, User> {
+    }): UseOidc.Oidc<User> {
         const { assert: assert_params } = params ?? {};
 
         const {
@@ -311,77 +296,6 @@ export function createOidcSpaUtils<
             }, [hasResolved]);
         }
 
-        const [evtIsDecodedIdTokenUsed] = useState(() => createStatefulEvt<boolean>(() => false));
-        {
-            const [, reRenderIfDecodedIdTokenChanged] = useState<DecodedIdToken | undefined>(() => {
-                if (!hasResolved) {
-                    return undefined;
-                }
-
-                if (oidcCoreOrInitializationError instanceof Error) {
-                    return undefined;
-                }
-
-                const oidcCore = oidcCoreOrInitializationError;
-
-                if (!oidcCore.isUserLoggedIn) {
-                    return undefined;
-                }
-                return oidcCore.getDecodedIdToken();
-            });
-
-            useEffect(() => {
-                if (!hasResolved) {
-                    return;
-                }
-
-                if (oidcCoreOrInitializationError instanceof Error) {
-                    return;
-                }
-
-                const oidcCore = oidcCoreOrInitializationError;
-
-                if (!oidcCore.isUserLoggedIn) {
-                    return;
-                }
-
-                let isActive = true;
-
-                let unsubscribe: (() => void) | undefined = undefined;
-
-                (async () => {
-                    if (!evtIsDecodedIdTokenUsed.current) {
-                        const dDecodedIdTokenUsed = new Deferred<void>();
-
-                        const { unsubscribe: unsubscribe_scope } = evtIsDecodedIdTokenUsed.subscribe(
-                            () => {
-                                unsubscribe_scope();
-                                dDecodedIdTokenUsed.resolve();
-                            }
-                        );
-                        unsubscribe = unsubscribe_scope;
-
-                        await dDecodedIdTokenUsed.pr;
-
-                        if (!isActive) {
-                            return;
-                        }
-                    }
-
-                    reRenderIfDecodedIdTokenChanged(oidcCore.getDecodedIdToken());
-
-                    unsubscribe = oidcCore.subscribeToTokensChange(() => {
-                        reRenderIfDecodedIdTokenChanged(oidcCore.getDecodedIdToken());
-                    }).unsubscribeFromTokensChange;
-                })();
-
-                return () => {
-                    isActive = false;
-                    unsubscribe?.();
-                };
-            }, [hasResolved]);
-        }
-
         const [evtIsAutoLogoutStateUsed] = useState(() => createStatefulEvt<boolean>(() => false));
 
         const [, reRenderIfAutoLogoutStateChanged] = useState(() => evtAutoLogoutState.current);
@@ -486,13 +400,10 @@ export function createOidcSpaUtils<
 
         const resultOfGetUserOrUndefined = resultOfGetUserOrInitializationErrorOrUndefined;
 
-        const oidc = createObjectWithSomePropertiesThatThrowIfAccessed<
-            UseOidc.Oidc.LoggedIn<DecodedIdToken, User>
-        >(
+        const oidc = createObjectWithSomePropertiesThatThrowIfAccessed<UseOidc.Oidc.LoggedIn<User>>(
             {
                 isOidcReady: true,
                 isUserLoggedIn: true,
-                decodedIdToken: null as any,
                 logout: oidcCore.logout,
                 renewTokens: oidcCore.renewTokens,
                 goToAuthServer: oidcCore.goToAuthServer,
@@ -520,13 +431,6 @@ export function createOidcSpaUtils<
         );
 
         Object.defineProperties(oidc, {
-            decodedIdToken: {
-                enumerable: true,
-                get: () => {
-                    evtIsDecodedIdTokenUsed.current = true;
-                    return oidcCore.getDecodedIdToken();
-                }
-            },
             autoLogoutState: {
                 enumerable: true,
                 get: () => {
@@ -550,9 +454,11 @@ export function createOidcSpaUtils<
         return oidc;
     }
 
+    let oidc_cached: GetOidc.Oidc<User> | undefined = undefined;
+
     async function getOidc(params?: {
         assert?: "user logged in" | "user not logged in" | "init completed";
-    }): Promise<GetOidc.Oidc<DecodedIdToken, User>> {
+    }): Promise<GetOidc.Oidc<User>> {
         if (!isBrowser) {
             throw new Error(
                 [
@@ -586,41 +492,27 @@ export function createOidcSpaUtils<
             );
         }
 
-        return oidcCore.isUserLoggedIn
-            ? id<GetOidc.Oidc.LoggedIn<DecodedIdToken, User>>({
+        if (oidc_cached !== undefined) {
+            return oidc_cached;
+        }
+
+        oidc_cached = oidcCore.isUserLoggedIn
+            ? id<GetOidc.Oidc.LoggedIn<User>>({
                   issuerUri: oidcCore.issuerUri,
                   clientId: oidcCore.clientId,
                   validRedirectUri: oidcCore.validRedirectUri,
                   isUserLoggedIn: true,
-                  getAccessToken: async () => {
-                      const { accessToken } = await oidcCore.getTokens();
-                      return accessToken;
-                  },
-                  subscribeToAccessTokenRotation: next => {
+                  getAccessToken: oidcCore.getAccessToken,
+                  subscribeToTokenRotation: next => {
                       const { unsubscribeFromTokensChange } = oidcCore.subscribeToTokensChange(
-                          ({ accessToken }) => {
-                              next(accessToken);
+                          ({ accessToken, decodedIdToken }) => {
+                              next({ accessToken, decodedIdToken });
                           }
                       );
 
-                      return { unsubscribeFromAccessTokenRotation: unsubscribeFromTokensChange };
+                      return { unsubscribeFromTokenRotation: unsubscribeFromTokensChange };
                   },
                   getDecodedIdToken: oidcCore.getDecodedIdToken,
-                  subscribeToDecodedIdTokenChange: next => {
-                      const current = oidcCore.getDecodedIdToken();
-
-                      const { unsubscribeFromTokensChange } = oidcCore.subscribeToTokensChange(
-                          ({ decodedIdToken }) => {
-                              // NOTE: oidc-spa/core keeps the reference stable
-                              // when structure hasn't changed.
-                              if (current !== decodedIdToken) {
-                                  next(decodedIdToken);
-                              }
-                          }
-                      );
-
-                      return { unsubscribeFromDecodedIdTokenChange: unsubscribeFromTokensChange };
-                  },
                   logout: oidcCore.logout,
                   renewTokens: oidcCore.renewTokens,
                   goToAuthServer: oidcCore.goToAuthServer,
@@ -643,6 +535,8 @@ export function createOidcSpaUtils<
                   initializationError: oidcCore.initializationError,
                   login: oidcCore.login
               });
+
+        return oidc_cached;
     }
 
     let hasBootstrapBeenCalled = false;
@@ -652,7 +546,7 @@ export function createOidcSpaUtils<
     const bootstrapOidc = (
         getParamsOfBootstrapOrDirectValue: GetterOrDirectValue<
             { process: { env: Record<string, string> } },
-            ParamsOfBootstrap<AutoLogin, DecodedIdToken, User, AccessTokenClaims>
+            ParamsOfBootstrap<User, AutoLogin, AccessTokenClaims>
         >
     ) => {
         if (hasBootstrapBeenCalled) {
@@ -751,12 +645,7 @@ export function createOidcSpaUtils<
                 let result:
                     | {
                           hasThrown: false;
-                          paramsOfBootstrap: ParamsOfBootstrap<
-                              AutoLogin,
-                              DecodedIdToken,
-                              User,
-                              AccessTokenClaims
-                          >;
+                          paramsOfBootstrap: ParamsOfBootstrap<User, AutoLogin, AccessTokenClaims>;
                       }
                     | {
                           hasThrown: true;
@@ -770,10 +659,9 @@ export function createOidcSpaUtils<
                     result = undefined;
 
                     try {
-                        const paramsOfBootstrap = getParamsOfBootstrap({ process: { env: env_proxy } });
                         result = {
                             hasThrown: false,
-                            paramsOfBootstrap
+                            paramsOfBootstrap: getParamsOfBootstrap({ process: { env: env_proxy } })
                         };
                     } catch (error) {
                         result = {
@@ -825,24 +713,10 @@ export function createOidcSpaUtils<
                             autoLogin: autoLogin as false,
                             // NOTE: Same here, the nullish coalescing is lying.
                             isUserInitiallyLoggedIn: paramsOfBootstrap.isUserInitiallyLoggedIn!,
-                            mockedParams: {
-                                clientId: paramsOfBootstrap.clientId_mock,
-                                issuerUri: paramsOfBootstrap.issuerUri_mock
-                            },
-                            mockedTokens: {
-                                decodedIdToken:
-                                    paramsOfBootstrap.decodedIdToken_mock ??
-                                    decodedIdToken_mock ??
-                                    createObjectThatThrowsIfAccessed<DecodedIdToken>({
-                                        debugMessage: [
-                                            "oidc-spa: You didn't provide any mock for the decodedIdToken",
-                                            "Either provide a default one by specifying decodedIdToken_mock",
-                                            "as parameter of .withExpectedDecodedIdTokenShape() or",
-                                            "specify decodedIdToken_mock when calling bootstrapOidc()"
-                                        ].join(" ")
-                                    })
-                            },
-                            mockedUser: user_mock
+                            clientId_mock: paramsOfBootstrap.clientId_mock,
+                            issuerUri_mock: paramsOfBootstrap.issuerUri_mock,
+                            decodedIdToken_mock: paramsOfBootstrap.decodedIdToken_mock,
+                            user_mock
                         });
 
                         dOidcCoreOrInitializationError.resolve(oidcCore);
@@ -870,14 +744,11 @@ export function createOidcSpaUtils<
 
                         const { createOidc } = await prModuleCore;
 
-                        let oidcCoreOrInitializationError:
-                            | Oidc_core<DecodedIdToken, User>
-                            | OidcInitializationError;
+                        let oidcCoreOrInitializationError: Oidc_core<User> | OidcInitializationError;
 
                         try {
                             oidcCoreOrInitializationError = await createOidc({
                                 autoLogin,
-                                decodedIdTokenSchema,
                                 issuerUri: paramsOfBootstrap.issuerUri,
                                 clientId: paramsOfBootstrap.clientId,
                                 idleSessionLifetimeInSeconds:
@@ -919,7 +790,7 @@ export function createOidcSpaUtils<
                             }
 
                             let resultOfGetUser: Awaited<
-                                ReturnType<Oidc_core.LoggedIn<DecodedIdToken, User>["getUser"]>
+                                ReturnType<Oidc_core.LoggedIn<User>["getUser"]>
                             >;
 
                             try {

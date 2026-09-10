@@ -14,7 +14,7 @@ export function createCreateValidateAndGetAccessTokenClaims_rfc9068<
     accessTokenClaimsSchema?: ZodSchemaLike<AccessTokenClaims_RFC9068, AccessTokenClaims>;
     accessTokenClaims_mock?: AccessTokenClaims;
     expectedAudience?: (params: {
-        paramsOfBootstrap: ParamsOfBootstrap.Real<boolean>;
+        paramsOfBootstrap: ParamsOfBootstrap.Real;
         process: { env: Record<string, string> };
     }) => string;
 }) {
