@@ -27,74 +27,93 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
 
     const dParamsOfBootstrap = new Deferred<ParamsOfBootstrap<DecodedAccessToken>>();
 
-    const evtPublicSigningKeys = Evt.create<PublicSigningKeys | undefined>(undefined);
+    const { getPublicSigningKeys, evtInvalidSignature } = (() => {
+        const evtPublicSigningKeys = Evt.create<PublicSigningKeys | undefined>(undefined);
 
-    const evtInvalidSignature = Evt.create<void>();
+        async function updatePublicSigningKeys() {
+            const publicSigningKeys_new = await (async function callee(
+                count: number
+            ): Promise<PublicSigningKeys | undefined> {
+                const paramsOfBootstrap = await dParamsOfBootstrap.pr;
 
-    evtInvalidSignature.pipe(throttleTime(3600_000)).attach(async () => {
-        const publicSigningKeys_new = await (async function callee(
-            count: number
-        ): Promise<PublicSigningKeys | undefined> {
-            const paramsOfBootstrap = await dParamsOfBootstrap.pr;
+                assert(paramsOfBootstrap.implementation === "real", "22933023");
 
-            assert(paramsOfBootstrap.implementation === "real", "22933023");
+                const { issuerUri } = paramsOfBootstrap;
 
-            const { issuerUri } = paramsOfBootstrap;
+                let wrap: PublicSigningKeys | undefined;
 
-            let wrap: PublicSigningKeys | undefined;
+                try {
+                    wrap = await fetchPublicSigningKeys({ issuerUri });
+                } catch (error) {
+                    assert(error instanceof Error);
 
-            try {
-                wrap = await fetchPublicSigningKeys({ issuerUri });
-            } catch (error) {
-                if (count === 9) {
+                    if (count === 9) {
+                        console.warn(
+                            `Could not fetch public signing keys after ${
+                                count + 1
+                            } attempts. Resetting exponential backoff.`
+                        );
+
+                        return undefined;
+                    }
+
+                    const delayMs = 1000 * Math.pow(2, count);
+
                     console.warn(
-                        `Failed to refresh public key and signing algorithm after ${count + 1} attempts`
+                        `Could not fetch public signing keys: ${error.message}. Retrying in ${delayMs}ms.`
                     );
 
-                    return undefined;
+                    await new Promise(resolve => setTimeout(resolve, delayMs));
+
+                    return callee(count + 1);
                 }
 
-                const delayMs = 1000 * Math.pow(2, count);
+                return wrap;
+            })(0);
 
-                console.warn(
-                    `Failed to refresh public key and signing algorithm: ${String(
-                        error
-                    )}, retrying in ${delayMs}ms`
-                );
-
-                await new Promise(resolve => setTimeout(resolve, delayMs));
-
-                return callee(count + 1);
+            if (publicSigningKeys_new === undefined) {
+                return;
             }
 
-            return wrap;
-        })(0);
-
-        if (publicSigningKeys_new === undefined) {
-            return;
+            evtPublicSigningKeys.state = publicSigningKeys_new;
         }
 
-        evtPublicSigningKeys.state = publicSigningKeys_new;
-    });
+        const evtInvalidSignature = Evt.create<void>();
 
-    let bootstrapAuth_prResolved: Promise<void> | undefined = undefined;
+        evtInvalidSignature.pipe(throttleTime(3600_000)).attach(() => updatePublicSigningKeys());
+
+        let hasBeenCalled_getPublicSigningKeys = false;
+
+        async function getPublicSigningKeys(): Promise<PublicSigningKeys | undefined> {
+            if (!hasBeenCalled_getPublicSigningKeys) {
+                hasBeenCalled_getPublicSigningKeys = true;
+
+                (async () => {
+                    while (evtPublicSigningKeys.state === undefined) {
+                        await updatePublicSigningKeys();
+                    }
+                })();
+            }
+
+            const publicSigningKeys = await evtPublicSigningKeys
+                .waitFor(publicSigningKeys => publicSigningKeys !== undefined, 5_000)
+                .catch(() => undefined);
+
+            return publicSigningKeys;
+        }
+
+        return { getPublicSigningKeys, evtInvalidSignature };
+    })();
 
     type Out = OidcSpaUtils<DecodedAccessToken>;
 
     const bootstrapAuth: Out["bootstrapAuth"] = paramsOfBootstrap => {
-        if (bootstrapAuth_prResolved !== undefined) {
-            return bootstrapAuth_prResolved;
+        if (dParamsOfBootstrap.getState().hasResolved) {
+            console.warn("oidc-spa: bootstrapAuth() has already been called, ignoring");
+            return;
         }
 
-        return (bootstrapAuth_prResolved = (async () => {
-            if (paramsOfBootstrap.implementation === "real") {
-                evtPublicSigningKeys.state = await fetchPublicSigningKeys({
-                    issuerUri: paramsOfBootstrap.issuerUri
-                });
-            }
-
-            dParamsOfBootstrap.resolve(paramsOfBootstrap);
-        })());
+        dParamsOfBootstrap.resolve(paramsOfBootstrap);
     };
 
     const { getIsDpopPoofSeenRecordIfNotSeen } = (() => {
@@ -199,7 +218,6 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
 
                     return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
                         isSuccess: false,
-                        errorCause: "validation error",
                         debugErrorMessage: [
                             `The decoded access token does not satisfies`,
                             `the shape mandated by RFC9068: ${error.message}`
@@ -223,7 +241,6 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
                 } catch {
                     return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
                         isSuccess: false,
-                        errorCause: "validation error",
                         debugErrorMessage: "Failed to decode the JWT header"
                     });
                 }
@@ -233,7 +250,6 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
                 if (typeof kidFromHeader !== "string" || kidFromHeader.length === 0) {
                     return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
                         isSuccess: false,
-                        errorCause: "validation error",
                         debugErrorMessage: "The decoded JWT header does not have a kid property"
                     });
                 }
@@ -241,7 +257,6 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
                 if (typeof algFromHeader !== "string") {
                     return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
                         isSuccess: false,
-                        errorCause: "validation error",
                         debugErrorMessage: "The decoded JWT header does not specify an algorithm"
                     });
                 }
@@ -264,7 +279,6 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
                 ) {
                     return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
                         isSuccess: false,
-                        errorCause: "validation error",
                         debugErrorMessage: `Unsupported or too weak algorithm ${algFromHeader}`
                     });
                 }
@@ -273,14 +287,20 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
                 alg = algFromHeader;
             }
 
-            const publicSigningKeys = evtPublicSigningKeys.state;
+            const publicSigningKeys = await getPublicSigningKeys();
 
-            assert(publicSigningKeys !== undefined, "3304483302");
-
-            if (!publicSigningKeys.kidSet.has(kid)) {
+            if (publicSigningKeys === undefined) {
                 return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
                     isSuccess: false,
-                    errorCause: "validation error",
+                    debugErrorMessage:
+                        "Could not fetch the public signing keys required to validate this access token"
+                });
+            }
+
+            if (!publicSigningKeys.kidSet.has(kid)) {
+                evtInvalidSignature.post();
+                return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
+                    isSuccess: false,
                     debugErrorMessage: `No public signing key found with kid ${kid}`
                 });
             }
@@ -297,7 +317,6 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
                 if (error instanceof errors.JWTExpired) {
                     return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
                         isSuccess: false,
-                        errorCause: "validation error - access token expired",
                         debugErrorMessage: error.message
                     });
                 }
@@ -306,7 +325,6 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
 
                 return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
                     isSuccess: false,
-                    errorCause: "validation error - invalid signature",
                     debugErrorMessage: error.message
                 });
             }
@@ -318,7 +336,6 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
 
                 return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
                     isSuccess: false,
-                    errorCause: "validation error",
                     debugErrorMessage: [
                         `The decoded access token does not satisfies`,
                         `the shape mandated by RFC9068: ${error.message}`
@@ -337,7 +354,6 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
                 if (normalize(decodedAccessToken_original.iss) !== normalize(issuerUri)) {
                     return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
                         isSuccess: false,
-                        errorCause: "validation error",
                         debugErrorMessage: [
                             `iss claim in access token payload "${decodedAccessToken_original.iss}"`,
                             `does not match the issuerUri "${issuerUri}".`
@@ -361,7 +377,6 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
                 if (!audiences.includes(expectedAudience)) {
                     return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
                         isSuccess: false,
-                        errorCause: "validation error",
                         debugErrorMessage: [
                             `Not expected audience, got aud claim ${JSON.stringify(
                                 decodedAccessToken_original.aud
@@ -381,7 +396,6 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
                 if (cnf_jkt !== undefined && typeof cnf_jkt !== "string") {
                     return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
                         isSuccess: false,
-                        errorCause: "validation error",
                         debugErrorMessage: "cnf.jkt claim is expected to be a string"
                     });
                 }
@@ -404,7 +418,6 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
                     if (cnf_jkt !== undefined) {
                         return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
                             isSuccess: false,
-                            errorCause: "validation error",
                             debugErrorMessage: [
                                 "access token is DPoP bound (cnf.jkt claim present)",
                                 "but used with bearer scheme"
@@ -419,7 +432,6 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
                 if (cnf_jkt === undefined) {
                     return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
                         isSuccess: false,
-                        errorCause: "validation error",
                         debugErrorMessage: [
                             "DPoP validation error, missing cnf.jtk claim",
                             "in the access token payload"
@@ -434,7 +446,6 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
                 } catch {
                     return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
                         isSuccess: false,
-                        errorCause: "validation error",
                         debugErrorMessage: "Failed to decode DPoP proof header"
                     });
                 }
@@ -444,7 +455,6 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
                 if (dpopAlg === undefined) {
                     return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
                         isSuccess: false,
-                        errorCause: "validation error",
                         debugErrorMessage: "DPoP proof header missing alg"
                     });
                 }
@@ -467,7 +477,6 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
                 ) {
                     return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
                         isSuccess: false,
-                        errorCause: "validation error",
                         debugErrorMessage: `Unsupported or too weak DPoP algorithm ${dpopAlg}`
                     });
                 }
@@ -475,7 +484,6 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
                 if (dpopTyp === undefined || dpopTyp.toLowerCase() !== "dpop+jwt") {
                     return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
                         isSuccess: false,
-                        errorCause: "validation error",
                         debugErrorMessage: "DPoP proof header typ must be dpop+jwt"
                     });
                 }
@@ -483,7 +491,6 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
                 if (jwk === undefined) {
                     return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
                         isSuccess: false,
-                        errorCause: "validation error",
                         debugErrorMessage: "DPoP proof header missing jwk"
                     });
                 }
@@ -495,7 +502,6 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
                 } catch (error) {
                     return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
                         isSuccess: false,
-                        errorCause: "validation error",
                         debugErrorMessage: `Failed to calculate DPoP jwk thumbprint: ${String(error)}`
                     });
                 }
@@ -503,7 +509,6 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
                 if (jkt_calculated !== cnf_jkt) {
                     return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
                         isSuccess: false,
-                        errorCause: "validation error",
                         debugErrorMessage: "DPoP jwk thumbprint does not match cnf.jkt claim"
                     });
                 }
@@ -522,7 +527,6 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
 
                     return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
                         isSuccess: false,
-                        errorCause: "validation error",
                         debugErrorMessage: `DPoP proof signature/structure invalid: ${error.message}`
                     });
                 }
@@ -533,7 +537,6 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
                     if (iat === undefined) {
                         return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
                             isSuccess: false,
-                            errorCause: "validation error",
                             debugErrorMessage: "DPoP proof missing or invalid iat claim"
                         });
                     }
@@ -545,7 +548,6 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
                     if (iat - now > maxFutureSkewSeconds) {
                         return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
                             isSuccess: false,
-                            errorCause: "validation error",
                             debugErrorMessage: "DPoP proof iat is in the future"
                         });
                     }
@@ -553,7 +555,6 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
                     if (now - iat > maxAgeSeconds) {
                         return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
                             isSuccess: false,
-                            errorCause: "validation error",
                             debugErrorMessage: "DPoP proof iat too old"
                         });
                     }
@@ -562,7 +563,6 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
                 check_htm: {
                     const errored = id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
                         isSuccess: false,
-                        errorCause: "validation error",
                         debugErrorMessage: [
                             "DPoP proof htm claim does not match request method.",
                             `htm: ${htm}, expected htm: ${params.expectedHtm}`
@@ -588,7 +588,6 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
                 check_htu: {
                     const errored = id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
                         isSuccess: false,
-                        errorCause: "validation error",
                         debugErrorMessage: [
                             "DPoP proof htu claim does not match request url.",
                             `htu: ${htu}, expected htu: ${params.expectedHtu}`
@@ -614,7 +613,6 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
                 if (typeof ath !== "string") {
                     return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
                         isSuccess: false,
-                        errorCause: "validation error",
                         debugErrorMessage: "DPoP proof missing ath claim"
                     });
                 }
@@ -631,7 +629,6 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
                 if (ath !== expectedAth) {
                     return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
                         isSuccess: false,
-                        errorCause: "validation error",
                         debugErrorMessage: "DPoP proof ath claim does not match access token"
                     });
                 }
@@ -639,7 +636,6 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
                 if (jti === undefined) {
                     return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
                         isSuccess: false,
-                        errorCause: "validation error",
                         debugErrorMessage: "DPoP proof missing jti claim"
                     });
                 }
@@ -647,7 +643,6 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
                 if (getIsDpopPoofSeenRecordIfNotSeen({ jkt: cnf_jkt, jti })) {
                     return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
                         isSuccess: false,
-                        errorCause: "validation error",
                         debugErrorMessage: "DPoP proof replayed"
                     });
                 }
@@ -667,7 +662,6 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
 
                 return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
                     isSuccess: false,
-                    errorCause: "validation error",
                     debugErrorMessage: [
                         `The decoded access token does not satisfies`,
                         `the shape that the application expects: ${error.message}`
