@@ -67,10 +67,6 @@ export namespace ValidateAndDecodeAccessToken {
 
         export type Errored = {
             isSuccess: false;
-            errorCause:
-                | "validation error"
-                | "validation error - access token expired"
-                | "validation error - invalid signature";
             debugErrorMessage: string;
         };
     }
@@ -108,7 +104,7 @@ export namespace ParamsOfBootstrap {
 }
 
 export type OidcSpaUtils<DecodedAccessToken> = {
-    bootstrapAuth: (params: ParamsOfBootstrap<DecodedAccessToken>) => Promise<void>;
+    bootstrapAuth: (params: ParamsOfBootstrap<DecodedAccessToken>) => void;
     validateAndDecodeAccessToken: ValidateAndDecodeAccessToken<DecodedAccessToken>;
     ofTypeDecodedAccessToken: DecodedAccessToken;
 };
