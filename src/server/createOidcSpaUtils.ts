@@ -1,9 +1,9 @@
 import type { ZodSchemaLike } from "../tools/ZodSchemaLike";
 import type {
-    DecodedAccessToken_RFC9068,
     OidcSpaUtils,
     ParamsOfBootstrap,
-    ValidateAndDecodeAccessToken
+    ValidateAndGetAccessTokenClaims,
+    AccessTokenClaims_specs
 } from "./types";
 import { Deferred } from "../tools/Deferred";
 import {
@@ -15,17 +15,17 @@ import {
     calculateJwkThumbprint,
     base64url
 } from "../vendor/server/jose";
-import { assert, isAmong, id, type Equals, is, Reflect } from "../vendor/server/tsafe";
+import { assert, isAmong, id, type Equals, is } from "../vendor/server/tsafe";
 import { z } from "../vendor/server/zod";
 import { Evt, throttleTime } from "../vendor/server/evt";
 import { decodeJwt } from "../tools/decodeJwt";
 
-export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unknown>>(params: {
-    decodedAccessTokenSchema: ZodSchemaLike<DecodedAccessToken_RFC9068, DecodedAccessToken> | undefined;
-}): OidcSpaUtils<DecodedAccessToken> {
-    const { decodedAccessTokenSchema } = params;
+export function createOidcSpaUtils<AccessTokenClaims>(params: {
+    accessTokenClaimsSchema: ZodSchemaLike<AccessTokenClaims_specs, AccessTokenClaims> | undefined;
+}): OidcSpaUtils<AccessTokenClaims> {
+    const { accessTokenClaimsSchema } = params;
 
-    const dParamsOfBootstrap = new Deferred<ParamsOfBootstrap<DecodedAccessToken>>();
+    const dParamsOfBootstrap = new Deferred<ParamsOfBootstrap<AccessTokenClaims>>();
 
     const { getPublicSigningKeys, evtInvalidSignature } = (() => {
         const evtPublicSigningKeys = Evt.create<PublicSigningKeys | undefined>(undefined);
@@ -36,7 +36,10 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
             ): Promise<PublicSigningKeys | undefined> {
                 const paramsOfBootstrap = await dParamsOfBootstrap.pr;
 
-                assert(paramsOfBootstrap.implementation === "real", "22933023");
+                assert(
+                    paramsOfBootstrap.mode === "real" || paramsOfBootstrap.mode === undefined,
+                    "22933023"
+                );
 
                 const { issuerUri } = paramsOfBootstrap;
 
@@ -105,7 +108,7 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
         return { getPublicSigningKeys, evtInvalidSignature };
     })();
 
-    type Out = OidcSpaUtils<DecodedAccessToken>;
+    type Out = OidcSpaUtils<AccessTokenClaims>;
 
     const bootstrapAuth: Out["bootstrapAuth"] = paramsOfBootstrap => {
         if (dParamsOfBootstrap.getState().hasResolved) {
@@ -166,16 +169,13 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
         return { getIsDpopPoofSeenRecordIfNotSeen };
     })();
 
-    const validateAndDecodeAccessToken: Out["validateAndDecodeAccessToken"] = async params => {
+    const validateAndGetAccessTokenClaims: Out["validateAndGetAccessTokenClaims"] = async params => {
         const paramsOfBootstrap = await dParamsOfBootstrap.pr;
 
-        if (
-            paramsOfBootstrap.implementation === "mock" &&
-            paramsOfBootstrap.behavior === "use static identity"
-        ) {
-            return id<ValidateAndDecodeAccessToken.ReturnType.Success<DecodedAccessToken>>({
+        if (paramsOfBootstrap.mode === "mock") {
+            return id<ValidateAndGetAccessTokenClaims.ReturnType.Success<AccessTokenClaims>>({
                 isSuccess: true,
-                decodedAccessToken: paramsOfBootstrap.decodedAccessToken_mock,
+                accessTokenClaims: paramsOfBootstrap.accessTokenClaims_mock,
                 get accessToken() {
                     if (paramsOfBootstrap.accessToken_mock === undefined) {
                         throw new Error(
@@ -188,213 +188,252 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
 
                     return paramsOfBootstrap.accessToken_mock;
                 },
-                get decodedAccessToken_original() {
-                    if (paramsOfBootstrap.decodedAccessToken_original_mock === undefined) {
+                get accessTokenClaims_original() {
+                    if (paramsOfBootstrap.accessTokenClaims_original_mock === undefined) {
+                        if (accessTokenClaimsSchema === undefined) {
+                            return paramsOfBootstrap.accessTokenClaims_mock as AccessTokenClaims_specs;
+                        }
+
                         throw new Error(
                             [
-                                "oidc-spa: No mock provided for decodedAccessToken_original.",
-                                "Provide decodedAccessToken_original_mock to bootstrapAuth"
+                                "oidc-spa: No mock provided for accessTokenClaims_original.",
+                                "Provide accessTokenClaims_original_mock to bootstrapAuth"
                             ].join(" ")
                         );
                     }
 
-                    return paramsOfBootstrap.decodedAccessToken_original_mock;
+                    return paramsOfBootstrap.accessTokenClaims_original_mock;
                 }
             });
         }
 
-        let decodedAccessToken_original: unknown;
+        let accessTokenClaims_original: unknown;
 
         validation: {
-            if (paramsOfBootstrap.implementation === "mock") {
-                assert<Equals<typeof paramsOfBootstrap.behavior, "decode only">>;
-
-                decodedAccessToken_original = decodeJwt(params.accessToken);
+            if (paramsOfBootstrap.mode === "unsafe decode only") {
+                accessTokenClaims_original = decodeJwt(params.accessToken);
 
                 try {
-                    zDecodedAccessToken_RFC9068.parse(decodedAccessToken_original);
+                    zAccessTokenClaims_specs.parse(accessTokenClaims_original);
                 } catch (error) {
                     assert(error instanceof Error, "38292332");
 
-                    return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
+                    return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
                         isSuccess: false,
                         debugErrorMessage: [
                             `The decoded access token does not satisfies`,
-                            `the shape mandated by RFC9068: ${error.message}`
+                            `the shape mandated the intersection of RFC9068 and RFC7662: ${error.message}`
                         ].join(" ")
                     });
                 }
 
-                assert(is<DecodedAccessToken_RFC9068>(decodedAccessToken_original));
+                assert(is<AccessTokenClaims_specs>(accessTokenClaims_original));
 
                 break validation;
             }
 
-            let kid: string;
-            let alg: string;
+            assert<Equals<typeof paramsOfBootstrap.mode, "real" | undefined>>;
 
-            {
-                let header: ReturnType<typeof decodeProtectedHeader>;
+            switch (paramsOfBootstrap.accessTokenValidationMethod) {
+                case "offline JWT validation":
+                    {
+                        let kid: string;
+                        let alg: string;
 
-                try {
-                    header = decodeProtectedHeader(params.accessToken);
-                } catch {
-                    return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
-                        isSuccess: false,
-                        debugErrorMessage: "Failed to decode the JWT header"
-                    });
-                }
+                        {
+                            let header: ReturnType<typeof decodeProtectedHeader>;
 
-                const { kid: kidFromHeader, alg: algFromHeader } = header;
+                            try {
+                                header = decodeProtectedHeader(params.accessToken);
+                            } catch {
+                                return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
+                                    isSuccess: false,
+                                    debugErrorMessage: "Failed to decode the JWT header"
+                                });
+                            }
 
-                if (typeof kidFromHeader !== "string" || kidFromHeader.length === 0) {
-                    return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
-                        isSuccess: false,
-                        debugErrorMessage: "The decoded JWT header does not have a kid property"
-                    });
-                }
+                            const { kid: kidFromHeader, alg: algFromHeader } = header;
 
-                if (typeof algFromHeader !== "string") {
-                    return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
-                        isSuccess: false,
-                        debugErrorMessage: "The decoded JWT header does not specify an algorithm"
-                    });
-                }
+                            if (typeof kidFromHeader !== "string" || kidFromHeader.length === 0) {
+                                return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
+                                    isSuccess: false,
+                                    debugErrorMessage:
+                                        "The decoded JWT header does not have a kid property"
+                                });
+                            }
 
-                if (
-                    !isAmong(
-                        [
-                            "RS256",
-                            "RS384",
-                            "RS512",
-                            "ES256",
-                            "ES384",
-                            "ES512",
-                            "PS256",
-                            "PS384",
-                            "PS512"
-                        ],
-                        algFromHeader
-                    )
-                ) {
-                    return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
-                        isSuccess: false,
-                        debugErrorMessage: `Unsupported or too weak algorithm ${algFromHeader}`
-                    });
-                }
+                            if (typeof algFromHeader !== "string") {
+                                return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
+                                    isSuccess: false,
+                                    debugErrorMessage:
+                                        "The decoded JWT header does not specify an algorithm"
+                                });
+                            }
 
-                kid = kidFromHeader;
-                alg = algFromHeader;
-            }
+                            if (
+                                !isAmong(
+                                    [
+                                        "RS256",
+                                        "RS384",
+                                        "RS512",
+                                        "ES256",
+                                        "ES384",
+                                        "ES512",
+                                        "PS256",
+                                        "PS384",
+                                        "PS512"
+                                    ],
+                                    algFromHeader
+                                )
+                            ) {
+                                return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
+                                    isSuccess: false,
+                                    debugErrorMessage: `Unsupported or too weak algorithm ${algFromHeader}`
+                                });
+                            }
 
-            const publicSigningKeys = await getPublicSigningKeys();
+                            kid = kidFromHeader;
+                            alg = algFromHeader;
+                        }
 
-            if (publicSigningKeys === undefined) {
-                return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
-                    isSuccess: false,
-                    debugErrorMessage:
-                        "Could not fetch the public signing keys required to validate this access token"
-                });
-            }
+                        const publicSigningKeys = await getPublicSigningKeys();
 
-            if (!publicSigningKeys.kidSet.has(kid)) {
-                evtInvalidSignature.post();
-                return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
-                    isSuccess: false,
-                    debugErrorMessage: `No public signing key found with kid ${kid}`
-                });
-            }
+                        if (publicSigningKeys === undefined) {
+                            return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
+                                isSuccess: false,
+                                debugErrorMessage:
+                                    "Could not fetch the public signing keys required to validate this access token"
+                            });
+                        }
 
-            try {
-                const verification = await jwtVerify(params.accessToken, publicSigningKeys.keyResolver, {
-                    algorithms: [alg]
-                });
+                        if (!publicSigningKeys.kidSet.has(kid)) {
+                            evtInvalidSignature.post();
+                            return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
+                                isSuccess: false,
+                                debugErrorMessage: `No public signing key found with kid ${kid}`
+                            });
+                        }
 
-                decodedAccessToken_original = verification.payload;
-            } catch (error) {
-                assert(error instanceof Error, "3922843");
+                        try {
+                            const verification = await jwtVerify(
+                                params.accessToken,
+                                publicSigningKeys.keyResolver,
+                                {
+                                    algorithms: [alg]
+                                }
+                            );
 
-                if (error instanceof errors.JWTExpired) {
-                    return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
-                        isSuccess: false,
-                        debugErrorMessage: error.message
-                    });
-                }
+                            accessTokenClaims_original = verification.payload;
+                        } catch (error) {
+                            assert(error instanceof Error, "3922843");
 
-                evtInvalidSignature.post();
+                            if (error instanceof errors.JWTExpired) {
+                                return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
+                                    isSuccess: false,
+                                    debugErrorMessage: error.message
+                                });
+                            }
 
-                return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
-                    isSuccess: false,
-                    debugErrorMessage: error.message
-                });
-            }
+                            evtInvalidSignature.post();
 
-            try {
-                zDecodedAccessToken_RFC9068.parse(decodedAccessToken_original);
-            } catch (error) {
-                assert(error instanceof Error, "382923");
+                            return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
+                                isSuccess: false,
+                                debugErrorMessage: error.message
+                            });
+                        }
 
-                return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
-                    isSuccess: false,
-                    debugErrorMessage: [
-                        `The decoded access token does not satisfies`,
-                        `the shape mandated by RFC9068: ${error.message}`
-                    ].join(" ")
-                });
-            }
+                        try {
+                            zAccessTokenClaims_JWTPayload.parse(accessTokenClaims_original);
+                        } catch (error) {
+                            assert(error instanceof Error, "382923");
 
-            assert(is<DecodedAccessToken_RFC9068>(decodedAccessToken_original));
+                            return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
+                                isSuccess: false,
+                                debugErrorMessage: [
+                                    `The decoded access token does not satisfies`,
+                                    `the shape mandated by RFC9068: ${error.message}`
+                                ].join(" ")
+                            });
+                        }
 
-            // Validate issuer
-            {
-                const { issuerUri } = paramsOfBootstrap;
+                        assert(is<AccessTokenClaims_JWTPayload>(accessTokenClaims_original));
 
-                const normalize = (url: string) => url.replace(/\/$/, "");
+                        // Validate issuer
+                        {
+                            const { issuerUri } = paramsOfBootstrap;
 
-                if (normalize(decodedAccessToken_original.iss) !== normalize(issuerUri)) {
-                    return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
-                        isSuccess: false,
-                        debugErrorMessage: [
-                            `iss claim in access token payload "${decodedAccessToken_original.iss}"`,
-                            `does not match the issuerUri "${issuerUri}".`
-                        ].join(" ")
-                    });
-                }
-            }
+                            const normalize = (url: string) => url.replace(/\/$/, "");
 
-            validate_audience: {
-                const { expectedAudience } = paramsOfBootstrap;
+                            if (normalize(accessTokenClaims_original.iss) !== normalize(issuerUri)) {
+                                return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
+                                    isSuccess: false,
+                                    debugErrorMessage: [
+                                        `iss claim in access token payload "${accessTokenClaims_original.iss}"`,
+                                        `does not match the issuerUri "${issuerUri}".`
+                                    ].join(" ")
+                                });
+                            }
+                        }
 
-                if (expectedAudience === undefined) {
-                    break validate_audience;
-                }
+                        validate_audience: {
+                            const { expectedAudience } = paramsOfBootstrap;
 
-                const audiences =
-                    decodedAccessToken_original.aud instanceof Array
-                        ? decodedAccessToken_original.aud
-                        : [decodedAccessToken_original.aud];
+                            if (expectedAudience === undefined) {
+                                break validate_audience;
+                            }
 
-                if (!audiences.includes(expectedAudience)) {
-                    return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
-                        isSuccess: false,
-                        debugErrorMessage: [
-                            `Not expected audience, got aud claim ${JSON.stringify(
-                                decodedAccessToken_original.aud
-                            )}`,
-                            `but expected "${expectedAudience}".`
-                        ].join(" ")
-                    });
-                }
+                            const audiences =
+                                accessTokenClaims_original.aud instanceof Array
+                                    ? accessTokenClaims_original.aud
+                                    : [accessTokenClaims_original.aud];
+
+                            if (!audiences.includes(expectedAudience)) {
+                                return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
+                                    isSuccess: false,
+                                    debugErrorMessage: [
+                                        `Not expected audience, got aud claim ${JSON.stringify(
+                                            accessTokenClaims_original.aud
+                                        )}`,
+                                        `but expected "${expectedAudience}".`
+                                    ].join(" ")
+                                });
+                            }
+                        }
+                    }
+                    break;
+                case "introspection endpoint":
+                    {
+                        // TODO:
+                        // use `const { clientId, clientSecret } = paramsOfBootstrap;` and `params.accessToken`
+                        // to implement the call to the introspection endpoint and call
+
+                        try {
+                            zAccessTokenClaims_specs.parse(accessTokenClaims_original);
+                        } catch (error) {
+                            assert(error instanceof Error, "38292332");
+
+                            return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
+                                isSuccess: false,
+                                debugErrorMessage: [
+                                    `The decoded access token does not satisfies`,
+                                    `the shape mandated the intersection of RFC9068 and RFC7662: ${error.message}`
+                                ].join(" ")
+                            });
+                        }
+
+                        assert(is<AccessTokenClaims_specs>(accessTokenClaims_original));
+                    }
+                    break;
             }
 
             validate_DPoP: {
                 const cnf_jkt =
-                    decodedAccessToken_original.cnf === undefined
+                    accessTokenClaims_original.cnf === undefined
                         ? undefined
-                        : decodedAccessToken_original.cnf.jkt;
+                        : accessTokenClaims_original.cnf.jkt;
 
                 if (cnf_jkt !== undefined && typeof cnf_jkt !== "string") {
-                    return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
+                    return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
                         isSuccess: false,
                         debugErrorMessage: "cnf.jkt claim is expected to be a string"
                     });
@@ -416,7 +455,7 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
                     }
 
                     if (cnf_jkt !== undefined) {
-                        return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
+                        return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
                             isSuccess: false,
                             debugErrorMessage: [
                                 "access token is DPoP bound (cnf.jkt claim present)",
@@ -430,7 +469,7 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
                 assert<Equals<typeof params.scheme, "DPoP">>;
 
                 if (cnf_jkt === undefined) {
-                    return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
+                    return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
                         isSuccess: false,
                         debugErrorMessage: [
                             "DPoP validation error, missing cnf.jtk claim",
@@ -444,7 +483,7 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
                 try {
                     dpopHeader = decodeProtectedHeader(params.dpopProof);
                 } catch {
-                    return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
+                    return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
                         isSuccess: false,
                         debugErrorMessage: "Failed to decode DPoP proof header"
                     });
@@ -453,7 +492,7 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
                 const { jwk, alg: dpopAlg, typ: dpopTyp } = dpopHeader;
 
                 if (dpopAlg === undefined) {
-                    return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
+                    return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
                         isSuccess: false,
                         debugErrorMessage: "DPoP proof header missing alg"
                     });
@@ -475,21 +514,21 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
                         dpopAlg
                     )
                 ) {
-                    return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
+                    return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
                         isSuccess: false,
                         debugErrorMessage: `Unsupported or too weak DPoP algorithm ${dpopAlg}`
                     });
                 }
 
                 if (dpopTyp === undefined || dpopTyp.toLowerCase() !== "dpop+jwt") {
-                    return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
+                    return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
                         isSuccess: false,
                         debugErrorMessage: "DPoP proof header typ must be dpop+jwt"
                     });
                 }
 
                 if (jwk === undefined) {
-                    return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
+                    return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
                         isSuccess: false,
                         debugErrorMessage: "DPoP proof header missing jwk"
                     });
@@ -500,14 +539,14 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
                 try {
                     jkt_calculated = await calculateJwkThumbprint(jwk);
                 } catch (error) {
-                    return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
+                    return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
                         isSuccess: false,
                         debugErrorMessage: `Failed to calculate DPoP jwk thumbprint: ${String(error)}`
                     });
                 }
 
                 if (jkt_calculated !== cnf_jkt) {
-                    return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
+                    return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
                         isSuccess: false,
                         debugErrorMessage: "DPoP jwk thumbprint does not match cnf.jkt claim"
                     });
@@ -525,7 +564,7 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
                 } catch (error) {
                     assert(error instanceof Error, "34022849313");
 
-                    return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
+                    return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
                         isSuccess: false,
                         debugErrorMessage: `DPoP proof signature/structure invalid: ${error.message}`
                     });
@@ -535,7 +574,7 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
 
                 {
                     if (iat === undefined) {
-                        return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
+                        return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
                             isSuccess: false,
                             debugErrorMessage: "DPoP proof missing or invalid iat claim"
                         });
@@ -546,14 +585,14 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
                     const maxFutureSkewSeconds = 3;
 
                     if (iat - now > maxFutureSkewSeconds) {
-                        return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
+                        return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
                             isSuccess: false,
                             debugErrorMessage: "DPoP proof iat is in the future"
                         });
                     }
 
                     if (now - iat > maxAgeSeconds) {
-                        return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
+                        return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
                             isSuccess: false,
                             debugErrorMessage: "DPoP proof iat too old"
                         });
@@ -561,7 +600,7 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
                 }
 
                 check_htm: {
-                    const errored = id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
+                    const errored = id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
                         isSuccess: false,
                         debugErrorMessage: [
                             "DPoP proof htm claim does not match request method.",
@@ -586,7 +625,7 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
                 }
 
                 check_htu: {
-                    const errored = id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
+                    const errored = id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
                         isSuccess: false,
                         debugErrorMessage: [
                             "DPoP proof htu claim does not match request url.",
@@ -611,7 +650,7 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
                 }
 
                 if (typeof ath !== "string") {
-                    return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
+                    return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
                         isSuccess: false,
                         debugErrorMessage: "DPoP proof missing ath claim"
                     });
@@ -627,21 +666,21 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
                 );
 
                 if (ath !== expectedAth) {
-                    return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
+                    return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
                         isSuccess: false,
                         debugErrorMessage: "DPoP proof ath claim does not match access token"
                     });
                 }
 
                 if (jti === undefined) {
-                    return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
+                    return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
                         isSuccess: false,
                         debugErrorMessage: "DPoP proof missing jti claim"
                     });
                 }
 
                 if (getIsDpopPoofSeenRecordIfNotSeen({ jkt: cnf_jkt, jti })) {
-                    return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
+                    return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
                         isSuccess: false,
                         debugErrorMessage: "DPoP proof replayed"
                     });
@@ -649,18 +688,34 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
             }
         }
 
-        let decodedAccessToken: DecodedAccessToken;
+        try {
+            zAccessTokenClaims_specs.parse(accessTokenClaims_original);
+        } catch (error) {
+            assert(error instanceof Error, "38292332");
 
-        if (decodedAccessTokenSchema === undefined) {
-            // @ts-expect-error: We know it will match because DecodedAccessToken will default to DecodedAccessToken_RFC9068
-            decodedAccessToken = decodedAccessToken_original;
+            return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
+                isSuccess: false,
+                debugErrorMessage: [
+                    `The decoded access token does not satisfies`,
+                    `the shape mandated the intersection of RFC9068 and RFC7662: ${error.message}`
+                ].join(" ")
+            });
+        }
+
+        assert(is<AccessTokenClaims_specs>(accessTokenClaims_original));
+
+        let accessTokenClaims: AccessTokenClaims;
+
+        if (accessTokenClaimsSchema === undefined) {
+            // @ts-expect-error: We know it will match because AccessTokenClaims will default to DecodedAccessToken_RFC9068
+            accessTokenClaims = accessTokenClaims_original;
         } else {
             try {
-                decodedAccessToken = decodedAccessTokenSchema.parse(decodedAccessToken_original);
+                accessTokenClaims = accessTokenClaimsSchema.parse(accessTokenClaims_original);
             } catch (error) {
                 assert(error instanceof Error, "887302013");
 
-                return id<ValidateAndDecodeAccessToken.ReturnType.Errored>({
+                return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
                     isSuccess: false,
                     debugErrorMessage: [
                         `The decoded access token does not satisfies`,
@@ -670,18 +725,17 @@ export function createOidcSpaUtils<DecodedAccessToken extends Record<string, unk
             }
         }
 
-        return id<ValidateAndDecodeAccessToken.ReturnType.Success<DecodedAccessToken>>({
+        return id<ValidateAndGetAccessTokenClaims.ReturnType.Success<AccessTokenClaims>>({
             isSuccess: true,
-            decodedAccessToken,
-            decodedAccessToken_original,
+            accessTokenClaims,
+            accessTokenClaims_original,
             accessToken: params.accessToken
         });
     };
 
     return {
         bootstrapAuth,
-        validateAndDecodeAccessToken,
-        ofTypeDecodedAccessToken: Reflect<DecodedAccessToken>()
+        validateAndGetAccessTokenClaims
     };
 }
 
@@ -830,22 +884,80 @@ async function fetchPublicSigningKeys(params: { issuerUri: string }): Promise<Pu
     };
 }
 
-const zDecodedAccessToken_RFC9068 = (() => {
-    type TargetType = DecodedAccessToken_RFC9068;
+type AccessTokenClaims_JWTPayload = {
+    iss: string;
+    aud: string | string[];
+    exp: number;
+    cnf?: {
+        jkt?: string;
+        [key: string]: unknown;
+    };
+};
+
+const zAccessTokenClaims_JWTPayload = (() => {
+    const zCnf = (() => {
+        type TargetType = Exclude<AccessTokenClaims_JWTPayload["cnf"], undefined>;
+
+        const zTargetType = z
+            .object({
+                jkt: z.string().optional()
+            })
+            .catchall(z.unknown());
+
+        type InferredType = z.infer<typeof zTargetType>;
+
+        assert<Equals<TargetType, InferredType>>;
+
+        return id<z.ZodType<TargetType>>(zTargetType);
+    })();
+
+    type TargetType = AccessTokenClaims_JWTPayload;
+
+    const zTargetType = z.object({
+        iss: z.string(),
+        aud: z.union([z.string(), z.array(z.string())]),
+        exp: z.number(),
+        cnf: zCnf.optional()
+    });
+
+    type InferredType = z.infer<typeof zTargetType>;
+
+    assert<Equals<TargetType, InferredType>>;
+
+    return id<z.ZodType<TargetType>>(zTargetType);
+})();
+
+const zAccessTokenClaims_specs = (() => {
+    const zCnf = (() => {
+        type TargetType = Exclude<AccessTokenClaims_JWTPayload["cnf"], undefined>;
+
+        const zTargetType = z
+            .object({
+                jkt: z.string().optional()
+            })
+            .catchall(z.unknown());
+
+        type InferredType = z.infer<typeof zTargetType>;
+
+        assert<Equals<TargetType, InferredType>>;
+
+        return id<z.ZodType<TargetType>>(zTargetType);
+    })();
+
+    type TargetType = AccessTokenClaims_specs;
 
     const zTargetType = z
         .object({
-            iss: z.string(),
-            sub: z.string(),
-            aud: z.union([z.string(), z.array(z.string())]),
-            exp: z.number(),
-            iat: z.number(),
-            client_id: z.string().optional(),
             scope: z.string().optional(),
-            jti: z.string().optional(),
+            client_id: z.string().optional(),
+            exp: z.number().optional(),
+            iat: z.number().optional(),
             nbf: z.number().optional(),
-            auth_time: z.number().optional(),
-            cnf: z.record(z.string(), z.unknown()).optional()
+            sub: z.string().optional(),
+            aud: z.union([z.string(), z.array(z.string())]).optional(),
+            iss: z.string().optional(),
+            jti: z.string().optional(),
+            cnf: zCnf.optional()
         })
         .catchall(z.unknown());
 
