@@ -1,41 +1,37 @@
 import type { OidcSpaUtils } from "./types";
 import type { ZodSchemaLike } from "../tools/ZodSchemaLike";
 import { createOidcSpaUtils } from "./createOidcSpaUtils";
-import type { DecodedAccessToken_RFC9068 } from "./types";
+import type { AccessTokenClaims_specs } from "./types";
 
 export type OidcSpaUtilsBuilder<
-    DecodedAccessToken extends Record<string, unknown> = DecodedAccessToken_RFC9068,
-    ExcludedMethod extends "withExpectedDecodedAccessTokenShape" | "createUtils" = never
+    AccessTokenClaims,
+    ExcludedMethod extends "withExpectedAccessTokenClaimsShape" = never
 > = Omit<
     {
-        withExpectedDecodedAccessTokenShape: <
-            DecodedAccessToken extends Record<string, unknown>
-        >(params: {
-            decodedAccessTokenSchema: ZodSchemaLike<DecodedAccessToken_RFC9068, DecodedAccessToken>;
-        }) => OidcSpaUtilsBuilder<
-            DecodedAccessToken,
-            ExcludedMethod | "withExpectedDecodedAccessTokenShape"
+        withExpectedAccessTokenClaimsShape: <AccessTokenClaims extends Record<string, unknown>>(
+            accessTokenClaimsSchema: ZodSchemaLike<AccessTokenClaims_specs, AccessTokenClaims>
+        ) => OidcSpaUtilsBuilder<
+            AccessTokenClaims,
+            ExcludedMethod | "withExpectedAccessTokenClaimsShape"
         >;
-        createUtils: () => OidcSpaUtils<DecodedAccessToken>;
+        createUtils: () => OidcSpaUtils<AccessTokenClaims>;
     },
     ExcludedMethod
 >;
 
-function createOidcSpaUtilsBuilder<
-    DecodedAccessToken extends Record<string, unknown> = DecodedAccessToken_RFC9068
->(params: {
-    decodedAccessTokenSchema: ZodSchemaLike<DecodedAccessToken_RFC9068, DecodedAccessToken> | undefined;
-}): OidcSpaUtilsBuilder<DecodedAccessToken> {
+function createOidcSpaUtilsBuilder<AccessTokenClaims>(params: {
+    accessTokenClaimsSchema: ZodSchemaLike<AccessTokenClaims_specs, AccessTokenClaims> | undefined;
+}): OidcSpaUtilsBuilder<AccessTokenClaims> {
     return {
-        withExpectedDecodedAccessTokenShape: ({ decodedAccessTokenSchema }) =>
-            createOidcSpaUtilsBuilder({ decodedAccessTokenSchema }),
+        withExpectedAccessTokenClaimsShape: accessTokenClaimsSchema =>
+            createOidcSpaUtilsBuilder({ accessTokenClaimsSchema }),
         createUtils: () =>
-            createOidcSpaUtils<DecodedAccessToken>({
-                decodedAccessTokenSchema: params.decodedAccessTokenSchema
+            createOidcSpaUtils<AccessTokenClaims>({
+                accessTokenClaimsSchema: params.accessTokenClaimsSchema
             })
     };
 }
 
-export const oidcSpaUtilsBuilder = createOidcSpaUtilsBuilder({
-    decodedAccessTokenSchema: undefined
+export const oidcSpaUtilsBuilder = createOidcSpaUtilsBuilder<AccessTokenClaims_specs>({
+    accessTokenClaimsSchema: undefined
 });
