@@ -8,6 +8,8 @@ import { createStatefulEvt } from "../tools/StatefulEvt";
 import { Deferred } from "../tools/Deferred";
 import { addOrUpdateSearchParam, getAllSearchParams } from "../tools/urlSearchParams";
 import { getIsOnline } from "../tools/getIsOnline";
+import { isNetworkError } from "../tools/isNetworkError";
+import { OidcInitializationError } from "./OidcInitializationError";
 import { setStateDataCookieIfEnabled } from "./StateDataCookie";
 
 const globalContext = {
@@ -355,6 +357,23 @@ export function createLoginOrGoToAuthServer(params: {
                 () => new Promise<never>(() => {}),
                 error => {
                     assert(error instanceof Error, "393430");
+
+                    // Reaching the auth server can fail for reasons that are not a defect of
+                    // this library: the network dropped mid-redirect, or the browser refused
+                    // the request outright. Firefox's Local Network Access, for one, blocks a
+                    // public page from reaching an auth server that resolves to a private or
+                    // CGNAT address, which is what a VPN split-DNS setup hands out. Reporting
+                    // those as "please report a bug" sends users chasing the wrong thing.
+                    if (isNetworkError(error)) {
+                        throw new OidcInitializationError({
+                            isAuthServerLikelyDown: getIsOnline().isOnline,
+                            messageOrCause: [
+                                `Could not reach the authorization server: ${error.message}.`,
+                                "The server may be down, or the browser may have blocked the request",
+                                "(check the console for a CSP, CORS or Local Network Access message)."
+                            ].join(" ")
+                        });
+                    }
 
                     assert(
                         false,
