@@ -405,9 +405,9 @@ export function createOidcSpaUtils<AccessTokenClaims>(params: {
                         }
 
                         validate_audience: {
-                            const { expectedAudience } = paramsOfBootstrap;
+                            const { expectedAccessTokenAudience } = paramsOfBootstrap;
 
-                            if (expectedAudience === undefined) {
+                            if (expectedAccessTokenAudience === undefined) {
                                 break validate_audience;
                             }
 
@@ -416,14 +416,14 @@ export function createOidcSpaUtils<AccessTokenClaims>(params: {
                                     ? accessTokenClaims_original.aud
                                     : [accessTokenClaims_original.aud];
 
-                            if (!audiences.includes(expectedAudience)) {
+                            if (!audiences.includes(expectedAccessTokenAudience)) {
                                 return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
                                     isSuccess: false,
                                     debugErrorMessage: [
                                         `Not expected audience, got aud claim ${JSON.stringify(
                                             accessTokenClaims_original.aud
                                         )}`,
-                                        `but expected "${expectedAudience}".`
+                                        `but expected "${expectedAccessTokenAudience}".`
                                     ].join(" ")
                                 });
                             }

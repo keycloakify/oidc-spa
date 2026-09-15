@@ -81,7 +81,7 @@ export namespace ParamsOfBootstrap {
 
         export type OfflineJWTValidation = Common & {
             accessTokenValidationMethod: "offline JWT validation";
-            expectedAudience: string | undefined;
+            expectedAccessTokenAudience: string | undefined;
         };
 
         export type TokenIntrospectionEndpoint = Common & {
