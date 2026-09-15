@@ -9,7 +9,6 @@ import { Deferred } from "../tools/Deferred";
 import {
     decodeProtectedHeader,
     jwtVerify,
-    createLocalJWKSet,
     errors,
     importJWK,
     calculateJwkThumbprint,
@@ -19,6 +18,8 @@ import { assert, isAmong, id, type Equals, is } from "../vendor/server/tsafe";
 import { z } from "../vendor/server/zod";
 import { Evt, throttleTime } from "../vendor/server/evt";
 import { decodeJwt } from "../tools/decodeJwt";
+import { fetchPublicSigningKeys, type PublicSigningKeys } from "./tools/fetchPublicSigningKeys";
+import { fetchIntrospectionEndpoint } from "./tools/fetchIntrospectionEndpoint";
 
 export function createOidcSpaUtils<AccessTokenClaims>(params: {
     accessTokenClaimsSchema: ZodSchemaLike<AccessTokenClaims_specs, AccessTokenClaims> | undefined;
@@ -26,6 +27,34 @@ export function createOidcSpaUtils<AccessTokenClaims>(params: {
     const { accessTokenClaimsSchema } = params;
 
     const dParamsOfBootstrap = new Deferred<ParamsOfBootstrap<AccessTokenClaims>>();
+
+    const { getIntrospectionEndpoint } = (() => {
+        let prIntrospectionEndpoint: Promise<string> | undefined;
+
+        async function getIntrospectionEndpoint(
+            params: ParamsOfBootstrap.Real.TokenIntrospectionEndpoint
+        ): Promise<string> {
+            if (prIntrospectionEndpoint === undefined) {
+                const pr = fetchIntrospectionEndpoint({ issuerUri: params.issuerUri });
+
+                prIntrospectionEndpoint = pr;
+
+                try {
+                    return await pr;
+                } catch (error) {
+                    if (prIntrospectionEndpoint === pr) {
+                        prIntrospectionEndpoint = undefined;
+                    }
+
+                    throw error;
+                }
+            }
+
+            return await prIntrospectionEndpoint;
+        }
+
+        return { getIntrospectionEndpoint };
+    })();
 
     const { getPublicSigningKeys, evtInvalidSignature } = (() => {
         const evtPublicSigningKeys = Evt.create<PublicSigningKeys | undefined>(undefined);
@@ -403,9 +432,97 @@ export function createOidcSpaUtils<AccessTokenClaims>(params: {
                     break;
                 case "introspection endpoint":
                     {
-                        // TODO:
-                        // use `const { clientId, clientSecret } = paramsOfBootstrap;` and `params.accessToken`
-                        // to implement the call to the introspection endpoint and call
+                        const { clientId, clientSecret, issuerUri } = paramsOfBootstrap;
+
+                        let introspectionEndpoint: string;
+
+                        try {
+                            introspectionEndpoint = await getIntrospectionEndpoint(paramsOfBootstrap);
+                        } catch (error) {
+                            return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
+                                isSuccess: false,
+                                debugErrorMessage: `Could not resolve the token introspection endpoint: ${String(
+                                    error
+                                )}`
+                            });
+                        }
+
+                        let response: Response;
+
+                        {
+                            const basicAuthorization = (() => {
+                                const formEncode = (value: string) =>
+                                    new URLSearchParams({ value }).toString().slice("value=".length);
+
+                                return btoa(`${formEncode(clientId)}:${formEncode(clientSecret)}`);
+                            })();
+
+                            try {
+                                response = await fetch(introspectionEndpoint, {
+                                    method: "POST",
+                                    headers: {
+                                        Accept: "application/json",
+                                        "Content-Type": "application/x-www-form-urlencoded",
+                                        Authorization: `Basic ${basicAuthorization}`
+                                    },
+                                    body: new URLSearchParams({
+                                        token: params.accessToken,
+                                        token_type_hint: "access_token"
+                                    })
+                                });
+                            } catch (error) {
+                                return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
+                                    isSuccess: false,
+                                    debugErrorMessage: `Token introspection request failed: ${String(
+                                        error
+                                    )}`
+                                });
+                            }
+                        }
+
+                        if (!response.ok) {
+                            return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
+                                isSuccess: false,
+                                debugErrorMessage: `Token introspection request failed with HTTP ${response.status} ${response.statusText}`
+                            });
+                        }
+
+                        let introspectionResponse: unknown;
+
+                        try {
+                            introspectionResponse = await response.json();
+                        } catch (error) {
+                            return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
+                                isSuccess: false,
+                                debugErrorMessage: `Failed to parse token introspection response: ${String(
+                                    error
+                                )}`
+                            });
+                        }
+
+                        try {
+                            zTokenIntrospectionResponse.parse(introspectionResponse);
+                        } catch (error) {
+                            assert(error instanceof Error, "12716391");
+
+                            return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
+                                isSuccess: false,
+                                debugErrorMessage: `Invalid token introspection response: ${error.message}`
+                            });
+                        }
+
+                        assert(is<TokenIntrospectionResponse>(introspectionResponse));
+
+                        const { active, ...claimsFromIntrospectionResponse } = introspectionResponse;
+
+                        if (!active) {
+                            return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
+                                isSuccess: false,
+                                debugErrorMessage: "Access token is inactive"
+                            });
+                        }
+
+                        accessTokenClaims_original = claimsFromIntrospectionResponse;
 
                         try {
                             zAccessTokenClaims_specs.parse(accessTokenClaims_original);
@@ -422,6 +539,20 @@ export function createOidcSpaUtils<AccessTokenClaims>(params: {
                         }
 
                         assert(is<AccessTokenClaims_specs>(accessTokenClaims_original));
+
+                        if (accessTokenClaims_original.iss !== undefined) {
+                            const normalize = (issuerUri: string) => issuerUri.replace(/\/$/, "");
+
+                            if (normalize(accessTokenClaims_original.iss) !== normalize(issuerUri)) {
+                                return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
+                                    isSuccess: false,
+                                    debugErrorMessage: [
+                                        `iss claim in token introspection response "${accessTokenClaims_original.iss}"`,
+                                        `does not match the issuerUri "${issuerUri}".`
+                                    ].join(" ")
+                                });
+                            }
+                        }
                     }
                     break;
             }
@@ -739,151 +870,6 @@ export function createOidcSpaUtils<AccessTokenClaims>(params: {
     };
 }
 
-type PublicSigningKeys = {
-    keyResolver: ReturnType<typeof createLocalJWKSet>;
-    kidSet: Set<string>;
-};
-
-async function fetchPublicSigningKeys(params: { issuerUri: string }): Promise<PublicSigningKeys> {
-    const { issuerUri } = params;
-
-    const { jwks_uri } = await (async () => {
-        const url = `${issuerUri.replace(/\/$/, "")}/.well-known/openid-configuration`;
-
-        const response = await fetch(url).catch(error => {
-            assert(error instanceof Error);
-            return error;
-        });
-
-        if (response instanceof Error || !response.ok) {
-            throw new Error(
-                `Failed to fetch openid configuration of the issuerUri: ${issuerUri} (${url}): ${
-                    response instanceof Error ? response.message : response.statusText
-                }`
-            );
-        }
-
-        let data: unknown;
-
-        try {
-            data = await response.json();
-        } catch (error) {
-            throw new Error(`Failed to parse json from ${url}: ${String(error)}`);
-        }
-
-        {
-            type WellKnownConfiguration = {
-                jwks_uri: string;
-            };
-
-            const zWellKnownConfiguration = z.object({
-                jwks_uri: z.string()
-            });
-
-            assert<Equals<WellKnownConfiguration, z.infer<typeof zWellKnownConfiguration>>>;
-
-            try {
-                zWellKnownConfiguration.parse(data);
-            } catch {
-                throw new Error(`${url} does not have a jwks_uri property`);
-            }
-
-            assert(is<WellKnownConfiguration>(data));
-        }
-
-        const { jwks_uri } = data;
-
-        return { jwks_uri };
-    })();
-
-    const { jwks } = await (async () => {
-        const response = await fetch(jwks_uri);
-
-        if (!response.ok) {
-            throw new Error(
-                `Failed to fetch public key and algorithm from ${jwks_uri}: ${response.statusText}`
-            );
-        }
-
-        let jwks: unknown;
-
-        try {
-            jwks = await response.json();
-        } catch (error) {
-            throw new Error(`Failed to parse json from ${jwks_uri}: ${String(error)}`);
-        }
-
-        {
-            type Jwks = {
-                keys: {
-                    kid: string;
-                    kty: string;
-                    use?: string;
-                    alg?: string;
-                }[];
-            };
-
-            const zJwks = z.object({
-                keys: z.array(
-                    z.object({
-                        kid: z.string(),
-                        kty: z.string(),
-                        use: z.string().optional(),
-                        alg: z.string().optional()
-                    })
-                )
-            });
-
-            assert<Equals<Jwks, z.infer<typeof zJwks>>>;
-
-            try {
-                zJwks.parse(jwks);
-            } catch {
-                throw new Error(`${jwks_uri} does not have the expected shape`);
-            }
-
-            assert(is<Jwks>(jwks));
-        }
-
-        return { jwks };
-    })();
-
-    //const signatureKeys = jwks.keys.filter((key): key is JWKS["keys"][number] & { kid: string } => {
-    const signatureKeys = jwks.keys.filter(key => {
-        if (typeof key.kid !== "string" || key.kid.length === 0) {
-            return false;
-        }
-
-        if (key.use !== undefined && key.use !== "sig") {
-            return false;
-        }
-
-        const supportedKty = ["RSA", "EC"] as const;
-
-        if (!supportedKty.includes(key.kty as (typeof supportedKty)[number])) {
-            return false;
-        }
-
-        return true;
-    });
-
-    assert(
-        signatureKeys.length !== 0,
-        `No public signing key found at ${jwks_uri}, ${JSON.stringify(jwks, null, 2)}`
-    );
-
-    const kidSet = new Set(signatureKeys.map(({ kid }) => kid));
-
-    const keyResolver = createLocalJWKSet({
-        keys: signatureKeys
-    });
-
-    return {
-        keyResolver,
-        kidSet
-    };
-}
-
 type AccessTokenClaims_JWTPayload = {
     iss: string;
     aud: string | string[];
@@ -958,6 +944,27 @@ const zAccessTokenClaims_specs = (() => {
             iss: z.string().optional(),
             jti: z.string().optional(),
             cnf: zCnf.optional()
+        })
+        .catchall(z.unknown());
+
+    type InferredType = z.infer<typeof zTargetType>;
+
+    assert<Equals<TargetType, InferredType>>;
+
+    return id<z.ZodType<TargetType>>(zTargetType);
+})();
+
+type TokenIntrospectionResponse = {
+    active: boolean;
+    [key: string]: unknown;
+};
+
+const zTokenIntrospectionResponse = (() => {
+    type TargetType = TokenIntrospectionResponse;
+
+    const zTargetType = z
+        .object({
+            active: z.boolean()
         })
         .catchall(z.unknown());
 
