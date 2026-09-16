@@ -5,11 +5,16 @@ import avatarFallbackSvgUrl from "./components/userPictureFallback.svg";
 
 // App-specific user model exposed by `useOidc()`.
 // Shape it around the information the UI needs to render.
-export type User = {
+export type User_client = {
     displayName: string;
     email: string | undefined;
     avatarImgUrl: string;
     canSeeKeycloakAdminNavigation: boolean;
+};
+
+export type User_server = {
+    id: string;
+    isKeycloakAdmin: boolean;
 };
 
 export const {
@@ -23,82 +28,108 @@ export const {
     oidcFnMiddleware,
     oidcRequestMiddleware
 } = oidcSpa
-    .withUser<User>({
-        createUser: async ({ decodedIdToken, accessToken }) => {
-            const { name, picture, email } = z
-                .object({
-                    sub: z.string(),
-                    name: z.string(),
-                    picture: z.string().optional(),
-                    email: z.string().optional(),
-                    preferred_username: z.string().optional()
-                })
-                .parse(decodedIdToken);
-
-            const decodedAccessToken = z
-                .object({
-                    resource_access: z
-                        .object({
-                            "realm-management": z.object({
-                                roles: z.array(z.string())
-                            })
-                        })
-                        .optional()
-                })
-                .parse(decodeJwt(accessToken));
-
-            const user: User = {
-                displayName: name,
-                avatarImgUrl: picture || avatarFallbackSvgUrl,
-                email,
-                canSeeKeycloakAdminNavigation:
-                    decodedAccessToken.resource_access?.["realm-management"].roles.includes(
-                        "realm-admin"
-                    ) ?? false
+    .withClientUser<User_client>(async ({ isMock, idTokenClaims, accessToken }) => {
+        if (isMock) {
+            const user_mock: User_client = {
+                displayName: "John Doe",
+                email: "jonh.doe@gmail.com",
+                avatarImgUrl: avatarFallbackSvgUrl,
+                canSeeKeycloakAdminNavigation: true
             };
+            return user_mock;
+        }
 
-            return user;
-        },
-        user_mock: {
-            displayName: "John Doe",
-            email: undefined,
-            avatarImgUrl: avatarFallbackSvgUrl,
-            canSeeKeycloakAdminNavigation: true
-        }
+        const { name, picture, email } = z
+            .object({
+                sub: z.string(),
+                name: z.string(),
+                picture: z.string().optional(),
+                email: z.string().optional(),
+                preferred_username: z.string().optional()
+            })
+            .parse(idTokenClaims);
+
+        const { resource_access } = z
+            .object({
+                resource_access: z
+                    .object({
+                        "realm-management": z.object({
+                            roles: z.array(z.string())
+                        })
+                    })
+                    .optional()
+            })
+            .parse(decodeJwt(accessToken));
+
+        const user: User_client = {
+            displayName: name,
+            avatarImgUrl: picture || avatarFallbackSvgUrl,
+            email,
+            canSeeKeycloakAdminNavigation:
+                resource_access?.["realm-management"].roles.includes("realm-admin") ?? false
+        };
+
+        return user;
     })
-    .withAccessTokenValidation({
-        type: "RFC 9068: JSON Web Token (JWT) Profile for OAuth 2.0 Access Tokens",
-        expectedAudience: (/*{ paramsOfBootstrap, process }*/) => "account",
-        accessTokenClaimsSchema: z.object({
-            sub: z.string(),
-            realm_access: z.object({ roles: z.array(z.string()) }).optional()
-        }),
-        accessTokenClaims_mock: {
-            sub: "mock-user-id",
-            realm_access: {
-                roles: ["realm-admin"]
-            }
+    .withServerUser<User_server>(async ({ isMock, accessTokenClaims }) => {
+        if (isMock) {
+            const user_mock: User_server = {
+                id: "b42ec423-efb1-4618-8e79-509105c7a4f0",
+                isKeycloakAdmin: true
+            };
+            return user_mock;
         }
+
+        const { sub, resource_access } = z
+            .object({
+                sub: z.string(),
+                resource_access: z
+                    .object({
+                        "realm-management": z.object({
+                            roles: z.array(z.string())
+                        })
+                    })
+                    .optional()
+            })
+            .parse(accessTokenClaims);
+
+        const user: User_server = {
+            id: sub,
+            isKeycloakAdmin: resource_access?.["realm-management"].roles.includes("realm-admin") ?? false
+        };
+
+        return user;
     })
     // See: https://docs.oidc-spa.dev/features/auto-login#tanstack-start
     //.withAutoLogin()
     .createUtils();
 
-// Can be call anywhere, even in the body of a React component.
-// All subsequent calls will be safely ignored.
-bootstrapOidc(({ process }) =>
-    process.env.OIDC_USE_MOCK === "true"
-        ? {
-              implementation: "mock",
-              isUserInitiallyLoggedIn: true
-          }
-        : {
-              implementation: "real",
-              issuerUri: process.env.OIDC_ISSUER_URI,
-              clientId: process.env.OIDC_CLIENT_ID,
-              debugLogs: true
-          }
-);
+if (process.env.OIDC_USE_MOCK === "true") {
+    bootstrapOidc({
+        mode: "mock",
+        isUserInitiallyLoggedIn: true
+    });
+} else {
+    bootstrapOidc(({ process }) => ({
+        issuerUri: process.env.OIDC_ISSUER_URI,
+        client: {
+            clientId: process.env.OIDC_CLIENT_ID,
+            debugLogs: true
+        },
+        server: {
+            accessTokenValidationMethod: "offline JWT signature check",
+            expectedAccessTokenAudience: process.env.OIDC_ACCESS_TOKEN_EXPECTED_AUDIENCE
+        }
+        // OR
+        /*
+        server: {
+            accessTokenValidationMethod: "introspection endpoint call",
+            clientId: process.env.OIDC_CLIENT_ID_SERVER,
+            clientSecret: process.env.OIDC_CLIENT_SECRET_SERVER
+        }
+        */
+    }));
+}
 
 export const fetchWithAuth: typeof fetch = async (input, init) => {
     const oidc = await getOidc();

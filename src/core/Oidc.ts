@@ -29,7 +29,7 @@ export declare namespace Oidc {
              * Transform the url before redirecting to the login pages.
              * Prefer using the extraQueryParams parameter if you're only adding query parameters.
              */
-            transformUrlBeforeRedirect?: (url: string) => string;
+            transformUrlBeforeRedirect?: (authorizationUrl: string) => string;
         }) => Promise<never>;
         initializationError: OidcInitializationError | undefined;
     };

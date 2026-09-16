@@ -6,18 +6,17 @@ export const Route = createFileRoute("/demo/api/admin-data")({
         middleware: [
             oidcRequestMiddleware({
                 require: "authed request",
-                hasAuthorization: ({ accessTokenClaims }) =>
-                    accessTokenClaims.realm_access?.roles.includes("realm-admin")
+                hasAuthorization: ({ user }) => user.isKeycloakAdmin
             })
         ],
         handlers: {
             GET: async ({ context: { oidc } }) => {
-                const userId = oidc.accessTokenClaims.sub;
+                const { user } = oidc;
 
                 // Here you can perform information and retrieve data only admins
                 // should have access to.
 
-                const adminData = `<Sensible data only accessible to admin got from api request for user: ${userId}>`;
+                const adminData = `<Sensible data only accessible to admin got from api request for user: ${user.id}>`;
 
                 return new Response(JSON.stringify(adminData), {
                     headers: {

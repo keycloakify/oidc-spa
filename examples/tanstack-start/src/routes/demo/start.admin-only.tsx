@@ -9,17 +9,16 @@ const getAdminOnlyData = createServerFn({ method: "GET" })
     .middleware([
         oidcFnMiddleware({
             require: "authed request",
-            hasAuthorization: ({ accessTokenClaims }) =>
-                accessTokenClaims.realm_access?.roles.includes("realm-admin")
+            hasAuthorization: ({ user }) => user.isKeycloakAdmin
         })
     ])
     .handler(async ({ context: { oidc } }) => {
-        const userId = oidc.accessTokenClaims.sub;
+        const { user } = oidc;
 
         // Here you can perform information and retrieve data only admins
         // should have access to.
 
-        return `<Sensible data only accessible to admin got from server function for user: ${userId}>`;
+        return `<Sensible data only accessible to admin got from server function for user: ${user.id}>`;
     });
 
 export const Route = createFileRoute("/demo/start/admin-only")({

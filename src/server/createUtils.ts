@@ -245,6 +245,7 @@ export function createUtils<AccessTokenClaims>(params: {
 
                     return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
                         isSuccess: false,
+                        recommendedHttpErrorStatusCode: 401,
                         debugErrorMessage: [
                             `The decoded access token does not satisfies`,
                             `the shape mandated the intersection of RFC9068 and RFC7662: ${error.message}`
@@ -273,6 +274,7 @@ export function createUtils<AccessTokenClaims>(params: {
                             } catch {
                                 return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
                                     isSuccess: false,
+                                    recommendedHttpErrorStatusCode: 401,
                                     debugErrorMessage: "Failed to decode the JWT header"
                                 });
                             }
@@ -282,6 +284,7 @@ export function createUtils<AccessTokenClaims>(params: {
                             if (typeof kidFromHeader !== "string" || kidFromHeader.length === 0) {
                                 return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
                                     isSuccess: false,
+                                    recommendedHttpErrorStatusCode: 401,
                                     debugErrorMessage:
                                         "The decoded JWT header does not have a kid property"
                                 });
@@ -290,6 +293,7 @@ export function createUtils<AccessTokenClaims>(params: {
                             if (typeof algFromHeader !== "string") {
                                 return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
                                     isSuccess: false,
+                                    recommendedHttpErrorStatusCode: 401,
                                     debugErrorMessage:
                                         "The decoded JWT header does not specify an algorithm"
                                 });
@@ -313,6 +317,7 @@ export function createUtils<AccessTokenClaims>(params: {
                             ) {
                                 return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
                                     isSuccess: false,
+                                    recommendedHttpErrorStatusCode: 401,
                                     debugErrorMessage: `Unsupported or too weak algorithm ${algFromHeader}`
                                 });
                             }
@@ -326,6 +331,7 @@ export function createUtils<AccessTokenClaims>(params: {
                         if (publicSigningKeys === undefined) {
                             return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
                                 isSuccess: false,
+                                recommendedHttpErrorStatusCode: 503,
                                 debugErrorMessage:
                                     "Could not fetch the public signing keys required to validate this access token"
                             });
@@ -335,6 +341,7 @@ export function createUtils<AccessTokenClaims>(params: {
                             evtInvalidSignature.post();
                             return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
                                 isSuccess: false,
+                                recommendedHttpErrorStatusCode: 401,
                                 debugErrorMessage: `No public signing key found with kid ${kid}`
                             });
                         }
@@ -355,6 +362,7 @@ export function createUtils<AccessTokenClaims>(params: {
                             if (error instanceof errors.JWTExpired) {
                                 return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
                                     isSuccess: false,
+                                    recommendedHttpErrorStatusCode: 401,
                                     debugErrorMessage: error.message
                                 });
                             }
@@ -363,6 +371,7 @@ export function createUtils<AccessTokenClaims>(params: {
 
                             return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
                                 isSuccess: false,
+                                recommendedHttpErrorStatusCode: 401,
                                 debugErrorMessage: error.message
                             });
                         }
@@ -374,6 +383,7 @@ export function createUtils<AccessTokenClaims>(params: {
 
                             return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
                                 isSuccess: false,
+                                recommendedHttpErrorStatusCode: 401,
                                 debugErrorMessage: [
                                     `The decoded access token does not satisfies`,
                                     `the shape mandated by RFC9068: ${error.message}`
@@ -392,6 +402,7 @@ export function createUtils<AccessTokenClaims>(params: {
                             if (normalize(accessTokenClaims_original.iss) !== normalize(issuerUri)) {
                                 return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
                                     isSuccess: false,
+                                    recommendedHttpErrorStatusCode: 401,
                                     debugErrorMessage: [
                                         `iss claim in access token payload "${accessTokenClaims_original.iss}"`,
                                         `does not match the issuerUri "${issuerUri}".`
@@ -412,6 +423,7 @@ export function createUtils<AccessTokenClaims>(params: {
                             if (!audiences.includes(expectedAudience)) {
                                 return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
                                     isSuccess: false,
+                                    recommendedHttpErrorStatusCode: 401,
                                     debugErrorMessage: [
                                         `Not expected audience, got aud claim ${JSON.stringify(
                                             accessTokenClaims_original.aud
@@ -437,6 +449,7 @@ export function createUtils<AccessTokenClaims>(params: {
                         } catch (error) {
                             return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
                                 isSuccess: false,
+                                recommendedHttpErrorStatusCode: 503,
                                 debugErrorMessage: `Could not resolve the token introspection endpoint: ${String(
                                     error
                                 )}`
@@ -469,6 +482,7 @@ export function createUtils<AccessTokenClaims>(params: {
                             } catch (error) {
                                 return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
                                     isSuccess: false,
+                                    recommendedHttpErrorStatusCode: 503,
                                     debugErrorMessage: `Token introspection request failed: ${String(
                                         error
                                     )}`
@@ -479,6 +493,8 @@ export function createUtils<AccessTokenClaims>(params: {
                         if (!response.ok) {
                             return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
                                 isSuccess: false,
+                                recommendedHttpErrorStatusCode:
+                                    response.status >= 500 || response.status === 429 ? 503 : 500,
                                 debugErrorMessage: `Token introspection request failed with HTTP ${response.status} ${response.statusText}`
                             });
                         }
@@ -490,6 +506,7 @@ export function createUtils<AccessTokenClaims>(params: {
                         } catch (error) {
                             return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
                                 isSuccess: false,
+                                recommendedHttpErrorStatusCode: 500,
                                 debugErrorMessage: `Failed to parse token introspection response: ${String(
                                     error
                                 )}`
@@ -503,6 +520,7 @@ export function createUtils<AccessTokenClaims>(params: {
 
                             return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
                                 isSuccess: false,
+                                recommendedHttpErrorStatusCode: 500,
                                 debugErrorMessage: `Invalid token introspection response: ${error.message}`
                             });
                         }
@@ -514,6 +532,7 @@ export function createUtils<AccessTokenClaims>(params: {
                         if (!active) {
                             return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
                                 isSuccess: false,
+                                recommendedHttpErrorStatusCode: 401,
                                 debugErrorMessage: "Access token is inactive"
                             });
                         }
@@ -527,6 +546,7 @@ export function createUtils<AccessTokenClaims>(params: {
 
                             return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
                                 isSuccess: false,
+                                recommendedHttpErrorStatusCode: 500,
                                 debugErrorMessage: [
                                     `The decoded access token does not satisfies`,
                                     `the shape mandated the intersection of RFC9068 and RFC7662: ${error.message}`
@@ -542,6 +562,7 @@ export function createUtils<AccessTokenClaims>(params: {
                             if (normalize(accessTokenClaims_original.iss) !== normalize(issuerUri)) {
                                 return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
                                     isSuccess: false,
+                                    recommendedHttpErrorStatusCode: 401,
                                     debugErrorMessage: [
                                         `iss claim in token introspection response "${accessTokenClaims_original.iss}"`,
                                         `does not match the issuerUri "${issuerUri}".`
@@ -562,6 +583,7 @@ export function createUtils<AccessTokenClaims>(params: {
                 if (cnf_jkt !== undefined && typeof cnf_jkt !== "string") {
                     return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
                         isSuccess: false,
+                        recommendedHttpErrorStatusCode: 401,
                         debugErrorMessage: "cnf.jkt claim is expected to be a string"
                     });
                 }
@@ -584,6 +606,7 @@ export function createUtils<AccessTokenClaims>(params: {
                     if (cnf_jkt !== undefined) {
                         return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
                             isSuccess: false,
+                            recommendedHttpErrorStatusCode: 401,
                             debugErrorMessage: [
                                 "access token is DPoP bound (cnf.jkt claim present)",
                                 "but used with bearer scheme"
@@ -598,6 +621,7 @@ export function createUtils<AccessTokenClaims>(params: {
                 if (cnf_jkt === undefined) {
                     return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
                         isSuccess: false,
+                        recommendedHttpErrorStatusCode: 401,
                         debugErrorMessage: [
                             "DPoP validation error, missing cnf.jtk claim",
                             "in the access token payload"
@@ -612,6 +636,7 @@ export function createUtils<AccessTokenClaims>(params: {
                 } catch {
                     return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
                         isSuccess: false,
+                        recommendedHttpErrorStatusCode: 401,
                         debugErrorMessage: "Failed to decode DPoP proof header"
                     });
                 }
@@ -621,6 +646,7 @@ export function createUtils<AccessTokenClaims>(params: {
                 if (dpopAlg === undefined) {
                     return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
                         isSuccess: false,
+                        recommendedHttpErrorStatusCode: 401,
                         debugErrorMessage: "DPoP proof header missing alg"
                     });
                 }
@@ -643,6 +669,7 @@ export function createUtils<AccessTokenClaims>(params: {
                 ) {
                     return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
                         isSuccess: false,
+                        recommendedHttpErrorStatusCode: 401,
                         debugErrorMessage: `Unsupported or too weak DPoP algorithm ${dpopAlg}`
                     });
                 }
@@ -650,6 +677,7 @@ export function createUtils<AccessTokenClaims>(params: {
                 if (dpopTyp === undefined || dpopTyp.toLowerCase() !== "dpop+jwt") {
                     return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
                         isSuccess: false,
+                        recommendedHttpErrorStatusCode: 401,
                         debugErrorMessage: "DPoP proof header typ must be dpop+jwt"
                     });
                 }
@@ -657,6 +685,7 @@ export function createUtils<AccessTokenClaims>(params: {
                 if (jwk === undefined) {
                     return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
                         isSuccess: false,
+                        recommendedHttpErrorStatusCode: 401,
                         debugErrorMessage: "DPoP proof header missing jwk"
                     });
                 }
@@ -668,6 +697,7 @@ export function createUtils<AccessTokenClaims>(params: {
                 } catch (error) {
                     return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
                         isSuccess: false,
+                        recommendedHttpErrorStatusCode: 401,
                         debugErrorMessage: `Failed to calculate DPoP jwk thumbprint: ${String(error)}`
                     });
                 }
@@ -675,6 +705,7 @@ export function createUtils<AccessTokenClaims>(params: {
                 if (jkt_calculated !== cnf_jkt) {
                     return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
                         isSuccess: false,
+                        recommendedHttpErrorStatusCode: 401,
                         debugErrorMessage: "DPoP jwk thumbprint does not match cnf.jkt claim"
                     });
                 }
@@ -693,6 +724,7 @@ export function createUtils<AccessTokenClaims>(params: {
 
                     return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
                         isSuccess: false,
+                        recommendedHttpErrorStatusCode: 401,
                         debugErrorMessage: `DPoP proof signature/structure invalid: ${error.message}`
                     });
                 }
@@ -703,6 +735,7 @@ export function createUtils<AccessTokenClaims>(params: {
                     if (iat === undefined) {
                         return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
                             isSuccess: false,
+                            recommendedHttpErrorStatusCode: 401,
                             debugErrorMessage: "DPoP proof missing or invalid iat claim"
                         });
                     }
@@ -714,6 +747,7 @@ export function createUtils<AccessTokenClaims>(params: {
                     if (iat - now > maxFutureSkewSeconds) {
                         return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
                             isSuccess: false,
+                            recommendedHttpErrorStatusCode: 401,
                             debugErrorMessage: "DPoP proof iat is in the future"
                         });
                     }
@@ -721,6 +755,7 @@ export function createUtils<AccessTokenClaims>(params: {
                     if (now - iat > maxAgeSeconds) {
                         return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
                             isSuccess: false,
+                            recommendedHttpErrorStatusCode: 401,
                             debugErrorMessage: "DPoP proof iat too old"
                         });
                     }
@@ -729,6 +764,7 @@ export function createUtils<AccessTokenClaims>(params: {
                 check_htm: {
                     const errored = id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
                         isSuccess: false,
+                        recommendedHttpErrorStatusCode: 401,
                         debugErrorMessage: [
                             "DPoP proof htm claim does not match request method.",
                             `htm: ${htm}, expected htm: ${params.expectedHtm}`
@@ -754,6 +790,7 @@ export function createUtils<AccessTokenClaims>(params: {
                 check_htu: {
                     const errored = id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
                         isSuccess: false,
+                        recommendedHttpErrorStatusCode: 401,
                         debugErrorMessage: [
                             "DPoP proof htu claim does not match request url.",
                             `htu: ${htu}, expected htu: ${params.expectedHtu}`
@@ -779,6 +816,7 @@ export function createUtils<AccessTokenClaims>(params: {
                 if (typeof ath !== "string") {
                     return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
                         isSuccess: false,
+                        recommendedHttpErrorStatusCode: 401,
                         debugErrorMessage: "DPoP proof missing ath claim"
                     });
                 }
@@ -795,6 +833,7 @@ export function createUtils<AccessTokenClaims>(params: {
                 if (ath !== expectedAth) {
                     return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
                         isSuccess: false,
+                        recommendedHttpErrorStatusCode: 401,
                         debugErrorMessage: "DPoP proof ath claim does not match access token"
                     });
                 }
@@ -802,6 +841,7 @@ export function createUtils<AccessTokenClaims>(params: {
                 if (jti === undefined) {
                     return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
                         isSuccess: false,
+                        recommendedHttpErrorStatusCode: 401,
                         debugErrorMessage: "DPoP proof missing jti claim"
                     });
                 }
@@ -809,6 +849,7 @@ export function createUtils<AccessTokenClaims>(params: {
                 if (getIsDpopPoofSeenRecordIfNotSeen({ jkt: cnf_jkt, jti })) {
                     return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
                         isSuccess: false,
+                        recommendedHttpErrorStatusCode: 401,
                         debugErrorMessage: "DPoP proof replayed"
                     });
                 }
@@ -822,6 +863,7 @@ export function createUtils<AccessTokenClaims>(params: {
 
             return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
                 isSuccess: false,
+                recommendedHttpErrorStatusCode: 401,
                 debugErrorMessage: [
                     `The decoded access token does not satisfies`,
                     `the shape mandated the intersection of RFC9068 and RFC7662: ${error.message}`
@@ -844,6 +886,7 @@ export function createUtils<AccessTokenClaims>(params: {
 
                 return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
                     isSuccess: false,
+                    recommendedHttpErrorStatusCode: 401,
                     debugErrorMessage: [
                         `The decoded access token does not satisfies`,
                         `the shape that the application expects: ${error.message}`
