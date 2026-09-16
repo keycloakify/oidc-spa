@@ -21,7 +21,7 @@ import { decodeJwt } from "../tools/decodeJwt";
 import { fetchPublicSigningKeys, type PublicSigningKeys } from "./tools/fetchPublicSigningKeys";
 import { fetchIntrospectionEndpoint } from "./tools/fetchIntrospectionEndpoint";
 
-export function createOidcSpaUtils<AccessTokenClaims>(params: {
+export function createUtils<AccessTokenClaims>(params: {
     accessTokenClaimsSchema: ZodSchemaLike<AccessTokenClaims_specs, AccessTokenClaims> | undefined;
 }): OidcSpaUtils<AccessTokenClaims> {
     const { accessTokenClaimsSchema } = params;
@@ -29,28 +29,27 @@ export function createOidcSpaUtils<AccessTokenClaims>(params: {
     const dParamsOfBootstrap = new Deferred<ParamsOfBootstrap<AccessTokenClaims>>();
 
     const { getIntrospectionEndpoint } = (() => {
-        let prIntrospectionEndpoint: Promise<string> | undefined;
+        let prIntrospectionEndpoint: Promise<string> | undefined = undefined;
 
-        async function getIntrospectionEndpoint(
-            params: ParamsOfBootstrap.Real.TokenIntrospectionEndpoint
-        ): Promise<string> {
-            if (prIntrospectionEndpoint === undefined) {
-                const pr = fetchIntrospectionEndpoint({ issuerUri: params.issuerUri });
+        function getIntrospectionEndpoint(): Promise<string> {
+            return (prIntrospectionEndpoint ??= (async () => {
+                const paramsOfBootstrap = await dParamsOfBootstrap.pr;
+                assert(paramsOfBootstrap.mode === "real", "22933023");
+                const { issuerUri } = paramsOfBootstrap;
 
-                prIntrospectionEndpoint = pr;
+                let introspectionEndpoint: string;
 
                 try {
-                    return await pr;
+                    introspectionEndpoint = await fetchIntrospectionEndpoint({ issuerUri });
                 } catch (error) {
-                    if (prIntrospectionEndpoint === pr) {
-                        prIntrospectionEndpoint = undefined;
-                    }
-
+                    assert(error instanceof Error);
+                    console.warn(`oidc-spa: ${error.message}`);
+                    prIntrospectionEndpoint = undefined;
                     throw error;
                 }
-            }
 
-            return await prIntrospectionEndpoint;
+                return introspectionEndpoint;
+            })());
         }
 
         return { getIntrospectionEndpoint };
@@ -65,10 +64,7 @@ export function createOidcSpaUtils<AccessTokenClaims>(params: {
             ): Promise<PublicSigningKeys | undefined> {
                 const paramsOfBootstrap = await dParamsOfBootstrap.pr;
 
-                assert(
-                    paramsOfBootstrap.mode === "real" || paramsOfBootstrap.mode === undefined,
-                    "22933023"
-                );
+                assert(paramsOfBootstrap.mode === "real", "22933023");
 
                 const { issuerUri } = paramsOfBootstrap;
 
@@ -81,7 +77,7 @@ export function createOidcSpaUtils<AccessTokenClaims>(params: {
 
                     if (count === 9) {
                         console.warn(
-                            `Could not fetch public signing keys after ${
+                            `oidc-spa: Could not fetch public signing keys after ${
                                 count + 1
                             } attempts. Resetting exponential backoff.`
                         );
@@ -92,7 +88,7 @@ export function createOidcSpaUtils<AccessTokenClaims>(params: {
                     const delayMs = 1000 * Math.pow(2, count);
 
                     console.warn(
-                        `Could not fetch public signing keys: ${error.message}. Retrying in ${delayMs}ms.`
+                        `oidc-spa: Could not fetch public signing keys: ${error.message}. Retrying in ${delayMs}ms.`
                     );
 
                     await new Promise(resolve => setTimeout(resolve, delayMs));
@@ -261,9 +257,9 @@ export function createOidcSpaUtils<AccessTokenClaims>(params: {
                 break validation;
             }
 
-            assert<Equals<typeof paramsOfBootstrap.mode, "real" | undefined>>;
+            assert<Equals<typeof paramsOfBootstrap.mode, "real">>;
 
-            switch (paramsOfBootstrap.accessTokenValidationMethod) {
+            switch (paramsOfBootstrap.accessTokenValidation.method) {
                 case "offline JWT validation":
                     {
                         let kid: string;
@@ -404,26 +400,23 @@ export function createOidcSpaUtils<AccessTokenClaims>(params: {
                             }
                         }
 
-                        validate_audience: {
-                            const { expectedAccessTokenAudience } = paramsOfBootstrap;
-
-                            if (expectedAccessTokenAudience === undefined) {
-                                break validate_audience;
-                            }
+                        // Validate audience
+                        {
+                            const { expectedAudience } = paramsOfBootstrap.accessTokenValidation;
 
                             const audiences =
                                 accessTokenClaims_original.aud instanceof Array
                                     ? accessTokenClaims_original.aud
                                     : [accessTokenClaims_original.aud];
 
-                            if (!audiences.includes(expectedAccessTokenAudience)) {
+                            if (!audiences.includes(expectedAudience)) {
                                 return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
                                     isSuccess: false,
                                     debugErrorMessage: [
                                         `Not expected audience, got aud claim ${JSON.stringify(
                                             accessTokenClaims_original.aud
                                         )}`,
-                                        `but expected "${expectedAccessTokenAudience}".`
+                                        `but expected "${expectedAudience}".`
                                     ].join(" ")
                                 });
                             }
@@ -432,12 +425,15 @@ export function createOidcSpaUtils<AccessTokenClaims>(params: {
                     break;
                 case "introspection endpoint":
                     {
-                        const { clientId, clientSecret, issuerUri } = paramsOfBootstrap;
+                        const {
+                            issuerUri,
+                            accessTokenValidation: { clientId, clientSecret }
+                        } = paramsOfBootstrap;
 
                         let introspectionEndpoint: string;
 
                         try {
-                            introspectionEndpoint = await getIntrospectionEndpoint(paramsOfBootstrap);
+                            introspectionEndpoint = await getIntrospectionEndpoint();
                         } catch (error) {
                             return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
                                 isSuccess: false,

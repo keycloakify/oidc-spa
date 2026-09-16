@@ -71,23 +71,26 @@ export type ParamsOfBootstrap<AccessTokenClaims> =
     | ParamsOfBootstrap.DecodeOnly;
 
 export namespace ParamsOfBootstrap {
-    export type Real = Real.OfflineJWTValidation | Real.TokenIntrospectionEndpoint;
-
+    export type Real = Real.OfflineJWTValidation | Real.IntrospectionEndpoint;
     export namespace Real {
-        type Common = {
-            mode?: "real";
+        export type Common = {
+            mode: "real";
             issuerUri: string;
         };
 
         export type OfflineJWTValidation = Common & {
-            accessTokenValidationMethod: "offline JWT validation";
-            expectedAccessTokenAudience: string | undefined;
+            accessTokenValidation: {
+                method: "offline JWT validation";
+                expectedAudience: string;
+            };
         };
 
-        export type TokenIntrospectionEndpoint = Common & {
-            accessTokenValidationMethod: "introspection endpoint";
-            clientId: string;
-            clientSecret: string;
+        export type IntrospectionEndpoint = Common & {
+            accessTokenValidation: {
+                method: "introspection endpoint";
+                clientId: string;
+                clientSecret: string;
+            };
         };
     }
 
