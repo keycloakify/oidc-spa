@@ -5,7 +5,7 @@ import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";
 import { getSearchParam, addOrUpdateSearchParam } from "../tools/urlSearchParams";
 import { getRootRelativeOriginalLocationHref_earlyInit } from "../core/earlyInit_rootRelativeOriginalLocationHref";
 import { INFINITY_TIME } from "../tools/INFINITY_TIME";
-import { getBASE_URL_earlyInit } from "../core/earlyInit_BASE_URL";
+import { getBASE_URL_earlyInit } from "./earlyInit_BASE_URL";
 import { decodeJwt } from "../tools/decodeJwt";
 
 export type ParamsOfCreateMockOidc<User, AutoLogin extends boolean> = {
@@ -37,6 +37,11 @@ export type ParamsOfCreateMockOidc<User, AutoLogin extends boolean> = {
 const URL_SEARCH_PARAM_NAME = "isUserLoggedIn";
 
 const locationHref_moduleEvalTime = location.href;
+
+export const ClIENT_ID_MOCK_DEFAULT = "myclientmock";
+export const ISSUER_URI_MOCK_DEFAULT = "https://auth.mycompany.com/realms/mymockrealm";
+export const ACCESS_TOKEN_MOCK_DEFAULT = "mocked-access-token";
+export const ID_TOKEN_MOCK_DEFAULT = "mocked-id-token";
 
 export async function createMockOidc<User = never, AutoLogin extends boolean = false>(
     params: ParamsOfCreateMockOidc<User, AutoLogin>
@@ -100,8 +105,8 @@ export async function createMockOidc<User = never, AutoLogin extends boolean = f
     });
 
     const common: Oidc.Common = {
-        clientId: clientId_mock ?? "mymockclient",
-        issuerUri: issuerUri_mock ?? "https://my-mock-oidc-server.net/realms/mymockrealm",
+        clientId: clientId_mock ?? ClIENT_ID_MOCK_DEFAULT,
+        issuerUri: issuerUri_mock ?? ISSUER_URI_MOCK_DEFAULT,
         validRedirectUri: homeUrl
     };
 
@@ -155,9 +160,9 @@ export async function createMockOidc<User = never, AutoLogin extends boolean = f
         renewTokens: async () => {},
         ...(() => {
             const tokens_common: Oidc.Tokens.Common = {
-                accessToken: accessToken_mock ?? "mocked-access-token",
+                accessToken: accessToken_mock ?? ACCESS_TOKEN_MOCK_DEFAULT,
                 accessTokenExpirationTime: accessTokenExpirationTime_mock ?? INFINITY_TIME,
-                idToken: idToken_mock ?? "mocked-id-token",
+                idToken: idToken_mock ?? ID_TOKEN_MOCK_DEFAULT,
                 decodedIdToken: (() => {
                     if (decodedIdToken_mock !== undefined) {
                         return decodedIdToken_mock;

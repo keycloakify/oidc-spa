@@ -43,7 +43,11 @@ export namespace ValidateAndGetAccessTokenClaims {
     }
 
     export type ReturnType<AccessTokenClaims> =
-        | (ReturnType.Success<AccessTokenClaims> & { errorCause?: never; debugErrorMessage?: never })
+        | (ReturnType.Success<AccessTokenClaims> & {
+              errorCause?: never;
+              debugErrorMessage?: never;
+              recommendedHttpErrorStatusCode?: never;
+          })
         | (ReturnType.Errored & {
               accessTokenClaims?: never;
               accessTokenClaims_original?: never;
@@ -60,6 +64,7 @@ export namespace ValidateAndGetAccessTokenClaims {
 
         export type Errored = {
             isSuccess: false;
+            recommendedHttpErrorStatusCode: 401 | 500 | 503;
             debugErrorMessage: string;
         };
     }
@@ -71,27 +76,28 @@ export type ParamsOfBootstrap<AccessTokenClaims> =
     | ParamsOfBootstrap.DecodeOnly;
 
 export namespace ParamsOfBootstrap {
-    export type Real = Real.OfflineJWTValidation | Real.IntrospectionEndpoint;
+    export type Real = {
+        mode: "real";
+        issuerUri: string;
+        accessTokenValidation: Real.AccessTokenValidation;
+    };
     export namespace Real {
-        export type Common = {
-            mode: "real";
-            issuerUri: string;
-        };
+        export type AccessTokenValidation =
+            | AccessTokenValidation.OfflineJWTValidation
+            | AccessTokenValidation.IntrospectionEndpoint;
 
-        export type OfflineJWTValidation = Common & {
-            accessTokenValidation: {
+        export namespace AccessTokenValidation {
+            export type OfflineJWTValidation = {
                 method: "offline JWT validation";
                 expectedAudience: string;
             };
-        };
 
-        export type IntrospectionEndpoint = Common & {
-            accessTokenValidation: {
+            export type IntrospectionEndpoint = {
                 method: "introspection endpoint";
                 clientId: string;
                 clientSecret: string;
             };
-        };
+        }
     }
 
     export type Mock<AccessTokenClaims> = {

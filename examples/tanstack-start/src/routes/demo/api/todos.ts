@@ -7,11 +7,11 @@ export const Route = createFileRoute("/demo/api/todos")({
         middleware: [oidcRequestMiddleware({ require: "authed request" })],
         handlers: {
             GET: async ({ context: { oidc } }) => {
-                const userId = oidc.accessTokenClaims.sub;
+                const { user } = oidc;
 
                 const todosStore = getTodosStore();
 
-                const todos = await todosStore.readTodos({ userId });
+                const todos = await todosStore.readTodos({ userId: user.id });
 
                 return new Response(JSON.stringify(todos), {
                     headers: {

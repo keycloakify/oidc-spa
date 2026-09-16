@@ -9,25 +9,25 @@ import { getTodosStore } from "#/data/todos";
 const getTodos = createServerFn({ method: "GET" })
     .middleware([oidcFnMiddleware({ require: "authed request" })])
     .handler(async ({ context: { oidc } }) => {
-        const userId = oidc.accessTokenClaims.sub;
+        const { user } = oidc;
 
         const todosStore = getTodosStore();
 
-        return await todosStore.readTodos({ userId });
+        return await todosStore.readTodos({ userId: user.id });
     });
 
 const addTodo = createServerFn({ method: "POST" })
     .validator((d: string) => d)
     .middleware([oidcFnMiddleware({ require: "authed request" })])
     .handler(async ({ data, context: { oidc } }) => {
-        const userId = oidc.accessTokenClaims.sub;
+        const { user } = oidc;
 
         const todosStore = getTodosStore();
 
-        const todos = await todosStore.readTodos({ userId });
+        const todos = await todosStore.readTodos({ userId: user.id });
         todos.push({ id: todos.length + 1, name: data });
 
-        await todosStore.updateTodos({ userId, todos });
+        await todosStore.updateTodos({ userId: user.id, todos });
     });
 
 export const Route = createFileRoute("/demo/start/server-funcs")({

@@ -5,18 +5,16 @@ import type {
     GetOidc,
     ParamsOfBootstrap,
     OidcServerContext,
-    CreateUser,
-    ParamsOfWithAccessTokenValidation
+    CreateClientUser,
+    CreateServerUser,
+    AccessTokenClaims,
+    IdTokenClaims
 } from "./types";
 import type { Oidc as Oidc_core } from "../../core";
 import { OidcInitializationError } from "../../core/OidcInitializationError";
 import { Deferred } from "../../tools/Deferred";
 import { isBrowser } from "../../tools/isBrowser";
-import { assert, type Equals, is } from "../../tools/tsafe/assert";
-import {
-    createObjectWithSomePropertiesThatThrowIfAccessed,
-    THROW_IF_ACCESSED
-} from "../../tools/createObjectThatThrowsIfAccessed";
+import { assert, type Equals } from "../../tools/tsafe/assert";
 import { createStatefulEvt } from "../../tools/StatefulEvt";
 import { id } from "../../tools/tsafe/id";
 import { typeGuard } from "../../tools/tsafe/typeGuard";
@@ -30,31 +28,29 @@ import { BEFORE_LOAD_FN_BRAND_PROPERTY_NAME } from "./disableSsrIfLoginEnforced"
 import { setDesiredPostLoginRedirectUrl } from "../../core/desiredPostLoginRedirectUrl";
 import type { MaybeAsync } from "../../tools/MaybeAsync";
 import { enableStateDataCookie } from "../../core/StateDataCookie";
-import { createValidateAndGetAccessTokenClaims_rfc9068 } from "./accessTokenValidation_rfc9068";
+import { getBASE_URL_earlyInit } from "../../core/earlyInit_BASE_URL";
+import {
+    createObjectThatThrowsIfAccessed,
+    isObjectThatThrowIfAccessed
+} from "../../tools/createObjectThatThrowsIfAccessed";
 
-export function createOidcSpaUtils<
-    User,
-    AutoLogin extends boolean,
-    AccessTokenClaims extends Record<string, unknown> | undefined
->(params: {
+export function createUtils<User_client, User_server, AutoLogin extends boolean>(params: {
     autoLogin: AutoLogin;
-    paramsOfWithAccessTokenValidation: ParamsOfWithAccessTokenValidation<AccessTokenClaims> | undefined;
-    createUser: CreateUser<User> | undefined;
-    user_mock: User | undefined;
-}): OidcSpaUtils<User, AutoLogin, AccessTokenClaims> {
-    const {
-        autoLogin,
-        paramsOfWithAccessTokenValidation,
-        createUser,
-        user_mock: user_mock_static
-    } = params;
+    createClientUser: CreateClientUser<User_client>;
+    createServerUser: CreateServerUser<User_server> | undefined;
+}): OidcSpaUtils<User_client, User_server, AutoLogin> {
+    const { autoLogin, createClientUser, createServerUser } = params;
 
-    const dParamsOfBootstrap = new Deferred<ParamsOfBootstrap<User, AutoLogin, AccessTokenClaims>>();
+    const dParamsOfBootstrap = new Deferred<ParamsOfBootstrap<User_client, User_server, AutoLogin>>();
 
-    const dOidcCoreOrInitializationError = new Deferred<Oidc_core<User> | OidcInitializationError>();
+    const dOidcCoreOrInitializationError = new Deferred<
+        Oidc_core<User_client> | OidcInitializationError
+    >();
 
     const dResultOfGetUserOrInitializationErrorOrUndefined = new Deferred<
-        Awaited<ReturnType<Oidc_core.LoggedIn<User>["getUser"]>> | OidcInitializationError | undefined
+        | Awaited<ReturnType<Oidc_core.LoggedIn<User_client>["getUser"]>>
+        | OidcInitializationError
+        | undefined
     >();
 
     const evtAutoLogoutState = createStatefulEvt<UseOidc.Oidc.LoggedIn<unknown>["autoLogoutState"]>(
@@ -68,12 +64,12 @@ export function createOidcSpaUtils<
 
         assert(hasResolved);
 
-        if (paramsOfBootstrap.implementation === "mock") {
+        if (paramsOfBootstrap.mode === "mock") {
             return;
         }
-        assert<Equals<typeof paramsOfBootstrap.implementation, "real">>;
+        assert<Equals<typeof paramsOfBootstrap.mode, "real">>;
 
-        const { warnUserSecondsBeforeAutoLogout = 60 } = paramsOfBootstrap;
+        const { warnUserSecondsBeforeAutoLogout = 60 } = paramsOfBootstrap.client;
 
         if (
             oidcCoreOrInitializationError === undefined ||
@@ -118,7 +114,7 @@ export function createOidcSpaUtils<
 
     function useOidc(params?: {
         assert?: "user logged in" | "user not logged in" | "ready";
-    }): UseOidc.Oidc<User> {
+    }): UseOidc.Oidc<User_client> {
         const { assert: assert_params } = params ?? {};
 
         const {
@@ -230,7 +226,7 @@ export function createOidcSpaUtils<
 
         const [evtIsUserUsed] = useState(() => createStatefulEvt<boolean>(() => false));
         {
-            const [, reRenderIfUserChanged] = useState<User | undefined>(() => {
+            const [, reRenderIfUserChanged] = useState<User_client | undefined>(() => {
                 if (!hasResolved) {
                     return undefined;
                 }
@@ -251,11 +247,11 @@ export function createOidcSpaUtils<
                     return;
                 }
 
-                if (resultOfGetUserOrInitializationErrorOrUndefined instanceof Error) {
+                if (resultOfGetUserOrInitializationErrorOrUndefined === undefined) {
                     return;
                 }
 
-                if (resultOfGetUserOrInitializationErrorOrUndefined === undefined) {
+                if (resultOfGetUserOrInitializationErrorOrUndefined instanceof Error) {
                     return;
                 }
 
@@ -397,67 +393,40 @@ export function createOidcSpaUtils<
             });
         }
 
-        const resultOfGetUserOrUndefined = resultOfGetUserOrInitializationErrorOrUndefined;
+        assert(resultOfGetUserOrInitializationErrorOrUndefined !== undefined);
 
-        const oidc = createObjectWithSomePropertiesThatThrowIfAccessed<UseOidc.Oidc.LoggedIn<User>>(
-            {
-                isOidcReady: true,
-                isUserLoggedIn: true,
-                logout: oidcCore.logout,
-                renewTokens: oidcCore.renewTokens,
-                goToAuthServer: oidcCore.goToAuthServer,
-                backFromAuthServer: oidcCore.backFromAuthServer,
-                isNewBrowserSession: oidcCore.isNewBrowserSession,
-                autoLogoutState: null as any,
-                issuerUri: oidcCore.issuerUri,
-                clientId: oidcCore.clientId,
-                validRedirectUri: oidcCore.validRedirectUri,
-                user: resultOfGetUserOrUndefined === undefined ? THROW_IF_ACCESSED : (null as any),
-                refreshUser: (() => {
-                    if (resultOfGetUserOrUndefined === undefined) {
-                        return THROW_IF_ACCESSED;
-                    }
+        const resultOfGetUser = resultOfGetUserOrInitializationErrorOrUndefined;
 
-                    const resultOfGetUser = resultOfGetUserOrUndefined;
-
-                    return resultOfGetUser.refreshUser;
-                })()
+        const oidc: UseOidc.Oidc.LoggedIn<User_client> = {
+            isOidcReady: true,
+            isUserLoggedIn: true,
+            logout: oidcCore.logout,
+            renewTokens: oidcCore.renewTokens,
+            goToAuthServer: oidcCore.goToAuthServer,
+            backFromAuthServer: oidcCore.backFromAuthServer,
+            isNewBrowserSession: oidcCore.isNewBrowserSession,
+            get autoLogoutState() {
+                evtIsAutoLogoutStateUsed.current = true;
+                return evtAutoLogoutState.current;
             },
-            [
-                "oidc-spa: You must use oidcSpa.withUser() to implement the user abstraction",
-                "See: https://docs.oidc-spa.dev/v/v10/features/user"
-            ].join(" ")
-        );
-
-        Object.defineProperties(oidc, {
-            autoLogoutState: {
-                enumerable: true,
-                get: () => {
-                    evtIsAutoLogoutStateUsed.current = true;
-                    return evtAutoLogoutState.current;
-                }
-            }
-        });
-
-        if (resultOfGetUserOrUndefined !== undefined) {
-            const resultOfGetUser = resultOfGetUserOrUndefined;
-            Object.defineProperty(oidc, "user", {
-                enumerable: true,
-                get: () => {
-                    evtIsUserUsed.current = true;
-                    return resultOfGetUser.user;
-                }
-            });
-        }
+            issuerUri: oidcCore.issuerUri,
+            clientId: oidcCore.clientId,
+            validRedirectUri: oidcCore.validRedirectUri,
+            get user() {
+                evtIsUserUsed.current = true;
+                return resultOfGetUser.user;
+            },
+            refreshUser: resultOfGetUser.refreshUser
+        };
 
         return oidc;
     }
 
-    let oidc_cached: GetOidc.Oidc<User> | undefined = undefined;
+    let oidc_cached: GetOidc.Oidc<User_client> | undefined = undefined;
 
     async function getOidc(params?: {
         assert?: "user logged in" | "user not logged in" | "init completed";
-    }): Promise<GetOidc.Oidc<User>> {
+    }): Promise<GetOidc.Oidc<User_client>> {
         if (!isBrowser) {
             throw new Error(
                 [
@@ -496,22 +465,21 @@ export function createOidcSpaUtils<
         }
 
         oidc_cached = oidcCore.isUserLoggedIn
-            ? id<GetOidc.Oidc.LoggedIn<User>>({
+            ? id<GetOidc.Oidc.LoggedIn<User_client>>({
                   issuerUri: oidcCore.issuerUri,
                   clientId: oidcCore.clientId,
                   validRedirectUri: oidcCore.validRedirectUri,
                   isUserLoggedIn: true,
                   getAccessToken: oidcCore.getAccessToken,
-                  subscribeToTokenRotation: next => {
+                  subscribeAccessTokenRotation: next => {
                       const { unsubscribeFromTokensChange } = oidcCore.subscribeToTokensChange(
-                          ({ accessToken, decodedIdToken }) => {
-                              next({ accessToken, decodedIdToken });
+                          ({ accessToken }) => {
+                              next({ accessToken });
                           }
                       );
 
-                      return { unsubscribeFromTokenRotation: unsubscribeFromTokensChange };
+                      return { unsubscribeFromAccessTokenRotation: unsubscribeFromTokensChange };
                   },
-                  getDecodedIdToken: oidcCore.getDecodedIdToken,
                   logout: oidcCore.logout,
                   renewTokens: oidcCore.renewTokens,
                   goToAuthServer: oidcCore.goToAuthServer,
@@ -545,7 +513,7 @@ export function createOidcSpaUtils<
     const bootstrapOidc = (
         getParamsOfBootstrapOrDirectValue: GetterOrDirectValue<
             { process: { env: Record<string, string> } },
-            ParamsOfBootstrap<User, AutoLogin, AccessTokenClaims>
+            ParamsOfBootstrap<User_client, User_server, AutoLogin>
         >
     ) => {
         if (hasBootstrapBeenCalled) {
@@ -588,8 +556,8 @@ export function createOidcSpaUtils<
                 const paramsOfBootstrap = getParamsOfBootstrap({ process: { env: env_proxy } });
 
                 if (
-                    paramsOfBootstrap.implementation === "real" &&
-                    (!paramsOfBootstrap.issuerUri || !paramsOfBootstrap.clientId)
+                    paramsOfBootstrap.mode === "real" &&
+                    (!paramsOfBootstrap.issuerUri || !paramsOfBootstrap.client.clientId)
                 ) {
                     throw new Error(
                         [
@@ -616,6 +584,26 @@ export function createOidcSpaUtils<
 
                 const env: Record<string, string> = {};
 
+                const { createProbe, parseProbe } = (() => {
+                    const prefix = "oidc-spa_probe:";
+
+                    return {
+                        createProbe: (envName: string) => `${prefix}${envName}`,
+                        parseProbe: (maybeProbe: unknown): string | undefined => {
+                            if (typeof maybeProbe !== "string") {
+                                return undefined;
+                            }
+                            const [, envName] = maybeProbe.split(prefix);
+
+                            if (envName === undefined) {
+                                return undefined;
+                            }
+
+                            return envName;
+                        }
+                    };
+                })();
+
                 const env_proxy = new Proxy(env, {
                     get: (...[, envName]) => {
                         assert(typeof envName === "string");
@@ -626,7 +614,7 @@ export function createOidcSpaUtils<
 
                         envNamesToPullFromServer.add(envName);
 
-                        return "oidc_spa_probe";
+                        return createProbe(envName);
                     },
                     has: (...[, envName]) => {
                         assert(typeof envName === "string");
@@ -644,7 +632,7 @@ export function createOidcSpaUtils<
                 let result:
                     | {
                           hasThrown: false;
-                          paramsOfBootstrap: ParamsOfBootstrap<User, AutoLogin, AccessTokenClaims>;
+                          paramsOfBootstrap: ParamsOfBootstrap<User_client, User_server, AutoLogin>;
                       }
                     | {
                           hasThrown: true;
@@ -667,6 +655,53 @@ export function createOidcSpaUtils<
                             hasThrown: true,
                             error
                         };
+                    }
+
+                    do_not_pull_client_secret: {
+                        if (result.hasThrown) {
+                            break do_not_pull_client_secret;
+                        }
+
+                        const { paramsOfBootstrap } = result;
+
+                        if (paramsOfBootstrap.mode !== "real") {
+                            break do_not_pull_client_secret;
+                        }
+
+                        const { server } = paramsOfBootstrap;
+
+                        if (server.accessTokenValidationMethod !== "introspection endpoint") {
+                            break do_not_pull_client_secret;
+                        }
+
+                        const { clientSecret } = server;
+
+                        const envName = parseProbe(clientSecret);
+
+                        if (envName === undefined) {
+                            if (clientSecret.length > 10) {
+                                console.warn(
+                                    [
+                                        `oidc-spa: You are leaking the server client secret to the frontend: ${clientSecret}`,
+                                        "The recommended approach is to store it in an env variable that isn't bundled into",
+                                        "the client dist."
+                                    ].join(" ")
+                                );
+                            }
+                            break do_not_pull_client_secret;
+                        }
+
+                        envNamesToPullFromServer.delete(envName);
+
+                        server.clientSecret = "redacted on client";
+                    }
+
+                    if (result.hasThrown) {
+                        for (const envName of envNamesToPullFromServer) {
+                            if (envName.toLocaleLowerCase().includes("secret")) {
+                                envNamesToPullFromServer.delete(envName);
+                            }
+                        }
                     }
 
                     if (envNamesToPullFromServer.size === 0) {
@@ -695,37 +730,94 @@ export function createOidcSpaUtils<
                     );
                 }
 
-                return result.paramsOfBootstrap;
+                const { paramsOfBootstrap } = result;
+
+                return paramsOfBootstrap;
             })();
 
             dParamsOfBootstrap.resolve(paramsOfBootstrap);
 
-            switch (paramsOfBootstrap.implementation) {
+            switch (paramsOfBootstrap.mode) {
                 case "mock":
                     {
-                        const { createMockOidc } = await import("../../core/createMockOidc");
+                        const [
+                            {
+                                createMockOidc: createMockOidc_core,
+                                ACCESS_TOKEN_MOCK_DEFAULT,
+                                ClIENT_ID_MOCK_DEFAULT,
+                                ID_TOKEN_MOCK_DEFAULT,
+                                ISSUER_URI_MOCK_DEFAULT
+                            },
+                            { decodeJwt }
+                        ] = await Promise.all([
+                            import("../../core/createMockOidc"),
+                            import("../../tools/decodeJwt")
+                        ]);
 
-                        const user_mock = paramsOfBootstrap.user_mock ?? user_mock_static;
+                        const clientId_mock =
+                            paramsOfBootstrap.client?.clientId_mock ?? ClIENT_ID_MOCK_DEFAULT;
 
-                        const oidcCore = await createMockOidc({
+                        const issuerUri_mock =
+                            paramsOfBootstrap.issuerUri_mock ?? ISSUER_URI_MOCK_DEFAULT;
+
+                        const accessToken_mock =
+                            paramsOfBootstrap.accessToken_mock ?? ACCESS_TOKEN_MOCK_DEFAULT;
+
+                        const idToken_mock = ID_TOKEN_MOCK_DEFAULT;
+
+                        const idTokenClaims_mock = (() => {
+                            if (idToken_mock !== undefined) {
+                                try {
+                                    return decodeJwt<IdTokenClaims>(idToken_mock);
+                                } catch {}
+                            }
+
+                            return createObjectThatThrowsIfAccessed<IdTokenClaims>({
+                                debugMessage: [
+                                    "You haven't provided a mocked decodedIdToken",
+                                    "See https://docs.oidc-spa.dev/v/v10/integration-guides/usage#mock-adapter"
+                                ].join("\n")
+                            });
+                        })();
+
+                        const BASE_URL = getBASE_URL_earlyInit();
+
+                        assert(BASE_URL !== undefined);
+
+                        const oidcCore = await createMockOidc_core({
                             // NOTE: The `as false` is lying here, it's just to preserve some level of type-safety.
                             autoLogin: autoLogin as false,
-                            // NOTE: Same here, the nullish coalescing is lying.
-                            isUserInitiallyLoggedIn: paramsOfBootstrap.isUserInitiallyLoggedIn!,
-                            clientId_mock: paramsOfBootstrap.clientId_mock,
-                            issuerUri_mock: paramsOfBootstrap.issuerUri_mock,
-                            decodedIdToken_mock: paramsOfBootstrap.decodedIdToken_mock,
-                            user_mock
+                            isUserInitiallyLoggedIn:
+                                paramsOfBootstrap.client?.isUserInitiallyLoggedIn ?? true,
+                            clientId_mock,
+                            issuerUri_mock,
+                            idToken_mock,
+                            decodedIdToken_mock: paramsOfBootstrap.client?.idTokenClaims_mock,
+                            accessToken_mock,
+                            user_mock: await createClientUser({
+                                isMock: true,
+                                idTokenClaims: idTokenClaims_mock,
+                                accessToken: accessToken_mock,
+                                fetchUserInfo: async () => {
+                                    if (isObjectThatThrowIfAccessed(idTokenClaims_mock)) {
+                                        throw new Error("Can't use fetchUserInfo in mockMode");
+                                    }
+                                    return idTokenClaims_mock;
+                                },
+                                issuerUri: issuerUri_mock,
+                                clientId: clientId_mock,
+                                validRedirectUri: toFullyQualifiedUrl({
+                                    urlish: BASE_URL,
+                                    doAssertNoQueryParams: true,
+                                    doOutputWithTrailingSlash: true
+                                }),
+                                user_current: undefined
+                            })
                         });
 
                         dOidcCoreOrInitializationError.resolve(oidcCore);
 
                         set_result_of_getUser: {
-                            if (user_mock === undefined) {
-                                dResultOfGetUserOrInitializationErrorOrUndefined.resolve(undefined);
-                                break set_result_of_getUser;
-                            }
-
                             if (!oidcCore.isUserLoggedIn) {
                                 dResultOfGetUserOrInitializationErrorOrUndefined.resolve(undefined);
                                 break set_result_of_getUser;
@@ -741,30 +833,42 @@ export function createOidcSpaUtils<
                     {
                         enableStateDataCookie();
 
-                        const { createOidc } = await prModuleCore;
+                        const { createOidc: createOidc_core } = await prModuleCore;
 
-                        let oidcCoreOrInitializationError: Oidc_core<User> | OidcInitializationError;
+                        let oidcCoreOrInitializationError:
+                            | Oidc_core<User_client>
+                            | OidcInitializationError;
 
                         try {
-                            oidcCoreOrInitializationError = await createOidc({
+                            oidcCoreOrInitializationError = await createOidc_core<
+                                User_client,
+                                AutoLogin
+                            >({
                                 autoLogin,
                                 issuerUri: paramsOfBootstrap.issuerUri,
-                                clientId: paramsOfBootstrap.clientId,
+                                clientId: paramsOfBootstrap.client.clientId,
                                 idleSessionLifetimeInSeconds:
-                                    paramsOfBootstrap.idleSessionLifetimeInSeconds,
-                                scopes: paramsOfBootstrap.scopes,
-                                transformUrlBeforeRedirect: paramsOfBootstrap.transformUrlBeforeRedirect,
-                                extraQueryParams: paramsOfBootstrap.extraQueryParams,
-                                extraTokenParams: paramsOfBootstrap.extraTokenParams,
-                                sessionRestorationMethod: paramsOfBootstrap.sessionRestorationMethod,
+                                    paramsOfBootstrap.client.idleSessionLifetimeInSeconds,
+                                scopes: paramsOfBootstrap.client.scopes,
+                                transformUrlBeforeRedirect:
+                                    paramsOfBootstrap.client.transformUrlBeforeRedirect,
+                                extraQueryParams: paramsOfBootstrap.client.extraQueryParams,
+                                extraTokenParams: paramsOfBootstrap.client.extraTokenParams,
+                                sessionRestorationMethod:
+                                    paramsOfBootstrap.client.sessionRestorationMethod,
                                 debugLogs: paramsOfBootstrap.debugLogs,
-                                __unsafe_clientSecret: paramsOfBootstrap.__unsafe_clientSecret,
-                                __metadata: paramsOfBootstrap.__metadata,
+                                __unsafe_clientSecret: paramsOfBootstrap.client.__unsafe_clientSecret,
+                                __metadata: paramsOfBootstrap.client.__metadata,
                                 __unsafe_useIdTokenAsAccessToken:
-                                    paramsOfBootstrap.__unsafe_useIdTokenAsAccessToken,
-                                autoLogoutParams: paramsOfBootstrap.autoLogoutParams,
-                                disableDPoP: paramsOfBootstrap.disableDPoP,
-                                createUser
+                                    paramsOfBootstrap.client.__unsafe_useIdTokenAsAccessToken,
+                                autoLogoutParams: paramsOfBootstrap.client.autoLogoutParams,
+                                disableDPoP: paramsOfBootstrap.client.disableDPoP,
+                                createUser: ({ decodedIdToken, ...params }) =>
+                                    createClientUser({
+                                        isMock: false,
+                                        ...params,
+                                        idTokenClaims: decodedIdToken
+                                    })
                             });
                         } catch (error) {
                             if (!(error instanceof OidcInitializationError)) {
@@ -778,18 +882,13 @@ export function createOidcSpaUtils<
                         dOidcCoreOrInitializationError.resolve(oidcCoreOrInitializationError);
 
                         set_result_of_getUser: {
-                            if (createUser === undefined) {
-                                dResultOfGetUserOrInitializationErrorOrUndefined.resolve(undefined);
-                                break set_result_of_getUser;
-                            }
-
                             if (!oidcCoreOrInitializationError.isUserLoggedIn) {
                                 dResultOfGetUserOrInitializationErrorOrUndefined.resolve(undefined);
                                 break set_result_of_getUser;
                             }
 
                             let resultOfGetUser: Awaited<
-                                ReturnType<Oidc_core.LoggedIn<User>["getUser"]>
+                                ReturnType<Oidc_core.LoggedIn<User_client>["getUser"]>
                             >;
 
                             try {
@@ -905,62 +1004,96 @@ export function createOidcSpaUtils<
 
     enforceLogin[BEFORE_LOAD_FN_BRAND_PROPERTY_NAME] = true;
 
-    const prValidateAndGetAccessTokenClaims =
-        paramsOfWithAccessTokenValidation === undefined
-            ? undefined
-            : dParamsOfBootstrap.pr.then(async paramsOfBootstrap => {
-                  const { validateAndGetAccessTokenClaims } =
-                      await createValidateAndGetAccessTokenClaims_rfc9068<any>({
-                          paramsOfWithAccessTokenValidation,
-                          paramsOfBootstrap
-                      });
+    const prValidateAndGetAccessTokenClaims = isBrowser
+        ? undefined
+        : dParamsOfBootstrap.pr.then(async paramsOfBootstrap => {
+              if (paramsOfBootstrap.mode === "mock") {
+                  return undefined;
+              }
 
-                  return { validateAndGetAccessTokenClaims };
+              assert<Equals<(typeof paramsOfBootstrap)["mode"], "real">>;
+
+              const { oidcSpa: oidcSpa_server } = await import("../../server");
+
+              const { bootstrapAuth, validateAndGetAccessTokenClaims } = oidcSpa_server.createUtils();
+
+              bootstrapAuth({
+                  mode: "real",
+                  issuerUri: paramsOfBootstrap.issuerUri,
+                  accessTokenValidation: (() => {
+                      switch (paramsOfBootstrap.server.accessTokenValidationMethod) {
+                          case "introspection endpoint":
+                              return {
+                                  method: "introspection endpoint",
+                                  clientId: paramsOfBootstrap.server.clientId,
+                                  clientSecret: paramsOfBootstrap.server.clientSecret
+                              };
+                          case "offline JWT validation":
+                              return {
+                                  method: "offline JWT validation",
+                                  expectedAudience: paramsOfBootstrap.server.expectedAccessTokenAudience
+                              };
+                          default:
+                              assert<Equals<typeof paramsOfBootstrap.server, never>>(false);
+                      }
+                  })()
               });
+
+              return validateAndGetAccessTokenClaims;
+          });
 
     function createFunctionMiddlewareServerFn(params?: {
         require?: "authed request";
-        hasAuthorization?: (params: {
-            accessTokenClaims: AccessTokenClaims;
-        }) => MaybeAsync<boolean | undefined>;
+        hasAuthorization?: (params: { user: User_server }) => MaybeAsync<boolean>;
     }) {
         return async (options: {
-            next: (options: { context: { oidc: OidcServerContext<AccessTokenClaims> } }) => any;
+            next: (options: { context: { oidc: OidcServerContext<User_server> } }) => any;
         }): Promise<any> => {
+            assert(prValidateAndGetAccessTokenClaims !== undefined);
+            assert(createServerUser !== undefined);
+
             const { next } = options;
 
-            const createError = (params: {
-                code: 400 | 401 | 403;
-                wwwAuthenticateResponseHeaderValue: string;
-                debugErrorMessage: string;
-            }) => {
-                const { code, wwwAuthenticateResponseHeaderValue, debugErrorMessage } = params;
+            const paramsOfBootstrap = await dParamsOfBootstrap.pr;
 
-                setResponseHeader("WWW-Authenticate", wwwAuthenticateResponseHeaderValue);
-                setResponseStatus(
-                    code,
-                    (() => {
-                        switch (code) {
-                            case 400:
-                                return "Bad Request";
-                            case 401:
-                                return "Unauthorized";
-                            case 403:
-                                return "Forbidden";
-                            default:
-                                assert<Equals<typeof code, never>>(false);
-                        }
-                    })()
-                );
+            if (paramsOfBootstrap.mode === "mock") {
+                const accessToken_mock =
+                    paramsOfBootstrap.accessToken_mock ??
+                    id<typeof import("../../core/createMockOidc").ACCESS_TOKEN_MOCK_DEFAULT>(
+                        "mocked-access-token"
+                    );
 
-                if (process.env.NODE_ENV === "development") {
-                    console.error(`oidc-spa: ${debugErrorMessage}`);
+                let user_mock: User_server;
+
+                try {
+                    user_mock = await createServerUser({
+                        isMock: true,
+                        accessToken: accessToken_mock,
+                        accessTokenClaims:
+                            paramsOfBootstrap.server?.accessTokenClaims_mock ??
+                            createObjectThatThrowsIfAccessed<AccessTokenClaims>({
+                                debugMessage: "No accessTokenClaims_mock provided"
+                            })
+                    });
+                } catch (error) {
+                    setResponseStatus(500);
+                    throw error;
                 }
 
-                return new Error(`oidc-spa: ${wwwAuthenticateResponseHeaderValue}`);
-            };
+                return next({
+                    context: {
+                        oidc: id<OidcServerContext<User_server>>(
+                            id<OidcServerContext.LoggedIn<User_server>>({
+                                isAuthedRequest: true,
+                                accessToken: accessToken_mock,
+                                user: user_mock
+                            })
+                        )
+                    }
+                });
+            }
 
-            assert(prValidateAndGetAccessTokenClaims !== undefined);
+            assert<Equals<(typeof paramsOfBootstrap)["mode"], "real">>;
 
             const { extractRequestAuthContext } = await import("../../server/extractRequestAuthContext");
 
@@ -971,22 +1104,17 @@ export function createOidcSpaUtils<
 
             if (requestAuthContext === undefined) {
                 if (params?.require === "authed request") {
-                    throw createError({
-                        code: 401,
-                        wwwAuthenticateResponseHeaderValue:
-                            'Bearer error="invalid_request", error_description="Missing access token"',
-                        debugErrorMessage: [
-                            "Authentication required for this request",
-                            "but no access token was attached to the request"
-                        ].join(" ")
-                    });
+                    const wwwAuthenticateResponseHeaderValue =
+                        'Bearer error="invalid_request", error_description="Missing access token"';
+                    setResponseHeader("WWW-Authenticate", wwwAuthenticateResponseHeaderValue);
+                    setResponseStatus(401, "Unauthorized");
+                    throw new Error(wwwAuthenticateResponseHeaderValue);
                 }
-
                 return next({
                     context: {
-                        oidc: id<OidcServerContext<AccessTokenClaims>>(
+                        oidc: id<OidcServerContext<User_server>>(
                             id<OidcServerContext.NotLoggedIn>({
-                                isUserLoggedIn: false
+                                isAuthedRequest: false
                             })
                         )
                     }
@@ -994,33 +1122,49 @@ export function createOidcSpaUtils<
             }
 
             if (!requestAuthContext.isWellFormed) {
-                throw createError({
-                    code: 400,
-                    wwwAuthenticateResponseHeaderValue:
-                        'Bearer error="invalid_request", error_description="Malformed or unsupported request"',
-                    debugErrorMessage: requestAuthContext.debugErrorMessage
-                });
+                const wwwAuthenticateResponseHeaderValue =
+                    'Bearer error="invalid_request", error_description="Malformed or unsupported request"';
+                setResponseHeader("WWW-Authenticate", wwwAuthenticateResponseHeaderValue);
+                setResponseStatus(400, "Bad Request");
+                throw new Error(wwwAuthenticateResponseHeaderValue);
             }
 
-            const { validateAndGetAccessTokenClaims } = await prValidateAndGetAccessTokenClaims;
+            const validateAndGetAccessTokenClaims = await prValidateAndGetAccessTokenClaims;
 
-            const resultOfValidate = await validateAndGetAccessTokenClaims(
-                requestAuthContext.accessTokenAndMetadata
-            );
+            assert(validateAndGetAccessTokenClaims !== undefined);
 
-            if (!resultOfValidate.isSuccess) {
-                const { debugErrorMessage, wwwAuthenticateResponseHeaderValue } = resultOfValidate;
+            const { isSuccess, accessToken, accessTokenClaims, recommendedHttpErrorStatusCode } =
+                await validateAndGetAccessTokenClaims(requestAuthContext.accessTokenAndMetadata);
 
-                throw createError({
-                    code: 401,
-                    wwwAuthenticateResponseHeaderValue,
-                    debugErrorMessage
-                });
+            if (!isSuccess) {
+                setResponseStatus(recommendedHttpErrorStatusCode);
+
+                const wwwAuthenticateResponseHeaderValue = `Bearer error="invalid_request", error_description="${(() => {
+                    switch (recommendedHttpErrorStatusCode) {
+                        case 401:
+                            return "Invalid token";
+                        case 500:
+                            return "Internal server error";
+                        case 503:
+                            return "Retry later";
+                    }
+                })()}"`;
+                setResponseHeader("WWW-Authenticate", wwwAuthenticateResponseHeaderValue);
+                throw new Error(wwwAuthenticateResponseHeaderValue);
             }
 
-            const { accessTokenClaims, accessToken } = resultOfValidate;
+            let user: User_server;
 
-            assert(is<Exclude<AccessTokenClaims, undefined>>(accessTokenClaims));
+            try {
+                user = await createServerUser({
+                    isMock: false,
+                    accessToken,
+                    accessTokenClaims
+                });
+            } catch (error) {
+                setResponseStatus(500);
+                throw error;
+            }
 
             check_authorization: {
                 const getHasAuthorization = params?.hasAuthorization;
@@ -1029,50 +1173,36 @@ export function createOidcSpaUtils<
                     break check_authorization;
                 }
 
-                const accessedClaimNames = new Set<string>();
+                let hasAuthorization: boolean;
 
-                const accessTokenClaims_proxy = new Proxy(accessTokenClaims, {
-                    get(...args) {
-                        const [, claimName] = args;
-
-                        record_claim_access: {
-                            if (typeof claimName !== "string") {
-                                break record_claim_access;
-                            }
-
-                            accessedClaimNames.add(claimName);
-                        }
-
-                        return Reflect.get(...args);
-                    }
-                });
-
-                const hasAuthorization = await getHasAuthorization({
-                    accessTokenClaims: accessTokenClaims_proxy
-                });
+                try {
+                    hasAuthorization = await getHasAuthorization({ user });
+                } catch (error) {
+                    setResponseStatus(500);
+                    throw error;
+                }
 
                 if (hasAuthorization) {
                     break check_authorization;
                 }
 
-                throw createError({
-                    code: 403,
-                    wwwAuthenticateResponseHeaderValue:
-                        'Bearer error="insufficient_scope", error_description="Insufficient privileges"',
-                    debugErrorMessage: [
-                        "Missing or invalid required access token claim.",
-                        `Related to claims: ${Array.from(accessedClaimNames).join(" and/or ")}`
-                    ].join(" ")
-                });
+                setResponseStatus(403);
+
+                const wwwAuthenticateResponseHeaderValue =
+                    'Bearer error="insufficient_scope", error_description="Insufficient privileges"';
+
+                setResponseHeader("WWW-Authenticate", wwwAuthenticateResponseHeaderValue);
+
+                throw new Error(wwwAuthenticateResponseHeaderValue);
             }
 
             return next({
                 context: {
-                    oidc: id<OidcServerContext<AccessTokenClaims>>(
-                        id<OidcServerContext.LoggedIn<AccessTokenClaims>>({
-                            isUserLoggedIn: true,
+                    oidc: id<OidcServerContext<User_server>>(
+                        id<OidcServerContext.LoggedIn<User_server>>({
+                            isAuthedRequest: true,
                             accessToken,
-                            accessTokenClaims
+                            user
                         })
                     )
                 }
@@ -1082,20 +1212,16 @@ export function createOidcSpaUtils<
 
     function oidcRequestMiddleware(params?: {
         require?: "authed request";
-        hasAuthorization?: (params: {
-            accessTokenClaims: AccessTokenClaims;
-        }) => MaybeAsync<boolean | undefined>;
+        hasAuthorization?: (params: { user: User_server }) => MaybeAsync<boolean>;
     }) {
         return createMiddleware({ type: "request" }).server<{
-            oidc: OidcServerContext<AccessTokenClaims>;
+            oidc: OidcServerContext<User_server>;
         }>(createFunctionMiddlewareServerFn(params));
     }
 
     function oidcFnMiddleware(params?: {
         require?: "authed request";
-        hasAuthorization?: (params: {
-            accessTokenClaims: AccessTokenClaims;
-        }) => MaybeAsync<boolean | undefined>;
+        hasAuthorization?: (params: { user: User_server }) => MaybeAsync<boolean>;
     }) {
         return createMiddleware({ type: "function" })
             .client(async ({ next }) => {
