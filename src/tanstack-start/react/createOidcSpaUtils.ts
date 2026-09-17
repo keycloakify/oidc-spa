@@ -755,7 +755,7 @@ export function createOidcSpaUtils<
     enforceLogin[BEFORE_LOAD_FN_BRAND_PROPERTY_NAME] = true;
 
     const prValidateAndGetAccessTokenClaims =
-        createValidateAndGetAccessTokenClaims === undefined
+        createValidateAndGetAccessTokenClaims === undefined || isBrowser
             ? undefined
             : dParamsOfBootstrap.pr.then(paramsOfBootstrap =>
                   createValidateAndGetAccessTokenClaims({
