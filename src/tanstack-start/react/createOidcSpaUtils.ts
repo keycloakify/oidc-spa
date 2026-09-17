@@ -17,7 +17,6 @@ import { isBrowser } from "../../tools/isBrowser";
 import { assert, type Equals } from "../../tools/tsafe/assert";
 import { createStatefulEvt } from "../../tools/StatefulEvt";
 import { id } from "../../tools/tsafe/id";
-import { typeGuard } from "../../tools/tsafe/typeGuard";
 import type { GetterOrDirectValue } from "../../tools/GetterOrDirectValue";
 import { createServerFn, createMiddleware } from "@tanstack/react-start";
 // @ts-expect-error: Since our module is not labeled as ESM we don't have the types here.
@@ -539,16 +538,15 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
 
                             const value = process.env[envName];
 
-                            if (value === undefined) {
+                            if (!value) {
                                 missingEnvNames.add(envName);
-                                return "";
                             }
 
                             return value;
                         },
                         has: (...[, envName]) => {
                             assert(typeof envName === "string");
-                            return true;
+                            return envName in process.env;
                         }
                     }
                 );
@@ -580,160 +578,52 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
             assert(prModuleCore !== undefined);
 
             const paramsOfBootstrap = await (async () => {
-                let envNamesToPullFromServer = new Set<string>();
-
-                const env: Record<string, string> = {};
-
-                const { createProbe, parseProbe } = (() => {
-                    const prefix = "oidc-spa_probe:";
-
-                    return {
-                        createProbe: (envName: string) => `${prefix}${envName}`,
-                        parseProbe: (maybeProbe: unknown): string | undefined => {
-                            if (typeof maybeProbe !== "string") {
-                                return undefined;
-                            }
-                            const [, envName] = maybeProbe.split(prefix);
-
-                            if (envName === undefined) {
-                                return undefined;
-                            }
-
-                            return envName;
-                        }
-                    };
-                })();
-
-                const env_proxy = new Proxy(env, {
-                    get: (...[, envName]) => {
-                        assert(typeof envName === "string");
-
-                        if (envName in env) {
-                            return env[envName];
-                        }
-
-                        envNamesToPullFromServer.add(envName);
-
-                        return createProbe(envName);
-                    },
-                    has: (...[, envName]) => {
-                        assert(typeof envName === "string");
-
-                        if (envName in env) {
-                            return true;
-                        }
-
-                        envNamesToPullFromServer.add(envName);
-
-                        return true;
+                class OidcSpaServerEnvRetrievalError extends Error {
+                    constructor(params: { envName: string }) {
+                        super(`oidc-spa: Env value ${params.envName} couldn't be pulled from server`);
+                        Object.setPrototypeOf(this, new.target.prototype);
                     }
-                });
-
-                let result:
-                    | {
-                          hasThrown: false;
-                          paramsOfBootstrap: ParamsOfBootstrap<User_client, User_server, AutoLogin>;
-                      }
-                    | {
-                          hasThrown: true;
-                          error: unknown;
-                      }
-                    | undefined = undefined;
-
-                while (true) {
-                    envNamesToPullFromServer = new Set();
-
-                    result = undefined;
-
-                    try {
-                        result = {
-                            hasThrown: false,
-                            paramsOfBootstrap: getParamsOfBootstrap({ process: { env: env_proxy } })
-                        };
-                    } catch (error) {
-                        result = {
-                            hasThrown: true,
-                            error
-                        };
-                    }
-
-                    do_not_pull_client_secret: {
-                        if (result.hasThrown) {
-                            break do_not_pull_client_secret;
-                        }
-
-                        const { paramsOfBootstrap } = result;
-
-                        if (paramsOfBootstrap.mode !== "real") {
-                            break do_not_pull_client_secret;
-                        }
-
-                        const { server } = paramsOfBootstrap;
-
-                        if (server.accessTokenValidationMethod !== "introspection endpoint") {
-                            break do_not_pull_client_secret;
-                        }
-
-                        const { clientSecret } = server;
-
-                        const envName = parseProbe(clientSecret);
-
-                        if (envName === undefined) {
-                            if (clientSecret.length > 10) {
-                                console.warn(
-                                    [
-                                        `oidc-spa: You are leaking the server client secret to the frontend: ${clientSecret}`,
-                                        "The recommended approach is to store it in an env variable that isn't bundled into",
-                                        "the client dist."
-                                    ].join(" ")
-                                );
-                            }
-                            break do_not_pull_client_secret;
-                        }
-
-                        envNamesToPullFromServer.delete(envName);
-
-                        server.clientSecret = "redacted on client";
-                    }
-
-                    if (result.hasThrown) {
-                        for (const envName of envNamesToPullFromServer) {
-                            if (
-                                envName.toLocaleLowerCase().includes("secret") ||
-                                envName.toLocaleLowerCase().includes("password")
-                            ) {
-                                envNamesToPullFromServer.delete(envName);
-                            }
-                        }
-                    }
-
-                    if (envNamesToPullFromServer.size === 0) {
-                        break;
-                    }
-
-                    Object.entries(
-                        await fetchServerEnvVariableValues({
-                            data: {
-                                envVarNames: Array.from(envNamesToPullFromServer)
-                            }
-                        })
-                    ).forEach(([envName, value]) => {
-                        env[envName] = value;
-                    });
                 }
 
-                if (result.hasThrown) {
+                const env_server_proxy = new Proxy(await fetchServerEnvVariableValues(), {
+                    get: (target, envName) => {
+                        assert(typeof envName === "string");
+
+                        if (!(envName in target)) {
+                            throw new OidcSpaServerEnvRetrievalError({ envName });
+                        }
+
+                        return target[envName] ?? undefined;
+                    },
+                    has: (target, envName) => {
+                        assert(typeof envName === "string");
+
+                        if (!(envName in target)) {
+                            throw new OidcSpaServerEnvRetrievalError({ envName });
+                        }
+
+                        return target[envName] !== null;
+                    }
+                }) as Record<string, string>;
+
+                let paramsOfBootstrap: ParamsOfBootstrap<User_client, User_server, AutoLogin>;
+
+                try {
+                    paramsOfBootstrap = getParamsOfBootstrap({ process: { env: env_server_proxy } });
+                } catch (error) {
+                    if (error instanceof OidcSpaServerEnvRetrievalError) {
+                        throw error;
+                    }
+
                     throw new Error(
                         [
                             "oidc-spa: The function argument passed to bootstrapOidc",
                             "has thrown when invoked."
                         ].join(" "),
                         //@ts-expect-error
-                        { cause: result.error }
+                        { cause: error }
                     );
                 }
-
-                const { paramsOfBootstrap } = result;
 
                 return paramsOfBootstrap;
             })();
@@ -1266,26 +1156,16 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
     };
 }
 
-const fetchServerEnvVariableValues = createServerFn({ method: "GET" })
-    .validator((data: { envVarNames: string[] }) => {
-        if (typeof data !== "object" || data === null) {
-            throw new Error("Expected an object");
-        }
-
-        const { envVarNames } = data as Record<string, unknown>;
-
-        assert(
-            typeGuard<string[]>(
-                envVarNames,
-                Array.isArray(envVarNames) && envVarNames.every(name => typeof name === "string")
-            )
-        );
-
-        return { envVarNames };
-    })
-    .handler(async ({ data }) => {
-        const { envVarNames } = data;
-        return Object.fromEntries(
-            envVarNames.map(envVarName => [envVarName, process.env[envVarName] ?? ""])
-        );
-    });
+const fetchServerEnvVariableValues = createServerFn({ method: "GET" }).handler(async () => {
+    const { publicEnvNames, toRedactEnvNames } = await import(
+        "virtual:oidc-spa/tanstack-start-public-env"
+    );
+    return {
+        ...Object.fromEntries(
+            Array.from(publicEnvNames).map(envVarName => [envVarName, process.env[envVarName] ?? null])
+        ),
+        ...Object.fromEntries(
+            Array.from(toRedactEnvNames).map(envVarName => [envVarName, "redacted on client"])
+        )
+    };
+});

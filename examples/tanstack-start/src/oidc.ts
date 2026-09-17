@@ -123,6 +123,11 @@ bootstrapOidc(({ process }) => {
         server: {
             accessTokenValidationMethod: "offline JWT validation",
             expectedAccessTokenAudience: process.env["ACCESS_TOKEN_EXPECTED_AUDIENCE"]
+            /*
+            accessTokenValidationMethod: "introspection endpoint",
+            clientId: process.env["OIDC_CLIENT_ID__SERVER"],
+            clientSecret: process.env["OIDC_CLIENT_SECRET__SERVER"],
+            */
         }
     };
 });

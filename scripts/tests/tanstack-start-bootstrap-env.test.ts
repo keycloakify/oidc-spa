@@ -57,7 +57,15 @@ test("TanStack Start bootstrap environment manifest", async t => {
                 handler.resolveId("virtual:oidc-spa/tanstack-start-public-env")!,
                 context as any
             );
-            return JSON.parse(code!.match(/new Set\((.*)\)/)![1]) as string[];
+            const getSet = (exportName: string) =>
+                JSON.parse(
+                    code!.match(new RegExp(`export const ${exportName} = new Set\\((.*?)\\);`))![1]
+                ) as string[];
+
+            return {
+                publicEnvNames: getSet("publicEnvNames"),
+                toRedactEnvNames: getSet("toRedactEnvNames")
+            };
         };
         const load = () => read(handler);
         return { root, handler, createHandler, context, resolvedSpecifiers, read, load };
@@ -73,7 +81,10 @@ test("TanStack Start bootstrap environment manifest", async t => {
                 clientId: "CLIENT_ID" in process.env ? process.env.CLIENT_ID : "fallback"
             }));`
         });
-        assert.deepEqual(await load(), ["CLIENT_ID", "EU_ISSUER", "REGION", "US_ISSUER"]);
+        assert.deepEqual(await load(), {
+            publicEnvNames: ["CLIENT_ID", "EU_ISSUER", "REGION", "US_ISSUER"],
+            toRedactEnvNames: []
+        });
     });
     await t.test(
         "recognizes renamed imports, builder aliases, callbacks and destructured env",
@@ -81,7 +92,7 @@ test("TanStack Start bootstrap environment manifest", async t => {
             const { load } = await fixture({
                 "oidc.ts": `
             import { oidcSpa as auth } from "oidc-spa/react-tanstack-start";
-            const builder = auth.withAccessTokenValidation({ type: "custom" });
+            const builder = auth.withClientUser(() => ({}));
             const utilities = builder.createUtils();
             const { bootstrapOidc: boot } = utilities;
             function options({ process: p }) {
@@ -92,7 +103,10 @@ test("TanStack Start bootstrap environment manifest", async t => {
             const callback = options;
             boot(callback);`
             });
-            assert.deepEqual(await load(), ["CLIENT", "ISSUER"]);
+            assert.deepEqual(await load(), {
+                publicEnvNames: ["CLIENT", "ISSUER"],
+                toRedactEnvNames: []
+            });
         }
     );
     await t.test("only follows the injected bindings and the adapter's bootstrap", async () => {
@@ -107,7 +121,10 @@ test("TanStack Start bootstrap environment manifest", async t => {
                 return { clientId: p.env.CLIENT, issuerUri: p.env.ISSUER };
             });`
         });
-        assert.deepEqual(await load(), ["CLIENT", "ISSUER"]);
+        assert.deepEqual(await load(), {
+            publicEnvNames: ["CLIENT", "ISSUER"],
+            toRedactEnvNames: []
+        });
     });
     await t.test(
         "follows imported bootstrap aliases through reexports, including lazy source files",
@@ -117,7 +134,10 @@ test("TanStack Start bootstrap environment manifest", async t => {
                 "barrel.ts": `export { boot as start } from "./auth";`,
                 "routes/lazy.ts": `import { start } from "@/barrel"; start(({ process }) => ({ clientId: process.env.LAZY_CLIENT }));`
             });
-            assert.deepEqual(await load(), ["LAZY_CLIENT"]);
+            assert.deepEqual(await load(), {
+                publicEnvNames: ["LAZY_CLIENT"],
+                toRedactEnvNames: []
+            });
         }
     );
     await t.test("follows builder reexports and tolerates circular barrels", async () => {
@@ -126,7 +146,7 @@ test("TanStack Start bootstrap environment manifest", async t => {
             "b.ts": `export * from "./a";`,
             "oidc.ts": `import { auth } from "./a"; const { bootstrapOidc } = auth.createUtils(); bootstrapOidc(({ process }) => ({ clientId: process.env.CLIENT }));`
         });
-        assert.deepEqual(await load(), ["CLIENT"]);
+        assert.deepEqual(await load(), { publicEnvNames: ["CLIENT"], toRedactEnvNames: [] });
     });
     await t.test("multiple instances and prototype-like names use exact membership", async () => {
         const { load } = await fixture({
@@ -135,7 +155,10 @@ test("TanStack Start bootstrap environment manifest", async t => {
             bootstrapOidc(({ process }) => ({ clientId: process.env.constructor }));
             other.bootstrapOidc(({ process }) => ({ clientId: process.env["__proto__"] }));`
         });
-        assert.deepEqual(await load(), ["__proto__", "constructor"]);
+        assert.deepEqual(await load(), {
+            publicEnvNames: ["__proto__", "constructor"],
+            toRedactEnvNames: []
+        });
     });
     await t.test("does not execute callbacks or read environment values at build time", async () => {
         const { load } = await fixture({
@@ -145,7 +168,7 @@ test("TanStack Start bootstrap environment manifest", async t => {
                 return { clientId: process.env.CLIENT };
             });`
         });
-        assert.deepEqual(await load(), ["CLIENT"]);
+        assert.deepEqual(await load(), { publicEnvNames: ["CLIENT"], toRedactEnvNames: [] });
     });
     await t.test("does not resolve bare dependencies while scanning source files", async () => {
         const { load, resolvedSpecifiers } = await fixture({
@@ -153,7 +176,7 @@ test("TanStack Start bootstrap environment manifest", async t => {
             "vite.config.ts": `import tailwindcss from "@tailwindcss/vite"; export default tailwindcss;`,
             "component.test.ts": `import "@testing-library/react"; import "vitest";`
         });
-        assert.deepEqual(await load(), ["CLIENT"]);
+        assert.deepEqual(await load(), { publicEnvNames: ["CLIENT"], toRedactEnvNames: [] });
         assert.deepEqual(resolvedSpecifiers, []);
     });
     await t.test(
@@ -165,8 +188,33 @@ test("TanStack Start bootstrap environment manifest", async t => {
                 "oidc.ts": `import { boot } from "#/auth"; boot(({ process }) => ({ clientId: process.env.CLIENT }));`,
                 "test.ts": `import "vitest";`
             });
-            assert.deepEqual(await load(), ["CLIENT"]);
+            assert.deepEqual(await load(), { publicEnvNames: ["CLIENT"], toRedactEnvNames: [] });
             assert.deepEqual(resolvedSpecifiers, ["#/auth"]);
+        }
+    );
+    await t.test(
+        "redacts the introspection client secret while exposing the remaining bootstrap values",
+        async () => {
+            const { load } = await fixture({
+                "oidc.ts": `${setup}
+            bootstrapOidc(({ process }) => {
+            const clientSecret = process.env.INTROSPECTION_CLIENT_SECRET;
+            return ({
+                mode: "real",
+                issuerUri: process.env.ISSUER_URI,
+                server: {
+                    accessTokenValidationMethod: "introspection endpoint",
+                    clientId: process.env.INTROSPECTION_CLIENT_ID,
+                    clientSecret
+                },
+                client: { clientId: process.env.CLIENT_ID }
+            });
+            });`
+            });
+            assert.deepEqual(await load(), {
+                publicEnvNames: ["CLIENT_ID", "INTROSPECTION_CLIENT_ID", "ISSUER_URI"],
+                toRedactEnvNames: ["INTROSPECTION_CLIENT_SECRET"]
+            });
         }
     );
     for (const expression of [
@@ -194,13 +242,13 @@ test("TanStack Start bootstrap environment manifest", async t => {
         const { load } = await fixture({
             "oidc.ts": `${setup} bootstrapOidc({ implementation: "real", clientId: "client", issuerUri: "https://issuer" });`
         });
-        assert.deepEqual(await load(), []);
+        assert.deepEqual(await load(), { publicEnvNames: [], toRedactEnvNames: [] });
     });
     await t.test("accepts TypeScript angle-bracket assertions in .ts sources", async () => {
         const { load } = await fixture({
             "oidc.ts": `${setup} const n = <number>1; bootstrapOidc(({ process }) => ({ clientId: process.env.CLIENT }));`
         });
-        assert.deepEqual(await load(), ["CLIENT"]);
+        assert.deepEqual(await load(), { publicEnvNames: ["CLIENT"], toRedactEnvNames: [] });
     });
     await t.test(
         "development invalidation revokes removed names and fails closed on invalid edits",
@@ -226,7 +274,7 @@ test("TanStack Start bootstrap environment manifest", async t => {
                     }
                 }
             } as any);
-            assert.deepEqual(await load(), ["OLD"]);
+            assert.deepEqual(await load(), { publicEnvNames: ["OLD"], toRedactEnvNames: [] });
             const file = path.join(root, "oidc.ts");
             await writeFile(
                 file,
@@ -235,7 +283,7 @@ test("TanStack Start bootstrap environment manifest", async t => {
             watcher.emit("change", file);
             assert.deepEqual(invalidated, [module]);
             assert.deepEqual(messages, [{ type: "full-reload" }]);
-            assert.deepEqual(await load(), ["NEW"]);
+            assert.deepEqual(await load(), { publicEnvNames: ["NEW"], toRedactEnvNames: [] });
             await writeFile(
                 file,
                 `${setup} bootstrapOidc(({ process }) => ({ clientId: process.env[name] }));`
@@ -244,7 +292,7 @@ test("TanStack Start bootstrap environment manifest", async t => {
             await assert.rejects(load, /computed environment variable names/);
             await rm(file);
             watcher.emit("unlink", file);
-            assert.deepEqual(await load(), []);
+            assert.deepEqual(await load(), { publicEnvNames: [], toRedactEnvNames: [] });
             httpServer.emit("close");
             assert.equal(watcher.listenerCount("change"), 0);
         }
@@ -254,11 +302,11 @@ test("TanStack Start bootstrap environment manifest", async t => {
             "oidc.ts": `${setup} bootstrapOidc(({ process }) => ({ clientId: process.env.OLD }));`,
             "dist/old.ts": `${setup} bootstrapOidc(({ process }) => ({ clientId: process.env.STALE_BUILD }));`
         });
-        assert.deepEqual(await load(), ["OLD"]);
+        assert.deepEqual(await load(), { publicEnvNames: ["OLD"], toRedactEnvNames: [] });
         await writeFile(
             path.join(root, "oidc.ts"),
             `${setup} bootstrapOidc(({ process }) => ({ clientId: process.env.NEW }));`
         );
-        assert.deepEqual(await read(createHandler()), ["NEW"]);
+        assert.deepEqual(await read(createHandler()), { publicEnvNames: ["NEW"], toRedactEnvNames: [] });
     });
 });
