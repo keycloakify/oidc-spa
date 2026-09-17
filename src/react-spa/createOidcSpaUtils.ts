@@ -587,7 +587,10 @@ export function createOidcSpaUtils<
         }, [suspend]);
 
         if (suspend) {
-            use(dOidcCoreOrInitializationError.pr);
+            const oidcCore = use(dOidcCoreOrInitializationError.pr);
+            if (oidcCore instanceof OidcInitializationError) {
+                throw oidcCore;
+            }
         }
             
 
