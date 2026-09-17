@@ -61,7 +61,7 @@ function createOidcSpa<User_client, User_server, AutoLogin extends boolean>(para
     };
 }
 
-export const oidcSpa = createOidcSpa<unknown, never, false>({
+export const oidcSpa = createOidcSpa<unknown, undefined, false>({
     autoLogin: false,
     createClientUser: undefined,
     createServerUser: undefined

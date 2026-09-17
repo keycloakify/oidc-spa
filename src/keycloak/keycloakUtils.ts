@@ -1,5 +1,6 @@
 import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";
 import { type KeycloakIssuerUriParsed, parseKeycloakIssuerUri } from "./keycloakIssuerUriParsed";
+import type { OidcUserInfo } from "../tools/OidcUserInfo";
 
 export type KeycloakUtils = {
     issuerUriParsed: KeycloakIssuerUriParsed;
@@ -7,7 +8,7 @@ export type KeycloakUtils = {
     adminConsoleUrl_master: string;
     getAccountUrl: (params: { clientId: string; validRedirectUri: string; locale?: string }) => string;
     fetchUserProfile: (params: { accessToken: string }) => Promise<KeycloakProfile>;
-    fetchUserInfo: (params: { accessToken: string }) => Promise<UserInfo>;
+    fetchUserInfo: (params: { accessToken: string }) => Promise<OidcUserInfo>;
     transformUrlBeforeRedirectForRegister: (authorizationUrl: string) => string;
 };
 
@@ -173,11 +174,6 @@ export namespace KeycloakProfile {
         };
     }
 }
-
-export type UserInfo = {
-    sub: string;
-    [key: string]: any;
-};
 
 export function createKeycloakUtils(params: { issuerUri: string }): KeycloakUtils {
     const { issuerUri } = params;

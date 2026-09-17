@@ -104,32 +104,28 @@ export const {
     //.withAutoLogin()
     .createUtils();
 
-if (process.env.OIDC_USE_MOCK === "true") {
-    bootstrapOidc({
-        mode: "mock",
-        isUserInitiallyLoggedIn: true
-    });
-} else {
-    bootstrapOidc(({ process }) => ({
-        issuerUri: process.env.OIDC_ISSUER_URI,
+bootstrapOidc(({ process }) => {
+    if (process.env.OIDC_USE_MOCK === "true") {
+        return {
+            mode: "mock",
+            client: {
+                isUserInitiallyLoggedIn: true
+            }
+        };
+    }
+
+    return {
+        mode: "real",
+        issuerUri: process.env["OIDC_ISSUER_URI"],
         client: {
-            clientId: process.env.OIDC_CLIENT_ID,
-            debugLogs: true
+            clientId: process.env["OIDC_CLIENT_ID"]
         },
         server: {
-            accessTokenValidationMethod: "offline JWT signature check",
-            expectedAccessTokenAudience: process.env.OIDC_ACCESS_TOKEN_EXPECTED_AUDIENCE
+            accessTokenValidationMethod: "offline JWT validation",
+            expectedAccessTokenAudience: process.env["ACCESS_TOKEN_EXPECTED_AUDIENCE"]
         }
-        // OR
-        /*
-        server: {
-            accessTokenValidationMethod: "introspection endpoint call",
-            clientId: process.env.OIDC_CLIENT_ID_SERVER,
-            clientSecret: process.env.OIDC_CLIENT_SECRET_SERVER
-        }
-        */
-    }));
-}
+    };
+});
 
 export const fetchWithAuth: typeof fetch = async (input, init) => {
     const oidc = await getOidc();

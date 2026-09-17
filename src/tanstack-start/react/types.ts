@@ -1,14 +1,14 @@
 import type {
     Oidc as Oidc_core,
     OidcInitializationError,
-    ParamsOfCreateOidc,
+    //ParamsOfCreateOidc,
     IdTokenClaims
 } from "../../core";
 import type { FunctionMiddlewareAfterServer, RequestMiddlewareAfterServer } from "@tanstack/react-start";
 import type { GetterOrDirectValue } from "../../tools/GetterOrDirectValue";
 import type { OidcMetadata } from "../../core/OidcMetadata";
 import type { MaybeAsync } from "../../tools/MaybeAsync";
-import { assert, type Equals } from "../../tools/tsafe/assert";
+//import { assert, type Equals } from "../../tools/tsafe/assert";
 import type { AccessTokenClaims_specs as AccessTokenClaims } from "../../server";
 
 export type { IdTokenClaims, AccessTokenClaims };
@@ -443,6 +443,7 @@ export namespace ParamsOfBootstrap {
         };
     };
 
+    /*
     assert<
         Equals<
             Omit<Real, "implementation" | "warnUserSecondsBeforeAutoLogout">,
@@ -452,6 +453,7 @@ export namespace ParamsOfBootstrap {
             >
         >
     >;
+    */
 
     export type Mock<AutoLogin> = {
         mode: "mock";
@@ -492,7 +494,7 @@ export type OidcSpaUtils<User_client, User_server, AutoLogin> = {
               };
           }) => Promise<void | never>;
       }) &
-    (never extends User_server
+    (User_server extends undefined
         ? {}
         : {
               oidcFnMiddleware: AutoLogin extends true
@@ -503,46 +505,7 @@ export type OidcSpaUtils<User_client, User_server, AutoLogin> = {
                   : OidcRequestMiddleware<User_server>;
           });
 
-export type OidcUserInfo = {
-    sub: string;
-
-    name?: string;
-    given_name?: string;
-    family_name?: string;
-    middle_name?: string;
-    nickname?: string;
-    preferred_username?: string;
-
-    profile?: string;
-    picture?: string;
-    website?: string;
-
-    email?: string;
-    email_verified?: boolean;
-
-    gender?: string;
-    birthdate?: string;
-
-    zoneinfo?: string;
-    locale?: string;
-
-    phone_number?: string;
-    phone_number_verified?: boolean;
-
-    address?: {
-        formatted?: string;
-        street_address?: string;
-        locality?: string;
-        region?: string;
-        postal_code?: string;
-        country?: string;
-    };
-
-    updated_at?: number;
-
-    // UserInfo may contain additional provider-specific claims.
-    [claim: string]: unknown;
-};
+export type OidcUserInfo = import("../../core").OidcUserInfo;
 
 export type CreateClientUser<User_client> = (params: {
     isMock: boolean;

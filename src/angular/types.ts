@@ -391,17 +391,16 @@ export type OidcSpaUtils<User, AutoLogin> = {
           ) => Promise<true>;
       });
 
+export type OidcUserInfo = import("../core").OidcUserInfo;
+
 export type CreateUser<User> = (params: {
     decodedIdToken: Oidc_core.Tokens.DecodedIdToken;
     accessToken: string;
-    fetchUserInfo: () => Promise<{
-        [key: string]: unknown;
-        sub: string;
-    }>;
+    fetchUserInfo: () => Promise<OidcUserInfo>;
     issuerUri: string;
     clientId: string;
     validRedirectUri: string;
     user_current: User | undefined;
 }) => MaybeAsync<User>;
 
-assert<Equals<CreateUser<{ _brand: string }>, ParamsOfCreateOidc.CreateUser<{ _brand: string }>>>;
+assert<Equals<CreateUser<{ _brand: string }>, import("../core").CreateUser<{ _brand: string }>>>;
