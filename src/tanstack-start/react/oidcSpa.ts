@@ -1,5 +1,5 @@
 import type { OidcSpaUtils, CreateClientUser, CreateServerUser } from "./types";
-import { createUtils } from "./createOidcSpaUtils";
+import { createUtils } from "./createUtils";
 import { assert } from "tsafe";
 
 export type OidcSpa<
