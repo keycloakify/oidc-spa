@@ -32,6 +32,7 @@ import {
     createObjectThatThrowsIfAccessed,
     isObjectThatThrowIfAccessed
 } from "../../tools/createObjectThatThrowsIfAccessed";
+import { publicEnvNames, toRedactEnvNames } from "virtual:oidc-spa/tanstack-start-public-env";
 
 export function createUtils<User_client, User_server, AutoLogin extends boolean>(params: {
     autoLogin: AutoLogin;
@@ -585,26 +586,31 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
                     }
                 }
 
-                const env_server_proxy = new Proxy(await fetchServerEnvVariableValues(), {
-                    get: (target, envName) => {
-                        assert(typeof envName === "string");
+                const env_server_proxy = new Proxy(
+                    publicEnvNames.size === 0 && toRedactEnvNames.size === 0
+                        ? {}
+                        : await fetchServerEnvVariableValues(),
+                    {
+                        get: (target, envName) => {
+                            assert(typeof envName === "string");
 
-                        if (!(envName in target)) {
-                            throw new OidcSpaServerEnvRetrievalError({ envName });
+                            if (!(envName in target)) {
+                                throw new OidcSpaServerEnvRetrievalError({ envName });
+                            }
+
+                            return target[envName] ?? undefined;
+                        },
+                        has: (target, envName) => {
+                            assert(typeof envName === "string");
+
+                            if (!(envName in target)) {
+                                throw new OidcSpaServerEnvRetrievalError({ envName });
+                            }
+
+                            return target[envName] !== null;
                         }
-
-                        return target[envName] ?? undefined;
-                    },
-                    has: (target, envName) => {
-                        assert(typeof envName === "string");
-
-                        if (!(envName in target)) {
-                            throw new OidcSpaServerEnvRetrievalError({ envName });
-                        }
-
-                        return target[envName] !== null;
                     }
-                }) as Record<string, string>;
+                ) as Record<string, string>;
 
                 let paramsOfBootstrap: ParamsOfBootstrap<User_client, User_server, AutoLogin>;
 
@@ -1156,16 +1162,11 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
     };
 }
 
-const fetchServerEnvVariableValues = createServerFn({ method: "GET" }).handler(async () => {
-    const { publicEnvNames, toRedactEnvNames } = await import(
-        "virtual:oidc-spa/tanstack-start-public-env"
-    );
-    return {
-        ...Object.fromEntries(
-            Array.from(publicEnvNames).map(envVarName => [envVarName, process.env[envVarName] ?? null])
-        ),
-        ...Object.fromEntries(
-            Array.from(toRedactEnvNames).map(envVarName => [envVarName, "redacted on client"])
-        )
-    };
-});
+const fetchServerEnvVariableValues = createServerFn({ method: "GET" }).handler(async () => ({
+    ...Object.fromEntries(
+        Array.from(publicEnvNames).map(envVarName => [envVarName, process.env[envVarName] ?? null])
+    ),
+    ...Object.fromEntries(
+        Array.from(toRedactEnvNames).map(envVarName => [envVarName, "redacted on client"])
+    )
+}));
