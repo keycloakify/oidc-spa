@@ -169,8 +169,7 @@ export function oidcSpa(params: OidcSpaVitePluginParams = {}) {
                 null
             );
         },
-        async buildStart() {
-            await bootstrapEnvHandler?.buildStart(this);
+        buildStart() {
             buildStart_handleTanstackStartClientOutput?.call(this);
         },
         configureServer(server) {

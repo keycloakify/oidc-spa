@@ -20,6 +20,19 @@ export function createHandleTanstackStartBootstrapEnv(params: { resolvedConfig: 
             imports: Map<string, string>;
         };
         const sources = new Map<string, Source>();
+        const aliases = resolvedConfig.resolve?.alias ?? [];
+        const packageImports = await (async (): Promise<Record<string, unknown>> => {
+            try {
+                const { imports } = JSON.parse(
+                    await fs.readFile(path.join(resolvedConfig.root, "package.json"), "utf8")
+                ) as { imports?: unknown };
+                return typeof imports === "object" && imports !== null && !Array.isArray(imports)
+                    ? (imports as Record<string, unknown>)
+                    : {};
+            } catch {
+                return {};
+            }
+        })();
         const excludedDirectories = new Set([
             "node_modules",
             "dist",
@@ -29,6 +42,42 @@ export function createHandleTanstackStartBootstrapEnv(params: { resolvedConfig: 
             path.resolve(resolvedConfig.root, resolvedConfig.build.outDir),
             path.resolve(resolvedConfig.cacheDir)
         ]);
+        const isLocalImport = (specifier: string) => {
+            if (specifier.startsWith(".") || specifier.startsWith("/")) {
+                return true;
+            }
+            if (specifier.startsWith("#")) {
+                return Object.entries(packageImports).some(([key, target]) => {
+                    const starIndex = key.indexOf("*");
+                    const matches =
+                        starIndex === -1
+                            ? key === specifier
+                            : specifier.startsWith(key.slice(0, starIndex)) &&
+                              specifier.endsWith(key.slice(starIndex + 1));
+                    if (!matches) return false;
+                    const containsLocalTarget = (target: unknown): boolean => {
+                        if (typeof target === "string") return target.startsWith(".");
+                        if (Array.isArray(target)) return target.some(containsLocalTarget);
+                        return (
+                            typeof target === "object" &&
+                            target !== null &&
+                            Object.values(target).some(containsLocalTarget)
+                        );
+                    };
+                    return containsLocalTarget(target);
+                });
+            }
+            return aliases.some(({ find }) => {
+                if (typeof find === "string") {
+                    return (
+                        specifier === find ||
+                        specifier.startsWith(find.endsWith("/") ? find : `${find}/`)
+                    );
+                }
+                find.lastIndex = 0;
+                return find.test(specifier);
+            });
+        };
 
         // Scan before generating the virtual module, including lazy routes. Collecting
         // names in transform() would make authorization depend on module load order.
@@ -83,7 +132,11 @@ export function createHandleTanstackStartBootstrapEnv(params: { resolvedConfig: 
                 )
                     continue;
                 const specifier = statement.node.source?.value;
-                if (!specifier || specifier === adapterId) continue;
+                // Resolving a bare dependency through Vite's dev client resolver
+                // registers it with the dependency optimizer. This scanner only
+                // follows local source files, so those resolutions are both harmful
+                // and unnecessary.
+                if (!specifier || specifier === adapterId || !isLocalImport(specifier)) continue;
                 const resolved = await context.resolve(specifier, id, { skipSelf: true });
                 if (!resolved || resolved.external) continue;
                 const dependencyId = resolved.id.split("?")[0];
@@ -402,13 +455,10 @@ export function createHandleTanstackStartBootstrapEnv(params: { resolvedConfig: 
 
     return {
         resolveId: (id: string) => (id === virtualId ? resolvedId : null),
-        buildStart: async (context: Pick<PluginContext, "resolve" | "addWatchFile">) => {
-            // Each build (including watch rebuilds) gets its own complete snapshot.
-            scanPromise = scan(context);
-            await scanPromise;
-        },
         load: async (id: string, context: Pick<PluginContext, "resolve" | "addWatchFile">) => {
             if (id !== resolvedId) return null;
+            // The manifest is only imported by the server function. Delaying the
+            // complete scan avoids Vite's dev dependency-optimizer startup phase.
             const names = await (scanPromise ??= scan(context));
             return `export const publicEnvNames = new Set(${JSON.stringify(names)});\n`;
         },

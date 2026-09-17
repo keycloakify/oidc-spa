@@ -15,19 +15,33 @@ test("TanStack Start bootstrap environment manifest", async t => {
             await mkdir(path.dirname(path.join(root, name)), { recursive: true });
             await writeFile(path.join(root, name), code);
         }
-        const handler = createHandleTanstackStartBootstrapEnv({
-            resolvedConfig: {
-                root,
-                cacheDir: path.join(root, "node_modules/.vite"),
-                build: { outDir: "dist" }
-            } as ResolvedConfig
-        });
+        const createHandler = () =>
+            createHandleTanstackStartBootstrapEnv({
+                resolvedConfig: {
+                    root,
+                    cacheDir: path.join(root, "node_modules/.vite"),
+                    build: { outDir: "dist" },
+                    resolve: {
+                        alias: [{ find: "@", replacement: root }]
+                    }
+                } as ResolvedConfig
+            });
+        const handler = createHandler();
+        const resolvedSpecifiers: string[] = [];
         const context = {
             addWatchFile: (_id: string) => {},
             resolve: async (specifier: string, importer?: string) => {
-                if (!specifier.startsWith(".") && !specifier.startsWith("@/")) return null;
+                resolvedSpecifiers.push(specifier);
+                if (
+                    !specifier.startsWith(".") &&
+                    !specifier.startsWith("@/") &&
+                    !specifier.startsWith("#/")
+                )
+                    return null;
                 const base = specifier.startsWith("@/")
                     ? path.join(root, specifier.slice(2))
+                    : specifier.startsWith("#/")
+                    ? path.join(root, "src", specifier.slice(2))
                     : path.resolve(path.dirname(importer!), specifier);
                 for (const id of [base, `${base}.ts`, `${base}.tsx`]) {
                     try {
@@ -38,14 +52,15 @@ test("TanStack Start bootstrap environment manifest", async t => {
                 return null;
             }
         };
-        const load = async () => {
+        const read = async (handler: ReturnType<typeof createHandler>) => {
             const code = await handler.load(
                 handler.resolveId("virtual:oidc-spa/tanstack-start-public-env")!,
                 context as any
             );
             return JSON.parse(code!.match(/new Set\((.*)\)/)![1]) as string[];
         };
-        return { root, handler, context, load };
+        const load = () => read(handler);
+        return { root, handler, createHandler, context, resolvedSpecifiers, read, load };
     };
     const setup = `import { oidcSpa } from "oidc-spa/react-tanstack-start";
         const { bootstrapOidc } = oidcSpa.withAutoLogin().createUtils();`;
@@ -132,6 +147,28 @@ test("TanStack Start bootstrap environment manifest", async t => {
         });
         assert.deepEqual(await load(), ["CLIENT"]);
     });
+    await t.test("does not resolve bare dependencies while scanning source files", async () => {
+        const { load, resolvedSpecifiers } = await fixture({
+            "oidc.ts": `${setup} bootstrapOidc(({ process }) => ({ clientId: process.env.CLIENT }));`,
+            "vite.config.ts": `import tailwindcss from "@tailwindcss/vite"; export default tailwindcss;`,
+            "component.test.ts": `import "@testing-library/react"; import "vitest";`
+        });
+        assert.deepEqual(await load(), ["CLIENT"]);
+        assert.deepEqual(resolvedSpecifiers, []);
+    });
+    await t.test(
+        "follows local package import mappings without resolving package dependencies",
+        async () => {
+            const { load, resolvedSpecifiers } = await fixture({
+                "package.json": JSON.stringify({ imports: { "#/*": "./src/*" } }),
+                "src/auth.ts": `import { oidcSpa } from "oidc-spa/react-tanstack-start"; export const { bootstrapOidc: boot } = oidcSpa.createUtils();`,
+                "oidc.ts": `import { boot } from "#/auth"; boot(({ process }) => ({ clientId: process.env.CLIENT }));`,
+                "test.ts": `import "vitest";`
+            });
+            assert.deepEqual(await load(), ["CLIENT"]);
+            assert.deepEqual(resolvedSpecifiers, ["#/auth"]);
+        }
+    );
     for (const expression of [
         `({ process }) => ({ clientId: process.env[name] })`,
         `({ process }) => configure(process.env)`,
@@ -212,8 +249,8 @@ test("TanStack Start bootstrap environment manifest", async t => {
             assert.equal(watcher.listenerCount("change"), 0);
         }
     );
-    await t.test("fresh build snapshots revoke removed names and ignore build output", async () => {
-        const { root, handler, context, load } = await fixture({
+    await t.test("fresh plugin instances snapshot changed source and ignore build output", async () => {
+        const { root, createHandler, load, read } = await fixture({
             "oidc.ts": `${setup} bootstrapOidc(({ process }) => ({ clientId: process.env.OLD }));`,
             "dist/old.ts": `${setup} bootstrapOidc(({ process }) => ({ clientId: process.env.STALE_BUILD }));`
         });
@@ -222,7 +259,6 @@ test("TanStack Start bootstrap environment manifest", async t => {
             path.join(root, "oidc.ts"),
             `${setup} bootstrapOidc(({ process }) => ({ clientId: process.env.NEW }));`
         );
-        await handler.buildStart(context as any);
-        assert.deepEqual(await load(), ["NEW"]);
+        assert.deepEqual(await read(createHandler()), ["NEW"]);
     });
 });
