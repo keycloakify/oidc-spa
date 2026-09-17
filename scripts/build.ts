@@ -39,6 +39,11 @@ if (fs.existsSync(distDirPath_root)) {
             srcDirPath: distDirPath_root,
             destDirPath: preBuildDistWithOnlyVendorDirPath,
             transformSourceCode: ({ fileRelativePath, sourceCode }) => {
+                // Rebundle the small build-runtime entrypoints on incremental builds
+                // too: edits to their wrappers must not be hidden by the vendor cache.
+                if (fileRelativePath.startsWith(pathJoin("esm", "vendor", "build-runtime"))) {
+                    return undefined;
+                }
                 if (
                     fileRelativePath.startsWith(pathJoin("vendor")) ||
                     fileRelativePath.startsWith(pathJoin("esm", "vendor"))
@@ -134,7 +139,7 @@ for (const targetFormat of ["cjs", "esm"] as const) {
     }
 
     vendor_dependencies: {
-        if (preBuildDistWithOnlyVendorDirPath !== undefined) {
+        if (preBuildDistWithOnlyVendorDirPath !== undefined && targetFormat !== "esm") {
             break vendor_dependencies;
         }
 
@@ -142,6 +147,9 @@ for (const targetFormat of ["cjs", "esm"] as const) {
 
         (["frontend", "server", "build-runtime"] as const)
             .filter(targetRuntime => {
+                if (preBuildDistWithOnlyVendorDirPath !== undefined) {
+                    return targetRuntime === "build-runtime";
+                }
                 switch (targetRuntime) {
                     case "build-runtime":
                         return targetFormat === "esm";

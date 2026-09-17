@@ -16,7 +16,6 @@ import { assert, type Equals, is } from "../../tools/tsafe/assert";
 import { createObjectThatThrowsIfAccessed } from "../../tools/createObjectThatThrowsIfAccessed";
 import { createStatefulEvt } from "../../tools/StatefulEvt";
 import { id } from "../../tools/tsafe/id";
-import { typeGuard } from "../../tools/tsafe/typeGuard";
 import type { GetterOrDirectValue } from "../../tools/GetterOrDirectValue";
 import { createServerFn, createMiddleware } from "@tanstack/react-start";
 // @ts-expect-error: Since our module is not labeled as ESM we don't have the types here.
@@ -541,95 +540,54 @@ export function createOidcSpaUtils<
             assert(prModuleCore !== undefined);
 
             const paramsOfBootstrap = await (async () => {
-                let envNamesToPullFromServer = new Set<string>();
+                class OidcSpaServerEnvRetrievalError extends Error {
+                    constructor(params: { envName: string }) {
+                        super(`oidc-spa: Env value ${params.envName} couldn't be pulled from server`);
+                        Object.setPrototypeOf(this, new.target.prototype);
+                    }
+                }
 
-                const env: Record<string, string> = {};
-
-                const env_proxy = new Proxy(env, {
-                    get: (...[, envName]) => {
+                const env_server_proxy = new Proxy(await fetchServerEnvVariableValues(), {
+                    get: (target, envName) => {
                         assert(typeof envName === "string");
 
-                        if (envName in env) {
-                            return env[envName];
+                        if (!Object.prototype.hasOwnProperty.call(target, envName)) {
+                            throw new OidcSpaServerEnvRetrievalError({ envName });
                         }
 
-                        envNamesToPullFromServer.add(envName);
-
-                        return "oidc_spa_probe";
+                        return target[envName];
                     },
-                    has: (...[, envName]) => {
+                    has: (target, envName) => {
                         assert(typeof envName === "string");
 
-                        if (envName in env) {
-                            return true;
+                        if (!Object.prototype.hasOwnProperty.call(target, envName)) {
+                            throw new OidcSpaServerEnvRetrievalError({ envName });
                         }
-
-                        envNamesToPullFromServer.add(envName);
 
                         return true;
                     }
-                });
+                }) as Record<string, string>;
 
-                let result:
-                    | {
-                          hasThrown: false;
-                          paramsOfBootstrap: ParamsOfBootstrap<
-                              AutoLogin,
-                              DecodedIdToken,
-                              AccessTokenClaims
-                          >;
-                      }
-                    | {
-                          hasThrown: true;
-                          error: unknown;
-                      }
-                    | undefined = undefined;
+                let paramsOfBootstrap: ParamsOfBootstrap<AutoLogin, DecodedIdToken, AccessTokenClaims>;
 
-                while (true) {
-                    envNamesToPullFromServer = new Set();
-
-                    result = undefined;
-
-                    try {
-                        const paramsOfBootstrap = getParamsOfBootstrap({ process: { env: env_proxy } });
-                        result = {
-                            hasThrown: false,
-                            paramsOfBootstrap
-                        };
-                    } catch (error) {
-                        result = {
-                            hasThrown: true,
-                            error
-                        };
+                try {
+                    paramsOfBootstrap = getParamsOfBootstrap({ process: { env: env_server_proxy } });
+                } catch (error) {
+                    if (error instanceof OidcSpaServerEnvRetrievalError) {
+                        throw error;
                     }
 
-                    if (envNamesToPullFromServer.size === 0) {
-                        break;
-                    }
-
-                    Object.entries(
-                        await fetchServerEnvVariableValues({
-                            data: {
-                                envVarNames: Array.from(envNamesToPullFromServer)
-                            }
-                        })
-                    ).forEach(([envName, value]) => {
-                        env[envName] = value;
-                    });
-                }
-
-                if (result.hasThrown) {
                     throw new Error(
                         [
                             "oidc-spa: The function argument passed to bootstrapOidc",
                             "has thrown when invoked."
                         ].join(" "),
                         //@ts-expect-error
-                        { cause: result.error }
+                        { cause: error }
                     );
                 }
 
-                return result.paramsOfBootstrap;
+                return paramsOfBootstrap;
             })();
 
             dParamsOfBootstrap.resolve(paramsOfBootstrap);
@@ -1021,26 +979,10 @@ export function createOidcSpaUtils<
     };
 }
 
-const fetchServerEnvVariableValues = createServerFn({ method: "GET" })
-    .validator((data: { envVarNames: string[] }) => {
-        if (typeof data !== "object" || data === null) {
-            throw new Error("Expected an object");
-        }
+const fetchServerEnvVariableValues = createServerFn({ method: "GET" }).handler(async () => {
+    const { publicEnvNames } = await import("virtual:oidc-spa/tanstack-start-public-env");
 
-        const { envVarNames } = data as Record<string, unknown>;
-
-        assert(
-            typeGuard<string[]>(
-                envVarNames,
-                Array.isArray(envVarNames) && envVarNames.every(name => typeof name === "string")
-            )
-        );
-
-        return { envVarNames };
-    })
-    .handler(async ({ data }) => {
-        const { envVarNames } = data;
-        return Object.fromEntries(
-            envVarNames.map(envVarName => [envVarName, process.env[envVarName] ?? ""])
-        );
-    });
+    return Object.fromEntries(
+        Array.from(publicEnvNames).map(envVarName => [envVarName, process.env[envVarName] ?? ""])
+    );
+});
