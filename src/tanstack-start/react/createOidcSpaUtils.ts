@@ -26,6 +26,7 @@ import { BEFORE_LOAD_FN_BRAND_PROPERTY_NAME } from "./disableSsrIfLoginEnforced"
 import { setDesiredPostLoginRedirectUrl } from "../../core/desiredPostLoginRedirectUrl";
 import type { MaybeAsync } from "../../tools/MaybeAsync";
 import { enableStateDataCookie } from "../../core/StateDataCookie";
+import { publicEnvNames } from "virtual:oidc-spa/tanstack-start-public-env";
 
 export function createOidcSpaUtils<
     AutoLogin extends boolean,
@@ -547,26 +548,29 @@ export function createOidcSpaUtils<
                     }
                 }
 
-                const env_server_proxy = new Proxy(await fetchServerEnvVariableValues(), {
-                    get: (target, envName) => {
-                        assert(typeof envName === "string");
+                const env_server_proxy = new Proxy(
+                    publicEnvNames.size === 0 ? {} : await fetchServerEnvVariableValues(),
+                    {
+                        get: (target, envName) => {
+                            assert(typeof envName === "string");
 
-                        if (!Object.prototype.hasOwnProperty.call(target, envName)) {
-                            throw new OidcSpaServerEnvRetrievalError({ envName });
+                            if (!Object.prototype.hasOwnProperty.call(target, envName)) {
+                                throw new OidcSpaServerEnvRetrievalError({ envName });
+                            }
+
+                            return target[envName];
+                        },
+                        has: (target, envName) => {
+                            assert(typeof envName === "string");
+
+                            if (!Object.prototype.hasOwnProperty.call(target, envName)) {
+                                throw new OidcSpaServerEnvRetrievalError({ envName });
+                            }
+
+                            return true;
                         }
-
-                        return target[envName];
-                    },
-                    has: (target, envName) => {
-                        assert(typeof envName === "string");
-
-                        if (!Object.prototype.hasOwnProperty.call(target, envName)) {
-                            throw new OidcSpaServerEnvRetrievalError({ envName });
-                        }
-
-                        return true;
                     }
-                }) as Record<string, string>;
+                ) as Record<string, string>;
 
                 let paramsOfBootstrap: ParamsOfBootstrap<AutoLogin, DecodedIdToken, AccessTokenClaims>;
 
@@ -979,10 +983,8 @@ export function createOidcSpaUtils<
     };
 }
 
-const fetchServerEnvVariableValues = createServerFn({ method: "GET" }).handler(async () => {
-    const { publicEnvNames } = await import("virtual:oidc-spa/tanstack-start-public-env");
-
-    return Object.fromEntries(
+const fetchServerEnvVariableValues = createServerFn({ method: "GET" }).handler(async () =>
+    Object.fromEntries(
         Array.from(publicEnvNames).map(envVarName => [envVarName, process.env[envVarName] ?? ""])
-    );
-});
+    )
+);
