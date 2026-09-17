@@ -698,7 +698,10 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
 
                     if (result.hasThrown) {
                         for (const envName of envNamesToPullFromServer) {
-                            if (envName.toLocaleLowerCase().includes("secret")) {
+                            if (
+                                envName.toLocaleLowerCase().includes("secret") ||
+                                envName.toLocaleLowerCase().includes("password")
+                            ) {
                                 envNamesToPullFromServer.delete(envName);
                             }
                         }

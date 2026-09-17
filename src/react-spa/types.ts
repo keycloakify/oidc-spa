@@ -382,13 +382,12 @@ export type OidcSpaUtils<User, AutoLogin> = {
           ) => (props: Props) => ReactNode;
       });
 
+export type OidcUserInfo = import("../core").OidcUserInfo;
+
 export type CreateUser<User> = (params: {
     decodedIdToken: Oidc_core.Tokens.DecodedIdToken;
     accessToken: string;
-    fetchUserInfo: () => Promise<{
-        [key: string]: unknown;
-        sub: string;
-    }>;
+    fetchUserInfo: () => Promise<OidcUserInfo>;
     issuerUri: string;
     clientId: string;
     validRedirectUri: string;
