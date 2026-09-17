@@ -1,4 +1,5 @@
 import {
+    use,
     useState,
     useEffect,
     useReducer,
@@ -563,12 +564,14 @@ export function createOidcSpaUtils<
         return children;
     }
 
-    function OidcInitializationGate(props: { fallback?: ReactNode; children: ReactNode }) {
-        const { fallback, children } = props;
+    function OidcInitializationGate(props: { fallback?: ReactNode; suspend?: boolean; children: ReactNode }) {
+        const { fallback, children, suspend } = props;
 
         const [isReadyToRender, readyToRender] = useReducer(() => true, false);
 
         useEffect(() => {
+            if (suspend) return;
+            
             let isActive = true;
 
             dOidcCoreOrInitializationError.pr.then(() => {
@@ -581,9 +584,14 @@ export function createOidcSpaUtils<
             return () => {
                 isActive = false;
             };
-        }, []);
+        }, [suspend]);
 
-        if (!isReadyToRender) {
+        if (suspend) {
+            use(dOidcCoreOrInitializationError.pr);
+        }
+            
+
+        if (!suspend && !isReadyToRender) {
             return fallback !== undefined ? fallback : null;
         }
 
