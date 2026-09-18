@@ -8,7 +8,10 @@ import type { ResolvedConfig } from "vite";
 import { createHandleTanstackStartBootstrapEnv } from "../../src/vite-plugin/handleTanstackStartBootstrapEnv";
 
 test("TanStack Start bootstrap environment manifest", async t => {
-    const fixture = async (files: Record<string, string>) => {
+    const fixture = async (
+        files: Record<string, string>,
+        params: { resolveAliasInConfig?: boolean } = {}
+    ) => {
         const root = await mkdtemp(path.join(tmpdir(), "oidc-spa-public-env-"));
         t.after(() => rm(root, { recursive: true, force: true }));
         for (const [name, code] of Object.entries(files)) {
@@ -20,9 +23,13 @@ test("TanStack Start bootstrap environment manifest", async t => {
                 resolvedConfig: {
                     root,
                     cacheDir: path.join(root, "node_modules/.vite"),
+                    command: "serve",
                     build: { outDir: "dist" },
                     resolve: {
-                        alias: [{ find: "@", replacement: root }]
+                        alias:
+                            params.resolveAliasInConfig === false
+                                ? []
+                                : [{ find: "@", replacement: root }]
                     }
                 } as ResolvedConfig
             });
@@ -30,6 +37,7 @@ test("TanStack Start bootstrap environment manifest", async t => {
         const resolvedSpecifiers: string[] = [];
         const context = {
             addWatchFile: (_id: string) => {},
+            environment: { name: "ssr" },
             resolve: async (specifier: string, importer?: string) => {
                 resolvedSpecifiers.push(specifier);
                 if (
@@ -147,28 +155,54 @@ test("TanStack Start bootstrap environment manifest", async t => {
         });
         assert.deepEqual(await load(), ["CLIENT"]);
     });
-    await t.test("does not resolve bare dependencies while scanning source files", async () => {
-        const { load, resolvedSpecifiers } = await fixture({
-            "oidc.ts": `${setup} bootstrapOidc(({ process }) => ({ clientId: process.env.CLIENT }));`,
-            "vite.config.ts": `import tailwindcss from "@tailwindcss/vite"; export default tailwindcss;`,
-            "component.test.ts": `import "@testing-library/react"; import "vitest";`
-        });
+    await t.test("follows aliases implemented by Vite resolver hooks", async () => {
+        const { load } = await fixture(
+            {
+                "auth.ts": `import { oidcSpa } from "oidc-spa/react-tanstack-start"; export const { bootstrapOidc: boot } = oidcSpa.createUtils();`,
+                "barrel.ts": `export { boot } from "./auth";`,
+                "oidc.ts": `import { boot } from "@/barrel"; boot(({ process }) => ({ clientId: process.env.CLIENT }));`
+            },
+            { resolveAliasInConfig: false }
+        );
         assert.deepEqual(await load(), ["CLIENT"]);
-        assert.deepEqual(resolvedSpecifiers, []);
     });
-    await t.test(
-        "follows local package import mappings without resolving package dependencies",
-        async () => {
-            const { load, resolvedSpecifiers } = await fixture({
-                "package.json": JSON.stringify({ imports: { "#/*": "./src/*" } }),
-                "src/auth.ts": `import { oidcSpa } from "oidc-spa/react-tanstack-start"; export const { bootstrapOidc: boot } = oidcSpa.createUtils();`,
-                "oidc.ts": `import { boot } from "#/auth"; boot(({ process }) => ({ clientId: process.env.CLIENT }));`,
-                "test.ts": `import "vitest";`
-            });
-            assert.deepEqual(await load(), ["CLIENT"]);
-            assert.deepEqual(resolvedSpecifiers, ["#/auth"]);
-        }
-    );
+    await t.test("uses the server resolver when loaded by the client", async () => {
+        const { handler, context, resolvedSpecifiers } = await fixture({
+            "auth.ts": `import { oidcSpa } from "oidc-spa/react-tanstack-start"; export const { bootstrapOidc: boot } = oidcSpa.createUtils();`,
+            "barrel.ts": `export { boot } from "./auth";`,
+            "oidc.ts": `import { boot } from "@/barrel"; boot(({ process }) => ({ clientId: process.env.CLIENT }));`
+        });
+        const watcher = new EventEmitter();
+        const httpServer = new EventEmitter();
+        const serverResolvedSpecifiers: string[] = [];
+        handler.configureServer({
+            watcher,
+            httpServer,
+            environments: {
+                ssr: {
+                    config: { consumer: "server" },
+                    pluginContainer: {
+                        resolveId: async (specifier: string, importer?: string) => {
+                            serverResolvedSpecifiers.push(specifier);
+                            return context.resolve(specifier, importer);
+                        }
+                    }
+                }
+            }
+        } as any);
+        const id = handler.resolveId("virtual:oidc-spa/tanstack-start-public-env")!;
+        const clientCode = await handler.load(id, {
+            ...context,
+            environment: { name: "client" },
+            resolve: async () => {
+                throw new Error("The client resolver must not scan application imports.");
+            }
+        });
+        assert.deepEqual(JSON.parse(clientCode!.match(/new Set\((.*)\)/)![1]), ["CLIENT"]);
+        assert.deepEqual(resolvedSpecifiers, ["./auth", "@/barrel"]);
+        assert.deepEqual([...serverResolvedSpecifiers].sort(), ["./auth", "@/barrel"]);
+        httpServer.emit("close");
+    });
     for (const expression of [
         `({ process }) => ({ clientId: process.env[name] })`,
         `({ process }) => configure(process.env)`,
