@@ -500,16 +500,15 @@ export function createOidcSpaUtils<
 
                             const value = process.env[envName];
 
-                            if (value === undefined) {
+                            if (!value) {
                                 missingEnvNames.add(envName);
-                                return "";
                             }
 
                             return value;
                         },
                         has: (...[, envName]) => {
                             assert(typeof envName === "string");
-                            return true;
+                            return envName in process.env;
                         }
                     }
                 );
@@ -554,20 +553,20 @@ export function createOidcSpaUtils<
                         get: (target, envName) => {
                             assert(typeof envName === "string");
 
-                            if (!Object.prototype.hasOwnProperty.call(target, envName)) {
+                            if (!(envName in target)) {
                                 throw new OidcSpaServerEnvRetrievalError({ envName });
                             }
 
-                            return target[envName];
+                            return target[envName] ?? undefined;
                         },
                         has: (target, envName) => {
                             assert(typeof envName === "string");
 
-                            if (!Object.prototype.hasOwnProperty.call(target, envName)) {
+                            if (!(envName in target)) {
                                 throw new OidcSpaServerEnvRetrievalError({ envName });
                             }
 
-                            return true;
+                            return target[envName] !== null;
                         }
                     }
                 ) as Record<string, string>;
@@ -983,8 +982,8 @@ export function createOidcSpaUtils<
     };
 }
 
-const fetchServerEnvVariableValues = createServerFn({ method: "GET" }).handler(async () =>
+const fetchServerEnvVariableValues = createServerFn({ method: "GET" }).handler(() =>
     Object.fromEntries(
-        Array.from(publicEnvNames).map(envVarName => [envVarName, process.env[envVarName] ?? ""])
+        Array.from(publicEnvNames).map(envVarName => [envVarName, process.env[envVarName] ?? null])
     )
 );
