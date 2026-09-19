@@ -1,17 +1,18 @@
 import type {
     Oidc as Oidc_core,
     OidcInitializationError,
-    //ParamsOfCreateOidc,
-    IdTokenClaims
+    ParamsOfCreateOidc,
+    IdTokenClaims,
+    OidcProviderMetadata,
+    OidcUserInfo
 } from "../../core";
 import type { FunctionMiddlewareAfterServer, RequestMiddlewareAfterServer } from "@tanstack/react-start";
 import type { GetterOrDirectValue } from "../../tools/GetterOrDirectValue";
-import type { OidcMetadata } from "../../core/OidcMetadata";
 import type { MaybeAsync } from "../../tools/MaybeAsync";
-//import { assert, type Equals } from "../../tools/tsafe/assert";
+import { assert, type Equals } from "../../tools/tsafe/assert";
 import type { AccessTokenClaims_specs as AccessTokenClaims } from "../../server";
 
-export type { IdTokenClaims, AccessTokenClaims };
+export type { IdTokenClaims, AccessTokenClaims, OidcProviderMetadata, OidcUserInfo };
 
 export type UseOidc<User_client> = {
     (params?: { assert?: undefined }): UseOidc.Oidc<User_client>;
@@ -330,9 +331,9 @@ export namespace ParamsOfBootstrap {
              * The isSilent parameter is true when the redirect is initiated in the background iframe for silent signin.
              * This can be used to omit ui related query parameters (like `ui_locales`).
              */
-            transformUrlBeforeRedirect?: (params: {
+            transformAuthorizationUrl?: (params: {
                 authorizationUrl: string;
-                isSilent: boolean;
+                isSilentRedirect: boolean;
             }) => string;
 
             /**
@@ -344,8 +345,8 @@ export namespace ParamsOfBootstrap {
              *
              * This parameter can also be passed to login() directly.
              */
-            extraQueryParams?:
-                | Record<string, string | undefined>
+            authorizationParams?:
+                | Record<string, string | string[] | undefined>
                 | ((params: { isSilent: boolean; url: string }) => Record<string, string | undefined>);
             /**
              * Extra body params to be added to the /token POST request.
@@ -359,7 +360,7 @@ export namespace ParamsOfBootstrap {
              *          extraTokenParams: { selectedCustomer: "xxx" }
              */
             extraTokenParams?:
-                | Record<string, string | undefined>
+                | Record<string, string | string[] | undefined>
                 | (() => Record<string, string | undefined>);
 
             /**
@@ -395,18 +396,6 @@ export namespace ParamsOfBootstrap {
             sessionRestorationMethod?: "iframe" | "full page redirect" | "auto";
 
             /**
-             * WARNING: This option exists solely as a workaround
-             * for limitations in the Google OAuth API.
-             * See: https://docs.oidc-spa.dev/providers-configuration/google-oauth
-             *
-             * Do not use this for other providers.
-             * If you think you need a client secret in a SPA, you are likely
-             * trying to use a confidential (private) client in the browser,
-             * which is insecure and not supported.
-             */
-            __unsafe_clientSecret?: string;
-
-            /**
              * This option should only be used as a last resort.
              *
              * If your OIDC provider is correctly configured, this should not be necessary.
@@ -417,14 +406,7 @@ export namespace ParamsOfBootstrap {
              * Use this only if that endpoint is not accessible (e.g. due to missing CORS headers
              * or non-standard deployments), and you cannot fix the server-side configuration.
              */
-            __metadata?: Partial<OidcMetadata>;
-
-            /**
-             *  WARNING: Setting this to true is a workaround for provider
-             *  like Google OAuth that don't support JWT access token.
-             *  Use at your own risk, this is a hack.
-             */
-            __unsafe_useIdTokenAsAccessToken?: boolean;
+            __providerMetadata?: OidcProviderMetadata;
 
             /**
              * Usage discouraged, this parameter exists because we don't want to assume
@@ -443,17 +425,12 @@ export namespace ParamsOfBootstrap {
         };
     };
 
-    /*
     assert<
         Equals<
-            Omit<Real, "implementation" | "warnUserSecondsBeforeAutoLogout">,
-            Omit<
-                ParamsOfCreateOidc<any, boolean>,
-                "BASE_URL" | "createUser" | "autoLogin" | "postLoginRedirectUrl"
-            >
+            Omit<Real["client"], "mode" | "warnUserSecondsBeforeAutoLogout">,
+            Omit<ParamsOfCreateOidc<any, true>, "createUser" | "autoLogin" | "redirectUrl_autoLogin">
         >
     >;
-    */
 
     export type Mock<AutoLogin> = {
         mode: "mock";
@@ -504,8 +481,6 @@ export type OidcSpaUtils<User_client, User_server, AutoLogin> = {
                   ? OidcRequestMiddleware.WithAutoLogin<User_server>
                   : OidcRequestMiddleware<User_server>;
           });
-
-export type OidcUserInfo = import("../../core").OidcUserInfo;
 
 export type CreateClientUser<User_client> = (params: {
     isMock: boolean;

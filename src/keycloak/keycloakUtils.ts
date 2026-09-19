@@ -1,6 +1,6 @@
 import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";
 import { type KeycloakIssuerUriParsed, parseKeycloakIssuerUri } from "./keycloakIssuerUriParsed";
-import type { OidcUserInfo } from "../tools/OidcUserInfo";
+import type { OidcUserInfo } from "../core/types";
 
 export type KeycloakUtils = {
     issuerUriParsed: KeycloakIssuerUriParsed;
@@ -9,7 +9,7 @@ export type KeycloakUtils = {
     getAccountUrl: (params: { clientId: string; validRedirectUri: string; locale?: string }) => string;
     fetchUserProfile: (params: { accessToken: string }) => Promise<KeycloakProfile>;
     fetchUserInfo: (params: { accessToken: string }) => Promise<OidcUserInfo>;
-    transformUrlBeforeRedirectForRegister: (authorizationUrl: string) => string;
+    transformUrlBeforeRedirectForRegister: (params: { authorizationUrl: string }) => string;
 };
 
 export type KeycloakProfile = KeycloakProfile.AttributeValuesMap & {
@@ -232,7 +232,7 @@ export function createKeycloakUtils(params: { issuerUri: string }): KeycloakUtil
                     Authorization: `Bearer ${accessToken}`
                 }
             }).then(r => r.json()),
-        transformUrlBeforeRedirectForRegister: authorizationUrl => {
+        transformUrlBeforeRedirectForRegister: ({ authorizationUrl }) => {
             const urlObj = new URL(authorizationUrl);
             urlObj.pathname = urlObj.pathname.replace(/\/auth$/, "/registrations");
             return urlObj.href;

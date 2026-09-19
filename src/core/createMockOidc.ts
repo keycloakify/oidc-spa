@@ -5,8 +5,9 @@ import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";
 import { getSearchParam, addOrUpdateSearchParam } from "../tools/urlSearchParams";
 import { getRootRelativeOriginalLocationHref_earlyInit } from "../core/earlyInit_rootRelativeOriginalLocationHref";
 import { INFINITY_TIME } from "../tools/INFINITY_TIME";
-import { getBASE_URL_earlyInit } from "./earlyInit_BASE_URL";
+import { getBASE_URL_earlyInit, prBASE_URL_earlyInit_set } from "./earlyInit_BASE_URL";
 import { decodeJwt } from "../tools/decodeJwt";
+import { assert } from "../tools/tsafe/assert";
 
 export type ParamsOfCreateMockOidc<User, AutoLogin extends boolean> = {
     user_mock?: User;
@@ -18,14 +19,6 @@ export type ParamsOfCreateMockOidc<User, AutoLogin extends boolean> = {
     accessTokenExpirationTime_mock?: number;
     refreshToken_mock?: string;
     refreshTokenExpirationTime_mock?: number;
-    /**
-     * The URL of the home page of your app.
-     * We need to know this so we know where to redirect when you call `logout({ redirectTo: "home"})`.
-     * In the majority of cases it should be `homeUrl: "/"` but it could aso be something like `homeUrl: "/dashboard"`
-     * if your web app isn't hosted at the root of the domain.
-     */
-    BASE_URL?: string;
-
     autoLogin?: AutoLogin;
     postLoginRedirectUrl?: string;
 } & (AutoLogin extends true
@@ -60,8 +53,6 @@ export async function createMockOidc<User = never, AutoLogin extends boolean = f
         autoLogin = false,
         postLoginRedirectUrl
     } = params;
-
-    const BASE_URL_params = params.BASE_URL;
 
     const isUserLoggedIn = (() => {
         const { wasPresent, value } = getSearchParam({
@@ -98,8 +89,29 @@ export async function createMockOidc<User = never, AutoLogin extends boolean = f
         return value === "true";
     })();
 
+    {
+        const timer = window.setTimeout(() => {
+            console.warn(
+                [
+                    "oidc-spa: Setup error.",
+                    "oidcEarlyInit() wasn't called.",
+                    "This is supposed to be handled by the oidc-spa Vite plugin",
+                    "or manually in other environments."
+                ].join(" ")
+            );
+        }, 3_000);
+
+        await prBASE_URL_earlyInit_set;
+
+        window.clearTimeout(timer);
+    }
+
     const homeUrl = toFullyQualifiedUrl({
-        urlish: BASE_URL_params ?? getBASE_URL_earlyInit() ?? "/",
+        urlish: (() => {
+            const BASE_URL = getBASE_URL_earlyInit();
+            assert(BASE_URL !== undefined);
+            return BASE_URL;
+        })(),
         doAssertNoQueryParams: true,
         doOutputWithTrailingSlash: true
     });

@@ -1,22 +1,19 @@
-import type { Oidc } from "./Oidc";
+import type { OidcTokens, CreateUser, OidcProviderMetadata, Oidc, IdTokenClaims } from "./types";
 import { id } from "../tools/tsafe/id";
 import { assert } from "../tools/tsafe/assert";
 import { areDeepEqual } from "../tools/areDeepEqual";
 import type { NonPostableEvt } from "../tools/Evt";
 import { decodeJwt } from "../tools/decodeJwt";
-import type { ParamsOfCreateOidc } from "./createOidc";
 
 export function createGetUser<User>(params: {
     issuerUri: string;
     clientId: string;
     validRedirectUri: string;
-    createUser: ParamsOfCreateOidc.CreateUser<User> | undefined;
-    getCurrentTokens: () => Oidc.Tokens;
+    createUser: CreateUser<User> | undefined;
+    getCurrentTokens: () => OidcTokens;
     evtTokensChange: NonPostableEvt<void>;
     renewTokens(): Promise<void>;
-    oidcMetadata: {
-        userinfo_endpoint?: string;
-    };
+    oidcProviderMetadata: Pick<OidcProviderMetadata, "userinfo_endpoint">;
 }) {
     const {
         issuerUri,
@@ -26,7 +23,7 @@ export function createGetUser<User>(params: {
         getCurrentTokens,
         evtTokensChange,
         renewTokens,
-        oidcMetadata
+        oidcProviderMetadata
     } = params;
 
     type GetUser = Oidc.LoggedIn<User>["getUser"];
@@ -36,7 +33,7 @@ export function createGetUser<User>(params: {
     async function fetchUserInfo(params: { accessToken: string }) {
         const { accessToken } = params;
 
-        const { userinfo_endpoint } = oidcMetadata;
+        const { userinfo_endpoint } = oidcProviderMetadata;
 
         if (!userinfo_endpoint) {
             // TODO: Make a class for this error
@@ -75,7 +72,7 @@ export function createGetUser<User>(params: {
 
         const hash_new = computeHash({
             accessToken: tokens.accessToken,
-            decodedIdToken: tokens.decodedIdToken
+            idTokenClaims: tokens.idTokenClaims
         });
 
         const prUser_new = (async () => {
@@ -93,7 +90,7 @@ export function createGetUser<User>(params: {
             try {
                 user_new = await createUser({
                     accessToken: tokens.accessToken,
-                    decodedIdToken: tokens.decodedIdToken,
+                    idTokenClaims: tokens.idTokenClaims,
                     issuerUri,
                     clientId,
                     validRedirectUri,
@@ -218,14 +215,11 @@ export function createGetUser<User>(params: {
     return { getUser };
 }
 
-function computeHash(params: {
-    decodedIdToken: Oidc.Tokens.DecodedIdToken;
-    accessToken: string;
-}): string {
-    const { decodedIdToken, accessToken } = params;
+function computeHash(params: { idTokenClaims: IdTokenClaims; accessToken: string }): string {
+    const { idTokenClaims, accessToken } = params;
 
     const decodedIdToken_stableish = (() => {
-        const { exp, iat, nonce, auth_time, amr, acr, ...rest } = decodedIdToken;
+        const { exp, iat, nonce, auth_time, amr, acr, ...rest } = idTokenClaims;
 
         return rest;
     })();

@@ -470,7 +470,10 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
                   clientId: oidcCore.clientId,
                   validRedirectUri: oidcCore.validRedirectUri,
                   isUserLoggedIn: true,
-                  getAccessToken: oidcCore.getAccessToken,
+                  getAccessToken: async () => {
+                      const { accessToken } = await oidcCore.getTokens();
+                      return accessToken;
+                  },
                   subscribeAccessTokenRotation: next => {
                       const { unsubscribeFromTokensChange } = oidcCore.subscribeToTokensChange(
                           ({ accessToken }) => {
@@ -679,10 +682,6 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
                             });
                         })();
 
-                        const BASE_URL = getBASE_URL_earlyInit();
-
-                        assert(BASE_URL !== undefined);
-
                         const oidcCore = await createMockOidc_core({
                             // NOTE: The `as false` is lying here, it's just to preserve some level of type-safety.
                             autoLogin: autoLogin as false,
@@ -706,7 +705,13 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
                                 issuerUri: issuerUri_mock,
                                 clientId: clientId_mock,
                                 validRedirectUri: toFullyQualifiedUrl({
-                                    urlish: BASE_URL,
+                                    urlish: (() => {
+                                        const BASE_URL = getBASE_URL_earlyInit();
+
+                                        assert(BASE_URL !== undefined);
+
+                                        return BASE_URL;
+                                    })(),
                                     doAssertNoQueryParams: true,
                                     doOutputWithTrailingSlash: true
                                 }),

@@ -23,7 +23,7 @@ export namespace StateData {
         export type Login = Common_Redirect & {
             action: "login";
             rootRelativeRedirectUrl_consentRequiredCase: string;
-            extraQueryParams: Record<string, string>;
+            authorizationParams: Record<string, string | string[]>;
         };
 
         export type Logout = Common_Redirect & {

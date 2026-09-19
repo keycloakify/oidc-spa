@@ -2,7 +2,7 @@ import type { UserManager as OidcClientTsUserManager } from "../vendor/frontend/
 import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";
 import { assert, type Equals } from "../tools/tsafe/assert";
 import { noUndefined } from "../tools/tsafe/noUndefined";
-import type { StateData } from "./StateData";
+import { type StateData, generateStateUrlParamValue } from "./StateData";
 import type { NonPostableEvt } from "../tools/Evt";
 import { createStatefulEvt } from "../tools/StatefulEvt";
 import { Deferred } from "../tools/Deferred";
@@ -11,6 +11,7 @@ import { getIsOnline } from "../tools/getIsOnline";
 import { isNetworkError } from "../tools/isNetworkError";
 import { OidcInitializationError } from "./OidcInitializationError";
 import { setStateDataCookieIfEnabled } from "./StateDataCookie";
+import type { OidcProviderMetadata } from "./types";
 
 const globalContext = {
     evtHasLoginBeenCalled: createStatefulEvt(() => false)
@@ -21,8 +22,12 @@ type Params = Params.Login | Params.GoToAuthServer;
 namespace Params {
     type Common = {
         redirectUrl: string;
-        extraQueryParams_local: Record<string, string | undefined> | undefined;
-        transformUrlBeforeRedirect_local: ((url: string) => string) | undefined;
+        authorizationParams_paramOfLoginOrGoToAuthServer:
+            | Record<string, string | string[] | undefined>
+            | undefined;
+        transformAuthorizationUrl_paramOfLoginOrGoToAuthServer:
+            | ((params: { authorizationUrl: string }) => string)
+            | undefined;
     };
 
     export type Login = Common & {
@@ -57,15 +62,15 @@ export function getPrSafelyRestoredFromBfCacheAfterLoginBackNavigationOrInitiali
 export function createLoginOrGoToAuthServer(params: {
     configId: string;
     oidcClientTsUserManager: OidcClientTsUserManager;
-    transformUrlBeforeRedirect:
-        | ((params: { authorizationUrl: string; isSilent: boolean }) => string)
+    transformAuthorizationUrl_paramOfCreateOidc:
+        | ((params: { authorizationUrl: string; isSilentRedirect: boolean }) => string)
         | undefined;
 
-    getExtraQueryParams:
-        | ((params: { isSilent: boolean; url: string }) => Record<string, string | undefined>)
+    getAuthorizationParams_paramsOfCreateOidc:
+        | ((params: { isSilentRedirect: boolean }) => Record<string, string | string[] | undefined>)
         | undefined;
 
-    getExtraTokenParams: (() => Record<string, string | undefined>) | undefined;
+    tokenParams: Record<string, string | string[] | undefined> | undefined;
 
     homeUrl: string;
     stateUrlParamValue_instance: string;
@@ -77,10 +82,9 @@ export function createLoginOrGoToAuthServer(params: {
         configId,
         oidcClientTsUserManager,
 
-        transformUrlBeforeRedirect,
-        getExtraQueryParams,
-
-        getExtraTokenParams,
+        transformAuthorizationUrl_paramOfCreateOidc,
+        getAuthorizationParams_paramsOfCreateOidc,
+        tokenParams,
 
         homeUrl,
         stateUrlParamValue_instance,
@@ -92,13 +96,6 @@ export function createLoginOrGoToAuthServer(params: {
     let lastPublicUrl: string | undefined = undefined;
 
     async function loginOrGoToAuthServer(params: Params): Promise<never> {
-        const {
-            redirectUrl: redirectUrl_params,
-            extraQueryParams_local,
-            transformUrlBeforeRedirect_local,
-            ...rest
-        } = params;
-
         log?.(`Calling loginOrGoToAuthServer ${JSON.stringify(params, null, 2)}`);
 
         delay_until_online: {
@@ -113,7 +110,7 @@ export function createLoginOrGoToAuthServer(params: {
         }
 
         login_specific_handling: {
-            if (rest.action !== "login") {
+            if (params.action !== "login") {
                 break login_specific_handling;
             }
 
@@ -125,7 +122,7 @@ export function createLoginOrGoToAuthServer(params: {
             globalContext.evtHasLoginBeenCalled.current = true;
 
             if (document.visibilityState !== "visible") {
-                rest.interaction === "ensure no interaction";
+                params.interaction === "ensure no interaction";
 
                 const dVisible = new Deferred<void>();
 
@@ -142,7 +139,7 @@ export function createLoginOrGoToAuthServer(params: {
             }
 
             bf_cache_handling: {
-                if (rest.doForceReloadOnBfCache) {
+                if (params.doForceReloadOnBfCache) {
                     const callback = (event: { persisted: boolean }) => {
                         if (!event.persisted) {
                             return;
@@ -165,7 +162,7 @@ export function createLoginOrGoToAuthServer(params: {
                         "We came back from the login pages and the state of the app has been restored"
                     );
 
-                    if (rest.doNavigateBackToLastPublicUrlIfTheTheUserNavigateBack) {
+                    if (params.doNavigateBackToLastPublicUrlIfTheTheUserNavigateBack) {
                         if (lastPublicUrl !== undefined) {
                             log?.(`Loading last public route: ${lastPublicUrl}`);
                             window.location.href = lastPublicUrl;
@@ -185,7 +182,7 @@ export function createLoginOrGoToAuthServer(params: {
         }
 
         const redirectUrl = toFullyQualifiedUrl({
-            urlish: redirectUrl_params,
+            urlish: params.redirectUrl,
             doAssertNoQueryParams: false
         });
 
@@ -211,7 +208,7 @@ export function createLoginOrGoToAuthServer(params: {
         log?.(`redirectUrl: ${rootRelativeRedirectUrl}`);
 
         const rootRelativeRedirectUrl_consentRequiredCase = (() => {
-            switch (rest.action) {
+            switch (params.action) {
                 case "login":
                     return (lastPublicUrl ?? homeUrl).slice(window.location.origin.length);
                 case "go to auth server":
@@ -232,89 +229,16 @@ export function createLoginOrGoToAuthServer(params: {
         const stateData: StateData.Redirect = {
             context: "redirect",
             rootRelativeRedirectUrl,
-            extraQueryParams: {},
+            authorizationParams: {},
             configId,
             action: "login",
             rootRelativeRedirectUrl_consentRequiredCase
         };
 
-        const isSilent = rest.action === "login" && rest.interaction === "ensure no interaction";
-
-        const transformUrl_oidcClientTs = (url: string) => {
-            (
-                [
-                    [
-                        getExtraQueryParams,
-                        transformUrlBeforeRedirect === undefined
-                            ? undefined
-                            : (url: string) =>
-                                  transformUrlBeforeRedirect({
-                                      isSilent,
-                                      authorizationUrl: url
-                                  })
-                    ],
-                    [extraQueryParams_local, transformUrlBeforeRedirect_local]
-                ] as const
-            ).forEach(([extraQueryParamsMaybeGetter, transformUrlBeforeRedirect], i, arr) => {
-                const url_before = i !== arr.length - 1 ? undefined : url;
-
-                add_extra_query_params: {
-                    if (extraQueryParamsMaybeGetter === undefined) {
-                        break add_extra_query_params;
-                    }
-
-                    const extraQueryParams =
-                        typeof extraQueryParamsMaybeGetter === "function"
-                            ? extraQueryParamsMaybeGetter({ isSilent, url })
-                            : extraQueryParamsMaybeGetter;
-
-                    for (const [name, value] of Object.entries(extraQueryParams)) {
-                        if (value === undefined) {
-                            continue;
-                        }
-                        url = addOrUpdateSearchParam({
-                            url,
-                            name,
-                            value,
-                            encodeMethod: "www-form"
-                        });
-                    }
-                }
-
-                apply_transform_url: {
-                    if (transformUrlBeforeRedirect === undefined) {
-                        break apply_transform_url;
-                    }
-                    url = transformUrlBeforeRedirect(url);
-                }
-
-                update_state: {
-                    if (url_before === undefined) {
-                        break update_state;
-                    }
-
-                    const paramValueByName_current = getAllSearchParams(url);
-                    const paramValueByName_before = getAllSearchParams(url_before);
-
-                    for (const [name, value_current] of Object.entries(paramValueByName_current)) {
-                        const value_before: string | undefined = paramValueByName_before[name];
-
-                        if (value_before === value_current) {
-                            continue;
-                        }
-
-                        stateData.extraQueryParams[name] = value_current;
-                    }
-                }
-            });
-
-            return url;
-        };
-
         const redirectMethod = (() => {
-            switch (rest.action) {
+            switch (params.action) {
                 case "login":
-                    return rest.doNavigateBackToLastPublicUrlIfTheTheUserNavigateBack
+                    return params.doNavigateBackToLastPublicUrlIfTheTheUserNavigateBack
                         ? "replace"
                         : "assign";
                 case "go to auth server":
@@ -324,8 +248,8 @@ export function createLoginOrGoToAuthServer(params: {
 
         log?.(`redirectMethod: ${redirectMethod}`);
 
-        if (rest.action === "login") {
-            rest.preRedirectHook?.();
+        if (params.action === "login") {
+            params.preRedirectHook?.();
         }
 
         return oidcClientTsUserManager
@@ -333,11 +257,11 @@ export function createLoginOrGoToAuthServer(params: {
                 state: stateData,
                 redirectMethod,
                 prompt: (() => {
-                    switch (rest.action) {
+                    switch (params.action) {
                         case "go to auth server":
                             return undefined;
                         case "login":
-                            switch (rest.interaction) {
+                            switch (params.interaction) {
                                 case "ensure no interaction":
                                     return "none";
                                 case "ensure interaction":
@@ -345,13 +269,26 @@ export function createLoginOrGoToAuthServer(params: {
                                 case "directly redirect if active session show login otherwise":
                                     return undefined;
                             }
-                            assert<Equals<typeof rest.interaction, never>>;
+                            assert<Equals<typeof params.interaction, never>>;
                     }
-                    assert<Equals<typeof rest, never>>;
+                    assert<Equals<typeof params, never>>;
                 })(),
-                transformUrl: transformUrl_oidcClientTs,
-                extraTokenParams:
-                    getExtraTokenParams === undefined ? undefined : noUndefined(getExtraTokenParams())
+                transformUrl: (authorizationUrl: string): string =>
+                    transformAuthorizationUrl_internal({
+                        authorizationUrl,
+                        authorizationParams_paramOfLoginOrGoToAuthServer:
+                            params.authorizationParams_paramOfLoginOrGoToAuthServer,
+                        transformAuthorizationUrl_paramOfLoginOrGoToAuthServer:
+                            params.transformAuthorizationUrl_paramOfLoginOrGoToAuthServer,
+                        transformAuthorizationUrl_paramOfCreateOidc,
+                        getAuthorizationParams_paramsOfCreateOidc,
+                        isSilentRedirect:
+                            params.action === "login" && params.interaction === "ensure no interaction",
+                        setStateDataAuthorizationParams: ({ authorizationParams }) => {
+                            stateData.authorizationParams = authorizationParams;
+                        }
+                    }),
+                extraTokenParams: tokenParams === undefined ? undefined : noUndefined(tokenParams)
             })
             .then(
                 () => new Promise<never>(() => {}),
@@ -395,5 +332,230 @@ export function createLoginOrGoToAuthServer(params: {
 
     return {
         loginOrGoToAuthServer
+    };
+}
+
+const AUTHORIZATION_URL_BASE_QUERY_PARAMS_NAMES = [
+    "client_id",
+    "redirect_uri",
+    "response_type",
+    "scope",
+    "state",
+    "code_challenge",
+    "response_mode"
+] as const;
+
+export function transformAuthorizationUrl_internal(params: {
+    authorizationUrl: string;
+    authorizationParams_paramOfLoginOrGoToAuthServer:
+        | Record<string, string | string[] | undefined>
+        | undefined;
+    transformAuthorizationUrl_paramOfLoginOrGoToAuthServer:
+        | ((params: { authorizationUrl: string }) => string)
+        | undefined;
+    transformAuthorizationUrl_paramOfCreateOidc:
+        | ((params: { authorizationUrl: string; isSilentRedirect: boolean }) => string)
+        | undefined;
+
+    getAuthorizationParams_paramsOfCreateOidc:
+        | ((params: { isSilentRedirect: boolean }) => Record<string, string | string[] | undefined>)
+        | undefined;
+    isSilentRedirect: boolean;
+    setStateDataAuthorizationParams:
+        | ((params: { authorizationParams: Record<string, string | string[]> }) => void)
+        | undefined;
+}): string {
+    const {
+        authorizationUrl,
+        authorizationParams_paramOfLoginOrGoToAuthServer,
+        transformAuthorizationUrl_paramOfLoginOrGoToAuthServer,
+        transformAuthorizationUrl_paramOfCreateOidc,
+        getAuthorizationParams_paramsOfCreateOidc,
+        isSilentRedirect,
+        setStateDataAuthorizationParams
+    } = params;
+
+    let authorizationUrl_transformed = authorizationUrl;
+
+    (
+        [
+            [getAuthorizationParams_paramsOfCreateOidc, transformAuthorizationUrl_paramOfCreateOidc],
+            [
+                authorizationParams_paramOfLoginOrGoToAuthServer,
+                transformAuthorizationUrl_paramOfLoginOrGoToAuthServer
+            ]
+        ] as const
+    ).forEach(([authorizationParams_maybeGetter, transformAuthorizationUrl], i) => {
+        const authorizationUrl_transformed_beforeCurrentPass = authorizationUrl_transformed;
+
+        handle_getAuthorizationParams: {
+            if (authorizationParams_maybeGetter === undefined) {
+                break handle_getAuthorizationParams;
+            }
+
+            const authorizationParams =
+                typeof authorizationParams_maybeGetter === "function"
+                    ? authorizationParams_maybeGetter({ isSilentRedirect })
+                    : authorizationParams_maybeGetter;
+
+            for (const [name, valueOrValues] of Object.entries(authorizationParams)) {
+                if (valueOrValues === undefined) {
+                    continue;
+                }
+                authorizationUrl_transformed = addOrUpdateSearchParam({
+                    url: authorizationUrl_transformed,
+                    name,
+                    values: valueOrValues instanceof Array ? valueOrValues : [valueOrValues],
+                    encodeMethod: "www-form",
+                    ifAlreadyPresent: "replace all by new values"
+                });
+            }
+        }
+
+        handle_transformAuthorizationUrl: {
+            if (transformAuthorizationUrl === undefined) {
+                break handle_transformAuthorizationUrl;
+            }
+            authorizationUrl_transformed = transformAuthorizationUrl({
+                authorizationUrl: authorizationUrl_transformed,
+                isSilentRedirect
+            });
+        }
+
+        handle_setStateDataAuthorizationParams: {
+            if (setStateDataAuthorizationParams === undefined) {
+                break handle_setStateDataAuthorizationParams;
+            }
+
+            {
+                const isGoToAuthServerPass = i === 1;
+
+                if (!isGoToAuthServerPass) {
+                    break handle_setStateDataAuthorizationParams;
+                }
+            }
+
+            const paramValueByName_current = getAllSearchParams(authorizationUrl_transformed);
+            const paramValueByName_before = getAllSearchParams(
+                authorizationUrl_transformed_beforeCurrentPass
+            );
+
+            const stateData_authorizationParams: Record<string, string | string[]> = {};
+
+            for (const [name, values_current] of Object.entries(paramValueByName_current)) {
+                const values_before: string[] | undefined = paramValueByName_before[name];
+
+                if (JSON.stringify(values_before) === JSON.stringify(values_current)) {
+                    continue;
+                }
+
+                stateData_authorizationParams[name] =
+                    values_current.length === 1 ? [values_current[0]] : values_current;
+            }
+
+            setStateDataAuthorizationParams({ authorizationParams: stateData_authorizationParams });
+        }
+    });
+
+    check_no_illegal_alteration: {
+        if (authorizationUrl === authorizationUrl_transformed) {
+            break check_no_illegal_alteration;
+        }
+
+        const params_before = getAllSearchParams(authorizationUrl);
+        const params_after = getAllSearchParams(authorizationUrl_transformed);
+
+        for (const name of AUTHORIZATION_URL_BASE_QUERY_PARAMS_NAMES) {
+            if (JSON.stringify(params_before[name]) !== JSON.stringify(params_after[name])) {
+                throw new Error(
+                    [
+                        "oidc-spa: Illegal transformation of the authorizationUrl, can't alter the",
+                        `${name} query parameter value.`
+                    ].join(" ")
+                );
+            }
+        }
+    }
+
+    return authorizationUrl_transformed;
+}
+
+export function getAuthorizationAudienceAndResourceParamsValues(params: {
+    oidcProviderMetadata: Pick<OidcProviderMetadata, "authorization_endpoint">;
+    clientId: string;
+    homeUrlAndRedirectUri: string;
+    scopes: string[];
+    response_mode: "fragment" | "query";
+    transformAuthorizationUrl_paramOfCreateOidc:
+        | ((params: { authorizationUrl: string; isSilentRedirect: boolean }) => string)
+        | undefined;
+
+    getAuthorizationParams_paramsOfCreateOidc:
+        | ((params: { isSilentRedirect: boolean }) => Record<string, string | string[] | undefined>)
+        | undefined;
+}): {
+    audience: string[] | undefined;
+    resource: string[] | undefined;
+} {
+    const {
+        oidcProviderMetadata,
+        clientId,
+        homeUrlAndRedirectUri,
+        scopes,
+        response_mode,
+        transformAuthorizationUrl_paramOfCreateOidc,
+        getAuthorizationParams_paramsOfCreateOidc
+    } = params;
+
+    const authorizationUrl_probe = (() => {
+        let url = oidcProviderMetadata.authorization_endpoint;
+
+        for (const name of AUTHORIZATION_URL_BASE_QUERY_PARAMS_NAMES) {
+            url = addOrUpdateSearchParam({
+                url,
+                encodeMethod: "www-form",
+                ifAlreadyPresent: "throw",
+                name,
+                values: [
+                    (() => {
+                        switch (name) {
+                            case "client_id":
+                                return clientId;
+                            case "redirect_uri":
+                                return homeUrlAndRedirectUri;
+                            case "response_type":
+                                return "code";
+                            case "scope":
+                                return scopes.join(" ");
+                            case "state":
+                                return generateStateUrlParamValue();
+                            case "code_challenge":
+                                return "probe";
+                            case "response_mode":
+                                return response_mode;
+                        }
+                    })()
+                ]
+            });
+        }
+
+        return url;
+    })();
+
+    const authorizationUrl_probe_transformed = transformAuthorizationUrl_internal({
+        authorizationUrl: authorizationUrl_probe,
+        authorizationParams_paramOfLoginOrGoToAuthServer: undefined,
+        transformAuthorizationUrl_paramOfLoginOrGoToAuthServer: undefined,
+        transformAuthorizationUrl_paramOfCreateOidc,
+        getAuthorizationParams_paramsOfCreateOidc,
+        isSilentRedirect: true,
+        setStateDataAuthorizationParams: undefined
+    });
+
+    const { audience, resource } = getAllSearchParams(authorizationUrl_probe_transformed);
+
+    return {
+        audience,
+        resource
     };
 }
