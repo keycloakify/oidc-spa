@@ -35,7 +35,8 @@ export declare namespace Oidc {
         subscribeToTokensChange: (onTokenChange: (tokens: OidcTokens) => void) => {
             unsubscribeFromTokensChange: () => void;
         };
-        getTokens: () => Promise<OidcTokens>;
+        getTokens: (param?: ParamsOfGetToken) => Promise<OidcTokens>;
+        getAccessToken: (params?: ParamsOfGetToken) => Promise<string>;
         logout: (
             params: { redirectTo: "home" | "current page" } | { redirectTo: "specific url"; url: string }
         ) => Promise<never>;
@@ -85,6 +86,14 @@ export declare namespace Oidc {
             };
             refreshUser: () => Promise<User>;
         }>;
+    };
+
+    type ParamsOfGetToken = {
+        authorizationParams?: Record<string, string | string[] | undefined>;
+        tokenParams?: Record<string, string | string[] | undefined>;
+        scope?: string[];
+        redirectUrl?: string;
+        disableDPoP?: boolean;
     };
 }
 

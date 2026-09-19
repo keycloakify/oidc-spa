@@ -68,6 +68,8 @@ import { createGetUser } from "./createGetUser";
 import * as runExclusive from "../tools/run-exclusive";
 import { getBASE_URL_earlyInit } from "./earlyInit_BASE_URL";
 import { fnv1aHashToHex } from "../tools/fnv1aHashToHex";
+import { noUndefined } from "../tools/tsafe/noUndefined";
+import { addOrUpdateSearchParam } from "../tools/urlSearchParams";
 
 // NOTE: Replaced at build time
 const VERSION = "{{OIDC_SPA_VERSION}}";
@@ -290,10 +292,16 @@ const createOidc_impl = runExclusive.build(async function <User, AutoLogin exten
                 return v;
             };
 
-            return {
+            const authorizationParams = noUndefined({
                 audience: toPretty(audience),
                 resource: toPretty(resource)
-            };
+            });
+
+            if (Object.keys(authorizationParams).length === 0) {
+                return undefined;
+            }
+
+            return authorizationParams;
         })();
 
         return {
@@ -301,7 +309,15 @@ const createOidc_impl = runExclusive.build(async function <User, AutoLogin exten
             clientId,
             scopes: scopes.filter(scope => scope !== "oidc"),
             authorizationParams,
-            tokenParams,
+            tokenParams: (() => {
+                if (tokenParams === undefined) {
+                    return undefined;
+                }
+                if (Object.keys(noUndefined(tokenParams)).length === 0) {
+                    return undefined;
+                }
+                return tokenParams;
+            })(),
             disableDPoP: params.disableDPoP
         };
     })();
@@ -336,7 +352,9 @@ const createOidc_impl = runExclusive.build(async function <User, AutoLogin exten
         log?.(
             [
                 `createOidc was called again with the same config seed (${JSON.stringify(
-                    configId_seed
+                    configId_seed,
+                    null,
+                    2
                 )})`,
                 `Returning already existing instance.`
             ].join(" ")
@@ -361,18 +379,21 @@ const createOidc_impl = runExclusive.build(async function <User, AutoLogin exten
         )}`
     );
 
-    const oidc = await createOidc_nonMemoized<User, AutoLogin>(rest, {
-        issuerUri,
-        clientId,
-        configId,
-        getAuthorizationParams,
-        tokenParams,
-        oidcProviderMetadata,
-        exports_earlyInit,
-        homeUrlAndRedirectUri,
-        response_mode,
-        scopes,
-        log
+    const oidc = await createOidc_nonMemoized<User, AutoLogin>({
+        params_forwarded: rest,
+        params_preProcesses: {
+            issuerUri,
+            clientId,
+            configId,
+            getAuthorizationParams,
+            tokenParams,
+            oidcProviderMetadata,
+            exports_earlyInit,
+            homeUrlAndRedirectUri,
+            response_mode,
+            scopes,
+            log
+        }
     });
 
     dOidc.resolve(oidc);
@@ -380,8 +401,10 @@ const createOidc_impl = runExclusive.build(async function <User, AutoLogin exten
     return oidc;
 });
 
-export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(
-    params: Omit<
+const A_HUNDRED_YEARS_IN_SECONDS = 3600 * 24 * 365 * 100;
+
+export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(params: {
+    params_forwarded: Omit<
         ParamsOfCreateOidc<User, AutoLogin>,
         | "issuerUri"
         | "clientId"
@@ -390,8 +413,8 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(
         | "tokenParams"
         | "__oidcProviderMetadata"
         | "scopes"
-    >,
-    preProcessedParams: {
+    >;
+    params_preProcesses: {
         issuerUri: string;
         clientId: string;
         configId: string;
@@ -405,8 +428,9 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(
         response_mode: "fragment" | "query";
         scopes: string[];
         log: typeof console.log | undefined;
-    }
-): Promise<AutoLogin extends true ? Oidc.LoggedIn<User> : Oidc<User>> {
+    };
+}): Promise<AutoLogin extends true ? Oidc.LoggedIn<User> : Oidc<User>> {
+    const { params_forwarded, params_preProcesses } = params;
     const {
         sessionRestorationMethod = "auto",
         disableDPoP: disableDPoP_params = false,
@@ -416,7 +440,7 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(
         idleSessionLifetimeInSeconds,
         autoLogout_redirectionTarget = { redirectTo: "current page" },
         autoLogin_redirectUrl
-    } = params;
+    } = params_forwarded;
 
     const {
         exports_earlyInit,
@@ -430,7 +454,7 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(
         response_mode,
         scopes,
         log
-    } = preProcessedParams;
+    } = params_preProcesses;
 
     const { getEvtIframeAuthResponse, getRedirectAuthResponse } = exports_earlyInit;
 
@@ -1613,6 +1637,10 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(
             break detect_useless_idleSessionLifetimeInSeconds;
         }
 
+        if (idleSessionLifetimeInSeconds === A_HUNDRED_YEARS_IN_SECONDS) {
+            break detect_useless_idleSessionLifetimeInSeconds;
+        }
+
         console.warn(
             [
                 "oidc-spa: You've specified idleSessionLifetimeInSeconds,",
@@ -1657,10 +1685,68 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(
     const oidc_loggedIn = id<Oidc.LoggedIn<User>>({
         ...oidc_common,
         isUserLoggedIn: true,
-        getTokens: async () => {
+        getTokens: async params_getTokens => {
             if (wouldHaveAutoLoggedOutIfBrowserWasOnline) {
                 await oidc_loggedIn.logout(autoLogout_redirectionTarget);
                 assert(false);
+            }
+
+            if (params_getTokens !== undefined) {
+                const oidc = await createOidc({
+                    issuerUri,
+                    clientId,
+                    createUser: () => ({}),
+                    __oidcProviderMetadata: oidcProviderMetadata,
+                    autoLogin: true,
+                    autoLogin_redirectUrl: params_getTokens.redirectUrl,
+                    autoLogout_redirectionTarget,
+                    debugLogs: log !== undefined,
+                    disableDPoP: (() => {
+                        if (params_getTokens.disableDPoP !== undefined) {
+                            return params_getTokens.disableDPoP || undefined;
+                        }
+                        return disableDPoP_params || undefined;
+                    })(),
+                    idleSessionLifetimeInSeconds: A_HUNDRED_YEARS_IN_SECONDS,
+                    sessionRestorationMethod,
+                    scopes: params_getTokens.scope ?? scopes,
+                    tokenParams: {
+                        ...tokenParams,
+                        ...params_getTokens.tokenParams
+                    },
+                    authorizationParams: getAuthorizationParams,
+                    transformAuthorizationUrl: ({ authorizationUrl, isSilentRedirect }) => {
+                        let authorizationUrl_modified = authorizationUrl;
+                        if (transformAuthorizationUrl !== undefined) {
+                            authorizationUrl_modified = transformAuthorizationUrl({
+                                authorizationUrl: authorizationUrl_modified,
+                                isSilentRedirect
+                            });
+                        }
+                        if (params_getTokens.authorizationParams !== undefined) {
+                            for (const [name, valueOrValues] of Object.entries(
+                                params_getTokens.authorizationParams
+                            )) {
+                                if (valueOrValues === undefined) {
+                                    continue;
+                                }
+                                authorizationUrl_modified = addOrUpdateSearchParam({
+                                    url: authorizationUrl_modified,
+                                    encodeMethod: "www-form",
+                                    ifAlreadyPresent: "replace all by new values",
+                                    name,
+                                    values:
+                                        typeof valueOrValues === "string"
+                                            ? [valueOrValues]
+                                            : valueOrValues
+                                });
+                            }
+                        }
+                        return authorizationUrl_modified;
+                    }
+                });
+
+                return oidc.getTokens();
             }
 
             if (prOngoingTokenRenewal === undefined) {
@@ -1695,6 +1781,10 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(
             }
 
             return currentTokens;
+        },
+        getAccessToken: async (params): Promise<string> => {
+            const { accessToken } = await oidc_loggedIn.getTokens(params);
+            return accessToken;
         },
         logout: async params => {
             if (globalContext.hasLogoutBeenCalled) {
