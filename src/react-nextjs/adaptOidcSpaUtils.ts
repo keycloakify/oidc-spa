@@ -1,4 +1,4 @@
-import { useEffect, useReducer, type ReactNode, type ComponentProps } from "react";
+import { createElement, useEffect, useReducer, type ReactNode, type ComponentProps } from "react";
 import { useRouter } from "next/navigation";
 import type { OidcSpaUtils as OidcSpaUtils_react, UseOidc } from "../react-spa";
 import type { OidcSpaUtils } from "./types";
@@ -26,11 +26,13 @@ export function adaptOidcSpaUtils<User, AutoLogin>(
         return props.children;
     }
 
-    const OidcInitializationGate: typeof OidcInitializationGate_base = props => (
-        <OidcInitializationGate_base {...props}>
-            <OidcInitializationGate_inner>{props.children}</OidcInitializationGate_inner>
-        </OidcInitializationGate_base>
-    );
+    const OidcInitializationGate: typeof OidcInitializationGate_base = props =>
+        createElement(OidcInitializationGate_base, {
+            ...props,
+            children: createElement(OidcInitializationGate_inner, {
+                children: props.children
+            })
+        });
 
     const withLoginEnforced: OidcSpaUtils_react<User, false>["withLoginEnforced"] = Component => {
         function ComponentWithLoginEnforced(props: ComponentProps<typeof Component>) {
@@ -50,7 +52,7 @@ export function adaptOidcSpaUtils<User, AutoLogin>(
                 return null;
             }
 
-            return <Component {...props} />;
+            return createElement(Component, props);
         }
 
         ComponentWithLoginEnforced.displayName = `${
