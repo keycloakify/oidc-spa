@@ -474,15 +474,8 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
                       const { accessToken } = await oidcCore.getTokens();
                       return accessToken;
                   },
-                  subscribeAccessTokenRotation: next => {
-                      const { unsubscribeFromTokensChange } = oidcCore.subscribeToTokensChange(
-                          ({ accessToken }) => {
-                              next({ accessToken });
-                          }
-                      );
-
-                      return { unsubscribeFromAccessTokenRotation: unsubscribeFromTokensChange };
-                  },
+                  subscribeToTokensChange: oidcCore.subscribeToTokensChange,
+                  getTokens: oidcCore.getTokens,
                   logout: oidcCore.logout,
                   renewTokens: oidcCore.renewTokens,
                   goToAuthServer: oidcCore.goToAuthServer,
@@ -665,7 +658,8 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
                         const accessToken_mock =
                             paramsOfBootstrap.accessToken_mock ?? ACCESS_TOKEN_MOCK_DEFAULT;
 
-                        const idToken_mock = ID_TOKEN_MOCK_DEFAULT;
+                        const idToken_mock =
+                            paramsOfBootstrap.client?.idTokenMock ?? ID_TOKEN_MOCK_DEFAULT;
 
                         const idTokenClaims_mock = (() => {
                             if (idToken_mock !== undefined) {
@@ -692,6 +686,7 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
                             idToken_mock,
                             decodedIdToken_mock: paramsOfBootstrap.client?.idTokenClaims_mock,
                             accessToken_mock,
+                            refreshToken_mock: paramsOfBootstrap.client?.refreshToken_mock,
                             user_mock: await createClientUser({
                                 isMock: true,
                                 idTokenClaims: idTokenClaims_mock,
@@ -754,24 +749,21 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
                                 idleSessionLifetimeInSeconds:
                                     paramsOfBootstrap.client.idleSessionLifetimeInSeconds,
                                 scopes: paramsOfBootstrap.client.scopes,
-                                transformUrlBeforeRedirect:
-                                    paramsOfBootstrap.client.transformUrlBeforeRedirect,
-                                extraQueryParams: paramsOfBootstrap.client.extraQueryParams,
-                                extraTokenParams: paramsOfBootstrap.client.extraTokenParams,
+                                transformAuthorizationUrl:
+                                    paramsOfBootstrap.client.transformAuthorizationUrl,
+                                authorizationParams: paramsOfBootstrap.client.authorizationParams,
+                                tokenParams: paramsOfBootstrap.client.tokenParams,
                                 sessionRestorationMethod:
                                     paramsOfBootstrap.client.sessionRestorationMethod,
                                 debugLogs: paramsOfBootstrap.debugLogs,
-                                __unsafe_clientSecret: paramsOfBootstrap.client.__unsafe_clientSecret,
-                                __metadata: paramsOfBootstrap.client.__metadata,
-                                __unsafe_useIdTokenAsAccessToken:
-                                    paramsOfBootstrap.client.__unsafe_useIdTokenAsAccessToken,
-                                autoLogoutParams: paramsOfBootstrap.client.autoLogoutParams,
+                                __oidcProviderMetadata: paramsOfBootstrap.client.__oidcProviderMetadata,
+                                autoLogout_redirectionTarget:
+                                    paramsOfBootstrap.client.autoLogout_redirectionTarget,
                                 disableDPoP: paramsOfBootstrap.client.disableDPoP,
-                                createUser: ({ decodedIdToken, ...params }) =>
+                                createUser: params =>
                                     createClientUser({
                                         isMock: false,
-                                        ...params,
-                                        idTokenClaims: decodedIdToken
+                                        ...params
                                     })
                             });
                         } catch (error) {

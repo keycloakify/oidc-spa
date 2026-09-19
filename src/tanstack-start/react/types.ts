@@ -1,10 +1,10 @@
 import type {
-    Oidc as Oidc_core,
     OidcInitializationError,
     ParamsOfCreateOidc,
     IdTokenClaims,
     OidcProviderMetadata,
-    OidcUserInfo
+    OidcUserInfo,
+    OidcTokens
 } from "../../core";
 import type { FunctionMiddlewareAfterServer, RequestMiddlewareAfterServer } from "@tanstack/react-start";
 import type { GetterOrDirectValue } from "../../tools/GetterOrDirectValue";
@@ -12,7 +12,7 @@ import type { MaybeAsync } from "../../tools/MaybeAsync";
 import { assert, type Equals } from "../../tools/tsafe/assert";
 import type { AccessTokenClaims_specs as AccessTokenClaims } from "../../server";
 
-export type { IdTokenClaims, AccessTokenClaims, OidcProviderMetadata, OidcUserInfo };
+export type { IdTokenClaims, AccessTokenClaims, OidcProviderMetadata, OidcUserInfo, OidcTokens };
 
 export type UseOidc<User_client> = {
     (params?: { assert?: undefined }): UseOidc.Oidc<User_client>;
@@ -88,10 +88,23 @@ export namespace UseOidc {
             issuerUri: string;
             clientId: string;
             validRedirectUri: string;
-            logout: Oidc_core.LoggedIn["logout"];
-            renewTokens: Oidc_core.LoggedIn["renewTokens"];
-            goToAuthServer: Oidc_core.LoggedIn["goToAuthServer"];
-            backFromAuthServer: Oidc_core.LoggedIn["backFromAuthServer"];
+            logout: (
+                params:
+                    | { redirectTo: "home" | "current page" }
+                    | { redirectTo: "specific url"; url: string }
+            ) => Promise<never>;
+            renewTokens: () => Promise<void>;
+            goToAuthServer: (params: {
+                authorizationParams?: Record<string, string | string[] | undefined>;
+                transformAuthorizationUrl?: (params: { authorizationUrl: string }) => string;
+                redirectUrl?: string;
+            }) => Promise<never>;
+            backFromAuthServer:
+                | {
+                      authorizationParams: Record<string, string | string[]>;
+                      result: Record<string, string>;
+                  }
+                | undefined;
             isNewBrowserSession: boolean;
             autoLogoutState:
                 | {
@@ -121,8 +134,8 @@ export namespace GetOidc {
     export type Oidc<User_client> =
         | (Oidc.NotLoggedIn & {
               getAccessToken?: never;
-              subscribeToTokenRotation?: never;
-              getIdTokenClaims?: never;
+              subscribeToTokensChange?: never;
+              getTokens?: never;
               logout?: never;
               renewTokens?: never;
               goToAuthServer?: never;
@@ -146,19 +159,38 @@ export namespace GetOidc {
         export type NotLoggedIn = Common & {
             isUserLoggedIn: false;
             initializationError: OidcInitializationError | undefined;
-            login: Oidc_core.NotLoggedIn["login"];
+            login: (params?: {
+                doesCurrentHrefRequiresAuth?: boolean;
+                redirectUrl?: string;
+                authorizationParams?: Record<string, string | string[] | undefined>;
+                transformAuthorizationUrl?: (params: { authorizationUrl: string }) => string;
+            }) => Promise<never>;
         };
 
         export type LoggedIn<User_client> = Common & {
             isUserLoggedIn: true;
-            getAccessToken: () => Promise<string>;
-            subscribeAccessTokenRotation: (next: (params: { accessToken: string }) => void) => {
-                unsubscribeFromAccessTokenRotation: () => void;
+            renewTokens(): Promise<void>;
+            subscribeToTokensChange: (onTokenChange: (tokens: OidcTokens) => void) => {
+                unsubscribeFromTokensChange: () => void;
             };
-            logout: Oidc_core.LoggedIn["logout"];
-            renewTokens: Oidc_core.LoggedIn["renewTokens"];
-            goToAuthServer: Oidc_core.LoggedIn["goToAuthServer"];
-            backFromAuthServer: Oidc_core.LoggedIn["backFromAuthServer"];
+            getTokens: (param?: ParamsOfGetToken) => Promise<OidcTokens>;
+            getAccessToken: (params?: ParamsOfGetToken) => Promise<string>;
+            logout: (
+                params:
+                    | { redirectTo: "home" | "current page" }
+                    | { redirectTo: "specific url"; url: string }
+            ) => Promise<never>;
+            goToAuthServer: (params: {
+                authorizationParams?: Record<string, string | string[] | undefined>;
+                transformAuthorizationUrl?: (params: { authorizationUrl: string }) => string;
+                redirectUrl?: string;
+            }) => Promise<never>;
+            backFromAuthServer:
+                | {
+                      authorizationParams: Record<string, string | string[]>;
+                      result: Record<string, string>;
+                  }
+                | undefined;
             isNewBrowserSession: boolean;
             subscribeToAutoLogoutState: (
                 next: (
@@ -184,6 +216,14 @@ export namespace GetOidc {
                 };
                 refreshUser: () => Promise<User_client>;
             }>;
+        };
+
+        export type ParamsOfGetToken = {
+            authorizationParams?: Record<string, string | string[] | undefined>;
+            tokenParams?: Record<string, string | string[] | undefined>;
+            scope?: string[];
+            redirectUrl?: string;
+            disableDPoP?: boolean;
         };
     }
 }
@@ -274,9 +314,6 @@ export type ParamsOfBootstrap<User_client, User_server, AutoLogin> =
 export namespace ParamsOfBootstrap {
     export type Real = {
         mode: "real";
-        /**
-         * See: https://docs.oidc-spa.dev/v/v10/providers-configuration/provider-configuration
-         */
         issuerUri: string;
         debugLogs?: boolean;
         server:
@@ -290,145 +327,42 @@ export namespace ParamsOfBootstrap {
                   clientSecret: string;
               };
         client: {
-            /**
-             * See: https://docs.oidc-spa.dev/v/v10/providers-configuration/provider-configuration
-             */
             clientId: string;
-
-            /**
-             * Default: 60 second.
-             * It defines how long before the auto logout we should start
-             * displaying an overlay message to the user alerting them
-             * like: "Are you still there? You'll be disconnected in 59...58..."
-             * NOTE: This parameter is only UI related! It does not defines
-             * after how much time of inactivity the user should be auto logged out.
-             * This is a server policy (that can be overwrote by idleSessionLifetimeInSeconds)
-             * See: https://docs.oidc-spa.dev/v/v10/auto-logout
-             */
             warnUserSecondsBeforeAutoLogout?: number;
-            /**
-             * This parameter defines after how many seconds of inactivity the user should be
-             * logged out automatically.
-             *
-             * WARNING: It should be configured on the identity server side
-             * as it's the authoritative source for security policies and not the client.
-             * If you don't provide this parameter it will be inferred from the refresh token expiration time.
-             * Some provider however don't issue a refresh token or do not correctly set the
-             * expiration time. This parameter enable you to hard code the value to compensate
-             * the shortcoming of your auth server.
-             * */
             idleSessionLifetimeInSeconds?: number;
-
-            /**
-             * The scopes being requested from the OIDC/OAuth2 provider (default: `["profile"]`
-             * (the scope "openid" is added automatically as it's mandatory)
-             **/
             scopes?: string[];
-
-            /**
-             * Transform the url (authorization endpoint) before redirecting to the login pages.
-             *
-             * The isSilent parameter is true when the redirect is initiated in the background iframe for silent signin.
-             * This can be used to omit ui related query parameters (like `ui_locales`).
-             */
             transformAuthorizationUrl?: (params: {
                 authorizationUrl: string;
                 isSilentRedirect: boolean;
             }) => string;
-
-            /**
-             * Extra query params to be added to the authorization endpoint url before redirecting or silent signing in.
-             * You can provide a function that returns those extra query params, it will be called
-             * when login() is called.
-             *
-             * Example: extraQueryParams: ()=> ({ ui_locales: "fr" })
-             *
-             * This parameter can also be passed to login() directly.
-             */
             authorizationParams?:
                 | Record<string, string | string[] | undefined>
-                | ((params: { isSilent: boolean; url: string }) => Record<string, string | undefined>);
-            /**
-             * Extra body params to be added to the /token POST request.
-             *
-             * It will be used when for the initial request, whenever the token is getting refreshed and if you call `renewTokens()`.
-             * You can also provide this parameter directly to the `renewTokens()` method.
-             *
-             * It can be either a string to string record or a function that returns a string to string record.
-             *
-             * Example: extraTokenParams: ()=> ({ selectedCustomer: "xxx" })
-             *          extraTokenParams: { selectedCustomer: "xxx" }
-             */
-            extraTokenParams?:
-                | Record<string, string | string[] | undefined>
-                | (() => Record<string, string | undefined>);
-
-            /**
-             * NOTE: Can be provided as parameter to the Vite plugin or to oidcEarlyInit()
-             *
-             * Determines how session restoration is handled.
-             * Session restoration allows users to stay logged in between visits
-             * without needing to explicitly sign in each time.
-             *
-             * Options:
-             *
-             * - **"auto" (default)**:
-             *   Automatically selects the best method.
-             *   If the app’s domain shares a common parent domain with the authorization endpoint,
-             *   an iframe is used for silent session restoration.
-             *   Otherwise, a full-page redirect is used.
-             *
-             * - **"full page redirect"**:
-             *   Forces full-page reloads for session restoration.
-             *   Use this if your application is served with a restrictive CSP
-             *   (e.g., `Content-Security-Policy: frame-ancestors "none"`)
-             *   or `X-Frame-Options: DENY`, and you cannot modify those headers.
-             *   This mode provides a slightly less seamless UX and will lead oidc-spa to
-             *   store tokens in `localStorage` if multiple OIDC clients are used
-             *   (e.g., your app communicates with several APIs).
-             *
-             * - **"iframe"**:
-             *   Forces iframe-based session restoration.
-             *   In development, if you go in your browser setting and allow your auth server’s domain
-             *   to set third-party cookies this value will let you test your app
-             *   with the local dev server as it will behave in production.
-             */
+                | ((params: {
+                      isSilentRedirect: boolean;
+                  }) => Record<string, string | string[] | undefined>);
+            tokenParams?: Record<string, string | string[] | undefined>;
             sessionRestorationMethod?: "iframe" | "full page redirect" | "auto";
-
-            /**
-             * This option should only be used as a last resort.
-             *
-             * If your OIDC provider is correctly configured, this should not be necessary.
-             *
-             * The metadata is normally retrieved automatically from:
-             * `${issuerUri}/.well-known/openid-configuration`
-             *
-             * Use this only if that endpoint is not accessible (e.g. due to missing CORS headers
-             * or non-standard deployments), and you cannot fix the server-side configuration.
-             */
-            __providerMetadata?: OidcProviderMetadata;
-
-            /**
-             * Usage discouraged, this parameter exists because we don't want to assume
-             * too much about your usecase but I can't think of a scenario where you would
-             * want anything other than the current page.
-             *
-             * Default: { redirectTo: "current page" }
-             */
-            autoLogoutParams?: Parameters<Oidc_core.LoggedIn<any>["logout"]>[0];
-
-            /**
-             * This is only for opting out of DPoP for a specific OIDC client instance.
-             * To enable DPoP see: https://docs.oidc-spa.dev/v/v10/security-features/dpop
-             * */
+            __oidcProviderMetadata?: OidcProviderMetadata;
+            autoLogout_redirectionTarget?:
+                | {
+                      redirectTo: "home" | "current page";
+                  }
+                | {
+                      redirectTo: "specific url";
+                      url: string;
+                  };
             disableDPoP?: true;
         };
     };
 
     assert<
         Equals<
-            Omit<Real["client"], "mode" | "warnUserSecondsBeforeAutoLogout">,
-            Omit<ParamsOfCreateOidc<any, true>, "createUser" | "autoLogin" | "redirectUrl_autoLogin">
+            Omit<Real["client"], "warnUserSecondsBeforeAutoLogout"> &
+                Pick<Real, "issuerUri" | "debugLogs">,
+            Omit<
+                ParamsOfCreateOidc<unknown, boolean>,
+                "createUser" | "autoLogin" | "autoLogin_redirectUrl"
+            >
         >
     >;
 
@@ -442,6 +376,8 @@ export namespace ParamsOfBootstrap {
         client?: {
             clientId_mock?: string;
             idTokenClaims_mock?: IdTokenClaims;
+            refreshToken_mock?: string;
+            idTokenMock?: string;
         } & (AutoLogin extends true
             ? {
                   isUserInitiallyLoggedIn?: true;

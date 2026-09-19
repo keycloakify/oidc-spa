@@ -31,7 +31,7 @@ export declare namespace Oidc {
 
     export type LoggedIn<User = unknown> = Common & {
         isUserLoggedIn: true;
-        renewTokens(): Promise<void>;
+        renewTokens: () => Promise<void>;
         subscribeToTokensChange: (onTokenChange: (tokens: OidcTokens) => void) => {
             unsubscribeFromTokensChange: () => void;
         };
