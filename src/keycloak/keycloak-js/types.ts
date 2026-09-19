@@ -261,15 +261,15 @@ export interface KeycloakInitOptions {
      * on the Keycloak server.
      *
      * Example:
-     * autoLogoutParams: { redirectTo: "current page" } // Default
-     * autoLogoutParams: { redirectTo: "home" }
-     * autoLogoutParams: { redirectTo: "specific url", url: "/your-session-has-expired" }
-     * autoLogoutParams: {
+     * autoLogout_redirectionTarget: { redirectTo: "current page" } // Default
+     * autoLogout_redirectionTarget: { redirectTo: "home" }
+     * autoLogout_redirectionTarget: { redirectTo: "specific url", url: "/your-session-has-expired" }
+     * autoLogout_redirectionTarget: {
      *      redirectTo: "specific url",
      *      get url(){ return `/your-session-has-expired?return_url=${encodeURIComponent(location.href)}`; }
      * }
      */
-    autoLogoutParams?:
+    autoLogout_redirectionTarget?:
         | {
               redirectTo: "home" | "current page";
           }

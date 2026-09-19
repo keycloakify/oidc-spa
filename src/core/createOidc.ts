@@ -202,7 +202,7 @@ const createOidc_impl = runExclusive.build(async function <User, AutoLogin exten
         tokenParams,
         autoLogin_redirectUrl,
         ...rest
-    } = params as ParamsOfCreateOidc<User, true>;
+    } = params;
 
     const issuerUri = toFullyQualifiedUrl({
         urlish: issuerUri_params,
@@ -372,7 +372,6 @@ const createOidc_impl = runExclusive.build(async function <User, AutoLogin exten
         homeUrlAndRedirectUri,
         response_mode,
         scopes,
-        autoLogin_redirectUrl,
         log
     });
 
@@ -383,7 +382,7 @@ const createOidc_impl = runExclusive.build(async function <User, AutoLogin exten
 
 export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(
     params: Omit<
-        ParamsOfCreateOidc<User, true>,
+        ParamsOfCreateOidc<User, AutoLogin>,
         | "issuerUri"
         | "clientId"
         | "debugLogs"
@@ -405,7 +404,6 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(
         homeUrlAndRedirectUri: string;
         response_mode: "fragment" | "query";
         scopes: string[];
-        autoLogin_redirectUrl: string | undefined;
         log: typeof console.log | undefined;
     }
 ): Promise<AutoLogin extends true ? Oidc.LoggedIn<User> : Oidc<User>> {
@@ -416,7 +414,8 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(
         autoLogin = false,
         createUser,
         idleSessionLifetimeInSeconds,
-        autoLogout_redirectionTarget = { redirectTo: "current page" }
+        autoLogout_redirectionTarget = { redirectTo: "current page" },
+        autoLogin_redirectUrl
     } = params;
 
     const {
@@ -430,7 +429,6 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(
         homeUrlAndRedirectUri,
         response_mode,
         scopes,
-        autoLogin_redirectUrl,
         log
     } = preProcessedParams;
 

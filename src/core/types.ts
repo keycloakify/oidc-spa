@@ -168,7 +168,7 @@ export type ParamsOfCreateOidc<User, AutoLogin extends boolean> = {
      *      get url(){ return `/your-session-has-expired?return_url=${encodeURIComponent(location.href)}`; }
      * }
      */
-    autoLogout_redirectionTarget:
+    autoLogout_redirectionTarget?:
         | {
               redirectTo: "home" | "current page";
           }
@@ -233,24 +233,22 @@ export type ParamsOfCreateOidc<User, AutoLogin extends boolean> = {
      * To enable DPoP see: https://docs.oidc-spa.dev/v/v10/security-features/dpop
      * */
     disableDPoP?: true;
-} & (AutoLogin extends true
-    ? {
-          /**
-           * This parameter is irrelevant in most usecases.
-           * It tells where to redirect after a successful login or autoLogin.
-           *
-           * If you are not in autoLogin mode there is absolutely no reason to use
-           * this parameter since you can pass `login({ redirectUrl: "..." })`.
-           *
-           * It can only be useful in some edge case with `autoLogin: true`
-           * When you want to precisely redirect somewhere after login.
-           *
-           * This can make sense if you have multiple clients to talk with different
-           * API and no iframe capabilities.
-           */
-          autoLogin_redirectUrl?: string;
-      }
-    : {});
+
+    /**
+     * This parameter take effect only when autoLogin is true.
+     * It tells where to redirect after a successful autoLogin.
+     *
+     * If you are not in autoLogin mode there is absolutely no reason to use
+     * this parameter since you can pass `login({ redirectUrl: "..." })`.
+     *
+     * It can only be useful in some edge case with `autoLogin: true`
+     * When you want to precisely redirect somewhere after login.
+     *
+     * This can make sense if you have multiple clients to talk with different
+     * API and no iframe capabilities.
+     */
+    autoLogin_redirectUrl?: string;
+};
 
 export type OidcTokens = OidcTokens.WithRefreshToken | OidcTokens.WithoutRefreshToken;
 

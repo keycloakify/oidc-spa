@@ -114,7 +114,7 @@ export class Keycloak {
             enableLogging,
             scope,
             locale,
-            autoLogoutParams
+            autoLogout_redirectionTarget
         } = initOptions;
 
         if (this.#state.initOptions !== undefined) {
@@ -141,10 +141,10 @@ export class Keycloak {
             issuerUri,
             clientId: this.#state.constructorParams.clientId,
             autoLogin,
-            postLoginRedirectUrl: redirectUri,
+            autoLogin_redirectUrl: redirectUri,
             debugLogs: enableLogging,
             scopes: scope?.split(" "),
-            autoLogoutParams,
+            autoLogout_redirectionTarget,
             authorizationParams:
                 !autoLogin || locale === undefined
                     ? undefined
@@ -746,8 +746,14 @@ export class Keycloak {
     async #login(
         options?: KeycloakLoginOptions & { doesCurrentHrefRequiresAuth?: boolean }
     ): Promise<never> {
+        if (!this.didInitialize) {
+            await this.#state.dInitialized.pr;
+        }
+
+        const { oidc, keycloakUtils, initOptions } = this.#state;
+
         const {
-            redirectUri,
+            redirectUri = initOptions?.redirectUri,
             action,
             loginHint,
             acr,
@@ -756,12 +762,6 @@ export class Keycloak {
             locale,
             doesCurrentHrefRequiresAuth
         } = options ?? {};
-
-        if (!this.didInitialize) {
-            await this.#state.dInitialized.pr;
-        }
-
-        const { oidc, keycloakUtils } = this.#state;
 
         assert(oidc !== undefined);
 
