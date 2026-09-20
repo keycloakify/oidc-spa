@@ -564,16 +564,14 @@ export function createOidcSpaUtils<User, AutoLogin extends boolean>(params: {
 
         const redirectUrl = (() => {
             if (loaderContext.request?.url !== undefined) {
-                return toFullyQualifiedUrl({
-                    urlish: loaderContext.request.url,
-                    doAssertNoQueryParams: false
-                });
+                return loaderContext.request.url;
             }
 
             if (loaderContext.location?.publicHref !== undefined) {
                 return toFullyQualifiedUrl({
                     urlish: loaderContext.location.publicHref,
-                    doAssertNoQueryParams: false
+                    doAssertNoQueryParams: false,
+                    rootUrl_fullyQualified: window.location.origin
                 });
             }
 

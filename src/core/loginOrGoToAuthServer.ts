@@ -12,6 +12,8 @@ import { isNetworkError } from "../tools/isNetworkError";
 import { OidcInitializationError } from "./OidcInitializationError";
 import { setStateDataCookieIfEnabled } from "./StateDataCookie";
 import type { OidcProviderMetadata } from "./types";
+import { getIsDeepLink } from "../tools/isDeepLink";
+import { deepLinkToRootRelativeUrl } from "../tools/deepLinkToRootRelativeUrl";
 
 const globalContext = {
     evtHasLoginBeenCalled: createStatefulEvt(() => false)
@@ -181,36 +183,43 @@ export function createLoginOrGoToAuthServer(params: {
             }
         }
 
-        const redirectUrl = toFullyQualifiedUrl({
-            urlish: params.redirectUrl,
-            doAssertNoQueryParams: false
-        });
+        const { rootRelativeRedirectUrl, redirectUrl_external } = (() => {
+            const redirectUrl = toFullyQualifiedUrl({
+                urlish: params.redirectUrl,
+                doAssertNoQueryParams: false,
+                rootUrl_fullyQualified: homeUrl
+            });
 
-        {
-            const redirectUrl_obj = new URL(redirectUrl);
-            const redirectUrl_originAndPath = `${redirectUrl_obj.origin}${redirectUrl_obj.pathname}`;
+            log?.(`post ${params.action} redirect url: ${redirectUrl}`);
 
-            if (!redirectUrl_originAndPath.replace(/\/?$/, "/").startsWith(homeUrl)) {
-                throw new Error(
-                    [
-                        `oidc-spa: redirect target ${redirectUrl_originAndPath} is outside of your application.`,
-                        `The homeUrl that you have provided defines the root where your app is hosted: ${homeUrl}.\n`,
-                        `This usually means one of the following:\n`,
-                        `1) The homeUrl is not set correctly. It must be the actual hosting root (for Vite, typically \`import.meta.env.BASE_URL\`).\n`,
-                        `2) You are trying to redirect outside of your application, which is not allowed by OIDC.`
-                    ].join(" ")
-                );
+            const isDeepLink = getIsDeepLink({
+                fullyQualifiedUrl: redirectUrl,
+                relativeTo_fullyQualified: homeUrl
+            });
+
+            if (isDeepLink) {
+                return {
+                    rootRelativeRedirectUrl: deepLinkToRootRelativeUrl({
+                        fullyQualifiedDeepLinkUrl: redirectUrl
+                    }),
+                    redirectUrl_external: undefined
+                };
+            } else {
+                return {
+                    rootRelativeRedirectUrl: deepLinkToRootRelativeUrl({
+                        fullyQualifiedDeepLinkUrl: homeUrl
+                    }),
+                    redirectUrl_external: redirectUrl
+                };
             }
-        }
-
-        const rootRelativeRedirectUrl = redirectUrl.slice(window.location.origin.length);
-
-        log?.(`redirectUrl: ${rootRelativeRedirectUrl}`);
+        })();
 
         const rootRelativeRedirectUrl_consentRequiredCase = (() => {
             switch (params.action) {
                 case "login":
-                    return (lastPublicUrl ?? homeUrl).slice(window.location.origin.length);
+                    return deepLinkToRootRelativeUrl({
+                        fullyQualifiedDeepLinkUrl: lastPublicUrl ?? homeUrl
+                    });
                 case "go to auth server":
                     return rootRelativeRedirectUrl;
             }
@@ -232,7 +241,8 @@ export function createLoginOrGoToAuthServer(params: {
             authorizationParams: {},
             configId,
             action: "login",
-            rootRelativeRedirectUrl_consentRequiredCase
+            rootRelativeRedirectUrl_consentRequiredCase,
+            redirectUrl_external
         };
 
         const redirectMethod = (() => {

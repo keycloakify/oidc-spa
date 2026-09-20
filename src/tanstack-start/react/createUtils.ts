@@ -716,7 +716,8 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
                                 validRedirectUri: toFullyQualifiedUrl({
                                     urlish: getBASE_URL_earlyInit(),
                                     doAssertNoQueryParams: true,
-                                    doOutputWithTrailingSlash: true
+                                    doOutputWithTrailingSlash: true,
+                                    rootUrl_fullyQualified: window.location.origin
                                 }),
                                 user_current: undefined
                             })
@@ -849,11 +850,12 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
             if (loaderContext.location?.publicHref !== undefined) {
                 return toFullyQualifiedUrl({
                     urlish: loaderContext.location.publicHref,
-                    doAssertNoQueryParams: false
+                    doAssertNoQueryParams: false,
+                    rootUrl_fullyQualified: window.location.origin
                 });
             }
 
-            return location.href;
+            return window.location.href;
         })();
 
         const oidc = await getOidc();

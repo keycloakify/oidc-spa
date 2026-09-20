@@ -69,6 +69,8 @@ import { getBASE_URL_earlyInit } from "./earlyInit_BASE_URL";
 import { fnv1aHashToHex } from "../tools/fnv1aHashToHex";
 import { noUndefined } from "../tools/tsafe/noUndefined";
 import { addOrUpdateSearchParam } from "../tools/urlSearchParams";
+import { getIsDeepLink } from "../tools/isDeepLink";
+import { deepLinkToRootRelativeUrl } from "../tools/deepLinkToRootRelativeUrl";
 
 // NOTE: Replaced at build time
 const VERSION = "{{OIDC_SPA_VERSION}}";
@@ -208,7 +210,8 @@ const createOidc_impl = runExclusive.build(async function <User, AutoLogin exten
     const issuerUri = toFullyQualifiedUrl({
         urlish: issuerUri_params,
         doAssertNoQueryParams: true,
-        doOutputWithTrailingSlash: false
+        doOutputWithTrailingSlash: false,
+        rootUrl_fullyQualified: window.location.origin
     });
 
     const oidcProviderMetadata =
@@ -222,8 +225,41 @@ const createOidc_impl = runExclusive.build(async function <User, AutoLogin exten
     const homeUrlAndRedirectUri = toFullyQualifiedUrl({
         urlish: getBASE_URL_earlyInit(),
         doAssertNoQueryParams: true,
-        doOutputWithTrailingSlash: true
+        doOutputWithTrailingSlash: true,
+        rootUrl_fullyQualified: window.location.origin
     });
+
+    if (
+        !getIsDeepLink({
+            fullyQualifiedUrl: homeUrlAndRedirectUri,
+            relativeTo_fullyQualified: window.location.origin
+        })
+    ) {
+        throw new Error(
+            [
+                "oidc-spa: Configuration Error,",
+                `\`oidcEarlyInit({ BASE_URL: "${getBASE_URL_earlyInit()}"})\` is not valid,`,
+                "BASE_URL is external to the current origin",
+                `BASE_URL is typically "/" or "/dashboard/"`
+            ].join(" ")
+        );
+    }
+
+    if (
+        !getIsDeepLink({
+            fullyQualifiedUrl: window.location.href,
+            relativeTo_fullyQualified: homeUrlAndRedirectUri
+        })
+    ) {
+        throw new Error(
+            [
+                "oidc-spa: Configuration Error,",
+                `We are currently at: ${window.location.origin}${window.location.pathname}\n`,
+                `however you've specified with \`oidcEarlyInit({ BASE_URL: "${getBASE_URL_earlyInit()}"})\``,
+                `that your whole app is supposed to be hosted under ${homeUrlAndRedirectUri}.\n`
+            ].join(" ")
+        );
+    }
 
     const getAuthorizationParams = (():
         | ((params: { isSilentRedirect: boolean }) => Record<string, string | string[] | undefined>)
@@ -871,6 +907,15 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
 
             const { stateData, authResponse } = stateDataAndAuthResponse;
 
+            const reloadIfExplicitPageExtension = (): Promise<never> | void => {
+                for (const extension of ["html", "htm", "php", "asp", "aspx"]) {
+                    if (window.location.pathname.endsWith(`.${extension}`)) {
+                        location.reload();
+                        return new Promise<never>(() => {});
+                    }
+                }
+            };
+
             switch (stateData.action) {
                 case "login":
                     {
@@ -939,6 +984,13 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
 
                         notifyOtherTabsOfLogin({ configId });
 
+                        if (stateData.redirectUrl_external !== undefined) {
+                            window.location.replace(stateData.redirectUrl_external);
+                            await new Promise<never>(() => {});
+                        }
+
+                        await reloadIfExplicitPageExtension();
+
                         return {
                             oidcClientTsUser,
                             isRestoredFromSessionStorage: false,
@@ -982,6 +1034,13 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
                             configId,
                             sessionId: stateData.sessionId
                         });
+
+                        if (stateData.redirectUrl_external !== undefined) {
+                            window.location.replace(stateData.redirectUrl_external);
+                            await new Promise<never>(() => {});
+                        }
+
+                        await reloadIfExplicitPageExtension();
 
                         // NOTE: The user is no longer logged in.
                         return undefined;
@@ -1780,19 +1839,45 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
 
             globalContext.hasLogoutBeenCalled = true;
 
-            const rootRelativePostLogoutRedirectUrl: string = (() => {
-                switch (params.redirectTo) {
-                    case "current page":
-                        return window.location.href;
-                    case "home":
-                        return homeUrlAndRedirectUri;
-                    case "specific url":
-                        return toFullyQualifiedUrl({
-                            urlish: params.url,
-                            doAssertNoQueryParams: false
-                        });
+            const { rootRelativeRedirectUrl, redirectUrl_external } = (() => {
+                const redirectUrl: string = (() => {
+                    switch (params.redirectTo) {
+                        case "current page":
+                            return window.location.href;
+                        case "home":
+                            return homeUrlAndRedirectUri;
+                        case "specific url":
+                            return toFullyQualifiedUrl({
+                                urlish: params.url,
+                                doAssertNoQueryParams: false,
+                                rootUrl_fullyQualified: homeUrlAndRedirectUri
+                            });
+                    }
+                })();
+
+                log?.(`Post logout redirect url: ${redirectUrl}`);
+
+                const isDeepLink = getIsDeepLink({
+                    fullyQualifiedUrl: redirectUrl,
+                    relativeTo_fullyQualified: homeUrlAndRedirectUri
+                });
+
+                if (isDeepLink) {
+                    return {
+                        rootRelativeRedirectUrl: deepLinkToRootRelativeUrl({
+                            fullyQualifiedDeepLinkUrl: redirectUrl
+                        }),
+                        redirectUrl_external: undefined
+                    };
+                } else {
+                    return {
+                        rootRelativeRedirectUrl: deepLinkToRootRelativeUrl({
+                            fullyQualifiedDeepLinkUrl: homeUrlAndRedirectUri
+                        }),
+                        redirectUrl_external: redirectUrl
+                    };
                 }
-            })().slice(window.location.origin.length);
+            })();
 
             await waitForAllOtherOngoingLoginOrRefreshProcessesToComplete({
                 prUnlock: new Promise<never>(() => {})
@@ -1814,7 +1899,7 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
                     sessionId
                 });
 
-                window.location.href = rootRelativePostLogoutRedirectUrl;
+                window.location.href = redirectUrl_external ?? rootRelativeRedirectUrl;
 
                 return new Promise<never>(() => {});
             }
@@ -1841,7 +1926,7 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
                 stateUrlParamValue_instance,
                 stateDataCookie: {
                     action: "logout",
-                    rootRelativeRedirectUrl: rootRelativePostLogoutRedirectUrl
+                    rootRelativeRedirectUrl
                 }
             });
 
@@ -1850,7 +1935,8 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
                     state: id<StateData.Redirect>({
                         configId,
                         context: "redirect",
-                        rootRelativeRedirectUrl: rootRelativePostLogoutRedirectUrl,
+                        rootRelativeRedirectUrl,
+                        redirectUrl_external,
                         action: "logout",
                         sessionId
                     }),

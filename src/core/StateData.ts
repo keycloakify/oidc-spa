@@ -18,6 +18,7 @@ export namespace StateData {
         type Common_Redirect = Common & {
             context: "redirect";
             rootRelativeRedirectUrl: string;
+            redirectUrl_external: string | undefined;
         };
 
         export type Login = Common_Redirect & {

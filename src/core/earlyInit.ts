@@ -339,9 +339,11 @@ function handleOidcCallback(): {
                     BASE_URL_fullyQualified = toFullyQualifiedUrl({
                         urlish: BASE_URL,
                         doAssertNoQueryParams: true,
-                        doOutputWithTrailingSlash: true
+                        doOutputWithTrailingSlash: true,
+                        rootUrl_fullyQualified: location_urlObj.origin
                     });
                 } catch {
+                    // NOTE: Any potential configuration error will be handled properly downstream.
                     break abort_case;
                 }
 

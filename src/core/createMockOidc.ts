@@ -73,7 +73,8 @@ export async function createMockOidc<User = never, AutoLogin extends boolean = f
         const { wasPresent, values } = getSearchParam({
             url: toFullyQualifiedUrl({
                 urlish: getRootRelativeOriginalLocationHref_earlyInit(),
-                doAssertNoQueryParams: false
+                doAssertNoQueryParams: false,
+                rootUrl_fullyQualified: window.location.origin
             }),
             name: URL_SEARCH_PARAM_NAME
         });
@@ -101,7 +102,8 @@ export async function createMockOidc<User = never, AutoLogin extends boolean = f
     const homeUrl = toFullyQualifiedUrl({
         urlish: getBASE_URL_earlyInit(),
         doAssertNoQueryParams: true,
-        doOutputWithTrailingSlash: true
+        doOutputWithTrailingSlash: true,
+        rootUrl_fullyQualified: window.location.origin
     });
 
     const common: Oidc.Common = {
@@ -123,7 +125,8 @@ export async function createMockOidc<User = never, AutoLogin extends boolean = f
 
                 return toFullyQualifiedUrl({
                     urlish: redirectUrl_params,
-                    doAssertNoQueryParams: false
+                    doAssertNoQueryParams: false,
+                    rootUrl_fullyQualified: homeUrl
                 });
             })(),
             name: URL_SEARCH_PARAM_NAME,
@@ -222,7 +225,8 @@ export async function createMockOidc<User = never, AutoLogin extends boolean = f
                         case "specific url":
                             return toFullyQualifiedUrl({
                                 urlish: params.url,
-                                doAssertNoQueryParams: false
+                                doAssertNoQueryParams: false,
+                                rootUrl_fullyQualified: homeUrl
                             });
                     }
                 })(),
