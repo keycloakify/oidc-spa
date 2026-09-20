@@ -13,8 +13,7 @@ const IFRAME_MESSAGE_PREFIX = "oidc-spa:cross-window-messaging:";
 export type ParamsOfEarlyInit = {
     /**
      * Base path of where is deployed the webapp
-     * usually `import.meta.env.BASE_URL`
-     * if omitted, can be provided to createOidc()
+     * it's `import.meta.env.BASE_URL`
      */
     BASE_URL: string;
 
@@ -28,7 +27,7 @@ export type ParamsOfEarlyInit = {
 
 let shouldLoadApp: boolean | undefined = undefined;
 
-export function oidcEarlyInit(params?: ParamsOfEarlyInit) {
+export function oidcEarlyInit(params: ParamsOfEarlyInit) {
     if (shouldLoadApp !== undefined) {
         return { shouldLoadApp };
     }
@@ -38,16 +37,14 @@ export function oidcEarlyInit(params?: ParamsOfEarlyInit) {
     return { shouldLoadApp };
 }
 
-function oidcEarlyInit_nonMemoized(params: ParamsOfEarlyInit | undefined) {
-    const { BASE_URL, securityDefenses = {} } = params ?? {};
+function oidcEarlyInit_nonMemoized(params: ParamsOfEarlyInit) {
+    const { BASE_URL, securityDefenses = {} } = params;
 
     if (!isBrowser) {
         return { shouldLoadApp: true };
     }
 
-    if (BASE_URL !== undefined) {
-        setBASE_URL_earlyInit({ BASE_URL });
-    }
+    setBASE_URL_earlyInit({ BASE_URL });
 
     const { shouldLoadApp } = handleOidcCallback();
 
@@ -335,10 +332,6 @@ function handleOidcCallback(): {
             // See: https://github.com/keycloakify/keycloak-account-ui/issues/10
             abort_case: {
                 const BASE_URL = getBASE_URL_earlyInit();
-
-                if (BASE_URL === undefined) {
-                    break abort_case;
-                }
 
                 let BASE_URL_fullyQualified: string;
 

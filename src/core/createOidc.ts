@@ -50,7 +50,6 @@ import {
     evtIsThereMoreThanOneInstanceThatCantUserIframes,
     notifyNewInstanceThatCantUseIframes
 } from "./instancesThatCantUseIframes";
-import { getDesiredPostLoginRedirectUrl } from "./desiredPostLoginRedirectUrl";
 import { ensureNonBlankPaint } from "../tools/ensureNonBlankPaint";
 import {
     setStateDataCookieIfEnabled,
@@ -221,11 +220,7 @@ const createOidc_impl = runExclusive.build(async function <User, AutoLogin exten
         isKeycloak({ issuerUri }) && !getIsStateDataCookieEnabled() ? "fragment" : "query";
 
     const homeUrlAndRedirectUri = toFullyQualifiedUrl({
-        urlish: (() => {
-            const BASE_URL = getBASE_URL_earlyInit();
-            assert(BASE_URL !== undefined);
-            return BASE_URL;
-        })(),
+        urlish: getBASE_URL_earlyInit(),
         doAssertNoQueryParams: true,
         doOutputWithTrailingSlash: true
     });
@@ -1172,7 +1167,7 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
                                 return getRootRelativeOriginalLocationHref_earlyInit();
                             }
 
-                            return getDesiredPostLoginRedirectUrl() ?? window.location.href;
+                            return window.location.href;
                         })(),
                         doNavigateBackToLastPublicUrlIfTheTheUserNavigateBack: true,
                         transformAuthorizationUrl_paramOfLoginOrGoToAuthServer: undefined,

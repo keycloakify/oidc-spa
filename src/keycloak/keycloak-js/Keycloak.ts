@@ -911,10 +911,16 @@ export class Keycloak {
                     return redirectUri;
                 }
 
-                const BASE_URL = getBASE_URL_earlyInit();
+                let BASE_URL: string;
+
+                try {
+                    BASE_URL = getBASE_URL_earlyInit();
+                } catch {
+                    BASE_URL = "/";
+                }
 
                 return toFullyQualifiedUrl({
-                    urlish: BASE_URL ?? "/",
+                    urlish: BASE_URL,
                     doAssertNoQueryParams: true,
                     doOutputWithTrailingSlash: true
                 });

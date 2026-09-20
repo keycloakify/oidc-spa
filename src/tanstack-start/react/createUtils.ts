@@ -24,7 +24,6 @@ import { getRequest, setResponseHeader, setResponseStatus } from "@tanstack/reac
 //import { getRequest, setResponseHeader, setResponseStatus } from "@tanstack/react-start-server";
 import { toFullyQualifiedUrl } from "../../tools/toFullyQualifiedUrl";
 import { BEFORE_LOAD_FN_BRAND_PROPERTY_NAME } from "./disableSsrIfLoginEnforced";
-import { setDesiredPostLoginRedirectUrl } from "../../core/desiredPostLoginRedirectUrl";
 import type { MaybeAsync } from "../../tools/MaybeAsync";
 import { enableStateDataCookie } from "../../core/StateDataCookie";
 import { getBASE_URL_earlyInit } from "../../core/earlyInit_BASE_URL";
@@ -422,6 +421,8 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
         return oidc;
     }
 
+    let redirectUrl_getTokens: string | undefined = undefined;
+
     let oidc_cached: GetOidc.Oidc<User_client> | undefined = undefined;
 
     async function getOidc(params?: {
@@ -464,40 +465,53 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
             return oidc_cached;
         }
 
-        oidc_cached = oidcCore.isUserLoggedIn
-            ? id<GetOidc.Oidc.LoggedIn<User_client>>({
-                  issuerUri: oidcCore.issuerUri,
-                  clientId: oidcCore.clientId,
-                  validRedirectUri: oidcCore.validRedirectUri,
-                  isUserLoggedIn: true,
-                  getAccessToken: async () => {
-                      const { accessToken } = await oidcCore.getTokens();
-                      return accessToken;
-                  },
-                  subscribeToTokensChange: oidcCore.subscribeToTokensChange,
-                  getTokens: oidcCore.getTokens,
-                  logout: oidcCore.logout,
-                  renewTokens: oidcCore.renewTokens,
-                  goToAuthServer: oidcCore.goToAuthServer,
-                  backFromAuthServer: oidcCore.backFromAuthServer,
-                  isNewBrowserSession: oidcCore.isNewBrowserSession,
-                  subscribeToAutoLogoutState: next => {
-                      next(evtAutoLogoutState.current);
+        oidc_cached = (() => {
+            if (oidcCore.isUserLoggedIn) {
+                const oidc = id<GetOidc.Oidc.LoggedIn<User_client>>({
+                    issuerUri: oidcCore.issuerUri,
+                    clientId: oidcCore.clientId,
+                    validRedirectUri: oidcCore.validRedirectUri,
+                    isUserLoggedIn: true,
+                    subscribeToTokensChange: oidcCore.subscribeToTokensChange,
+                    getTokens: params => {
+                        if (params === undefined) {
+                            return oidcCore.getTokens();
+                        }
+                        return oidcCore.getTokens({
+                            ...params,
+                            redirectUrl: params.redirectUrl ?? redirectUrl_getTokens
+                        });
+                    },
+                    getAccessToken: async (params): Promise<string> => {
+                        const { accessToken } = await oidc.getTokens(params);
+                        return accessToken;
+                    },
+                    logout: oidcCore.logout,
+                    renewTokens: oidcCore.renewTokens,
+                    goToAuthServer: oidcCore.goToAuthServer,
+                    backFromAuthServer: oidcCore.backFromAuthServer,
+                    isNewBrowserSession: oidcCore.isNewBrowserSession,
+                    subscribeToAutoLogoutState: next => {
+                        next(evtAutoLogoutState.current);
 
-                      const { unsubscribe } = evtAutoLogoutState.subscribe(next);
+                        const { unsubscribe } = evtAutoLogoutState.subscribe(next);
 
-                      return { unsubscribeFromAutoLogoutState: unsubscribe };
-                  },
-                  getUser: oidcCore.getUser
-              })
-            : id<GetOidc.Oidc.NotLoggedIn>({
-                  issuerUri: oidcCore.issuerUri,
-                  clientId: oidcCore.clientId,
-                  validRedirectUri: oidcCore.validRedirectUri,
-                  isUserLoggedIn: false,
-                  initializationError: oidcCore.initializationError,
-                  login: oidcCore.login
-              });
+                        return { unsubscribeFromAutoLogoutState: unsubscribe };
+                    },
+                    getUser: oidcCore.getUser
+                });
+                return oidc;
+            } else {
+                return id<GetOidc.Oidc.NotLoggedIn>({
+                    issuerUri: oidcCore.issuerUri,
+                    clientId: oidcCore.clientId,
+                    validRedirectUri: oidcCore.validRedirectUri,
+                    isUserLoggedIn: false,
+                    initializationError: oidcCore.initializationError,
+                    login: oidcCore.login
+                });
+            }
+        })();
 
         return oidc_cached;
     }
@@ -700,13 +714,7 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
                                 issuerUri: issuerUri_mock,
                                 clientId: clientId_mock,
                                 validRedirectUri: toFullyQualifiedUrl({
-                                    urlish: (() => {
-                                        const BASE_URL = getBASE_URL_earlyInit();
-
-                                        assert(BASE_URL !== undefined);
-
-                                        return BASE_URL;
-                                    })(),
+                                    urlish: getBASE_URL_earlyInit(),
                                     doAssertNoQueryParams: true,
                                     doOutputWithTrailingSlash: true
                                 }),
@@ -870,12 +878,12 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
             });
         }
 
-        define_temporary_postLoginRedirectUrl: {
+        set_redirectUrl_getTokens: {
             if (isUrlAlreadyReplaced) {
-                break define_temporary_postLoginRedirectUrl;
+                break set_redirectUrl_getTokens;
             }
 
-            setDesiredPostLoginRedirectUrl({ postLoginRedirectUrl: redirectUrl });
+            redirectUrl_getTokens = redirectUrl;
 
             const history_pushState = history.pushState;
             const history_replaceState = history.replaceState;
@@ -883,7 +891,7 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
             const onNavigated = () => {
                 history.pushState = history_pushState;
                 history.replaceState = history_replaceState;
-                setDesiredPostLoginRedirectUrl({ postLoginRedirectUrl: undefined });
+                redirectUrl_getTokens = undefined;
             };
 
             history.pushState = function pushState(...args) {
