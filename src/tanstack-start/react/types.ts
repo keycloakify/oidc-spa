@@ -4,7 +4,8 @@ import type {
     IdTokenClaims,
     OidcProviderMetadata,
     OidcUserInfo,
-    Oidc
+    Oidc as Oidc_client,
+    OidcTokens
 } from "../../core";
 import type { FunctionMiddlewareAfterServer, RequestMiddlewareAfterServer } from "@tanstack/react-start";
 import type { GetterOrDirectValue } from "../../tools/GetterOrDirectValue";
@@ -12,124 +13,123 @@ import type { MaybeAsync } from "../../tools/MaybeAsync";
 import { assert, type Equals } from "../../tools/tsafe/assert";
 import type { AccessTokenClaims_specs as AccessTokenClaims } from "../../server";
 
-export type * from "../../core";
+export type { IdTokenClaims, OidcProviderMetadata, OidcUserInfo, OidcTokens, Oidc_client };
+export type { AccessTokenClaims };
 
 export type UseOidc<User_client> = {
-    (params?: { assert?: undefined }): UseOidc.Oidc<User_client>;
-    (params: { assert: "user logged in" }): UseOidc.Oidc.LoggedIn<User_client>;
-    (params: { assert: "user not logged in" }): UseOidc.Oidc.NotLoggedIn;
+    (params?: { assert?: undefined }): Oidc_react<User_client>;
+    (params: { assert: "user logged in" }): Oidc_react.LoggedIn<User_client>;
+    (params: { assert: "user not logged in" }): Oidc_react.NotLoggedIn;
 };
 
 export namespace UseOidc {
     export type WithAutoLogin<User_client> = (params?: {
         assert: "ready";
-    }) => Oidc.LoggedIn<User_client>;
+    }) => Oidc_react.LoggedIn<User_client>;
+}
 
-    export type Oidc<User_client> =
-        | (Oidc.NotReady & {
-              isUserLoggedIn?: never;
-              issuerUri?: never;
-              clientId?: never;
-              validRedirectUri?: never;
+export type Oidc_react<User_client> =
+    | (Oidc_react.NotReady & {
+          isUserLoggedIn?: never;
+          issuerUri?: never;
+          clientId?: never;
+          validRedirectUri?: never;
 
-              logout?: never;
-              renewTokens?: never;
-              goToAuthServer?: never;
-              backFromAuthServer?: never;
-              isNewBrowserSession?: never;
+          logout?: never;
+          renewTokens?: never;
+          goToAuthServer?: never;
+          backFromAuthServer?: never;
+          isNewBrowserSession?: never;
 
-              login?: never;
-              user?: never;
-              refreshUser?: never;
-          })
-        | (Oidc.NotLoggedIn & {
-              logout?: never;
-              renewTokens?: never;
-              goToAuthServer?: never;
-              backFromAuthServer?: never;
-              isNewBrowserSession?: never;
-              user?: never;
-              refreshUser?: never;
-          })
-        | (Oidc.LoggedIn<User_client> & {
-              login?: never;
-              oidcInitializationError?: never;
-          });
+          login?: never;
+          user?: never;
+          refreshUser?: never;
+      })
+    | (Oidc_react.NotLoggedIn & {
+          logout?: never;
+          renewTokens?: never;
+          goToAuthServer?: never;
+          backFromAuthServer?: never;
+          isNewBrowserSession?: never;
+          user?: never;
+          refreshUser?: never;
+      })
+    | (Oidc_react.LoggedIn<User_client> & {
+          login?: never;
+          oidcInitializationError?: never;
+      });
 
-    export namespace Oidc {
-        export type NotReady = {
-            isOidcReady: false;
-            autoLogoutState: {
-                shouldDisplayWarning: false;
-            };
-            oidcInitializationError: OidcInitializationError | undefined;
+export namespace Oidc_react {
+    export type NotReady = {
+        isOidcReady: false;
+        autoLogoutState: {
+            shouldDisplayWarning: false;
         };
+        oidcInitializationError: OidcInitializationError | undefined;
+    };
 
-        export type NotLoggedIn = {
-            isOidcReady: true;
-            isUserLoggedIn: false;
-            issuerUri: string;
-            clientId: string;
-            validRedirectUri: string;
-            login: (params?: {
-                extraQueryParams?: Record<string, string | undefined>;
-                redirectUrl?: string;
-                transformUrlBeforeRedirect?: (authorizationUrl: string) => string;
-            }) => Promise<never>;
-            autoLogoutState: {
-                shouldDisplayWarning: false;
-            };
-            oidcInitializationError: OidcInitializationError | undefined;
+    export type NotLoggedIn = {
+        isOidcReady: true;
+        isUserLoggedIn: false;
+        issuerUri: string;
+        clientId: string;
+        validRedirectUri: string;
+        login: (params?: {
+            extraQueryParams?: Record<string, string | undefined>;
+            redirectUrl?: string;
+            transformUrlBeforeRedirect?: (authorizationUrl: string) => string;
+        }) => Promise<never>;
+        autoLogoutState: {
+            shouldDisplayWarning: false;
         };
+        oidcInitializationError: OidcInitializationError | undefined;
+    };
 
-        export type LoggedIn<User_client> = {
-            isOidcReady: true;
-            isUserLoggedIn: true;
-            issuerUri: string;
-            clientId: string;
-            validRedirectUri: string;
-            logout: (
-                params:
-                    | { redirectTo: "home" | "current page" }
-                    | { redirectTo: "specific url"; url: string }
-            ) => Promise<never>;
-            renewTokens: () => Promise<void>;
-            goToAuthServer: (params: {
-                authorizationParams?: Record<string, string | string[] | undefined>;
-                transformAuthorizationUrl?: (params: { authorizationUrl: string }) => string;
-                redirectUrl?: string;
-            }) => Promise<never>;
-            backFromAuthServer:
-                | {
-                      authorizationParams: Record<string, string | string[]>;
-                      result: Record<string, string>;
-                  }
-                | undefined;
-            isNewBrowserSession: boolean;
-            autoLogoutState:
-                | {
-                      shouldDisplayWarning: true;
-                      secondsLeftBeforeAutoLogout: number;
-                  }
-                | {
-                      shouldDisplayWarning: false;
-                  };
-            user: User_client;
-            refreshUser: () => Promise<User_client>;
-        };
-    }
+    export type LoggedIn<User_client> = {
+        isOidcReady: true;
+        isUserLoggedIn: true;
+        issuerUri: string;
+        clientId: string;
+        validRedirectUri: string;
+        logout: (
+            params: { redirectTo: "home" | "current page" } | { redirectTo: "specific url"; url: string }
+        ) => Promise<never>;
+        renewTokens: () => Promise<void>;
+        goToAuthServer: (params: {
+            authorizationParams?: Record<string, string | string[] | undefined>;
+            transformAuthorizationUrl?: (params: { authorizationUrl: string }) => string;
+            redirectUrl?: string;
+        }) => Promise<never>;
+        backFromAuthServer:
+            | {
+                  authorizationParams: Record<string, string | string[]>;
+                  result: Record<string, string>;
+              }
+            | undefined;
+        isNewBrowserSession: boolean;
+        autoLogoutState:
+            | {
+                  shouldDisplayWarning: true;
+                  secondsLeftBeforeAutoLogout: number;
+              }
+            | {
+                  shouldDisplayWarning: false;
+              };
+        user: User_client;
+        refreshUser: () => Promise<User_client>;
+    };
 }
 
 export type GetOidc<User_client> = {
-    (params?: { assert?: undefined }): Promise<Oidc<User_client>>;
-    (params: { assert: "user logged in" }): Promise<Oidc.LoggedIn<User_client>>;
-    (params: { assert: "user not logged in" }): Promise<Oidc.NotLoggedIn>;
+    (params?: { assert?: undefined }): Promise<Oidc_client<User_client>>;
+    (params: { assert: "user logged in" }): Promise<Oidc_client.LoggedIn<User_client>>;
+    (params: { assert: "user not logged in" }): Promise<Oidc_client.NotLoggedIn>;
 };
 
 export namespace GetOidc {
     export type WithAutoLogin<User_client> = (params?: {
         assert: "user logged in";
-    }) => Promise<Oidc.LoggedIn<User_client>>;
+    }) => Promise<Oidc_client.LoggedIn<User_client>>;
 }
 
 export type OidcFnMiddleware<User_server> = {
@@ -137,13 +137,13 @@ export type OidcFnMiddleware<User_server> = {
         require?: undefined;
         hasAuthorization?: (params: { user: User_server }) => MaybeAsync<boolean>;
     }): OidcFnMiddleware.TanStackFnMiddleware<{
-        oidc: OidcServerContext<User_server>;
+        oidc: Oidc_server<User_server>;
     }>;
     (params?: {
         require?: "authed request";
         hasAuthorization?: (params: { user: User_server }) => MaybeAsync<boolean>;
     }): OidcFnMiddleware.TanStackFnMiddleware<{
-        oidc: OidcServerContext.LoggedIn<User_server>;
+        oidc: Oidc_server.LoggedIn<User_server>;
     }>;
 };
 
@@ -152,7 +152,7 @@ export namespace OidcFnMiddleware {
         require?: "authed request";
         hasAuthorization?: (params: { user: User_server }) => MaybeAsync<boolean>;
     }) => TanStackFnMiddleware<{
-        oidc: OidcServerContext.LoggedIn<User_server>;
+        oidc: Oidc_server.LoggedIn<User_server>;
     }>;
 
     export type TanStackFnMiddleware<T> = FunctionMiddlewareAfterServer<
@@ -166,14 +166,14 @@ export namespace OidcFnMiddleware {
     >;
 }
 
-export type OidcServerContext<User_server> =
-    | OidcServerContext.LoggedIn<User_server>
-    | (OidcServerContext.NotLoggedIn & {
+export type Oidc_server<User_server> =
+    | Oidc_server.LoggedIn<User_server>
+    | (Oidc_server.NotLoggedIn & {
           user?: never;
           accessToken?: never;
       });
 
-export namespace OidcServerContext {
+export namespace Oidc_server {
     export type NotLoggedIn = {
         isAuthedRequest: false;
     };
@@ -190,13 +190,13 @@ export type OidcRequestMiddleware<User_server> = {
         require?: undefined;
         hasAuthorization?: (params: { user: User_server }) => MaybeAsync<boolean>;
     }): OidcRequestMiddleware.TanstackRequestMiddleware<{
-        oidc: OidcServerContext<User_server>;
+        oidc: Oidc_server<User_server>;
     }>;
     (params?: {
         require?: "authed request";
         hasAuthorization?: (params: { user: User_server }) => MaybeAsync<boolean>;
     }): OidcRequestMiddleware.TanstackRequestMiddleware<{
-        oidc: OidcServerContext.LoggedIn<User_server>;
+        oidc: Oidc_server.LoggedIn<User_server>;
     }>;
 };
 
@@ -205,7 +205,7 @@ export namespace OidcRequestMiddleware {
         require?: "authed request";
         hasAuthorization?: (params: { user: User_server }) => MaybeAsync<boolean>;
     }) => TanstackRequestMiddleware<{
-        oidc: OidcServerContext.LoggedIn<User_server>;
+        oidc: Oidc_server.LoggedIn<User_server>;
     }>;
 
     export type TanstackRequestMiddleware<T> = RequestMiddlewareAfterServer<{}, undefined, T>;

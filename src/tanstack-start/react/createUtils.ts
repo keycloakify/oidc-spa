@@ -1,14 +1,14 @@
 import { useState, useEffect, useReducer } from "react";
 import type {
     OidcSpaUtils,
-    UseOidc,
-    GetOidc,
     ParamsOfBootstrap,
-    OidcServerContext,
+    Oidc_server,
     CreateClientUser,
     CreateServerUser,
     AccessTokenClaims,
-    IdTokenClaims
+    IdTokenClaims,
+    Oidc_react,
+    Oidc_client
 } from "./types";
 import type { Oidc as Oidc_core } from "../../core";
 import { OidcInitializationError } from "../../core/OidcInitializationError";
@@ -42,9 +42,7 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
 
     const dParamsOfBootstrap = new Deferred<ParamsOfBootstrap<User_client, User_server, AutoLogin>>();
 
-    const dOidcCoreOrInitializationError = new Deferred<
-        Oidc_core<User_client> | OidcInitializationError
-    >();
+    const dOidcOrInitializationError = new Deferred<Oidc_core<User_client> | OidcInitializationError>();
 
     const dResultOfGetUserOrInitializationErrorOrUndefined = new Deferred<
         | Awaited<ReturnType<Oidc_core.LoggedIn<User_client>["getUser"]>>
@@ -52,13 +50,13 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
         | undefined
     >();
 
-    const evtAutoLogoutState = createStatefulEvt<UseOidc.Oidc.LoggedIn<unknown>["autoLogoutState"]>(
+    const evtAutoLogoutState = createStatefulEvt<Oidc_react.LoggedIn<unknown>["autoLogoutState"]>(
         () => ({
             shouldDisplayWarning: false
         })
     );
 
-    dOidcCoreOrInitializationError.pr.then(oidcCoreOrInitializationError => {
+    dOidcOrInitializationError.pr.then(oidcOrInitializationError => {
         const { hasResolved, value: paramsOfBootstrap } = dParamsOfBootstrap.getState();
 
         assert(hasResolved);
@@ -69,35 +67,35 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
         assert<Equals<typeof paramsOfBootstrap.mode, "real">>;
 
         if (
-            oidcCoreOrInitializationError === undefined ||
-            oidcCoreOrInitializationError instanceof OidcInitializationError
+            oidcOrInitializationError === undefined ||
+            oidcOrInitializationError instanceof OidcInitializationError
         ) {
             return;
         }
 
-        const oidcCore = oidcCoreOrInitializationError;
+        const oidc = oidcOrInitializationError;
 
-        if (!oidcCore.isUserLoggedIn) {
+        if (!oidc.isUserLoggedIn) {
             return;
         }
 
-        oidcCore.subscribeToAutoLogoutState(autoLogoutState => {
+        oidc.subscribeToAutoLogoutState(autoLogoutState => {
             evtAutoLogoutState.current = autoLogoutState;
         });
     });
 
     function useOidc(params?: {
         assert?: "user logged in" | "user not logged in" | "ready";
-    }): UseOidc.Oidc<User_client> {
+    }): Oidc_react<User_client> {
         const { assert: assert_params } = params ?? {};
 
         const {
             hasResolved,
-            oidcCoreOrInitializationError,
+            oidcOrInitializationError,
             resultOfGetUserOrInitializationErrorOrUndefined
         } = (() => {
-            const { hasResolved: hasResolved_oidcCore, value: oidcCoreOrInitializationError } =
-                dOidcCoreOrInitializationError.getState();
+            const { hasResolved: hasResolved_oidc, value: oidcOrInitializationError } =
+                dOidcOrInitializationError.getState();
 
             const {
                 hasResolved: hasResolved_resultOfGetUser,
@@ -107,16 +105,16 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
             if (!hasResolved_resultOfGetUser) {
                 return {
                     hasResolved: false as const,
-                    oidcCoreOrInitializationError: undefined,
+                    oidcOrInitializationError: undefined,
                     resultOfGetUserOrInitializationErrorOrUndefined: undefined
                 };
             }
 
-            assert(hasResolved_oidcCore);
+            assert(hasResolved_oidc);
 
             return {
                 hasResolved: true as const,
-                oidcCoreOrInitializationError,
+                oidcOrInitializationError,
                 resultOfGetUserOrInitializationErrorOrUndefined
             };
         })();
@@ -128,7 +126,7 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
 
             if (
                 !hasResolved ||
-                oidcCoreOrInitializationError instanceof Error ||
+                oidcOrInitializationError instanceof Error ||
                 resultOfGetUserOrInitializationErrorOrUndefined instanceof Error
             ) {
                 throw new Error(
@@ -150,7 +148,7 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
                 break check_assertion;
             }
 
-            const oidcCore = oidcCoreOrInitializationError;
+            const oidc = oidcOrInitializationError;
 
             const getMessage = (v: string) =>
                 [
@@ -161,12 +159,12 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
 
             switch (assert_params) {
                 case "user logged in":
-                    if (!oidcCore.isUserLoggedIn) {
+                    if (!oidc.isUserLoggedIn) {
                         throw new Error(getMessage("to be logged in but currently they arn't"));
                     }
                     break;
                 case "user not logged in":
-                    if (oidcCore.isUserLoggedIn) {
+                    if (oidc.isUserLoggedIn) {
                         throw new Error(getMessage("not to be logged in but currently they are"));
                     }
                     break;
@@ -205,15 +203,16 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
                     return undefined;
                 }
 
-                if (resultOfGetUserOrInitializationErrorOrUndefined === undefined) {
+                if (
+                    resultOfGetUserOrInitializationErrorOrUndefined === undefined ||
+                    resultOfGetUserOrInitializationErrorOrUndefined instanceof Error
+                ) {
                     return undefined;
                 }
 
-                if (resultOfGetUserOrInitializationErrorOrUndefined instanceof Error) {
-                    return undefined;
-                }
+                const resultOfGetUser = resultOfGetUserOrInitializationErrorOrUndefined;
 
-                return resultOfGetUserOrInitializationErrorOrUndefined.user;
+                return resultOfGetUser.user;
             });
 
             useEffect(() => {
@@ -221,11 +220,10 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
                     return;
                 }
 
-                if (resultOfGetUserOrInitializationErrorOrUndefined === undefined) {
-                    return;
-                }
-
-                if (resultOfGetUserOrInitializationErrorOrUndefined instanceof Error) {
+                if (
+                    resultOfGetUserOrInitializationErrorOrUndefined === undefined ||
+                    resultOfGetUserOrInitializationErrorOrUndefined instanceof Error
+                ) {
                     return;
                 }
 
@@ -315,11 +313,11 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
 
         if (
             !hasResolved ||
-            oidcCoreOrInitializationError instanceof Error ||
+            oidcOrInitializationError instanceof Error ||
             resultOfGetUserOrInitializationErrorOrUndefined instanceof Error ||
             hasHydrated === false
         ) {
-            return id<UseOidc.Oidc.NotReady>({
+            return id<Oidc_react.NotReady>({
                 isOidcReady: false,
                 autoLogoutState: {
                     shouldDisplayWarning: false
@@ -330,9 +328,9 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
                     }
 
                     if (hasResolved) {
-                        if (oidcCoreOrInitializationError instanceof OidcInitializationError) {
-                            const error = oidcCoreOrInitializationError;
-                            return error;
+                        if (oidcOrInitializationError instanceof OidcInitializationError) {
+                            const initializationError = oidcOrInitializationError;
+                            return initializationError;
                         }
                         if (
                             resultOfGetUserOrInitializationErrorOrUndefined instanceof
@@ -348,19 +346,19 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
             });
         }
 
-        const oidcCore = oidcCoreOrInitializationError;
+        const oidc = oidcOrInitializationError;
 
-        if (!oidcCore.isUserLoggedIn) {
-            return id<UseOidc.Oidc.NotLoggedIn>({
+        if (!oidc.isUserLoggedIn) {
+            return id<Oidc_react.NotLoggedIn>({
                 isOidcReady: true,
                 isUserLoggedIn: false,
-                oidcInitializationError: oidcCore.initializationError,
-                issuerUri: oidcCore.issuerUri,
-                clientId: oidcCore.clientId,
-                validRedirectUri: oidcCore.validRedirectUri,
+                oidcInitializationError: oidc.initializationError,
+                issuerUri: oidc.issuerUri,
+                clientId: oidc.clientId,
+                validRedirectUri: oidc.validRedirectUri,
                 autoLogoutState: { shouldDisplayWarning: false },
                 login: params =>
-                    oidcCore.login({
+                    oidc.login({
                         doesCurrentHrefRequiresAuth: false,
                         ...params
                     })
@@ -371,21 +369,21 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
 
         const resultOfGetUser = resultOfGetUserOrInitializationErrorOrUndefined;
 
-        const oidc: UseOidc.Oidc.LoggedIn<User_client> = {
+        const oidc_react: Oidc_react.LoggedIn<User_client> = {
             isOidcReady: true,
             isUserLoggedIn: true,
-            logout: oidcCore.logout,
-            renewTokens: oidcCore.renewTokens,
-            goToAuthServer: oidcCore.goToAuthServer,
-            backFromAuthServer: oidcCore.backFromAuthServer,
-            isNewBrowserSession: oidcCore.isNewBrowserSession,
+            issuerUri: oidc.issuerUri,
+            clientId: oidc.clientId,
+            validRedirectUri: oidc.validRedirectUri,
+            logout: oidc.logout,
+            renewTokens: oidc.renewTokens,
+            goToAuthServer: oidc.goToAuthServer,
+            backFromAuthServer: oidc.backFromAuthServer,
+            isNewBrowserSession: oidc.isNewBrowserSession,
             get autoLogoutState() {
                 evtIsAutoLogoutStateUsed.current = true;
                 return evtAutoLogoutState.current;
             },
-            issuerUri: oidcCore.issuerUri,
-            clientId: oidcCore.clientId,
-            validRedirectUri: oidcCore.validRedirectUri,
             get user() {
                 evtIsUserUsed.current = true;
                 return resultOfGetUser.user;
@@ -393,16 +391,16 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
             refreshUser: resultOfGetUser.refreshUser
         };
 
-        return oidc;
+        return oidc_react;
     }
 
     let redirectUrl_getTokens: string | undefined = undefined;
 
-    let oidc_cached: GetOidc.Oidc<User_client> | undefined = undefined;
+    let oidc_cached: Oidc_client<User_client> | undefined = undefined;
 
     async function getOidc(params?: {
         assert?: "user logged in" | "user not logged in" | "init completed";
-    }): Promise<GetOidc.Oidc<User_client>> {
+    }): Promise<Oidc_client<User_client>> {
         if (!isBrowser) {
             throw new Error(
                 [
@@ -413,13 +411,13 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
             );
         }
 
-        const oidcCore = await dOidcCoreOrInitializationError.pr;
+        const oidc = await dOidcOrInitializationError.pr;
 
-        if (oidcCore instanceof OidcInitializationError) {
+        if (oidc instanceof OidcInitializationError) {
             return new Promise<never>(() => {});
         }
 
-        if (params?.assert === "user logged in" && !oidcCore.isUserLoggedIn) {
+        if (params?.assert === "user logged in" && !oidc.isUserLoggedIn) {
             throw new Error(
                 [
                     "oidc-spa: Called getOidc({ assert: 'user logged in' })",
@@ -427,7 +425,7 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
                 ].join(" ")
             );
         }
-        if (params?.assert === "user not logged in" && oidcCore.isUserLoggedIn) {
+        if (params?.assert === "user not logged in" && oidc.isUserLoggedIn) {
             throw new Error(
                 [
                     "oidc-spa: Called getOidc({ assert: 'user not logged in' })",
@@ -441,50 +439,26 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
         }
 
         oidc_cached = (() => {
-            if (oidcCore.isUserLoggedIn) {
-                const oidc = id<GetOidc.Oidc.LoggedIn<User_client>>({
-                    issuerUri: oidcCore.issuerUri,
-                    clientId: oidcCore.clientId,
-                    validRedirectUri: oidcCore.validRedirectUri,
-                    isUserLoggedIn: true,
-                    subscribeToTokensChange: oidcCore.subscribeToTokensChange,
+            if (oidc.isUserLoggedIn) {
+                const oidc_proxy = id<Oidc_client.LoggedIn<User_client>>({
+                    ...oidc,
                     getTokens: params => {
                         if (params === undefined) {
-                            return oidcCore.getTokens();
+                            return oidc.getTokens();
                         }
-                        return oidcCore.getTokens({
+                        return oidc.getTokens({
                             ...params,
                             redirectUrl: params.redirectUrl ?? redirectUrl_getTokens
                         });
                     },
                     getAccessToken: async (params): Promise<string> => {
-                        const { accessToken } = await oidc.getTokens(params);
+                        const { accessToken } = await oidc_proxy.getTokens(params);
                         return accessToken;
-                    },
-                    logout: oidcCore.logout,
-                    renewTokens: oidcCore.renewTokens,
-                    goToAuthServer: oidcCore.goToAuthServer,
-                    backFromAuthServer: oidcCore.backFromAuthServer,
-                    isNewBrowserSession: oidcCore.isNewBrowserSession,
-                    subscribeToAutoLogoutState: next => {
-                        next(evtAutoLogoutState.current);
-
-                        const { unsubscribe } = evtAutoLogoutState.subscribe(next);
-
-                        return { unsubscribeFromAutoLogoutState: unsubscribe };
-                    },
-                    getUser: oidcCore.getUser
+                    }
                 });
-                return oidc;
+                return oidc_proxy;
             } else {
-                return id<GetOidc.Oidc.NotLoggedIn>({
-                    issuerUri: oidcCore.issuerUri,
-                    clientId: oidcCore.clientId,
-                    validRedirectUri: oidcCore.validRedirectUri,
-                    isUserLoggedIn: false,
-                    initializationError: oidcCore.initializationError,
-                    login: oidcCore.login
-                });
+                return oidc;
             }
         })();
 
@@ -665,7 +639,7 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
                             });
                         })();
 
-                        const oidcCore = await createMockOidc_core({
+                        const oidc = await createMockOidc_core({
                             // NOTE: The `as false` is lying here, it's just to preserve some level of type-safety.
                             autoLogin: autoLogin as false,
                             isUserInitiallyLoggedIn:
@@ -698,16 +672,16 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
                             })
                         });
 
-                        dOidcCoreOrInitializationError.resolve(oidcCore);
+                        dOidcOrInitializationError.resolve(oidc);
 
                         set_result_of_getUser: {
-                            if (!oidcCore.isUserLoggedIn) {
+                            if (!oidc.isUserLoggedIn) {
                                 dResultOfGetUserOrInitializationErrorOrUndefined.resolve(undefined);
                                 break set_result_of_getUser;
                             }
 
                             dResultOfGetUserOrInitializationErrorOrUndefined.resolve(
-                                await oidcCore.getUser()
+                                await oidc.getUser()
                             );
                         }
                     }
@@ -718,15 +692,10 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
 
                         const { createOidc: createOidc_core } = await prModuleCore;
 
-                        let oidcCoreOrInitializationError:
-                            | Oidc_core<User_client>
-                            | OidcInitializationError;
+                        let oidcOrInitializationError: Oidc_core<User_client> | OidcInitializationError;
 
                         try {
-                            oidcCoreOrInitializationError = await createOidc_core<
-                                User_client,
-                                AutoLogin
-                            >({
+                            oidcOrInitializationError = await createOidc_core<User_client, AutoLogin>({
                                 autoLogin,
                                 issuerUri: paramsOfBootstrap.issuerUri,
                                 clientId: paramsOfBootstrap.client.clientId,
@@ -756,15 +725,18 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
                             if (!(error instanceof OidcInitializationError)) {
                                 throw error;
                             }
-                            dOidcCoreOrInitializationError.resolve(error);
-                            dResultOfGetUserOrInitializationErrorOrUndefined.resolve(error);
+                            const initializationError = error;
+                            dOidcOrInitializationError.resolve(initializationError);
+                            dResultOfGetUserOrInitializationErrorOrUndefined.resolve(
+                                initializationError
+                            );
                             return;
                         }
 
-                        dOidcCoreOrInitializationError.resolve(oidcCoreOrInitializationError);
+                        dOidcOrInitializationError.resolve(oidcOrInitializationError);
 
                         set_result_of_getUser: {
-                            if (!oidcCoreOrInitializationError.isUserLoggedIn) {
+                            if (!oidcOrInitializationError.isUserLoggedIn) {
                                 dResultOfGetUserOrInitializationErrorOrUndefined.resolve(undefined);
                                 break set_result_of_getUser;
                             }
@@ -774,7 +746,7 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
                             >;
 
                             try {
-                                resultOfGetUser = await oidcCoreOrInitializationError.getUser();
+                                resultOfGetUser = await oidcOrInitializationError.getUser();
                             } catch (error) {
                                 dResultOfGetUserOrInitializationErrorOrUndefined.resolve(
                                     new OidcInitializationError({
@@ -930,7 +902,7 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
         hasAuthorization?: (params: { user: User_server }) => MaybeAsync<boolean>;
     }) {
         return async (options: {
-            next: (options: { context: { oidc: OidcServerContext<User_server> } }) => any;
+            next: (options: { context: { oidc: Oidc_server<User_server> } }) => any;
         }): Promise<any> => {
             assert(prValidateAndGetAccessTokenClaims !== undefined);
             assert(createServerUser !== undefined);
@@ -965,8 +937,8 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
 
                 return next({
                     context: {
-                        oidc: id<OidcServerContext<User_server>>(
-                            id<OidcServerContext.LoggedIn<User_server>>({
+                        oidc: id<Oidc_server<User_server>>(
+                            id<Oidc_server.LoggedIn<User_server>>({
                                 isAuthedRequest: true,
                                 accessToken: accessToken_mock,
                                 user: user_mock
@@ -995,8 +967,8 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
                 }
                 return next({
                     context: {
-                        oidc: id<OidcServerContext<User_server>>(
-                            id<OidcServerContext.NotLoggedIn>({
+                        oidc: id<Oidc_server<User_server>>(
+                            id<Oidc_server.NotLoggedIn>({
                                 isAuthedRequest: false
                             })
                         )
@@ -1081,8 +1053,8 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
 
             return next({
                 context: {
-                    oidc: id<OidcServerContext<User_server>>(
-                        id<OidcServerContext.LoggedIn<User_server>>({
+                    oidc: id<Oidc_server<User_server>>(
+                        id<Oidc_server.LoggedIn<User_server>>({
                             isAuthedRequest: true,
                             accessToken,
                             user
@@ -1098,7 +1070,7 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
         hasAuthorization?: (params: { user: User_server }) => MaybeAsync<boolean>;
     }) {
         return createMiddleware({ type: "request" }).server<{
-            oidc: OidcServerContext<User_server>;
+            oidc: Oidc_server<User_server>;
         }>(createFunctionMiddlewareServerFn(params));
     }
 
@@ -1131,7 +1103,7 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
                 });
             })
             .server<{
-                oidc: OidcServerContext<AccessTokenClaims>;
+                oidc: Oidc_server<AccessTokenClaims>;
             }>(createFunctionMiddlewareServerFn(params));
     }
 

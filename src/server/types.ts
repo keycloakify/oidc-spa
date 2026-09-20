@@ -1,5 +1,4 @@
-// Claims in common from RFC7662 (token introspection)
-// and RFC9068 (JWT Payload)
+/** Claims in common from RFC7662 (token introspection) and RFC9068 (JWT Payload) */
 export type AccessTokenClaims_specs = {
     scope?: string;
     client_id?: string;
