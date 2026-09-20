@@ -983,15 +983,6 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
                             sessionId: stateData.sessionId
                         });
 
-                        if (
-                            autoLogin ||
-                            location.pathname.endsWith(".html") ||
-                            location.pathname.endsWith(".htm")
-                        ) {
-                            location.reload();
-                            await new Promise<never>(() => {});
-                        }
-
                         // NOTE: The user is no longer logged in.
                         return undefined;
                     }
