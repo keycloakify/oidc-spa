@@ -68,8 +68,6 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
         }
         assert<Equals<typeof paramsOfBootstrap.mode, "real">>;
 
-        const { warnUserSecondsBeforeAutoLogout = 60 } = paramsOfBootstrap.client;
-
         if (
             oidcCoreOrInitializationError === undefined ||
             oidcCoreOrInitializationError instanceof OidcInitializationError
@@ -83,31 +81,8 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
             return;
         }
 
-        oidcCore.subscribeToAutoLogoutCountdown(({ secondsLeft }) => {
-            const newState: UseOidc.Oidc.LoggedIn<unknown>["autoLogoutState"] = (() => {
-                if (secondsLeft === undefined) {
-                    return {
-                        shouldDisplayWarning: false
-                    };
-                }
-
-                if (secondsLeft > warnUserSecondsBeforeAutoLogout) {
-                    return {
-                        shouldDisplayWarning: false
-                    };
-                }
-
-                return {
-                    shouldDisplayWarning: true,
-                    secondsLeftBeforeAutoLogout: secondsLeft
-                };
-            })();
-
-            if (!newState.shouldDisplayWarning && !evtAutoLogoutState.current.shouldDisplayWarning) {
-                return;
-            }
-
-            evtAutoLogoutState.current = newState;
+        oidcCore.subscribeToAutoLogoutState(autoLogoutState => {
+            evtAutoLogoutState.current = autoLogoutState;
         });
     });
 
@@ -769,6 +744,8 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
                                 autoLogout_redirectionTarget:
                                     paramsOfBootstrap.client.autoLogout_redirectionTarget,
                                 disableDPoP: paramsOfBootstrap.client.disableDPoP,
+                                warnUserSecondsBeforeAutoLogout:
+                                    paramsOfBootstrap.client.warnUserSecondsBeforeAutoLogout,
                                 createUser: params =>
                                     createClientUser({
                                         isMock: false,

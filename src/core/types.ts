@@ -32,7 +32,7 @@ export declare namespace Oidc {
     export type LoggedIn<User = unknown> = Common & {
         isUserLoggedIn: true;
         renewTokens: () => Promise<void>;
-        subscribeToTokensChange: (onTokenChange: (tokens: OidcTokens) => void) => {
+        subscribeToTokensChange: (next: (tokens: OidcTokens) => void) => {
             unsubscribeFromTokensChange: () => void;
         };
         getTokens: (param?: ParamsOfGetToken) => Promise<OidcTokens>;
@@ -45,9 +45,21 @@ export declare namespace Oidc {
             transformAuthorizationUrl?: (params: { authorizationUrl: string }) => string;
             redirectUrl?: string;
         }) => Promise<never>;
-        subscribeToAutoLogoutCountdown: (
-            tickCallback: (params: { secondsLeft: number | undefined }) => void
-        ) => { unsubscribeFromAutoLogoutCountdown: () => void };
+        subscribeToAutoLogoutState: (
+            next: (
+                autoLogoutState:
+                    | {
+                          shouldDisplayWarning: true;
+                          secondsLeftBeforeAutoLogout: number;
+                          /** Enable to reset countdown */
+                          simulateUserInteraction: () => void;
+                      }
+                    | {
+                          shouldDisplayWarning: false;
+                          secondsLeftBeforeAutoLogout?: never;
+                      }
+            ) => void
+        ) => { unsubscribeFromAutoLogoutState: () => void };
         /**
          * If you called `goToAuthServer` or `login` with extraQueryParams, this object let you know the outcome of the
          * of the action that was intended.
@@ -113,6 +125,13 @@ export type ParamsOfCreateOidc<User, AutoLogin extends boolean> = {
      * (the scope "openid" is added automatically as it's mandatory)
      **/
     scopes?: string[];
+
+    /** If subscribeToAutoLogoutState has been set, the first next will be called
+     * with secondLeftBeforeAutoLogout set to this value.
+     * (Then every seconds until auto logout or user interaction)
+     * Default: 30 (30 seconds)
+     */
+    warnUserSecondsBeforeAutoLogout?: number;
 
     /**
      * Transform the url (authorization endpoint) before redirecting to the login pages.

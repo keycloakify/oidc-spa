@@ -357,8 +357,7 @@ export namespace ParamsOfBootstrap {
 
     assert<
         Equals<
-            Omit<Real["client"], "warnUserSecondsBeforeAutoLogout"> &
-                Pick<Real, "issuerUri" | "debugLogs">,
+            Real["client"] & Pick<Real, "issuerUri" | "debugLogs">,
             Omit<
                 ParamsOfCreateOidc<unknown, boolean>,
                 "createUser" | "autoLogin" | "autoLogin_redirectUrl"

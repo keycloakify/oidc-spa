@@ -71,6 +71,7 @@ import { noUndefined } from "../tools/tsafe/noUndefined";
 import { addOrUpdateSearchParam } from "../tools/urlSearchParams";
 import { getIsDeepLink } from "../tools/isDeepLink";
 import { deepLinkToRootRelativeUrl } from "../tools/deepLinkToRootRelativeUrl";
+import { simulateUserInteraction } from "../tools/getPrUserInteraction";
 
 // NOTE: Replaced at build time
 const VERSION = "{{OIDC_SPA_VERSION}}";
@@ -470,7 +471,8 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
         createUser,
         idleSessionLifetimeInSeconds,
         autoLogout_redirectionTarget = { redirectTo: "current page" },
-        autoLogin_redirectUrl
+        autoLogin_redirectUrl,
+        warnUserSecondsBeforeAutoLogout = 30
     } = params_forwarded;
 
     const {
@@ -1961,14 +1963,32 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
                 unsubscribeFromTokensChange
             };
         },
-        subscribeToAutoLogoutCountdown: tickCallback => {
+        subscribeToAutoLogoutState: next => {
+            const tickCallback = (params: { secondsLeft: number | undefined }) => {
+                const { secondsLeft } = params;
+                if (secondsLeft === undefined) {
+                    next({
+                        shouldDisplayWarning: false
+                    });
+                    return;
+                }
+                if (secondsLeft > warnUserSecondsBeforeAutoLogout) {
+                    return;
+                }
+                next({
+                    shouldDisplayWarning: true,
+                    secondsLeftBeforeAutoLogout: secondsLeft,
+                    simulateUserInteraction: () => simulateUserInteraction()
+                });
+            };
+
             autoLogoutCountdownTickCallbacks.add(tickCallback);
 
-            const unsubscribeFromAutoLogoutCountdown = () => {
+            const unsubscribeFromAutoLogoutState = () => {
                 autoLogoutCountdownTickCallbacks.delete(tickCallback);
             };
 
-            return { unsubscribeFromAutoLogoutCountdown };
+            return { unsubscribeFromAutoLogoutState };
         },
         goToAuthServer: ({ redirectUrl, authorizationParams, transformAuthorizationUrl }) =>
             loginOrGoToAuthServer({
