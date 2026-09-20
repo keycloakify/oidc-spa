@@ -2,7 +2,23 @@ import type { OidcInitializationError } from "./OidcInitializationError";
 import type { MaybeAsync } from "../tools/MaybeAsync";
 import { assert } from "../tools/tsafe/assert";
 
-export declare type Oidc<User = unknown> = Oidc.LoggedIn<User> | Oidc.NotLoggedIn;
+export declare type Oidc<User = unknown> =
+    | (Oidc.NotLoggedIn & {
+          renewTokens?: never;
+          subscribeToTokensChange?: never;
+          getTokens?: never;
+          getAccessToken?: never;
+          logout?: never;
+          goToAuthServer?: never;
+          subscribeToAutoLogoutState?: never;
+          backFromAuthServer?: never;
+          isNewBrowserSession?: never;
+          getUser?: never;
+      })
+    | (Oidc.LoggedIn<User> & {
+          login?: never;
+          initializationError?: never;
+      });
 
 export declare namespace Oidc {
     export type Common = {
