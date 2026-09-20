@@ -155,7 +155,7 @@ export function registerExports_DPoP(exports: Exports_DPoP): void {
     globalContext.dExports_DPoP.resolve(exports);
 }
 /** @see: https://docs.oidc-spa.dev/v/v10/usage */
-export function createOidc<User, AutoLogin extends boolean = false>(
+export function createOidc<User = undefined, AutoLogin extends boolean = false>(
     params: ParamsOfCreateOidc<User, AutoLogin>
 ): Promise<AutoLogin extends true ? Oidc.LoggedIn<User> : Oidc<User>> {
     return createOidc_impl(params);
@@ -1742,7 +1742,6 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
                 const oidc = await createOidc({
                     issuerUri,
                     clientId,
-                    createUser: () => ({}),
                     __oidcProviderMetadata: oidcProviderMetadata,
                     autoLogin: true,
                     autoLogin_redirectUrl: params_getTokens.redirectUrl,

@@ -110,7 +110,7 @@ export declare namespace Oidc {
 }
 
 export type ParamsOfCreateOidc<User, AutoLogin extends boolean> = {
-    createUser: CreateUser<User>;
+    createUser?: CreateUser<User>;
 
     /**
      * See: https://docs.oidc-spa.dev/v/v10/providers-configuration/provider-configuration
