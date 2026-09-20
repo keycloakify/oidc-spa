@@ -698,7 +698,7 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
                             clientId_mock,
                             issuerUri_mock,
                             idToken_mock,
-                            decodedIdToken_mock: paramsOfBootstrap.client?.idTokenClaims_mock,
+                            idTokenClaims_mock: paramsOfBootstrap.client?.idTokenClaims_mock,
                             accessToken_mock,
                             refreshToken_mock: paramsOfBootstrap.client?.refreshToken_mock,
                             user_mock: await createClientUser({
