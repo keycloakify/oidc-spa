@@ -1,34 +1,26 @@
-/**
- * Claims defined by RFC 9068: "JSON Web Token (JWT) Profile for OAuth 2.0 Access Tokens"
- * https://datatracker.ietf.org/doc/html/rfc9068
- *
- * These tokens are intended for consumption by resource servers.
- */
-export type DecodedAccessToken_RFC9068 = {
-    // --- REQUIRED (MUST) ---
-    iss: string; // Issuer Identifier
-    sub: string; // Subject Identifier
-    aud: string | string[]; // Audience(s)
-    exp: number; // Expiration time (seconds since epoch)
-    iat: number; // Issued-at time (seconds since epoch)
-
-    // --- RECOMMENDED (SHOULD) ---
-    client_id?: string; // OAuth2 Client ID that requested the token
-    scope?: string; // Space-separated list of granted scopes
-    jti?: string; // Unique JWT ID (for replay detection)
-
-    // --- OPTIONAL / EXTENSION CLAIMS ---
-    nbf?: number; // Not-before time (standard JWT claim)
-    auth_time?: number; // Time of user authentication (optional)
-    cnf?: Record<string, unknown>; // Confirmation (e.g. proof-of-possession)
-    [key: string]: unknown; // Allow custom claims (e.g. roles, groups)
+/** Claims in common from RFC7662 (token introspection) and RFC9068 (JWT Payload) */
+export type AccessTokenClaims_specs = {
+    scope?: string;
+    client_id?: string;
+    exp?: number;
+    iat?: number;
+    nbf?: number;
+    sub?: string;
+    aud?: string | string[];
+    iss?: string;
+    jti?: string;
+    cnf?: {
+        jkt?: string;
+        [key: string]: unknown;
+    };
+    [key: string]: unknown;
 };
 
-export type ValidateAndDecodeAccessToken<DecodedAccessToken> = (
-    params: ValidateAndDecodeAccessToken.Params
-) => Promise<ValidateAndDecodeAccessToken.ReturnType<DecodedAccessToken>>;
+export type ValidateAndGetAccessTokenClaims<AccessTokenClaims> = (
+    params: ValidateAndGetAccessTokenClaims.Params
+) => Promise<ValidateAndGetAccessTokenClaims.ReturnType<AccessTokenClaims>>;
 
-export namespace ValidateAndDecodeAccessToken {
+export namespace ValidateAndGetAccessTokenClaims {
     export type Params = Params.Bearer | Params.DPoP;
 
     export namespace Params {
@@ -49,66 +41,77 @@ export namespace ValidateAndDecodeAccessToken {
         };
     }
 
-    export type ReturnType<DecodedAccessToken> =
-        | (ReturnType.Success<DecodedAccessToken> & { errorCause?: never; debugErrorMessage?: never })
+    export type ReturnType<AccessTokenClaims> =
+        | (ReturnType.Success<AccessTokenClaims> & {
+              errorCause?: never;
+              debugErrorMessage?: never;
+              recommendedHttpErrorStatusCode?: never;
+          })
         | (ReturnType.Errored & {
-              decodedAccessToken?: never;
-              decodedAccessToken_original?: never;
+              accessTokenClaims?: never;
+              accessTokenClaims_original?: never;
               accessToken?: never;
           });
 
     export namespace ReturnType {
-        export type Success<DecodedAccessToken> = {
+        export type Success<AccessTokenClaims> = {
             isSuccess: true;
-            decodedAccessToken: DecodedAccessToken;
-            decodedAccessToken_original: DecodedAccessToken_RFC9068;
+            accessTokenClaims: AccessTokenClaims;
+            accessTokenClaims_original: AccessTokenClaims_specs;
             accessToken: string;
         };
 
         export type Errored = {
             isSuccess: false;
-            errorCause:
-                | "validation error"
-                | "validation error - access token expired"
-                | "validation error - invalid signature";
+            recommendedHttpErrorStatusCode: 401 | 500 | 503;
             debugErrorMessage: string;
         };
     }
 }
 
-export type ParamsOfBootstrap<DecodedAccessToken> =
+export type ParamsOfBootstrap<AccessTokenClaims> =
     | ParamsOfBootstrap.Real
-    | ParamsOfBootstrap.Mock<DecodedAccessToken>;
+    | ParamsOfBootstrap.Mock<AccessTokenClaims>
+    | ParamsOfBootstrap.DecodeOnly;
 
 export namespace ParamsOfBootstrap {
     export type Real = {
-        implementation: "real";
+        mode: "real";
         issuerUri: string;
-        expectedAudience: string | undefined;
+        accessTokenValidation: Real.AccessTokenValidation;
+    };
+    export namespace Real {
+        export type AccessTokenValidation =
+            | AccessTokenValidation.OfflineJWTValidation
+            | AccessTokenValidation.IntrospectionEndpoint;
+
+        export namespace AccessTokenValidation {
+            export type OfflineJWTValidation = {
+                method: "offline JWT validation";
+                expectedAudience: string;
+            };
+
+            export type IntrospectionEndpoint = {
+                method: "introspection endpoint";
+                clientId: string;
+                clientSecret: string;
+            };
+        }
+    }
+
+    export type Mock<AccessTokenClaims> = {
+        mode: "mock";
+        accessTokenClaims_mock: AccessTokenClaims;
+        accessTokenClaims_original_mock?: AccessTokenClaims_specs;
+        accessToken_mock?: string;
     };
 
-    export type Mock<DecodedAccessToken> = Mock.DecodeOnly | Mock.UseStaticIdentity<DecodedAccessToken>;
-
-    export namespace Mock {
-        type Common = {
-            implementation: "mock";
-        };
-
-        export type DecodeOnly = Common & {
-            behavior: "decode only";
-        };
-
-        export type UseStaticIdentity<DecodedAccessToken> = Common & {
-            behavior: "use static identity";
-            decodedAccessToken_mock: DecodedAccessToken;
-            decodedAccessToken_original_mock?: DecodedAccessToken_RFC9068;
-            accessToken_mock?: string;
-        };
-    }
+    export type DecodeOnly = {
+        mode: "unsafe decode only";
+    };
 }
 
-export type OidcSpaUtils<DecodedAccessToken> = {
-    bootstrapAuth: (params: ParamsOfBootstrap<DecodedAccessToken>) => Promise<void>;
-    validateAndDecodeAccessToken: ValidateAndDecodeAccessToken<DecodedAccessToken>;
-    ofTypeDecodedAccessToken: DecodedAccessToken;
+export type OidcSpaUtils<AccessTokenClaims> = {
+    bootstrapAuth: (params: ParamsOfBootstrap<AccessTokenClaims>) => void;
+    validateAndGetAccessTokenClaims: ValidateAndGetAccessTokenClaims<AccessTokenClaims>;
 };

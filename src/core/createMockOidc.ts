@@ -5,25 +5,20 @@ import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";
 import { getSearchParam, addOrUpdateSearchParam } from "../tools/urlSearchParams";
 import { getRootRelativeOriginalLocationHref_earlyInit } from "../core/earlyInit_rootRelativeOriginalLocationHref";
 import { INFINITY_TIME } from "../tools/INFINITY_TIME";
-import { getBASE_URL_earlyInit } from "../core/earlyInit_BASE_URL";
+import { getBASE_URL_earlyInit, prBASE_URL_earlyInit_set } from "./earlyInit_BASE_URL";
+import { decodeJwt } from "../tools/decodeJwt";
+import type { IdTokenClaims, OidcTokens } from "./types";
 
-export type ParamsOfCreateMockOidc<
-    DecodedIdToken extends Record<string, unknown> = Record<string, unknown>,
-    AutoLogin extends boolean = false
-> = {
-    mockedParams?: {
-        issuerUri?: string;
-        clientId?: string;
-    };
-    mockedTokens?: Partial<Oidc.Tokens<DecodedIdToken>>;
-    /**
-     * The URL of the home page of your app.
-     * We need to know this so we know where to redirect when you call `logout({ redirectTo: "home"})`.
-     * In the majority of cases it should be `homeUrl: "/"` but it could aso be something like `homeUrl: "/dashboard"`
-     * if your web app isn't hosted at the root of the domain.
-     */
-    BASE_URL?: string;
-
+export type ParamsOfCreateMockOidc<User, AutoLogin extends boolean> = {
+    user_mock?: User;
+    issuerUri_mock?: string;
+    clientId_mock?: string;
+    idTokenClaims_mock?: IdTokenClaims;
+    idToken_mock?: string;
+    accessToken_mock?: string;
+    accessTokenExpirationTime_mock?: number;
+    refreshToken_mock?: string;
+    refreshTokenExpirationTime_mock?: number;
     autoLogin?: AutoLogin;
     postLoginRedirectUrl?: string;
 } & (AutoLogin extends true
@@ -34,35 +29,52 @@ export type ParamsOfCreateMockOidc<
 
 const URL_SEARCH_PARAM_NAME = "isUserLoggedIn";
 
-const locationHref_moduleEvalTime = location.href;
+export const ClIENT_ID_MOCK_DEFAULT = "myclientmock";
+export const ISSUER_URI_MOCK_DEFAULT = "https://auth.mycompany.com/realms/mymockrealm";
+export const ACCESS_TOKEN_MOCK_DEFAULT = "mocked-access-token";
+export const ID_TOKEN_MOCK_DEFAULT = "mocked-id-token";
 
-export async function createMockOidc<
-    DecodedIdToken extends Record<string, unknown> = Oidc.Tokens.DecodedIdToken_OidcCoreSpec,
-    AutoLogin extends boolean = false
->(
-    params: ParamsOfCreateMockOidc<DecodedIdToken, AutoLogin>
-): Promise<AutoLogin extends true ? Oidc.LoggedIn<DecodedIdToken> : Oidc<DecodedIdToken>> {
+export async function createMockOidc<User = never, AutoLogin extends boolean = false>(
+    params: ParamsOfCreateMockOidc<User, AutoLogin>
+): Promise<AutoLogin extends true ? Oidc.LoggedIn<User> : Oidc<User>> {
     const {
+        user_mock,
         isUserInitiallyLoggedIn = true,
-        mockedParams = {},
-        mockedTokens = {},
+        issuerUri_mock,
+        clientId_mock,
+        idTokenClaims_mock,
+        idToken_mock,
+        accessToken_mock,
+        accessTokenExpirationTime_mock,
+        refreshToken_mock,
+        refreshTokenExpirationTime_mock,
         autoLogin = false,
         postLoginRedirectUrl
     } = params;
 
-    const BASE_URL_params = params.BASE_URL;
+    {
+        const timer = window.setTimeout(() => {
+            console.warn(
+                [
+                    "oidc-spa: Setup error.",
+                    "oidcEarlyInit() wasn't called.",
+                    "This is supposed to be handled by the oidc-spa Vite plugin",
+                    "or manually in other environments."
+                ].join(" ")
+            );
+        }, 3_000);
+
+        await prBASE_URL_earlyInit_set;
+
+        window.clearTimeout(timer);
+    }
 
     const isUserLoggedIn = (() => {
-        const { wasPresent, value } = getSearchParam({
+        const { wasPresent, values } = getSearchParam({
             url: toFullyQualifiedUrl({
-                urlish: (() => {
-                    try {
-                        return getRootRelativeOriginalLocationHref_earlyInit();
-                    } catch {
-                        return locationHref_moduleEvalTime;
-                    }
-                })(),
-                doAssertNoQueryParams: false
+                urlish: getRootRelativeOriginalLocationHref_earlyInit(),
+                doAssertNoQueryParams: false,
+                rootUrl_fullyQualified: window.location.origin
             }),
             name: URL_SEARCH_PARAM_NAME
         });
@@ -84,18 +96,19 @@ export async function createMockOidc<
             window.history.replaceState({}, "", url_withoutTheParam);
         }
 
-        return value === "true";
+        return values[0] === "true";
     })();
 
     const homeUrl = toFullyQualifiedUrl({
-        urlish: BASE_URL_params ?? getBASE_URL_earlyInit() ?? "/",
+        urlish: getBASE_URL_earlyInit(),
         doAssertNoQueryParams: true,
-        doOutputWithTrailingSlash: true
+        doOutputWithTrailingSlash: true,
+        rootUrl_fullyQualified: window.location.origin
     });
 
     const common: Oidc.Common = {
-        clientId: mockedParams.clientId ?? "mymockclient",
-        issuerUri: mockedParams.issuerUri ?? "https://my-mock-oidc-server.net/realms/mymockrealm",
+        clientId: clientId_mock ?? ClIENT_ID_MOCK_DEFAULT,
+        issuerUri: issuerUri_mock ?? ISSUER_URI_MOCK_DEFAULT,
         validRedirectUri: homeUrl
     };
 
@@ -112,12 +125,14 @@ export async function createMockOidc<
 
                 return toFullyQualifiedUrl({
                     urlish: redirectUrl_params,
-                    doAssertNoQueryParams: false
+                    doAssertNoQueryParams: false,
+                    rootUrl_fullyQualified: homeUrl
                 });
             })(),
             name: URL_SEARCH_PARAM_NAME,
-            value: "true",
-            encodeMethod: "www-form"
+            values: ["true"],
+            encodeMethod: "www-form",
+            ifAlreadyPresent: "replace all by new values"
         });
 
         window.location.href = redirectUrl;
@@ -143,51 +158,53 @@ export async function createMockOidc<
         return oidc;
     }
 
-    const oidc: Oidc.LoggedIn<DecodedIdToken> = {
+    const oidc: Oidc.LoggedIn<User> = {
         ...common,
         isUserLoggedIn: true,
         renewTokens: async () => {},
         ...(() => {
-            const tokens_common: Oidc.Tokens.Common<DecodedIdToken> = {
-                accessToken: mockedTokens.accessToken ?? "mocked-access-token",
-                accessTokenExpirationTime: mockedTokens.accessTokenExpirationTime ?? INFINITY_TIME,
-                idToken: mockedTokens.idToken ?? "mocked-id-token",
-                decodedIdToken:
-                    mockedTokens.decodedIdToken ??
-                    createObjectThatThrowsIfAccessed<DecodedIdToken>({
+            const tokens_common: OidcTokens.Common = {
+                accessToken: accessToken_mock ?? ACCESS_TOKEN_MOCK_DEFAULT,
+                accessTokenExpirationTime: accessTokenExpirationTime_mock ?? INFINITY_TIME,
+                idToken: idToken_mock ?? ID_TOKEN_MOCK_DEFAULT,
+                idTokenClaims: (() => {
+                    if (idTokenClaims_mock !== undefined) {
+                        return idTokenClaims_mock;
+                    }
+
+                    if (idToken_mock !== undefined) {
+                        try {
+                            return decodeJwt(idToken_mock);
+                        } catch {}
+                    }
+
+                    return createObjectThatThrowsIfAccessed<IdTokenClaims>({
                         debugMessage: [
                             "You haven't provided a mocked decodedIdToken",
                             "See https://docs.oidc-spa.dev/v/v10/integration-guides/usage#mock-adapter"
                         ].join("\n")
-                    }),
-                decodedIdToken_original:
-                    mockedTokens.decodedIdToken_original ??
-                    createObjectThatThrowsIfAccessed<Oidc.Tokens.DecodedIdToken_OidcCoreSpec>({
-                        debugMessage: [
-                            "You haven't provided a mocked decodedIdToken_original",
-                            "See https://docs.oidc-spa.dev/v/v10/integration-guides/usage#mock-adapter"
-                        ].join("\n")
-                    }),
+                    });
+                })(),
                 issuedAtTime: Date.now(),
                 getServerDateNow: () => Date.now()
             };
 
-            const tokens: Oidc.Tokens<DecodedIdToken> =
-                mockedTokens.refreshToken !== undefined || mockedTokens.hasRefreshToken === true
-                    ? id<Oidc.Tokens.WithRefreshToken<DecodedIdToken>>({
+            const tokens: OidcTokens =
+                refreshToken_mock !== undefined
+                    ? id<OidcTokens.WithRefreshToken>({
                           ...tokens_common,
                           hasRefreshToken: true,
-                          refreshToken: mockedTokens.refreshToken ?? "mocked-refresh-token",
-                          refreshTokenExpirationTime: mockedTokens.refreshTokenExpirationTime
+                          refreshToken: refreshToken_mock,
+                          refreshTokenExpirationTime: refreshTokenExpirationTime_mock ?? INFINITY_TIME
                       })
-                    : id<Oidc.Tokens.WithoutRefreshToken<DecodedIdToken>>({
+                    : id<OidcTokens.WithoutRefreshToken>({
                           ...tokens_common,
                           hasRefreshToken: false
                       });
 
             return {
                 getTokens: () => Promise.resolve(tokens),
-                getDecodedIdToken: () => tokens_common.decodedIdToken
+                getAccessToken: () => Promise.resolve(tokens.accessToken)
             };
         })(),
         subscribeToTokensChange: () => {
@@ -208,13 +225,15 @@ export async function createMockOidc<
                         case "specific url":
                             return toFullyQualifiedUrl({
                                 urlish: params.url,
-                                doAssertNoQueryParams: false
+                                doAssertNoQueryParams: false,
+                                rootUrl_fullyQualified: homeUrl
                             });
                     }
                 })(),
                 name: URL_SEARCH_PARAM_NAME,
-                value: "false",
-                encodeMethod: "www-form"
+                values: ["false"],
+                encodeMethod: "www-form",
+                ifAlreadyPresent: "replace all by new values"
             });
 
             window.location.href = redirectUrl;
@@ -226,7 +245,20 @@ export async function createMockOidc<
         }),
         goToAuthServer: async ({ redirectUrl }) => loginOrGoToAuthServer({ redirectUrl }),
         isNewBrowserSession: false,
-        backFromAuthServer: undefined
+        backFromAuthServer: undefined,
+        getUser: () => {
+            if (user_mock === undefined) {
+                throw new Error("oidc-spa: No mock user provided");
+            }
+
+            return Promise.resolve({
+                refreshUser: () => Promise.resolve(user_mock),
+                subscribeToUserChange: () => {
+                    return { unsubscribeFromUserChange: () => {} };
+                },
+                user: user_mock
+            });
+        }
     };
 
     return oidc;

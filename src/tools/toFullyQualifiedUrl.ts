@@ -1,5 +1,6 @@
 type Params = {
     urlish: string;
+    rootUrl_fullyQualified: string;
 } & (
     | {
           doAssertNoQueryParams: true;
@@ -22,7 +23,13 @@ export function toFullyQualifiedUrl(params: Params): string {
             path = `/${path}`;
         }
 
-        url = `${window.location.origin}${path}`;
+        let rootUrl = params.rootUrl_fullyQualified;
+
+        if (rootUrl.endsWith("/")) {
+            rootUrl = rootUrl.slice(0, -1);
+        }
+
+        url = `${rootUrl}${path}`;
     }
 
     {

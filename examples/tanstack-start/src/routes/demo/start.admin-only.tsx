@@ -8,18 +8,17 @@ import { createKeycloakUtils } from "oidc-spa/keycloak";
 const getAdminOnlyData = createServerFn({ method: "GET" })
     .middleware([
         oidcFnMiddleware({
-            assert: "user logged in",
-            hasRequiredClaims: ({ accessTokenClaims }) =>
-                accessTokenClaims.realm_access?.roles.includes("realm-admin")
+            require: "authed request",
+            hasAuthorization: ({ user }) => user.isKeycloakAdmin
         })
     ])
     .handler(async ({ context: { oidc } }) => {
-        const userId = oidc.accessTokenClaims.sub;
+        const { user } = oidc;
 
         // Here you can perform information and retrieve data only admins
         // should have access to.
 
-        return `<Sensible data only accessible to admin got from server function for user: ${userId}>`;
+        return `<Sensible data only accessible to admin got from server function for user: ${user.id}>`;
     });
 
 export const Route = createFileRoute("/demo/start/admin-only")({
@@ -27,12 +26,12 @@ export const Route = createFileRoute("/demo/start/admin-only")({
     component: AdminOnly,
     loader: async () => {
         const oidc = await getOidc({ assert: "user logged in" });
+        const { user } = await oidc.getUser();
 
         // NOTE: This is just cosmetic, it doesn't actually protect anything.
-        // It's very important that you implement hasRequired claim in the server
-        // function and request middleware to check that the user actually have the required
-        // authorization.
-        if (!oidc.getDecodedIdToken().realm_access?.roles.includes("realm-admin")) {
+        // Use hasAuthorization in the server function and request middleware
+        // to check that the user has the required authorization.
+        if (!user.canSeeKeycloakAdminNavigation) {
             throw new Error("unauthorized");
         }
 
@@ -87,7 +86,7 @@ function AdminOnly() {
                     <h1 className="text-2xl font-semibold">Administration Page</h1>
                 </header>
                 <p className="mb-6 text-white/90">
-                    Access granted. Your ID token includes the
+                    Access granted. Your user has the
                     <span className="mx-2 px-2 py-0.5 rounded bg-white/10 border border-white/20 text-white">
                         realm-admin
                     </span>

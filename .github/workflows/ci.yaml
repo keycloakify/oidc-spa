@@ -34,6 +34,9 @@ jobs:
       with:
         node-version: '22.x'
     - uses: bahmutov/npm-install@v1
+    - run: yarn test:angular
+    - run: yarn test:react-nextjs
+    - run: yarn test:tanstack-start-bootstrap-env
     - run: yarn build
 
   check_if_version_upgraded:

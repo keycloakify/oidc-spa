@@ -1,39 +1,68 @@
 "use client";
 
-import { type ComponentType, type ReactNode, useEffect, useReducer } from "react";
-import { useRouter } from "next/navigation";
-import { oidcSpa } from "oidc-spa/react-spa";
+import { oidcSpa } from "oidc-spa/react-nextjs";
 import { z } from "zod";
+import { decodeJwt } from "oidc-spa/decode-jwt";
+import avatarFallbackSvg from "@/assets/avatarFallback.svg";
 
-const decodedIdTokenSchema = z.object({
-    sub: z.string(),
-    name: z.string(),
-    picture: z.string().optional(),
-    email: z.string().email().optional(),
-    preferred_username: z.string().optional(),
-    realm_access: z.object({ roles: z.array(z.string()) }).optional()
-});
+const avatarFallbackSvgUrl: string = avatarFallbackSvg.src;
 
-const {
-    bootstrapOidc,
-    useOidc,
-    getOidc,
-    OidcInitializationGate: OidcInitializationGate_base
-} = oidcSpa
-    .withExpectedDecodedIdTokenShape({
-        decodedIdTokenSchema,
-        decodedIdToken_mock: {
-            sub: "mock-user",
-            name: "John Doe",
-            preferred_username: "john.doe",
-            realm_access: {
-                roles: ["realm-admin"]
-            }
+// App-level user shape exposed by `useOidc()`.
+// You decide what an user should looks like!
+export type User = {
+    displayName: string;
+    email: string | undefined;
+    avatarImgUrl: string;
+    canSeeKeycloakAdminNavigation: boolean;
+};
+
+const { bootstrapOidc, useOidc, getOidc, OidcInitializationGate, withLoginEnforced } = oidcSpa
+    .withUser<User>({
+        createUser: async ({ decodedIdToken, accessToken }) => {
+            const { name, picture, email } = z
+                .object({
+                    sub: z.string(),
+                    name: z.string(),
+                    picture: z.string().optional(),
+                    email: z.string().optional(),
+                    preferred_username: z.string().optional()
+                })
+                .parse(decodedIdToken);
+
+            const decodedAccessToken = z
+                .object({
+                    resource_access: z
+                        .object({
+                            "realm-management": z.object({ roles: z.array(z.string()) }).optional()
+                        })
+                        .optional()
+                })
+                .parse(decodeJwt(accessToken));
+
+            const user: User = {
+                displayName: name,
+                avatarImgUrl: picture || avatarFallbackSvgUrl,
+                email,
+                canSeeKeycloakAdminNavigation:
+                    decodedAccessToken.resource_access?.["realm-management"]?.roles.includes(
+                        "realm-admin"
+                    ) ?? false
+            };
+
+            return user;
+        },
+        user_mock: {
+            displayName: "John Doe",
+            email: undefined,
+            avatarImgUrl: avatarFallbackSvgUrl,
+            canSeeKeycloakAdminNavigation: true
         }
     })
+    // See: https://docs.oidc-spa.dev/v/v10/features/auto-login#react-spa
+    //.withAutoLogin()
     .createUtils();
 
-export { useOidc, getOidc };
+export { useOidc, getOidc, OidcInitializationGate, withLoginEnforced };
 
 bootstrapOidc(
     process.env.NEXT_PUBLIC_OIDC_USE_MOCK === "true"
@@ -48,69 +77,6 @@ bootstrapOidc(
               debugLogs: process.env.NODE_ENV === "development"
           }
 );
-
-function OidcInitializationGate_inner(props: { children: ReactNode }) {
-    const { children } = props;
-
-    const { backFromAuthServer } = useOidc();
-    const router = useRouter();
-
-    useEffect(() => {
-        if (backFromAuthServer !== undefined) {
-            router.replace(`${location.pathname}${location.search}${location.hash}`, { scroll: false });
-        }
-    }, []);
-
-    return children;
-}
-
-export function OidcInitializationGate(props: { fallback?: ReactNode; children: ReactNode }) {
-    const { children, fallback } = props;
-
-    return (
-        <OidcInitializationGate_base fallback={fallback}>
-            <OidcInitializationGate_inner>{children}</OidcInitializationGate_inner>
-        </OidcInitializationGate_base>
-    );
-}
-
-export function withLoginEnforced<Props extends Record<string, unknown>>(
-    component: ComponentType<Props>
-): (props: Props) => ReactNode {
-    const Component = component;
-
-    function ComponentWithLoginEnforced(props: Props) {
-        const { isUserLoggedIn, login } = useOidc();
-
-        const [hasRunEffect, notifyEffectRun] = useReducer(() => true, false);
-
-        useEffect(() => {
-            notifyEffectRun();
-
-            if (!isUserLoggedIn) {
-                login({
-                    doesCurrentHrefRequiresAuth: true
-                });
-            }
-        }, []);
-
-        if (!hasRunEffect) {
-            return null;
-        }
-
-        if (!isUserLoggedIn) {
-            return null;
-        }
-
-        return <Component {...props} />;
-    }
-
-    ComponentWithLoginEnforced.displayName = `${
-        Component.displayName ?? Component.name ?? "Component"
-    }WithLoginEnforced`;
-
-    return ComponentWithLoginEnforced;
-}
 
 export const fetchWithAuth: typeof fetch = async (input, init) => {
     const oidc = await getOidc();

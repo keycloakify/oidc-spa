@@ -41,3 +41,7 @@ testem.log
 .DS_Store
 Thumbs.db
 
+# Each example supports npm, Yarn, and pnpm.
+/package-lock.json
+/yarn.lock
+/pnpm-lock.yaml

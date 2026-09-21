@@ -6,35 +6,34 @@ import {
     type ReactNode,
     type ComponentType
 } from "react";
-import type { UseOidc, OidcSpaUtils, GetOidc, ParamsOfBootstrap } from "./types";
-import type { ZodSchemaLike } from "../tools/ZodSchemaLike";
+import type { UseOidc, OidcSpaUtils, GetOidc, ParamsOfBootstrap, CreateUser } from "./types";
 import type { Oidc as Oidc_core } from "../core";
 import { OidcInitializationError } from "../core/OidcInitializationError";
 import { Deferred } from "../tools/Deferred";
 import { isBrowser } from "../tools/isBrowser";
 import { assert, type Equals } from "../tools/tsafe/assert";
-import { createObjectThatThrowsIfAccessed } from "../tools/createObjectThatThrowsIfAccessed";
+import {
+    createObjectWithSomePropertiesThatThrowIfAccessed,
+    THROW_IF_ACCESSED
+} from "../tools/createObjectThatThrowsIfAccessed";
 import { createStatefulEvt } from "../tools/StatefulEvt";
 import { id } from "../tools/tsafe/id";
 import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";
 import { setDesiredPostLoginRedirectUrl } from "../core/desiredPostLoginRedirectUrl";
 
-export function createOidcSpaUtils<
-    AutoLogin extends boolean,
-    DecodedIdToken extends Record<string, unknown>
->(params: {
+export function createOidcSpaUtils<User, AutoLogin extends boolean>(params: {
     autoLogin: AutoLogin;
-    decodedIdTokenSchema:
-        | ZodSchemaLike<Oidc_core.Tokens.DecodedIdToken_OidcCoreSpec, DecodedIdToken>
-        | undefined;
-    decodedIdToken_mock: DecodedIdToken | undefined;
-}): OidcSpaUtils<AutoLogin, DecodedIdToken> {
-    const { autoLogin, decodedIdTokenSchema, decodedIdToken_mock } = params;
+    createUser: CreateUser<User> | undefined;
+    user_mock: User | undefined;
+}): OidcSpaUtils<User, AutoLogin> {
+    const { autoLogin, createUser, user_mock: user_mock_static } = params;
 
-    const dParamsOfBootstrap = new Deferred<ParamsOfBootstrap<AutoLogin, DecodedIdToken>>();
+    const dParamsOfBootstrap = new Deferred<ParamsOfBootstrap<User, AutoLogin>>();
 
-    const dOidcCoreOrInitializationError = new Deferred<
-        Oidc_core<DecodedIdToken> | OidcInitializationError
+    const dOidcCoreOrInitializationError = new Deferred<Oidc_core<User> | OidcInitializationError>();
+
+    const dResultOfGetUserOrInitializationErrorOrUndefined = new Deferred<
+        Awaited<ReturnType<Oidc_core.LoggedIn<User>["getUser"]>> | OidcInitializationError | undefined
     >();
 
     const evtAutoLogoutState = createStatefulEvt<UseOidc.Oidc.LoggedIn<unknown>["autoLogoutState"]>(
@@ -96,9 +95,7 @@ export function createOidcSpaUtils<
         });
     });
 
-    function useOidc(params?: {
-        assert?: "user logged in" | "user not logged in";
-    }): UseOidc.Oidc<DecodedIdToken> {
+    function useOidc(params?: { assert?: "user logged in" | "user not logged in" }): UseOidc.Oidc<User> {
         const { assert: assert_params } = params ?? {};
 
         if (!isBrowser) {
@@ -118,7 +115,8 @@ export function createOidcSpaUtils<
         }
 
         if (oidcCore instanceof OidcInitializationError) {
-            throw oidcCore;
+            const initializationError = oidcCore;
+            throw initializationError;
         }
 
         check_assertion: {
@@ -149,46 +147,65 @@ export function createOidcSpaUtils<
             }
         }
 
-        const [, reRenderIfDecodedIdTokenChanged] = useState<DecodedIdToken | undefined>(() => {
-            if (!oidcCore.isUserLoggedIn) {
+        const resultOfGetUserOrUndefined = (() => {
+            const { hasResolved, value: resultOfGetUserOrInitializationErrorOrUndefined } =
+                dResultOfGetUserOrInitializationErrorOrUndefined.getState();
+
+            if (!hasResolved) {
+                throw dResultOfGetUserOrInitializationErrorOrUndefined.pr;
+            }
+
+            if (resultOfGetUserOrInitializationErrorOrUndefined instanceof OidcInitializationError) {
+                const initializationError = resultOfGetUserOrInitializationErrorOrUndefined;
+                throw initializationError;
+            }
+
+            const resultOfGetUserOrUndefined = resultOfGetUserOrInitializationErrorOrUndefined;
+
+            return resultOfGetUserOrUndefined;
+        })();
+
+        const [, reRenderIfUserChanged] = useState<User | undefined>(() => {
+            if (resultOfGetUserOrUndefined === undefined) {
                 return undefined;
             }
-            return oidcCore.getDecodedIdToken();
+            const resultOfGetUser = resultOfGetUserOrUndefined;
+            return resultOfGetUser.user;
         });
 
-        const [evtIsDecodedIdTokenUsed] = useState(() => createStatefulEvt<boolean>(() => false));
+        const [evtIsUserUsed] = useState(() => createStatefulEvt<boolean>(() => false));
 
         useEffect(() => {
-            if (!oidcCore.isUserLoggedIn) {
+            if (resultOfGetUserOrUndefined === undefined) {
                 return;
             }
+            const resultOfGetUser = resultOfGetUserOrUndefined;
 
             let isActive = true;
-
             let unsubscribe: (() => void) | undefined = undefined;
 
             (async () => {
-                if (!evtIsDecodedIdTokenUsed.current) {
-                    const dDecodedIdTokenUsed = new Deferred<void>();
+                if (!evtIsUserUsed.current) {
+                    const dUserUsed = new Deferred<void>();
 
-                    const { unsubscribe: unsubscribe_scope } = evtIsDecodedIdTokenUsed.subscribe(() => {
+                    const { unsubscribe: unsubscribe_scope } = evtIsUserUsed.subscribe(() => {
                         unsubscribe_scope();
-                        dDecodedIdTokenUsed.resolve();
+                        dUserUsed.resolve();
                     });
                     unsubscribe = unsubscribe_scope;
 
-                    await dDecodedIdTokenUsed.pr;
+                    await dUserUsed.pr;
 
                     if (!isActive) {
                         return;
                     }
                 }
 
-                reRenderIfDecodedIdTokenChanged(oidcCore.getDecodedIdToken());
+                reRenderIfUserChanged(resultOfGetUser.user);
 
-                unsubscribe = oidcCore.subscribeToTokensChange(() => {
-                    reRenderIfDecodedIdTokenChanged(oidcCore.getDecodedIdToken());
-                }).unsubscribeFromTokensChange;
+                unsubscribe = resultOfGetUser.subscribeToUserChange(({ user }) => {
+                    reRenderIfUserChanged(user);
+                }).unsubscribeFromUserChange;
             })();
 
             return () => {
@@ -249,30 +266,64 @@ export function createOidcSpaUtils<
             });
         }
 
-        return id<UseOidc.Oidc.LoggedIn<DecodedIdToken>>({
-            isUserLoggedIn: true,
-            get decodedIdToken() {
-                evtIsDecodedIdTokenUsed.current = true;
-                return oidcCore.getDecodedIdToken();
+        const oidc = createObjectWithSomePropertiesThatThrowIfAccessed<UseOidc.Oidc.LoggedIn<User>>(
+            {
+                isUserLoggedIn: true,
+                logout: oidcCore.logout,
+                renewTokens: oidcCore.renewTokens,
+                goToAuthServer: oidcCore.goToAuthServer,
+                backFromAuthServer: oidcCore.backFromAuthServer,
+                isNewBrowserSession: oidcCore.isNewBrowserSession,
+                autoLogoutState: null as any,
+                issuerUri: oidcCore.issuerUri,
+                clientId: oidcCore.clientId,
+                validRedirectUri: oidcCore.validRedirectUri,
+                user: resultOfGetUserOrUndefined === undefined ? THROW_IF_ACCESSED : (null as any),
+                refreshUser: (() => {
+                    if (resultOfGetUserOrUndefined === undefined) {
+                        return THROW_IF_ACCESSED;
+                    }
+
+                    const resultOfGetUser = resultOfGetUserOrUndefined;
+
+                    return resultOfGetUser.refreshUser;
+                })()
             },
-            logout: oidcCore.logout,
-            renewTokens: oidcCore.renewTokens,
-            goToAuthServer: oidcCore.goToAuthServer,
-            backFromAuthServer: oidcCore.backFromAuthServer,
-            isNewBrowserSession: oidcCore.isNewBrowserSession,
-            get autoLogoutState() {
-                evtIsAutoLogoutStateUsed.current = true;
-                return evtAutoLogoutState.current;
-            },
-            issuerUri: oidcCore.issuerUri,
-            clientId: oidcCore.clientId,
-            validRedirectUri: oidcCore.validRedirectUri
+            [
+                "oidc-spa: You must use oidcSpa.withUser() to implement the user abstraction",
+                "See: https://docs.oidc-spa.dev/v/v10/features/user"
+            ].join(" ")
+        );
+
+        Object.defineProperties(oidc, {
+            autoLogoutState: {
+                enumerable: true,
+                get: () => {
+                    evtIsAutoLogoutStateUsed.current = true;
+                    return evtAutoLogoutState.current;
+                }
+            }
         });
+
+        if (resultOfGetUserOrUndefined !== undefined) {
+            const resultOfGetUser = resultOfGetUserOrUndefined;
+            Object.defineProperty(oidc, "user", {
+                enumerable: true,
+                get: () => {
+                    evtIsUserUsed.current = true;
+                    return resultOfGetUser.user;
+                }
+            });
+        }
+
+        return oidc;
     }
+
+    let oidc_cached: GetOidc.Oidc<User> | undefined = undefined;
 
     async function getOidc(params?: {
         assert?: "user logged in" | "user not logged in";
-    }): Promise<GetOidc.Oidc<DecodedIdToken>> {
+    }): Promise<GetOidc.Oidc<User>> {
         if (!isBrowser) {
             throw new Error("oidc-spa: getOidc() can't be used on the server");
         }
@@ -300,45 +351,31 @@ export function createOidcSpaUtils<
             );
         }
 
+        if (oidc_cached !== undefined) {
+            return oidc_cached;
+        }
+
         const common = {
             issuerUri: oidcCore.issuerUri,
             clientId: oidcCore.clientId,
             validRedirectUri: oidcCore.validRedirectUri
         };
 
-        return oidcCore.isUserLoggedIn
-            ? id<GetOidc.Oidc.LoggedIn<DecodedIdToken>>({
+        oidc_cached = oidcCore.isUserLoggedIn
+            ? id<GetOidc.Oidc.LoggedIn<User>>({
                   ...common,
                   isUserLoggedIn: true,
-                  getAccessToken: async () => {
-                      const { accessToken } = await oidcCore.getTokens();
-                      return accessToken;
-                  },
-                  subscribeToAccessTokenRotation: next => {
+                  getAccessToken: oidcCore.getAccessToken,
+                  subscribeToTokenRotation: next => {
                       const { unsubscribeFromTokensChange } = oidcCore.subscribeToTokensChange(
-                          ({ accessToken }) => {
-                              next(accessToken);
+                          ({ accessToken, decodedIdToken }) => {
+                              next({ accessToken, decodedIdToken });
                           }
                       );
 
-                      return { unsubscribeFromAccessTokenRotation: unsubscribeFromTokensChange };
+                      return { unsubscribeFromTokenRotation: unsubscribeFromTokensChange };
                   },
                   getDecodedIdToken: oidcCore.getDecodedIdToken,
-                  subscribeToDecodedIdTokenChange: next => {
-                      const current = oidcCore.getDecodedIdToken();
-
-                      const { unsubscribeFromTokensChange } = oidcCore.subscribeToTokensChange(
-                          ({ decodedIdToken }) => {
-                              // NOTE: oidc-spa/core keeps the reference stable
-                              // when structure hasn't changed.
-                              if (current !== decodedIdToken) {
-                                  next(decodedIdToken);
-                              }
-                          }
-                      );
-
-                      return { unsubscribeFromDecodedIdTokenChange: unsubscribeFromTokensChange };
-                  },
                   logout: oidcCore.logout,
                   renewTokens: oidcCore.renewTokens,
                   goToAuthServer: oidcCore.goToAuthServer,
@@ -350,7 +387,8 @@ export function createOidcSpaUtils<
                       const { unsubscribe } = evtAutoLogoutState.subscribe(next);
 
                       return { unsubscribeFromAutoLogoutState: unsubscribe };
-                  }
+                  },
+                  getUser: oidcCore.getUser
               })
             : id<GetOidc.Oidc.NotLoggedIn>({
                   ...common,
@@ -358,15 +396,15 @@ export function createOidcSpaUtils<
                   initializationError: oidcCore.initializationError,
                   login: oidcCore.login
               });
+
+        return oidc_cached;
     }
 
     const prModuleCore = !isBrowser ? undefined : import("../core");
 
     let bootstrapOidc_prResolved: Promise<void> | undefined = undefined;
 
-    const bootstrapOidc = (
-        paramsOfBootstrap: ParamsOfBootstrap<AutoLogin, DecodedIdToken>
-    ): Promise<void> => {
+    const bootstrapOidc = (paramsOfBootstrap: ParamsOfBootstrap<User, AutoLogin>): Promise<void> => {
         if (bootstrapOidc_prResolved !== undefined) {
             return bootstrapOidc_prResolved;
         }
@@ -387,47 +425,49 @@ export function createOidcSpaUtils<
                     {
                         const { createMockOidc } = await import("../core/createMockOidc");
 
+                        const user_mock = paramsOfBootstrap.user_mock ?? user_mock_static;
+
                         const oidcCore = await createMockOidc({
                             BASE_URL: paramsOfBootstrap.BASE_URL,
                             // NOTE: The `as false` is lying here, it's just to preserve some level of type-safety.
                             autoLogin: autoLogin as false,
                             // NOTE: Same here, the nullish coalescing is lying.
                             isUserInitiallyLoggedIn: paramsOfBootstrap.isUserInitiallyLoggedIn!,
-                            mockedParams: {
-                                clientId: paramsOfBootstrap.clientId_mock,
-                                issuerUri: paramsOfBootstrap.issuerUri_mock
-                            },
-                            mockedTokens: {
-                                decodedIdToken:
-                                    paramsOfBootstrap.decodedIdToken_mock ??
-                                    decodedIdToken_mock ??
-                                    createObjectThatThrowsIfAccessed<DecodedIdToken>({
-                                        debugMessage: [
-                                            "oidc-spa: You didn't provide any mock for the decodedIdToken",
-                                            "Either provide a default one by specifying decodedIdToken_mock",
-                                            "as parameter of .withExpectedDecodedIdTokenShape() or",
-                                            "specify decodedIdToken_mock when calling bootstrapOidc()"
-                                        ].join(" ")
-                                    })
-                            }
+                            clientId_mock: paramsOfBootstrap.clientId_mock,
+                            issuerUri_mock: paramsOfBootstrap.issuerUri_mock,
+                            decodedIdToken_mock: paramsOfBootstrap.decodedIdToken_mock,
+                            user_mock: user_mock
                         });
 
                         dOidcCoreOrInitializationError.resolve(oidcCore);
+
+                        set_result_of_getUser: {
+                            if (user_mock === undefined) {
+                                dResultOfGetUserOrInitializationErrorOrUndefined.resolve(undefined);
+                                break set_result_of_getUser;
+                            }
+
+                            if (!oidcCore.isUserLoggedIn) {
+                                dResultOfGetUserOrInitializationErrorOrUndefined.resolve(undefined);
+                                break set_result_of_getUser;
+                            }
+
+                            dResultOfGetUserOrInitializationErrorOrUndefined.resolve(
+                                await oidcCore.getUser()
+                            );
+                        }
                     }
                     break;
                 case "real":
                     {
                         const { createOidc } = await prModuleCore;
 
-                        let oidcCoreOrInitializationError:
-                            | Oidc_core<DecodedIdToken>
-                            | OidcInitializationError;
+                        let oidcCoreOrInitializationError: Oidc_core<User> | OidcInitializationError;
 
                         try {
                             oidcCoreOrInitializationError = await createOidc({
                                 BASE_URL: paramsOfBootstrap.BASE_URL,
                                 autoLogin,
-                                decodedIdTokenSchema,
                                 issuerUri: paramsOfBootstrap.issuerUri,
                                 clientId: paramsOfBootstrap.clientId,
                                 idleSessionLifetimeInSeconds:
@@ -443,17 +483,64 @@ export function createOidcSpaUtils<
                                 __unsafe_useIdTokenAsAccessToken:
                                     paramsOfBootstrap.__unsafe_useIdTokenAsAccessToken,
                                 autoLogoutParams: paramsOfBootstrap.autoLogoutParams,
-                                disableDPoP: paramsOfBootstrap.disableDPoP
+                                disableDPoP: paramsOfBootstrap.disableDPoP,
+                                createUser
                             });
                         } catch (error) {
-                            if (!(error instanceof OidcInitializationError)) {
-                                throw error;
-                            }
+                            assert(
+                                error instanceof OidcInitializationError,
+                                `129322 This is a bug in oidc-spa, please report: ${error}`
+                            );
+
                             dOidcCoreOrInitializationError.resolve(error);
+
                             return;
                         }
 
                         dOidcCoreOrInitializationError.resolve(oidcCoreOrInitializationError);
+
+                        set_result_of_getUser: {
+                            if (createUser === undefined) {
+                                dResultOfGetUserOrInitializationErrorOrUndefined.resolve(undefined);
+                                break set_result_of_getUser;
+                            }
+
+                            if (!oidcCoreOrInitializationError.isUserLoggedIn) {
+                                dResultOfGetUserOrInitializationErrorOrUndefined.resolve(undefined);
+                                break set_result_of_getUser;
+                            }
+
+                            let resultOfGetUser: Awaited<
+                                ReturnType<Oidc_core.LoggedIn<User>["getUser"]>
+                            >;
+
+                            try {
+                                resultOfGetUser = await oidcCoreOrInitializationError.getUser();
+                            } catch (error) {
+                                dResultOfGetUserOrInitializationErrorOrUndefined.resolve(
+                                    new OidcInitializationError({
+                                        isAuthServerLikelyDown: false,
+                                        messageOrCause: new Error(
+                                            "The initial invocation of createUser threw an error",
+                                            // @ts-expect-error
+                                            {
+                                                cause:
+                                                    error instanceof Error
+                                                        ? error
+                                                        : new Error(`${error}`)
+                                            }
+                                        )
+                                    })
+                                );
+                                break set_result_of_getUser;
+                            }
+
+                            dResultOfGetUserOrInitializationErrorOrUndefined.resolve(resultOfGetUser);
+
+                            resultOfGetUser.subscribeToUserChange(({ user }) => {
+                                resultOfGetUser.user = user;
+                            });
+                        }
                     }
                     break;
             }
@@ -477,16 +564,14 @@ export function createOidcSpaUtils<
 
         const redirectUrl = (() => {
             if (loaderContext.request?.url !== undefined) {
-                return toFullyQualifiedUrl({
-                    urlish: loaderContext.request.url,
-                    doAssertNoQueryParams: false
-                });
+                return loaderContext.request.url;
             }
 
             if (loaderContext.location?.publicHref !== undefined) {
                 return toFullyQualifiedUrl({
                     urlish: loaderContext.location.publicHref,
-                    doAssertNoQueryParams: false
+                    doAssertNoQueryParams: false,
+                    rootUrl_fullyQualified: window.location.origin
                 });
             }
 
@@ -560,6 +645,26 @@ export function createOidcSpaUtils<
             return createElement(ErrorComponent, { oidcInitializationError });
         }
 
+        user: {
+            const { hasResolved, value: resultOfGetUserOrInitializationErrorOrUndefined } =
+                dResultOfGetUserOrInitializationErrorOrUndefined.getState();
+
+            if (!hasResolved) {
+                throw dResultOfGetUserOrInitializationErrorOrUndefined.pr;
+            }
+            if (resultOfGetUserOrInitializationErrorOrUndefined === undefined) {
+                break user;
+            }
+
+            if (resultOfGetUserOrInitializationErrorOrUndefined instanceof OidcInitializationError) {
+                const oidcInitializationError = resultOfGetUserOrInitializationErrorOrUndefined;
+
+                return createElement(ErrorComponent, {
+                    oidcInitializationError
+                });
+            }
+        }
+
         return children;
     }
 
@@ -571,12 +676,26 @@ export function createOidcSpaUtils<
         useEffect(() => {
             let isActive = true;
 
-            dOidcCoreOrInitializationError.pr.then(() => {
+            (async () => {
+                const oidcCoreOrInitializationError = await dOidcCoreOrInitializationError.pr;
+
                 if (!isActive) {
                     return;
                 }
+
+                if (oidcCoreOrInitializationError instanceof OidcInitializationError) {
+                    readyToRender();
+                    return;
+                }
+
+                await dResultOfGetUserOrInitializationErrorOrUndefined.pr;
+
+                if (!isActive) {
+                    return;
+                }
+
                 readyToRender();
-            });
+            })();
 
             return () => {
                 isActive = false;
@@ -596,18 +715,10 @@ export function createOidcSpaUtils<
         const Component = component;
 
         function ComponentWithLoginEnforced(props: Props) {
-            const { hasResolved, value: oidcCore } = dOidcCoreOrInitializationError.getState();
+            const { isUserLoggedIn, login } = useOidc();
 
-            if (!hasResolved) {
-                throw dOidcCoreOrInitializationError.pr;
-            }
-
-            if (oidcCore instanceof OidcInitializationError) {
-                throw oidcCore;
-            }
-
-            if (!oidcCore.isUserLoggedIn) {
-                throw oidcCore.login({ doesCurrentHrefRequiresAuth: true });
+            if (!isUserLoggedIn) {
+                throw login({ doesCurrentHrefRequiresAuth: true });
             }
 
             return createElement(Component, props);
