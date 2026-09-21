@@ -8,7 +8,6 @@ import type {
     OidcTokens
 } from "../../core";
 import type { FunctionMiddlewareAfterServer, RequestMiddlewareAfterServer } from "@tanstack/react-start";
-import type { GetterOrDirectValue } from "../../tools/GetterOrDirectValue";
 import type { MaybeAsync } from "../../tools/MaybeAsync";
 import { assert, type Equals } from "../../tools/tsafe/assert";
 import type { AccessTokenClaims_specs as AccessTokenClaims } from "../../server";
@@ -212,24 +211,14 @@ export namespace OidcRequestMiddleware {
 }
 
 export type ParamsOfBootstrap<User_client, User_server, AutoLogin> =
-    | ParamsOfBootstrap.Real
-    | ParamsOfBootstrap.Mock<AutoLogin>;
+    | ParamsOfBootstrap.Real<User_server extends undefined ? false : true>
+    | ParamsOfBootstrap.Mock<User_server extends undefined ? false : true, AutoLogin>;
 
 export namespace ParamsOfBootstrap {
-    export type Real = {
+    export type Real<HasServer> = {
         mode: "real";
         issuerUri: string;
         debugLogs?: boolean;
-        server:
-            | {
-                  accessTokenValidationMethod: "offline JWT validation";
-                  expectedAccessTokenAudience: string;
-              }
-            | {
-                  accessTokenValidationMethod: "introspection endpoint";
-                  clientId: string;
-                  clientSecret: string;
-              };
         client: {
             clientId: string;
             warnUserSecondsBeforeAutoLogout?: number;
@@ -257,11 +246,24 @@ export namespace ParamsOfBootstrap {
                   };
             disableDPoP?: true;
         };
-    };
+    } & (HasServer extends true
+        ? {
+              server:
+                  | {
+                        accessTokenValidationMethod: "offline JWT validation";
+                        expectedAccessTokenAudience: string;
+                    }
+                  | {
+                        accessTokenValidationMethod: "introspection endpoint";
+                        clientId: string;
+                        clientSecret: string;
+                    };
+          }
+        : {});
 
     assert<
         Equals<
-            Real["client"] & Pick<Real, "issuerUri" | "debugLogs">,
+            Real<false>["client"] & Pick<Real<false>, "issuerUri" | "debugLogs">,
             Omit<
                 ParamsOfCreateOidc<unknown, boolean>,
                 "createUser" | "autoLogin" | "autoLogin_redirectUrl"
@@ -269,13 +271,10 @@ export namespace ParamsOfBootstrap {
         >
     >;
 
-    export type Mock<AutoLogin> = {
+    export type Mock<HasServer, AutoLogin> = {
         mode: "mock";
         issuerUri_mock?: string;
         accessToken_mock?: string;
-        server?: {
-            accessTokenClaims_mock?: AccessTokenClaims;
-        };
         client?: {
             clientId_mock?: string;
             idTokenClaims_mock?: IdTokenClaims;
@@ -288,16 +287,16 @@ export namespace ParamsOfBootstrap {
             : {
                   isUserInitiallyLoggedIn: boolean;
               });
-    };
+    } & (HasServer extends true
+        ? {
+              server?: {
+                  accessTokenClaims_mock?: AccessTokenClaims;
+              };
+          }
+        : {});
 }
 
 export type OidcSpaUtils<User_client, User_server, AutoLogin> = {
-    bootstrapOidc: (
-        params: GetterOrDirectValue<
-            { process: { env: Record<string, string> } },
-            ParamsOfBootstrap<User_client, User_server, AutoLogin>
-        >
-    ) => void;
     useOidc: AutoLogin extends true ? UseOidc.WithAutoLogin<User_client> : UseOidc<User_client>;
     getOidc: AutoLogin extends true ? GetOidc.WithAutoLogin<User_client> : GetOidc<User_client>;
 } & (AutoLogin extends true

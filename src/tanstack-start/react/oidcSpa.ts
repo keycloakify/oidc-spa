@@ -1,6 +1,7 @@
-import type { OidcSpaUtils, CreateClientUser, CreateServerUser } from "./types";
+import type { OidcSpaUtils, CreateClientUser, CreateServerUser, ParamsOfBootstrap } from "./types";
 import { createUtils } from "./createUtils";
 import { assert } from "tsafe";
+import type { GetterOrDirectValue } from "../../tools/GetterOrDirectValue";
 
 export type OidcSpa<
     User_client,
@@ -21,7 +22,12 @@ export type OidcSpa<
 > &
     ("withClientUser" extends Excluded
         ? {
-              createUtils: () => OidcSpaUtils<User_client, User_server, AutoLogin>;
+              createUtils: (
+                  getParamsOfBootstrapOrDirectValue: GetterOrDirectValue<
+                      { process: { env: Record<string, string> } },
+                      ParamsOfBootstrap<User_client, User_server, AutoLogin>
+                  >
+              ) => OidcSpaUtils<User_client, User_server, AutoLogin>;
           }
         : {});
 
@@ -50,12 +56,13 @@ function createOidcSpa<User_client, User_server, AutoLogin extends boolean>(para
                 createServerUser
             }),
         // @ts-expect-error
-        createUtils: () => {
+        createUtils: getParamsOfBootstrapOrDirectValue => {
             assert(params.createClientUser !== undefined);
             return createUtils({
                 autoLogin: params.autoLogin,
                 createClientUser: params.createClientUser,
-                createServerUser: params.createServerUser
+                createServerUser: params.createServerUser,
+                getParamsOfBootstrapOrDirectValue
             });
         }
     };

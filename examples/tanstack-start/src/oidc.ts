@@ -18,7 +18,6 @@ export type User_server = {
 };
 
 export const {
-    bootstrapOidc,
     useOidc,
     getOidc,
     // NOTE: Each time you enforceLogin on a route the oidc-spa vite plugin
@@ -102,35 +101,33 @@ export const {
     })
     // See: https://docs.oidc-spa.dev/features/auto-login#tanstack-start
     //.withAutoLogin()
-    .createUtils();
+    .createUtils(({ process }) => {
+        if (process.env.OIDC_USE_MOCK === "true") {
+            return {
+                mode: "mock",
+                client: {
+                    isUserInitiallyLoggedIn: true
+                }
+            };
+        }
 
-bootstrapOidc(({ process }) => {
-    if (process.env.OIDC_USE_MOCK === "true") {
         return {
-            mode: "mock",
+            mode: "real",
+            issuerUri: process.env["OIDC_ISSUER_URI"],
             client: {
-                isUserInitiallyLoggedIn: true
-            }
-        };
-    }
-
-    return {
-        mode: "real",
-        issuerUri: process.env["OIDC_ISSUER_URI"],
-        client: {
-            clientId: process.env["OIDC_CLIENT_ID"]
-        },
-        server: {
-            accessTokenValidationMethod: "offline JWT validation",
-            expectedAccessTokenAudience: process.env["ACCESS_TOKEN_EXPECTED_AUDIENCE"]
-            /*
+                clientId: process.env["OIDC_CLIENT_ID"]
+            },
+            server: {
+                accessTokenValidationMethod: "offline JWT validation",
+                expectedAccessTokenAudience: process.env["ACCESS_TOKEN_EXPECTED_AUDIENCE"]
+                /*
             accessTokenValidationMethod: "introspection endpoint",
             clientId: process.env["OIDC_CLIENT_ID__SERVER"],
             clientSecret: process.env["OIDC_CLIENT_SECRET__SERVER"],
             */
-        }
-    };
-});
+            }
+        };
+    });
 
 export const fetchWithAuth: typeof fetch = async (input, init) => {
     const oidc = await getOidc();
