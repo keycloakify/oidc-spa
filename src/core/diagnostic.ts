@@ -128,7 +128,7 @@ export async function createIframeTimeoutInitializationError(params: {
                 messageOrCause: new Error(
                     `Unexpected error while trying to diagnose why the silent sign-in process timed out.`,
                     // @ts-expect-error
-                    { cause: cspOrError }
+                    { cause: headersOrError }
                 )
             });
         }
@@ -334,6 +334,44 @@ export async function createIframeTimeoutInitializationError(params: {
             "\n\n",
             `If nothing works, or if you see in the console a message mentioning 'refused to frame' there might be a problem with your CSP.`,
             `Read more: https://docs.oidc-spa.dev/v/v10/resources/csp-configuration`
+        ].join(" ")
+    });
+}
+
+export function createInvalidClientCredentialsInitializationError(params: {
+    issuerUri: string;
+    clientId: string;
+}): OidcInitializationError {
+    const { issuerUri, clientId } = params;
+
+    return new OidcInitializationError({
+        isAuthServerLikelyDown: false,
+        messageOrCause: [
+            `The token endpoint rejected the OIDC client "${clientId}" with "Invalid client or Invalid client credentials".\n`,
+            `This usually means the client is configured as a confidential/private client and requires a client secret.\n`,
+            `oidc-spa performs the token exchange in the browser, so the OIDC client must be a public client that does not require a client secret.\n`,
+            `Issuer URI: "${issuerUri}"\n`,
+            ...(() => {
+                if (!isKeycloak({ issuerUri })) {
+                    return [
+                        "Check the documentation of your OIDC server and configure this client as a public client using Authorization Code Flow + PKCE."
+                    ];
+                }
+
+                const kc = createKeycloakUtils({ issuerUri });
+
+                return [
+                    `Since it seems that you are using Keycloak, here are the steps to follow:\n`,
+                    `1. Go to the Keycloak admin console: ${kc.adminConsoleUrl_master}\n`,
+                    `2. Log in as an admin user.\n`,
+                    `3. In the top left corner select the realm "${kc.issuerUriParsed.realm}".\n`,
+                    `4. In the left menu, click on "Clients".\n`,
+                    `5. Find "${clientId}" in the list of clients and click on it.\n`,
+                    `6. In "Capability config", turn "Client authentication" off. On older Keycloak versions, set the client access type to "public".\n`,
+                    `7. Save the changes.\n\n`,
+                    `More info: https://docs.oidc-spa.dev/v/v10/providers-configuration/keycloak`
+                ];
+            })()
         ].join(" ")
     });
 }

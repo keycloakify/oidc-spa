@@ -1,20 +1,18 @@
 import { defineConfig } from "vite";
+import { devtools } from "@tanstack/devtools-vite";
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import viteReact from "@vitejs/plugin-react";
-import viteTsConfigPaths from "vite-tsconfig-paths";
 import tailwindcss from "@tailwindcss/vite";
-import { nitroV2Plugin } from "@tanstack/nitro-v2-vite-plugin";
+import { nitro } from "nitro/vite";
 import { oidcSpa } from "oidc-spa/vite-plugin";
 
 const config = defineConfig({
+    resolve: {
+        tsconfigPaths: true
+    },
     plugins: [
-        nitroV2Plugin({
-            preset: "vercel"
-        }),
-        // this is the plugin that enables path aliases
-        viteTsConfigPaths({
-            projects: ["./tsconfig.json"]
-        }),
+        devtools(),
+        nitro({ rollupConfig: { external: [/^@sentry\//] } }),
         tailwindcss(),
         tanstackStart(),
         oidcSpa({

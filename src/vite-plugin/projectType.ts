@@ -14,11 +14,10 @@ export function getProjectType(params: { pluginNames: string[] }) {
         return "react-router-framework";
     }
 
-    if (
-        Array.from(pluginNames).some(
-            pluginName => pluginName.startsWith("nuxt:") || pluginName.startsWith("nuxt-")
-        )
-    ) {
+    // This is a core @nuxt/vite-builder plugin present throughout the supported Nuxt 3/4 line.
+    // The broader "nuxt:" namespace is not framework-specific: standalone plugins such as
+    // @nuxt/ui use it in ordinary Vite applications too.
+    if (pluginNames.has("nuxt:vite-node-server")) {
         return "nuxt";
     }
 

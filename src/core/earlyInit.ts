@@ -4,10 +4,7 @@ import type { AuthResponse } from "./AuthResponse";
 import { setBASE_URL_earlyInit } from "./earlyInit_BASE_URL";
 import { isBrowser } from "../tools/isBrowser";
 import { createEvt, type Evt } from "../tools/Evt";
-import {
-    setGetRootRelativeOriginalLocationHref_earlyInit,
-    getRootRelativeOriginalLocationHref_earlyInit
-} from "./earlyInit_rootRelativeOriginalLocationHref";
+import { setGetRootRelativeOriginalLocationHref_earlyInit } from "./earlyInit_rootRelativeOriginalLocationHref";
 import { prModuleCreateOidc } from "./earlyInit_prModuleCreateOidc";
 import { hasOidcRedirectResponse, extractOidcRedirectResponse } from "./parseOidcRedirectUrl";
 
@@ -80,6 +77,10 @@ function oidcEarlyInit_nonMemoized(params: ParamsOfEarlyInit | undefined) {
         return { shouldLoadApp: true };
     }
 
+    if (BASE_URL !== undefined) {
+        setBASE_URL_earlyInit({ BASE_URL });
+    }
+
     const { shouldLoadApp } = handleOidcCallback();
 
     let exports_earlyInit: import("./createOidc").Exports_earlyInit;
@@ -150,10 +151,6 @@ function oidcEarlyInit_nonMemoized(params: ParamsOfEarlyInit | undefined) {
             );
         }
 
-        if (BASE_URL !== undefined) {
-            setBASE_URL_earlyInit({ BASE_URL });
-        }
-
         {
             const { enableBrowserRuntimeFreeze, enableDPoP, enableTokenSubstitution } = securityDefenses;
 
@@ -197,6 +194,7 @@ let redirectAuthResponse: AuthResponse | undefined = undefined;
 function handleOidcCallback(): {
     shouldLoadApp: boolean;
 } {
+    const location_urlObj = new URL(window.location.href);
     const assessment = hasOidcRedirectResponse(window.location.href);
 
     if (!assessment.hasAuthResponseInUrl) {
@@ -206,16 +204,84 @@ function handleOidcCallback(): {
         return { shouldLoadApp: true };
     }
 
-    setGetRootRelativeOriginalLocationHref_earlyInit({
-        rootRelativeOriginalLocationHref: window.location.pathname
-    });
-
     const authResponse = extractOidcRedirectResponse(window.location.href, assessment.responseMode);
 
     const stateData = getStateData({ stateUrlParamValue: authResponse.state });
 
+    const getRootRelativeRedirectUrl_strippedFromAuthResponse = () => {
+        const authResponseParamNames = new Set([
+            "state",
+            "session_state",
+            "code",
+            "iss",
+            "error",
+            "error_description",
+            "error_uri"
+        ]);
+
+        const rootRelativeRedirectUrl = location_urlObj.href.slice(location_urlObj.origin.length);
+
+        const { prefix, delimiter, serializedParams, suffix } = (() => {
+            switch (assessment.responseMode) {
+                case "query": {
+                    const queryStartIndex = rootRelativeRedirectUrl.indexOf("?");
+                    assert(queryStartIndex !== -1);
+
+                    const fragmentStartIndex = rootRelativeRedirectUrl.indexOf("#", queryStartIndex);
+
+                    return {
+                        prefix: rootRelativeRedirectUrl.slice(0, queryStartIndex),
+                        delimiter: "?",
+                        serializedParams: rootRelativeRedirectUrl.slice(
+                            queryStartIndex + 1,
+                            fragmentStartIndex === -1 ? undefined : fragmentStartIndex
+                        ),
+                        suffix:
+                            fragmentStartIndex === -1
+                                ? ""
+                                : rootRelativeRedirectUrl.slice(fragmentStartIndex)
+                    };
+                }
+                case "fragment": {
+                    const fragmentStartIndex = rootRelativeRedirectUrl.indexOf("#");
+                    assert(fragmentStartIndex !== -1);
+
+                    return {
+                        prefix: rootRelativeRedirectUrl.slice(0, fragmentStartIndex),
+                        delimiter: "#",
+                        serializedParams: rootRelativeRedirectUrl.slice(fragmentStartIndex + 1),
+                        suffix: ""
+                    };
+                }
+                default:
+                    assert<Equals<typeof assessment, never>>(false);
+            }
+        })();
+
+        const remainingSerializedParams = serializedParams.split("&").filter(serializedParam => {
+            const paramName = new URLSearchParams(serializedParam).keys().next().value;
+
+            return paramName === undefined || !authResponseParamNames.has(paramName);
+        });
+
+        return [
+            prefix,
+            remainingSerializedParams.some(serializedParam => serializedParam !== "")
+                ? `${delimiter}${remainingSerializedParams.join("&")}`
+                : "",
+            suffix
+        ].join("");
+    };
+
     if (stateData === undefined) {
-        history.replaceState({}, "", getRootRelativeOriginalLocationHref_earlyInit());
+        const rootRelativeRedirectUrl = getRootRelativeRedirectUrl_strippedFromAuthResponse();
+
+        setGetRootRelativeOriginalLocationHref_earlyInit({
+            rootRelativeOriginalLocationHref: rootRelativeRedirectUrl
+        });
+
+        history.replaceState({}, "", rootRelativeRedirectUrl);
+
         return { shouldLoadApp: true };
     }
 
@@ -236,6 +302,35 @@ function handleOidcCallback(): {
             );
             return { shouldLoadApp: false };
         case "redirect": {
+            // See: https://github.com/keycloakify/keycloak-account-ui/issues/10
+            abort_case: {
+                const oidcCallbackUrl = stateData.oidcCallbackUrl;
+
+                // Redirects started before this field was added retain their previous behavior.
+                if (oidcCallbackUrl === undefined) {
+                    break abort_case;
+                }
+
+                const expectedCallbackUrl = new URL(oidcCallbackUrl);
+
+                if (
+                    expectedCallbackUrl.origin === location_urlObj.origin &&
+                    expectedCallbackUrl.pathname === location_urlObj.pathname
+                ) {
+                    break abort_case;
+                }
+
+                const rootRelativeRedirectUrl = getRootRelativeRedirectUrl_strippedFromAuthResponse();
+
+                setGetRootRelativeOriginalLocationHref_earlyInit({
+                    rootRelativeOriginalLocationHref: rootRelativeRedirectUrl
+                });
+
+                history.replaceState({}, "", rootRelativeRedirectUrl);
+
+                return { shouldLoadApp: true };
+            }
+
             redirectAuthResponse = authResponse;
             const rootRelativeRedirectUrl = (() => {
                 if (stateData.action === "login" && authResponse.error === "consent_required") {
@@ -243,6 +338,10 @@ function handleOidcCallback(): {
                 }
                 return stateData.rootRelativeRedirectUrl;
             })();
+
+            setGetRootRelativeOriginalLocationHref_earlyInit({
+                rootRelativeOriginalLocationHref: rootRelativeRedirectUrl
+            });
 
             history.replaceState({}, "", rootRelativeRedirectUrl);
             return { shouldLoadApp: true };

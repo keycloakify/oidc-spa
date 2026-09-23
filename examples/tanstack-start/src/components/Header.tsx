@@ -2,7 +2,7 @@ import { Link } from "@tanstack/react-router";
 
 import { useState } from "react";
 import { ChevronDown, ChevronRight, Home, Menu, Server, X } from "lucide-react";
-import { useOidc } from "@/oidc";
+import { useOidc } from "#/oidc";
 import { isKeycloak, createKeycloakUtils } from "oidc-spa/keycloak";
 
 import userPictureFallback from "./userPictureFallback.svg";

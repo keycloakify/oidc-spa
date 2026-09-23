@@ -4,8 +4,14 @@
     "typescript": true,
     "tailwind": true,
     "packageManager": "npm",
-    "git": true,
+    "git": false,
+    "install": false,
+    "intent": false,
+    "addOnOptions": {},
+    "includeExamples": true,
+    "envVarValues": {},
+    "routerOnly": false,
     "version": 1,
-    "framework": "react-cra",
-    "chosenAddOns": ["nitro", "start"]
+    "framework": "react",
+    "chosenAddOns": ["nitro"]
 }

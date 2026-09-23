@@ -1,7 +1,9 @@
-import { Outlet } from "@tanstack/react-router";
-import { createRootRoute } from "@tanstack/react-router";
-import { AutoLogoutWarningOverlay } from "~/components/AutoLogoutWarningOverlay";
-import { Header } from "~/components/Header";
+import { Outlet, createRootRoute } from "@tanstack/react-router";
+import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
+import { TanStackDevtools } from "@tanstack/react-devtools";
+import { AutoLogoutWarningOverlay } from "#/components/AutoLogoutWarningOverlay";
+import { Header } from "#/components/Header";
+import "../styles.css";
 
 export const Route = createRootRoute({
     component: RootComponent
@@ -15,6 +17,15 @@ function RootComponent() {
                 <Outlet />
             </main>
             <AutoLogoutWarningOverlay />
+            <TanStackDevtools
+                config={{ position: "bottom-right" }}
+                plugins={[
+                    {
+                        name: "TanStack Router",
+                        render: <TanStackRouterDevtoolsPanel />
+                    }
+                ]}
+            />
         </>
     );
 }

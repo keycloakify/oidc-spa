@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { oidcRequestMiddleware } from "@/oidc";
+import { oidcRequestMiddleware } from "#/oidc";
 
 export const Route = createFileRoute("/demo/api/admin-data")({
     server: {

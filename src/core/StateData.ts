@@ -18,6 +18,7 @@ export namespace StateData {
         type Common_Redirect = Common & {
             context: "redirect";
             rootRelativeRedirectUrl: string;
+            oidcCallbackUrl?: string;
         };
 
         export type Login = Common_Redirect & {

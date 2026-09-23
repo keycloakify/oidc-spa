@@ -1,4 +1,4 @@
-import { useOidc } from "@/oidc";
+import { useOidc } from "#/oidc";
 
 /** See: https://docs.oidc-spa.dev/auto-logout */
 export function AutoLogoutWarningOverlay() {

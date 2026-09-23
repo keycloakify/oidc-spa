@@ -16,7 +16,6 @@ import { assert, type Equals, is } from "../../tools/tsafe/assert";
 import { createObjectThatThrowsIfAccessed } from "../../tools/createObjectThatThrowsIfAccessed";
 import { createStatefulEvt } from "../../tools/StatefulEvt";
 import { id } from "../../tools/tsafe/id";
-import { typeGuard } from "../../tools/tsafe/typeGuard";
 import type { GetterOrDirectValue } from "../../tools/GetterOrDirectValue";
 import { createServerFn, createMiddleware } from "@tanstack/react-start";
 // @ts-expect-error: Since our module is not labeled as ESM we don't have the types here.
@@ -27,6 +26,7 @@ import { BEFORE_LOAD_FN_BRAND_PROPERTY_NAME } from "./disableSsrIfLoginEnforced"
 import { setDesiredPostLoginRedirectUrl } from "../../core/desiredPostLoginRedirectUrl";
 import type { MaybeAsync } from "../../tools/MaybeAsync";
 import { enableStateDataCookie } from "../../core/StateDataCookie";
+import { publicEnvNames } from "virtual:oidc-spa/tanstack-start-public-env";
 
 export function createOidcSpaUtils<
     AutoLogin extends boolean,
@@ -500,16 +500,15 @@ export function createOidcSpaUtils<
 
                             const value = process.env[envName];
 
-                            if (value === undefined) {
+                            if (!value) {
                                 missingEnvNames.add(envName);
-                                return "";
                             }
 
                             return value;
                         },
                         has: (...[, envName]) => {
                             assert(typeof envName === "string");
-                            return true;
+                            return envName in process.env;
                         }
                     }
                 );
@@ -541,95 +540,57 @@ export function createOidcSpaUtils<
             assert(prModuleCore !== undefined);
 
             const paramsOfBootstrap = await (async () => {
-                let envNamesToPullFromServer = new Set<string>();
-
-                const env: Record<string, string> = {};
-
-                const env_proxy = new Proxy(env, {
-                    get: (...[, envName]) => {
-                        assert(typeof envName === "string");
-
-                        if (envName in env) {
-                            return env[envName];
-                        }
-
-                        envNamesToPullFromServer.add(envName);
-
-                        return "oidc_spa_probe";
-                    },
-                    has: (...[, envName]) => {
-                        assert(typeof envName === "string");
-
-                        if (envName in env) {
-                            return true;
-                        }
-
-                        envNamesToPullFromServer.add(envName);
-
-                        return true;
+                class OidcSpaServerEnvRetrievalError extends Error {
+                    constructor(params: { envName: string }) {
+                        super(`oidc-spa: Env value ${params.envName} couldn't be pulled from server`);
+                        Object.setPrototypeOf(this, new.target.prototype);
                     }
-                });
-
-                let result:
-                    | {
-                          hasThrown: false;
-                          paramsOfBootstrap: ParamsOfBootstrap<
-                              AutoLogin,
-                              DecodedIdToken,
-                              AccessTokenClaims
-                          >;
-                      }
-                    | {
-                          hasThrown: true;
-                          error: unknown;
-                      }
-                    | undefined = undefined;
-
-                while (true) {
-                    envNamesToPullFromServer = new Set();
-
-                    result = undefined;
-
-                    try {
-                        const paramsOfBootstrap = getParamsOfBootstrap({ process: { env: env_proxy } });
-                        result = {
-                            hasThrown: false,
-                            paramsOfBootstrap
-                        };
-                    } catch (error) {
-                        result = {
-                            hasThrown: true,
-                            error
-                        };
-                    }
-
-                    if (envNamesToPullFromServer.size === 0) {
-                        break;
-                    }
-
-                    Object.entries(
-                        await fetchServerEnvVariableValues({
-                            data: {
-                                envVarNames: Array.from(envNamesToPullFromServer)
-                            }
-                        })
-                    ).forEach(([envName, value]) => {
-                        env[envName] = value;
-                    });
                 }
 
-                if (result.hasThrown) {
+                const env_server_proxy = new Proxy(
+                    publicEnvNames.size === 0 ? {} : await fetchServerEnvVariableValues(),
+                    {
+                        get: (target, envName) => {
+                            assert(typeof envName === "string");
+
+                            if (!(envName in target)) {
+                                throw new OidcSpaServerEnvRetrievalError({ envName });
+                            }
+
+                            return target[envName] ?? undefined;
+                        },
+                        has: (target, envName) => {
+                            assert(typeof envName === "string");
+
+                            if (!(envName in target)) {
+                                throw new OidcSpaServerEnvRetrievalError({ envName });
+                            }
+
+                            return target[envName] !== null;
+                        }
+                    }
+                ) as Record<string, string>;
+
+                let paramsOfBootstrap: ParamsOfBootstrap<AutoLogin, DecodedIdToken, AccessTokenClaims>;
+
+                try {
+                    paramsOfBootstrap = getParamsOfBootstrap({ process: { env: env_server_proxy } });
+                } catch (error) {
+                    if (error instanceof OidcSpaServerEnvRetrievalError) {
+                        throw error;
+                    }
+
                     throw new Error(
                         [
                             "oidc-spa: The function argument passed to bootstrapOidc",
                             "has thrown when invoked."
                         ].join(" "),
                         //@ts-expect-error
-                        { cause: result.error }
+                        { cause: error }
                     );
                 }
 
-                return result.paramsOfBootstrap;
+                return paramsOfBootstrap;
             })();
 
             dParamsOfBootstrap.resolve(paramsOfBootstrap);
@@ -793,7 +754,7 @@ export function createOidcSpaUtils<
     enforceLogin[BEFORE_LOAD_FN_BRAND_PROPERTY_NAME] = true;
 
     const prValidateAndGetAccessTokenClaims =
-        createValidateAndGetAccessTokenClaims === undefined
+        createValidateAndGetAccessTokenClaims === undefined || isBrowser
             ? undefined
             : dParamsOfBootstrap.pr.then(paramsOfBootstrap =>
                   createValidateAndGetAccessTokenClaims({
@@ -1021,26 +982,8 @@ export function createOidcSpaUtils<
     };
 }
 
-const fetchServerEnvVariableValues = createServerFn({ method: "GET" })
-    .inputValidator((data: { envVarNames: string[] }) => {
-        if (typeof data !== "object" || data === null) {
-            throw new Error("Expected an object");
-        }
-
-        const { envVarNames } = data as Record<string, unknown>;
-
-        assert(
-            typeGuard<string[]>(
-                envVarNames,
-                Array.isArray(envVarNames) && envVarNames.every(name => typeof name === "string")
-            )
-        );
-
-        return { envVarNames };
-    })
-    .handler(async ({ data }) => {
-        const { envVarNames } = data;
-        return Object.fromEntries(
-            envVarNames.map(envVarName => [envVarName, process.env[envVarName] ?? ""])
-        );
-    });
+const fetchServerEnvVariableValues = createServerFn({ method: "GET" }).handler(() =>
+    Object.fromEntries(
+        Array.from(publicEnvNames).map(envVarName => [envVarName, process.env[envVarName] ?? null])
+    )
+);

@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
-import { enforceLogin, oidcFnMiddleware } from "@/oidc";
-import Spinner from "@/components/Spinner";
+import { enforceLogin, oidcFnMiddleware } from "#/oidc";
+import Spinner from "#/components/Spinner";
 
-import { getTodosStore } from "@/data/todos";
+import { getTodosStore } from "#/data/todos";
 
 const getTodos = createServerFn({ method: "GET" })
     .middleware([oidcFnMiddleware({ assert: "user logged in" })])
@@ -17,7 +17,7 @@ const getTodos = createServerFn({ method: "GET" })
     });
 
 const addTodo = createServerFn({ method: "POST" })
-    .inputValidator((d: string) => d)
+    .validator((d: string) => d)
     .middleware([oidcFnMiddleware({ assert: "user logged in" })])
     .handler(async ({ data, context: { oidc } }) => {
         const userId = oidc.accessTokenClaims.sub;

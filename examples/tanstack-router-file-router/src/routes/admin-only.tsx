@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { enforceLogin, getOidc, useOidc } from "~/oidc";
+import { enforceLogin, getOidc, useOidc } from "#/oidc";
 import { isKeycloak, createKeycloakUtils } from "oidc-spa/keycloak";
 
 export const Route = createFileRoute("/admin-only")({

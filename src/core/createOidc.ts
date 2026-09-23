@@ -45,6 +45,7 @@ import {
 } from "./ongoingLoginOrRefreshProcesses";
 import { createGetIsNewBrowserSession } from "./isNewBrowserSession";
 import { getIsOnline } from "../tools/getIsOnline";
+import { isNetworkError } from "../tools/isNetworkError";
 import { isKeycloak } from "../keycloak/isKeycloak";
 import { INFINITY_TIME } from "../tools/INFINITY_TIME";
 import { getRootRelativeOriginalLocationHref_earlyInit } from "./earlyInit_rootRelativeOriginalLocationHref";
@@ -1291,10 +1292,19 @@ export async function createOidc_nonMemoized<
                         } catch (error) {
                             assert(error instanceof Error, "741947");
 
-                            if (error.message === "Failed to fetch") {
+                            if (isNetworkError(error)) {
                                 return (
                                     await import("./diagnostic")
                                 ).createFailedToFetchTokenEndpointInitializationError({
+                                    clientId,
+                                    issuerUri
+                                });
+                            }
+
+                            if (error.message === "Invalid client or Invalid client credentials") {
+                                return (
+                                    await import("./diagnostic")
+                                ).createInvalidClientCredentialsInitializationError({
                                     clientId,
                                     issuerUri
                                 });
@@ -1491,10 +1501,19 @@ export async function createOidc_nonMemoized<
                 } catch (error) {
                     assert(error instanceof Error, "433344");
 
-                    if (error.message === "Failed to fetch") {
+                    if (isNetworkError(error)) {
                         return (
                             await import("./diagnostic")
                         ).createFailedToFetchTokenEndpointInitializationError({
+                            clientId,
+                            issuerUri
+                        });
+                    }
+
+                    if (error.message === "Invalid client or Invalid client credentials") {
+                        return (
+                            await import("./diagnostic")
+                        ).createInvalidClientCredentialsInitializationError({
                             clientId,
                             issuerUri
                         });
@@ -1964,6 +1983,7 @@ export async function createOidc_nonMemoized<
                         configId,
                         context: "redirect",
                         rootRelativeRedirectUrl: rootRelativePostLogoutRedirectUrl,
+                        oidcCallbackUrl,
                         action: "logout",
                         sessionId
                     }),

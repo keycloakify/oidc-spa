@@ -1,12 +1,16 @@
 import { defineConfig } from "vite";
-import react from "@vitejs/plugin-react";
-import tsconfigPaths from "vite-tsconfig-paths";
+import { devtools } from "@tanstack/devtools-vite";
 import { tanstackRouter } from "@tanstack/router-plugin/vite";
+import react from "@vitejs/plugin-react";
+import tailwindcss from "@tailwindcss/vite";
 import { oidcSpa } from "oidc-spa/vite-plugin";
 
 export default defineConfig({
+    resolve: { tsconfigPaths: true },
     plugins: [
-        tanstackRouter(),
+        devtools(),
+        tailwindcss(),
+        tanstackRouter({ target: "react", autoCodeSplitting: true }),
         // To improve the security of your app see:
         // https://docs.oidc-spa.dev/security-features/overview
         oidcSpa({
@@ -15,7 +19,6 @@ export default defineConfig({
                 //excludes: [ "fetch", "XMLHttpRequest"]
             }
         }),
-        tsconfigPaths(),
         react()
     ]
 });

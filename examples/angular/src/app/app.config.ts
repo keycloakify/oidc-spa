@@ -24,8 +24,8 @@ export const appConfig: ApplicationConfig = {
     ),
     provideRouter(routes),
     Oidc.provide({
-      issuerUri: 'https://cloud-iam.oidc-spa.dev/realms/oidc-spa',
-      clientId: 'example-angular',
+      issuerUri: 'https://phasetwo.oidc-spa.dev/realms/demo-realm',
+      clientId: 'example-app',
       debugLogs: true,
     }),
   ],
