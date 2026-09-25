@@ -17,8 +17,10 @@ export const SESSION_STORAGE_GLOBAL_PREFIX = `oidc-spa:lazy-session-storage:`;
 export async function createLazyAsyncSessionStorage(params: {
     storageId: string;
     persistenceStorage?: AsyncStorage;
+    /** Use only when an accepted native launch callback takes priority over local user restore. */
+    skipInitialLoad?: boolean;
 }): Promise<LazyAsyncSessionStorage> {
-    const { storageId, persistenceStorage } = params;
+    const { storageId, persistenceStorage, skipInitialLoad = false } = params;
 
     const sessionStoragePrefix = `${SESSION_STORAGE_GLOBAL_PREFIX}${storageId}:`;
 
@@ -28,32 +30,34 @@ export async function createLazyAsyncSessionStorage(params: {
 
     const sourceStorage = persistenceStorage ?? sessionStorageAdapter;
 
-    const prefixedKeys: string[] = [];
+    if (!skipInitialLoad) {
+        const prefixedKeys: string[] = [];
 
-    for (let i = 0; i < (await sourceStorage.length); i++) {
-        const key = await sourceStorage.key(i);
-        assert(key !== null, "470498");
+        for (let i = 0; i < (await sourceStorage.length); i++) {
+            const key = await sourceStorage.key(i);
+            assert(key !== null, "470498");
 
-        if (!key.startsWith(sessionStoragePrefix)) {
-            continue;
+            if (!key.startsWith(sessionStoragePrefix)) {
+                continue;
+            }
+
+            prefixedKeys.push(key);
         }
 
-        prefixedKeys.push(key);
-    }
+        for (const key of prefixedKeys) {
+            const value = await sourceStorage.getItem(key);
 
-    for (const key of prefixedKeys) {
-        const value = await sourceStorage.getItem(key);
+            if (value === null) {
+                continue;
+            }
 
-        if (value === null) {
-            continue;
+            await sourceStorage.removeItem(key);
+
+            entries.push({
+                key: key.slice(sessionStoragePrefix.length),
+                value
+            });
         }
-
-        await sourceStorage.removeItem(key);
-
-        entries.push({
-            key: key.slice(sessionStoragePrefix.length),
-            value
-        });
     }
 
     let isPersistenceEnabled = false;

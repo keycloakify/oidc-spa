@@ -8,9 +8,19 @@ import { initializeExternalRedirectUrl, setExternalRedirectUrl } from "../core/e
 
 export type CapacitorCallbackUrlPolicy = "strict" | "tolerant";
 
+export type NativeAuthorizationRequest = Readonly<{
+    configId: string;
+    authorizationUrl: string;
+    state: string;
+}>;
+
 type CapacitorNavigatorParams = {
     callbackUrlPolicy?: CapacitorCallbackUrlPolicy;
     browserFinishedGracePeriodMs?: number;
+    /** Awaited for sign-in only; rejection prevents Browser.open. */
+    beforeBrowserOpen?: (request: NativeAuthorizationRequest) => Promise<void>;
+    /** Enable only with a token adapter that validates the accepted callback handoff. */
+    persistAcceptedLaunchCallbackToTokenStorage?: boolean;
 };
 
 export class CapacitorNavigator extends BaseNavigator {
@@ -20,21 +30,31 @@ export class CapacitorNavigator extends BaseNavigator {
 
     readonly #callbackUrlPolicy: CapacitorCallbackUrlPolicy;
     readonly #browserFinishedGracePeriodMs: number;
+    readonly #beforeBrowserOpen: CapacitorNavigatorParams["beforeBrowserOpen"];
+    readonly #persistAcceptedLaunchCallbackToTokenStorage: boolean;
 
     #listenerRemove: (() => void) | undefined;
     #browserFinishedListenerRemove: (() => void) | undefined;
     #browserFinishedTimeoutId: ReturnType<typeof setTimeout> | undefined;
     readonly #authFlowAbortedListeners = new Set<() => void>();
+    #prHasAcceptedLaunchCallback: Promise<boolean> | undefined;
+    #isValidForCurrentFlow: ((url: string) => Promise<boolean>) | undefined;
+    #callbackQueue: Promise<void> = Promise.resolve();
+    #hasCommittedCallback = false;
 
     constructor(params: CapacitorNavigatorParams = {}) {
         super();
 
         const {
             callbackUrlPolicy = "tolerant",
-            browserFinishedGracePeriodMs = CapacitorNavigator.DEFAULT_BROWSER_FINISHED_GRACE_PERIOD_MS
+            browserFinishedGracePeriodMs = CapacitorNavigator.DEFAULT_BROWSER_FINISHED_GRACE_PERIOD_MS,
+            beforeBrowserOpen,
+            persistAcceptedLaunchCallbackToTokenStorage = false
         } = params;
 
         this.#callbackUrlPolicy = callbackUrlPolicy;
+        this.#beforeBrowserOpen = beforeBrowserOpen;
+        this.#persistAcceptedLaunchCallbackToTokenStorage = persistAcceptedLaunchCallbackToTokenStorage;
         this.#browserFinishedGracePeriodMs = Math.max(
             CapacitorNavigator.MIN_BROWSER_FINISHED_GRACE_PERIOD_MS,
             Math.min(
@@ -45,26 +65,14 @@ export class CapacitorNavigator extends BaseNavigator {
     }
 
     #emitWarning(params: { code: string; message: string; error?: unknown }): void {
-        const { code, message, error } = params;
-
-        const errorDetails = (() => {
-            if (!(error instanceof Error)) {
-                return {};
-            }
-
-            return {
-                errorName: error.name,
-                errorMessage: error.message
-            };
-        })();
+        const { code, message } = params;
 
         const configId = this.configId ?? "unknown";
 
         this.onWarning?.({
             code,
             message,
-            configId,
-            ...errorDetails
+            configId
         });
 
         console.warn(`oidc-spa: ${message}`);
@@ -147,18 +155,13 @@ export class CapacitorNavigator extends BaseNavigator {
         source: "launch" | "appUrlOpen" | "callback";
         receivedUrl: string;
     }): void {
-        const { source, receivedUrl } = params;
-
-        const expectedIdentity = this.#getCallbackIdentity({ url: this.callbackUrl ?? "" });
-        const actualIdentity = this.#getCallbackIdentity({ url: receivedUrl });
+        const { source } = params;
 
         this.#emitWarning({
             code: "CAPACITOR_CALLBACK_URL_BLOCKED",
             message: [
                 "Blocked native callback URL because it does not match the configured callback URL.",
-                `Source: ${source}.`,
-                `Expected: ${expectedIdentity ?? "invalid"}.`,
-                `Received: ${actualIdentity ?? "invalid"}.`
+                `Source: ${source}.`
             ].join(" ")
         });
     }
@@ -178,6 +181,31 @@ export class CapacitorNavigator extends BaseNavigator {
         return false;
     }
 
+    async #isExpectedCallback(url: string): Promise<boolean> {
+        try {
+            const parsedUrl = new URL(url);
+            const stateCount =
+                parsedUrl.searchParams.getAll("state").length +
+                new URLSearchParams(parsedUrl.hash.replace(/^#/, "")).getAll("state").length;
+
+            if (
+                stateCount === 1 &&
+                this.#isValidForCurrentFlow !== undefined &&
+                (await this.#isValidForCurrentFlow(url))
+            ) {
+                return true;
+            }
+        } catch {
+            // A failed state-store read must not accept the callback.
+        }
+
+        this.#emitWarning({
+            code: "CAPACITOR_CALLBACK_STATE_REJECTED",
+            message: "Blocked native callback because its OIDC state is not valid for the current flow."
+        });
+        return false;
+    }
+
     #getRequiredInitialization(): { configId: string; tokenStorageAdapter: AsyncStorage } {
         if (this.configId === undefined || this.tokenStorageAdapter === undefined) {
             throw new Error(
@@ -192,12 +220,14 @@ export class CapacitorNavigator extends BaseNavigator {
     }
 
     override initialize(params: {
+        storageAdapter?: AsyncStorage;
         tokenStorageAdapter: AsyncStorage;
         configId: string;
         callbackUrl?: string;
+        isValidForCurrentFlow?: (url: string) => Promise<boolean>;
         onWarning?: (warning: BaseNavigatorWarning) => void;
         onAuthFlowAborted?: () => void;
-    }): void {
+    }): Promise<boolean> {
         reinitialize_guard: {
             if (this.configId === undefined && this.tokenStorageAdapter === undefined) {
                 break reinitialize_guard;
@@ -205,8 +235,10 @@ export class CapacitorNavigator extends BaseNavigator {
 
             if (
                 this.configId !== params.configId ||
+                this.storageAdapter !== params.storageAdapter ||
                 this.tokenStorageAdapter !== params.tokenStorageAdapter ||
                 this.callbackUrl !== params.callbackUrl ||
+                this.#isValidForCurrentFlow !== params.isValidForCurrentFlow ||
                 this.onWarning !== params.onWarning ||
                 this.onAuthFlowAborted !== params.onAuthFlowAborted
             ) {
@@ -215,16 +247,18 @@ export class CapacitorNavigator extends BaseNavigator {
                 );
             }
 
-            return;
+            return this.#prHasAcceptedLaunchCallback!;
         }
 
         super.initialize(params);
+        this.#isValidForCurrentFlow = params.isValidForCurrentFlow;
 
         const { configId, tokenStorageAdapter } = this.#getRequiredInitialization();
 
-        initializeExternalRedirectUrl({
+        this.#prHasAcceptedLaunchCallback = initializeExternalRedirectUrl({
             configId,
-            prExternalRedirectUrl: App.getLaunchUrl().then(result => {
+            storageAdapter: this.storageAdapter,
+            prExternalRedirectUrl: App.getLaunchUrl().then(async result => {
                 const url = result?.url;
 
                 if (url === undefined || !hasOidcRedirectResponse(url).hasAuthResponseInUrl) {
@@ -235,18 +269,35 @@ export class CapacitorNavigator extends BaseNavigator {
                     return undefined;
                 }
 
+                if (!(await this.#isExpectedCallback(url))) {
+                    return undefined;
+                }
+
                 return url;
             }),
             tokenStorageAdapter,
+            persistLaunchUrl: this.#persistAcceptedLaunchCallbackToTokenStorage,
             onWarning: warning => {
                 this.onWarning?.(warning);
             }
-        });
+        }).then(url => url !== undefined);
+
+        return this.#prHasAcceptedLaunchCallback;
     }
 
     #cleanupListener(): void {
         this.#listenerRemove?.();
         this.#listenerRemove = undefined;
+    }
+
+    #enqueueCallback(operation: () => Promise<void>): Promise<void> {
+        const next = this.#callbackQueue.then(async () => {
+            if (!this.#hasCommittedCallback) {
+                await operation();
+            }
+        });
+        this.#callbackQueue = next.catch(() => {});
+        return next;
     }
 
     #cleanupBrowserFinishedListenerRemove(): void {
@@ -270,49 +321,58 @@ export class CapacitorNavigator extends BaseNavigator {
     }
 
     async prepare(_params: unknown): Promise<IWindow> {
+        this.#hasCommittedCallback = false;
         this.#cleanupListener();
         this.#cleanupBrowserFinishedListenerRemove();
         this.#clearBrowserFinishedTimeout();
 
         this.#listenerRemove = (
-            await App.addListener("appUrlOpen", async event => {
-                if (!hasOidcRedirectResponse(event.url).hasAuthResponseInUrl) {
-                    return;
-                }
+            await App.addListener("appUrlOpen", event =>
+                this.#enqueueCallback(async () => {
+                    if (!hasOidcRedirectResponse(event.url).hasAuthResponseInUrl) {
+                        return;
+                    }
 
-                if (!this.#isAllowedCallbackOrWarn({ source: "appUrlOpen", url: event.url })) {
-                    return;
-                }
+                    if (!this.#isAllowedCallbackOrWarn({ source: "appUrlOpen", url: event.url })) {
+                        return;
+                    }
 
-                this.#clearBrowserFinishedTimeout();
-                this.#cleanupBrowserFinishedListenerRemove();
-                this.#cleanupListener();
+                    if (!(await this.#isExpectedCallback(event.url))) {
+                        return;
+                    }
 
-                const { configId, tokenStorageAdapter } = this.#getRequiredInitialization();
+                    this.#clearBrowserFinishedTimeout();
+                    this.#cleanupBrowserFinishedListenerRemove();
+                    this.#cleanupListener();
 
-                try {
-                    await setExternalRedirectUrl({
-                        configId,
-                        url: event.url,
-                        tokenStorageAdapter
-                    });
+                    const { configId, tokenStorageAdapter } = this.#getRequiredInitialization();
 
-                    await this.#closeBrowserIfNotAndroid();
-                } catch (error) {
-                    this.#emitWarning({
-                        code: "CAPACITOR_APP_URL_OPEN_REDIRECT_FAILED",
-                        message: "Failed to complete native redirect flow from appUrlOpen handler.",
-                        error
-                    });
-                    return;
-                }
+                    try {
+                        await setExternalRedirectUrl({
+                            configId,
+                            url: event.url,
+                            storageAdapter: this.storageAdapter,
+                            tokenStorageAdapter
+                        });
 
-                window.location.reload();
-            })
+                        this.#hasCommittedCallback = true;
+
+                        await this.#closeBrowserIfNotAndroid();
+                    } catch {
+                        this.#emitWarning({
+                            code: "CAPACITOR_APP_URL_OPEN_REDIRECT_FAILED",
+                            message: "Failed to complete native redirect flow from appUrlOpen handler."
+                        });
+                        return;
+                    }
+
+                    window.location.reload();
+                })
+            )
         ).remove;
 
         return {
-            navigate: async ({ url }) => {
+            navigate: async ({ url, state, response_mode }) => {
                 this.#clearBrowserFinishedTimeout();
                 this.#cleanupBrowserFinishedListenerRemove();
                 this.#browserFinishedListenerRemove = (
@@ -326,18 +386,68 @@ export class CapacitorNavigator extends BaseNavigator {
                     })
                 ).remove;
 
+                let beforeBrowserOpenPhase: "state" | "hook" | undefined;
+
                 try {
+                    // oidc-client-ts passes response_mode for sign-in and omits it for
+                    // sign-out. A sign-out URL may contain an id_token_hint.
+                    if (this.#beforeBrowserOpen !== undefined && response_mode !== undefined) {
+                        beforeBrowserOpenPhase = "state";
+                        let states: string[];
+
+                        try {
+                            states = new URL(url).searchParams.getAll("state");
+                        } catch {
+                            throw new Error("Native authorization request has an invalid OIDC state.");
+                        }
+
+                        if (
+                            states.length !== 1 ||
+                            !states[0] ||
+                            typeof state !== "string" ||
+                            states[0] !== state
+                        ) {
+                            throw new Error("Native authorization request has an invalid OIDC state.");
+                        }
+
+                        beforeBrowserOpenPhase = "hook";
+                        try {
+                            await this.#beforeBrowserOpen({
+                                configId: this.#getRequiredInitialization().configId,
+                                authorizationUrl: url,
+                                state
+                            });
+                        } catch {
+                            throw new Error("Native authorization handoff failed.");
+                        }
+
+                        beforeBrowserOpenPhase = undefined;
+                    }
+
                     await Browser.open({ url });
                 } catch (error) {
                     this.#clearBrowserFinishedTimeout();
                     this.#cleanupBrowserFinishedListenerRemove();
                     this.#cleanupListener();
 
-                    this.#emitWarning({
-                        code: "CAPACITOR_NAVIGATE_OPEN_FAILED",
-                        message: "Failed to open native browser during navigate().",
-                        error
-                    });
+                    if (beforeBrowserOpenPhase !== undefined) {
+                        this.#emitWarning({
+                            code:
+                                beforeBrowserOpenPhase === "state"
+                                    ? "CAPACITOR_AUTH_REQUEST_STATE_INVALID"
+                                    : "CAPACITOR_AUTH_REQUEST_HANDOFF_FAILED",
+                            message:
+                                beforeBrowserOpenPhase === "state"
+                                    ? "Native authorization request has an invalid OIDC state."
+                                    : "Failed to persist native authorization request before opening the browser."
+                        });
+                    } else {
+                        this.#emitWarning({
+                            code: "CAPACITOR_NAVIGATE_OPEN_FAILED",
+                            message: "Failed to open native browser during navigate().",
+                            error
+                        });
+                    }
 
                     throw error;
                 }
@@ -365,42 +475,50 @@ export class CapacitorNavigator extends BaseNavigator {
     }
 
     async callback(url: string, _params?: unknown): Promise<void> {
-        // NOTE: This method is required by the INavigator contract.
-        // In Capacitor, callback handling is normally done via
-        // App.getLaunchUrl()/App.addListener("appUrlOpen", ...).
-        // This implementation is a defensive compatibility fallback
-        // in case navigator.callback() is invoked by upstream flows.
-        if (!hasOidcRedirectResponse(url).hasAuthResponseInUrl) {
-            return;
-        }
+        return this.#enqueueCallback(async () => {
+            // NOTE: This method is required by the INavigator contract.
+            // In Capacitor, callback handling is normally done via
+            // App.getLaunchUrl()/App.addListener("appUrlOpen", ...).
+            // This implementation is a defensive compatibility fallback
+            // in case navigator.callback() is invoked by upstream flows.
+            if (!hasOidcRedirectResponse(url).hasAuthResponseInUrl) {
+                return;
+            }
 
-        if (!this.#isAllowedCallbackOrWarn({ source: "callback", url })) {
-            return;
-        }
+            if (!this.#isAllowedCallbackOrWarn({ source: "callback", url })) {
+                return;
+            }
 
-        this.#clearBrowserFinishedTimeout();
-        this.#cleanupBrowserFinishedListenerRemove();
-        this.#cleanupListener();
+            if (!(await this.#isExpectedCallback(url))) {
+                return;
+            }
 
-        const { configId, tokenStorageAdapter } = this.#getRequiredInitialization();
+            this.#clearBrowserFinishedTimeout();
+            this.#cleanupBrowserFinishedListenerRemove();
+            this.#cleanupListener();
 
-        try {
-            await setExternalRedirectUrl({
-                configId,
-                url,
-                tokenStorageAdapter
-            });
+            const { configId, tokenStorageAdapter } = this.#getRequiredInitialization();
 
-            await this.#closeBrowserIfNotAndroid();
-        } catch (error) {
-            this.#emitWarning({
-                code: "CAPACITOR_CALLBACK_REDIRECT_FAILED",
-                message: "Failed to complete native redirect flow from callback().",
-                error
-            });
-            return;
-        }
+            try {
+                await setExternalRedirectUrl({
+                    configId,
+                    url,
+                    storageAdapter: this.storageAdapter,
+                    tokenStorageAdapter
+                });
 
-        window.location.reload();
+                this.#hasCommittedCallback = true;
+
+                await this.#closeBrowserIfNotAndroid();
+            } catch {
+                this.#emitWarning({
+                    code: "CAPACITOR_CALLBACK_REDIRECT_FAILED",
+                    message: "Failed to complete native redirect flow from callback()."
+                });
+                return;
+            }
+
+            window.location.reload();
+        });
     }
 }

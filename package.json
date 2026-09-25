@@ -9,6 +9,8 @@
     "scripts": {
         "prepare": "patch-package",
         "build": "tsx scripts/build.ts",
+        "test": "vitest run",
+        "test:typecheck": "tsc -p tsconfig.tests.json",
         "_format": "prettier '**/*.{ts,tsx,json,md}'",
         "format": "yarn _format --write",
         "format:check": "yarn _format --list-different",
@@ -148,6 +150,7 @@
         "tsx": "^4.15.5",
         "typescript": "5.7.2",
         "vite": "^7.1.10",
+        "vitest": "^4.1.0",
         "webcrypto-liner-shim": "1.4.8",
         "webpack": "5.93.0",
         "webpack-cli": "5.1.4",

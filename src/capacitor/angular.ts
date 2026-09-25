@@ -5,7 +5,11 @@ import {
     type CanActivateFn,
     type RouterStateSnapshot
 } from "@angular/router";
-import { CapacitorNavigator, type CapacitorCallbackUrlPolicy } from "./CapacitorNavigator";
+import {
+    CapacitorNavigator,
+    type CapacitorCallbackUrlPolicy,
+    type NativeAuthorizationRequest
+} from "./CapacitorNavigator";
 import { Capacitor } from "@capacitor/core";
 import { Oidc } from "../core/Oidc";
 import type { BaseNavigatorWarning } from "../core/BaseNavigator";
@@ -29,6 +33,10 @@ export const CAPACITOR_IS_NATIVE_APP = new InjectionToken<boolean>("oidc-spa.cap
 export type ParamsOfCapacitorProvide = ParamsOfProvide & {
     callbackUrlPolicy?: CapacitorCallbackUrlPolicy;
     browserFinishedGracePeriodMs?: number;
+    /** Awaited for native sign-in only, before Browser.open. */
+    beforeBrowserOpen?: (request: NativeAuthorizationRequest) => Promise<void>;
+    /** Enable only when the token adapter can safely validate this callback handoff. */
+    persistAcceptedLaunchCallbackToTokenStorage?: boolean;
 };
 
 /**
@@ -46,11 +54,24 @@ export abstract class CapacitorOidcService<
         const {
             callbackUrlPolicy = "tolerant",
             browserFinishedGracePeriodMs = CapacitorNavigator.DEFAULT_BROWSER_FINISHED_GRACE_PERIOD_MS,
+            beforeBrowserOpen,
+            persistAcceptedLaunchCallbackToTokenStorage = false,
             nativeSessionRestoreMode: nativeSessionRestoreMode_params,
             ...baseParams
         } = params;
 
         const effectiveIsNativeApp = baseParams.isNativeApp ?? Capacitor.isNativePlatform();
+
+        if (
+            effectiveIsNativeApp &&
+            baseParams.navigator !== undefined &&
+            (beforeBrowserOpen !== undefined || persistAcceptedLaunchCallbackToTokenStorage)
+        ) {
+            throw new Error(
+                "oidc-spa: native auth-flow options require the default CapacitorNavigator."
+            );
+        }
+
         const onNavigatorWarning = baseParams.onNavigatorWarning ?? (() => {});
         const nativeSessionRestoreMode =
             nativeSessionRestoreMode_params ??
@@ -60,7 +81,9 @@ export abstract class CapacitorOidcService<
             ? baseParams.navigator ??
               new CapacitorNavigator({
                   callbackUrlPolicy,
-                  browserFinishedGracePeriodMs
+                  browserFinishedGracePeriodMs,
+                  beforeBrowserOpen,
+                  persistAcceptedLaunchCallbackToTokenStorage
               })
             : undefined;
 

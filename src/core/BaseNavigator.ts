@@ -9,19 +9,24 @@ export type BaseNavigatorWarning = {
 };
 
 export abstract class BaseNavigator implements INavigator {
+    protected storageAdapter?: AsyncStorage;
     protected tokenStorageAdapter?: AsyncStorage;
     protected configId?: string;
     protected callbackUrl?: string;
     protected onWarning?: (warning: BaseNavigatorWarning) => void;
     protected onAuthFlowAborted?: () => void;
 
+    /** Native navigators may resolve true after accepting a launch callback. */
     initialize(params: {
+        storageAdapter?: AsyncStorage;
         tokenStorageAdapter: AsyncStorage;
         configId: string;
         callbackUrl?: string;
+        isValidForCurrentFlow?: (url: string) => Promise<boolean>;
         onWarning?: (warning: BaseNavigatorWarning) => void;
         onAuthFlowAborted?: () => void;
-    }): void {
+    }): void | Promise<boolean> {
+        this.storageAdapter = params.storageAdapter;
         this.tokenStorageAdapter = params.tokenStorageAdapter;
         this.configId = params.configId;
         this.callbackUrl = params.callbackUrl;

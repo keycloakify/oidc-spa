@@ -918,11 +918,120 @@ export async function createOidc_nonMemoized<
         }
     }
 
+    const stateStore = new WebStorageStateStore({
+        store: isNativeApp ? effectiveStorageAdapter : localStorageAdapter,
+        prefix: STATE_STORE_KEY_PREFIX
+    });
+
+    const getStateDataFromUserManagerStateStore = async (params: {
+        stateUrlParamValue: string;
+    }): Promise<StateData.Redirect | undefined> => {
+        const { stateUrlParamValue } = params;
+
+        const storedState = await stateStore.get(stateUrlParamValue);
+
+        if (storedState === null) {
+            return undefined;
+        }
+
+        let parsedState: unknown;
+
+        try {
+            parsedState = JSON.parse(storedState);
+        } catch {
+            try {
+                await stateStore.remove(stateUrlParamValue);
+            } catch {}
+
+            return undefined;
+        }
+
+        const created =
+            parsedState instanceof Object && "created" in parsedState ? parsedState.created : undefined;
+        const ageInSeconds =
+            typeof created === "number" && Number.isFinite(created)
+                ? Math.floor(Date.now() / 1000) - created
+                : undefined;
+
+        if (ageInSeconds === undefined || ageInSeconds < 0 || ageInSeconds >= 15 * 60) {
+            try {
+                await stateStore.remove(stateUrlParamValue);
+            } catch {}
+            return undefined;
+        }
+
+        if (
+            !(parsedState instanceof Object) ||
+            !("data" in parsedState) ||
+            !(parsedState.data instanceof Object) ||
+            !("context" in parsedState.data) ||
+            parsedState.data.context !== "redirect"
+        ) {
+            return undefined;
+        }
+
+        return parsedState.data as StateData.Redirect;
+    };
+
+    const getStateDataForExternalRedirectUrl = async (
+        url: string
+    ): Promise<StateData.Redirect | undefined> => {
+        const assessment = hasOidcRedirectResponse(url);
+
+        if (!assessment.hasAuthResponseInUrl) {
+            return undefined;
+        }
+
+        const authResponse = extractOidcRedirectResponse(url, assessment.responseMode);
+        const stateData = await getStateDataFromUserManagerStateStore({
+            stateUrlParamValue: authResponse.state
+        });
+
+        return stateData?.configId === configId ? stateData : undefined;
+    };
+
+    let resetOngoingAction: ReturnType<typeof createLoginOrGoToAuthServer>["resetOngoingAction"];
+
+    const onAuthFlowAborted = () => {
+        assert(resetOngoingAction !== undefined, "559291");
+        resetOngoingAction({ action: "login" });
+        setHasLogoutBeenCalledForCurrentConfig(false);
+    };
+
+    const initializeNavigator = () => {
+        if (!(navigator instanceof BaseNavigator)) {
+            return undefined;
+        }
+
+        return navigator.initialize({
+            storageAdapter: effectiveStorageAdapter,
+            tokenStorageAdapter: effectiveTokenStorageAdapter,
+            configId,
+            callbackUrl: oidcCallbackUrl,
+            isValidForCurrentFlow: async url =>
+                (await getStateDataForExternalRedirectUrl(url)) !== undefined,
+            onWarning: onNavigatorWarning,
+            onAuthFlowAborted
+        });
+    };
+
+    const hasAcceptedNativeLaunchCallback = isNativeApp && (await initializeNavigator()) === true;
+    const hasValidNativeLaunchCallback =
+        hasAcceptedNativeLaunchCallback &&
+        (await peekExternalRedirectUrl({
+            configId,
+            storageAdapter: effectiveStorageAdapter,
+            tokenStorageAdapter: effectiveTokenStorageAdapter,
+            isValidForCurrentFlow: async url =>
+                (await getStateDataForExternalRedirectUrl(url)) !== undefined
+        })) !== undefined;
+
     const userStore = canUseIframe
         ? new InMemoryWebStorage()
         : await createLazyAsyncSessionStorage({
               storageId: configId,
-              persistenceStorage: effectiveTokenStorageAdapter
+              persistenceStorage: effectiveTokenStorageAdapter,
+              skipInitialLoad: hasValidNativeLaunchCallback
           });
 
     if (
@@ -960,10 +1069,7 @@ export async function createOidc_nonMemoized<
                       userStore: new WebStorageStateStore({
                           store: userStore
                       }),
-                      stateStore: new WebStorageStateStore({
-                          store: isNativeApp ? effectiveStorageAdapter : localStorageAdapter,
-                          prefix: STATE_STORE_KEY_PREFIX
-                      }),
+                      stateStore,
                       client_secret: __unsafe_clientSecret,
                       metadata: oidcMetadata,
                       dpop: (() => {
@@ -987,45 +1093,9 @@ export async function createOidc_nonMemoized<
                   navigator
               );
 
-    const getStateDataFromUserManagerStateStore = async (params: {
-        stateUrlParamValue: string;
-    }): Promise<StateData.Redirect | undefined> => {
-        const { stateUrlParamValue } = params;
-
-        const storedState = await oidcClientTsUserManager.settings.stateStore.get(stateUrlParamValue);
-
-        if (storedState === null) {
-            return undefined;
-        }
-
-        let parsedState: unknown;
-
-        try {
-            parsedState = JSON.parse(storedState);
-        } catch {
-            try {
-                await oidcClientTsUserManager.settings.stateStore.remove(stateUrlParamValue);
-            } catch {}
-
-            return undefined;
-        }
-
-        if (
-            !(parsedState instanceof Object) ||
-            !("data" in parsedState) ||
-            !(parsedState.data instanceof Object) ||
-            !("context" in parsedState.data) ||
-            parsedState.data.context !== "redirect"
-        ) {
-            return undefined;
-        }
-
-        return parsedState.data as StateData.Redirect;
-    };
-
     const evtInitializationOutcomeUserNotLoggedIn = createEvt<void>();
 
-    const { loginOrGoToAuthServer, resetOngoingAction } = createLoginOrGoToAuthServer({
+    const loginOrGoToAuthServerResult = createLoginOrGoToAuthServer({
         configId,
         oidcClientTsUserManager,
         transformUrlBeforeRedirect,
@@ -1038,19 +1108,11 @@ export async function createOidc_nonMemoized<
         oidcCallbackUrl
     });
 
-    const onAuthFlowAborted = () => {
-        resetOngoingAction({ action: "login" });
-        setHasLogoutBeenCalledForCurrentConfig(false);
-    };
+    const { loginOrGoToAuthServer } = loginOrGoToAuthServerResult;
+    resetOngoingAction = loginOrGoToAuthServerResult.resetOngoingAction;
 
-    if (navigator instanceof BaseNavigator) {
-        navigator.initialize({
-            tokenStorageAdapter: effectiveTokenStorageAdapter,
-            configId,
-            callbackUrl: oidcCallbackUrl,
-            onWarning: onNavigatorWarning,
-            onAuthFlowAborted
-        });
+    if (!isNativeApp) {
+        initializeNavigator();
     }
 
     const { loginSilent } = createLoginSilent({
@@ -1067,7 +1129,9 @@ export async function createOidc_nonMemoized<
 
     const { getIsNewBrowserSession } = createGetIsNewBrowserSession({
         configId,
-        evtInitializationOutcomeUserNotLoggedIn
+        evtInitializationOutcomeUserNotLoggedIn,
+        isNativeApp,
+        storageAdapter: effectiveStorageAdapter
     });
 
     const { completeLoginOrRefreshProcess } = await startLoginOrRefreshProcess();
@@ -1082,6 +1146,7 @@ export async function createOidc_nonMemoized<
           }
     > => {
         let pendingExternalRedirectUrl: string | undefined;
+        let pendingExternalRedirectStateData: StateData.Redirect | undefined;
         let hasLoadedPendingExternalRedirectUrl = false;
 
         const getPendingExternalRedirectUrlIfAny = async () => {
@@ -1090,8 +1155,23 @@ export async function createOidc_nonMemoized<
 
                 pendingExternalRedirectUrl = await peekExternalRedirectUrl({
                     configId,
-                    tokenStorageAdapter: effectiveTokenStorageAdapter
+                    storageAdapter: effectiveStorageAdapter,
+                    tokenStorageAdapter: effectiveTokenStorageAdapter,
+                    isValidForCurrentFlow: async url => {
+                        pendingExternalRedirectStateData = await getStateDataForExternalRedirectUrl(url);
+                        return pendingExternalRedirectStateData !== undefined;
+                    }
                 });
+
+                if (isNativeApp && pendingExternalRedirectUrl !== undefined) {
+                    // The accepted callback supersedes any older persisted user. Keep this
+                    // marker if processing fails, so a later start cannot restore that user.
+                    await persistAuthState({
+                        configId,
+                        state: { stateDescription: "explicitly logged out" },
+                        storageAdapter: effectiveStorageAdapter
+                    });
+                }
 
                 hasLoadedPendingExternalRedirectUrl = true;
             }
@@ -1124,6 +1204,21 @@ export async function createOidc_nonMemoized<
                 getRedirectAuthResponse().authResponse !== undefined;
 
             if (hasPendingNativeCallbackOrExternalRedirect) {
+                break restore_from_session_storage;
+            }
+
+            const persistedAuthState = await getPersistedAuthState({
+                configId,
+                storageAdapter: effectiveStorageAdapter
+            });
+
+            if (
+                persistedAuthState === "explicitly logged out" ||
+                (isNativeApp && persistedAuthState !== "logged in")
+            ) {
+                try {
+                    await oidcClientTsUserManager.removeUser();
+                } catch {}
                 break restore_from_session_storage;
             }
 
@@ -1191,6 +1286,7 @@ export async function createOidc_nonMemoized<
                 if (externalRedirectUrl !== undefined) {
                     await clearExternalRedirectUrl({
                         configId,
+                        storageAdapter: effectiveStorageAdapter,
                         tokenStorageAdapter: effectiveTokenStorageAdapter
                     });
 
@@ -1204,9 +1300,7 @@ export async function createOidc_nonMemoized<
                             assessment.responseMode
                         );
 
-                        const stateData = await getStateDataFromUserManagerStateStore({
-                            stateUrlParamValue: authResponse.state
-                        });
+                        const stateData = pendingExternalRedirectStateData;
 
                         if (stateData !== undefined && stateData.configId === configId) {
                             stateDataAndAuthResponse = { stateData, authResponse };
@@ -1361,6 +1455,12 @@ export async function createOidc_nonMemoized<
                 case "logout":
                     {
                         log?.("Handling logout redirect auth response", authResponse);
+
+                        await persistAuthState({
+                            configId,
+                            state: { stateDescription: "explicitly logged out" },
+                            storageAdapter: effectiveStorageAdapter
+                        });
 
                         const authResponseUrl = authResponseToUrl(authResponse);
 
@@ -1961,6 +2061,12 @@ export async function createOidc_nonMemoized<
                 ].join(" ")
             );
 
+            await persistAuthState({
+                configId,
+                state: { stateDescription: "explicitly logged out" },
+                storageAdapter: effectiveStorageAdapter
+            });
+
             window.addEventListener("pageshow", event => {
                 if (!event.persisted) {
                     return;
@@ -2322,8 +2428,8 @@ export async function createOidc_nonMemoized<
                 transformUrlBeforeRedirect_local: transformUrlBeforeRedirect
             }),
         backFromAuthServer: resultOfLoginProcess.backFromAuthServer,
-        isNewBrowserSession: (() => {
-            const value = getIsNewBrowserSession({ subjectId });
+        isNewBrowserSession: await (async () => {
+            const value = await getIsNewBrowserSession({ subjectId });
 
             log?.(`isNewBrowserSession: ${value}`);
 
