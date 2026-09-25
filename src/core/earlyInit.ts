@@ -7,6 +7,7 @@ import { createEvt, type Evt } from "../tools/Evt";
 import { setGetRootRelativeOriginalLocationHref_earlyInit } from "./earlyInit_rootRelativeOriginalLocationHref";
 import { prModuleCreateOidc } from "./earlyInit_prModuleCreateOidc";
 import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";
+import { enableSharedScope, getSharedState } from "./sharedScope";
 
 const IFRAME_MESSAGE_PREFIX = "oidc-spa:cross-window-messaging:";
 
@@ -56,16 +57,35 @@ export type ParamsOfEarlyInit = {
         enableDPoP?: () => void;
         enableTokenSubstitution?: () => void;
     };
+
+    /**
+     * Micro-frontend setups only: each remote bundles its own oidc-spa, so the callback handling
+     * and iframe listener run once per bundle and conflict. With this enabled that state is held
+     * on `window` and shared. Every participating bundle must pass it, and it makes the oidc
+     * state reachable by any script on the page, so only use it with trusted remotes.
+     */
+    isMicroFrontendSetup?: boolean;
 };
 
-let shouldLoadApp: boolean | undefined = undefined;
+const memo_moduleScoped: { shouldLoadApp: boolean | undefined } = { shouldLoadApp: undefined };
+
+// Shared so the non memoized init runs once per document, not once per bundle.
+const getMemo = () => getSharedState("earlyInitMemo", memo_moduleScoped);
 
 export function oidcEarlyInit(params?: ParamsOfEarlyInit) {
-    if (shouldLoadApp !== undefined) {
-        return { shouldLoadApp };
+    if (params?.isMicroFrontendSetup) {
+        enableSharedScope();
     }
 
-    shouldLoadApp = oidcEarlyInit_nonMemoized(params).shouldLoadApp;
+    const memo = getMemo();
+
+    if (memo.shouldLoadApp !== undefined) {
+        return { shouldLoadApp: memo.shouldLoadApp };
+    }
+
+    const { shouldLoadApp } = oidcEarlyInit_nonMemoized(params);
+
+    memo.shouldLoadApp = shouldLoadApp;
 
     return { shouldLoadApp };
 }
