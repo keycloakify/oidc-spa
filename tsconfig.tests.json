@@ -1,0 +1,17 @@
+{
+    "extends": "./tsconfig.json",
+    "compilerOptions": {
+        "declaration": false,
+        "incremental": false,
+        "module": "esnext",
+        "moduleResolution": "bundler",
+        "noEmit": true,
+        "noUnusedLocals": false,
+        "noUnusedParameters": false,
+        "strict": true,
+        "noImplicitAny": false,
+        "lib": ["ES2020", "DOM", "DOM.Iterable"],
+        "types": ["node"]
+    },
+    "include": ["tests/**/*.test.ts", "vitest.config.ts"]
+}

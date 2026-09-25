@@ -12,7 +12,8 @@ import {
     type EnvironmentProviders,
     makeEnvironmentProviders,
     provideAppInitializer,
-    PLATFORM_ID
+    PLATFORM_ID,
+    type Provider
 } from "@angular/core";
 import type { HttpInterceptorFn, HttpRequest } from "@angular/common/http";
 import { toSignal } from "@angular/core/rxjs-interop";
@@ -22,6 +23,9 @@ import type { ValueOrAsyncGetter } from "./tools/ValueOrAsyncGetter";
 import { getBaseHref } from "./tools/getBaseHref";
 import type { ConcreteClass } from "./tools/ConcreteClass";
 import { setDesiredPostLoginRedirectUrl } from "./core/desiredPostLoginRedirectUrl";
+import { BaseNavigator, type BaseNavigatorWarning } from "./core/BaseNavigator";
+import type { AsyncStorage } from "./vendor/frontend/oidc-client-ts";
+import type { INavigator } from "./vendor/frontend/oidc-client-ts";
 
 export type ParamsOfProvide = {
     issuerUri: string;
@@ -75,6 +79,9 @@ export type ParamsOfProvide = {
      * It does not need to include the origin, eg: "/dashboard"
      *
      * This parameter can also be passed to login() directly as `redirectUrl`.
+     *
+     * In native environments (for example Capacitor with `isNativeApp: true`),
+     * this value is used as the OIDC callback URI and should therefore be set.
      */
     postLoginRedirectUrl?: string;
 
@@ -179,6 +186,76 @@ export type ParamsOfProvide = {
      * To enable DPoP see: https://docs.oidc-spa.dev/v/v10/security-features/dpop
      * */
     disableDPoP?: true;
+
+    /**
+     * Custom storage adapter for oidc-spa persisted auth meta-state.
+     * If not provided, defaults to browser localStorage.
+     *
+     * In native mode, this adapter is also used for the oidc-client-ts state store.
+     * In browser/web mode, the redirect/callback state store still relies on
+     * localStorage for compatibility with synchronous early-init and iframe-based flows.
+     *
+     * Use this to provide a Capacitor Storage adapter for mobile environments.
+     */
+    storageAdapter?: AsyncStorage;
+
+    /**
+     * Optional separate storage adapter for persisting tokens specifically.
+     * If provided alongside storageAdapter, persisted auth meta-state uses
+     * storageAdapter and token storage uses tokenStorageAdapter.
+     *
+     * In browser/web mode, this does not affect the redirect/callback state store,
+     * which remains on localStorage.
+     *
+     * Useful for mobile environments where you may want to separate
+     * OIDC state (PKCE, nonce) from sensitive tokens.
+     * For production use, choose the persistence strategy based on your
+     * security requirements. If persisted tokens need stronger protection,
+     * prefer a secure storage or biometric-gated wrapper.
+     */
+    tokenStorageAdapter?: AsyncStorage;
+
+    /**
+     * Custom navigator for handling redirects.
+     * If not provided, uses the default browser navigation.
+     *
+     * For Capacitor, import and instantiate CapacitorNavigator from "oidc-spa/capacitor".
+     *
+     * Example:
+     * ```typescript
+     * import { CapacitorNavigator } from "oidc-spa/capacitor";
+     * navigator: new CapacitorNavigator()
+     * ```
+     */
+    navigator?: BaseNavigator | INavigator;
+
+    /**
+     * Optional warning hook for navigator-level warnings.
+     * Useful for forwarding non-fatal native flow issues to your telemetry.
+     */
+    onNavigatorWarning?: (warning: BaseNavigatorWarning) => void;
+
+    /**
+     * Indicates if the app is running as a native mobile app (e.g., Capacitor).
+     * When true, iframe-based session restoration is automatically disabled,
+     * falling back to full-page redirect.
+     *
+     * This is equivalent to setting `sessionRestorationMethod: "full page redirect"`
+     * but with a clearer semantic meaning for mobile apps.
+     *
+     * Note: If you provide a custom navigator (e.g., CapacitorNavigator),
+     * you should also set this to true for optimal behavior.
+     */
+    isNativeApp?: boolean;
+
+    /**
+     * Native-only session restoration behavior.
+     *
+     * - "full-page-redirect" (default): keep redirect-based restoration behavior.
+     * - "prefer-local-restore": first attempt restoring from locally persisted user state,
+     *   then fallback to redirect if no valid local session can be restored.
+     */
+    nativeSessionRestoreMode?: "full-page-redirect" | "prefer-local-restore";
 };
 
 assert<
@@ -218,13 +295,17 @@ export abstract class AbstractOidcService<
 
     #isRunningGetParams = false;
 
-    static provide(params: ValueOrAsyncGetter<ParamsOfProvide>): EnvironmentProviders {
+    static provide(
+        params: ValueOrAsyncGetter<ParamsOfProvide>,
+        additionalProviders?: Provider[]
+    ): EnvironmentProviders {
         const paramsOrGetParams = params;
 
         assert(is<ConcreteClass<typeof AbstractOidcService>>(this));
 
         return makeEnvironmentProviders([
             this,
+            ...(additionalProviders ?? []),
             provideAppInitializer(async () => {
                 {
                     const platformId = inject(PLATFORM_ID);
@@ -499,8 +580,8 @@ export abstract class AbstractOidcService<
         };
     }
 
-    static get enforceLoginGuard() {
-        const canActivateFn = (async route => {
+    static get enforceLoginGuard(): CanActivateFn {
+        const canActivateFn: CanActivateFn = async (route, _state) => {
             const instance = inject(this);
             const router = inject(Router);
 
@@ -556,7 +637,7 @@ export abstract class AbstractOidcService<
             }
 
             return true;
-        }) satisfies CanActivateFn;
+        };
         return canActivateFn;
     }
 

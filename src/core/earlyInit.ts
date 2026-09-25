@@ -1,12 +1,12 @@
-import { getStateData, getIsStatQueryParamValue } from "./StateData";
+import { getStateData } from "./StateData";
 import { assert, type Equals } from "../tools/tsafe/assert";
 import type { AuthResponse } from "./AuthResponse";
-import { setBASE_URL_earlyInit, getBASE_URL_earlyInit } from "./earlyInit_BASE_URL";
+import { setBASE_URL_earlyInit } from "./earlyInit_BASE_URL";
 import { isBrowser } from "../tools/isBrowser";
 import { createEvt, type Evt } from "../tools/Evt";
 import { setGetRootRelativeOriginalLocationHref_earlyInit } from "./earlyInit_rootRelativeOriginalLocationHref";
 import { prModuleCreateOidc } from "./earlyInit_prModuleCreateOidc";
-import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";
+import { hasOidcRedirectResponse, extractOidcRedirectResponse } from "./parseOidcRedirectUrl";
 
 const IFRAME_MESSAGE_PREFIX = "oidc-spa:cross-window-messaging:";
 
@@ -195,79 +195,16 @@ function handleOidcCallback(): {
     shouldLoadApp: boolean;
 } {
     const location_urlObj = new URL(window.location.href);
+    const assessment = hasOidcRedirectResponse(window.location.href);
 
-    const locationHrefAssessment = (() => {
-        fragment: {
-            const stateUrlParamValue = new URLSearchParams(location_urlObj.hash.replace(/^#/, "")).get(
-                "state"
-            );
-
-            if (stateUrlParamValue === null) {
-                break fragment;
-            }
-
-            if (!getIsStatQueryParamValue({ maybeStateUrlParamValue: stateUrlParamValue })) {
-                break fragment;
-            }
-
-            return { hasAuthResponseInUrl: true, responseMode: "fragment" } as const;
-        }
-
-        query: {
-            const stateUrlParamValue = location_urlObj.searchParams.get("state");
-
-            if (stateUrlParamValue === null) {
-                break query;
-            }
-
-            if (!getIsStatQueryParamValue({ maybeStateUrlParamValue: stateUrlParamValue })) {
-                break query;
-            }
-
-            if (
-                location_urlObj.searchParams.get("client_id") !== null &&
-                location_urlObj.searchParams.get("response_type") !== null &&
-                location_urlObj.searchParams.get("redirect_uri") !== null
-            ) {
-                // NOTE: We are probably in a Keycloakify theme and oidc-spa was loaded by mistake.
-                break query;
-            }
-
-            return { hasAuthResponseInUrl: true, responseMode: "query" } as const;
-        }
-
-        return { hasAuthResponseInUrl: false } as const;
-    })();
-
-    if (!locationHrefAssessment.hasAuthResponseInUrl) {
+    if (!assessment.hasAuthResponseInUrl) {
         setGetRootRelativeOriginalLocationHref_earlyInit({
-            rootRelativeOriginalLocationHref: location_urlObj.href.slice(location_urlObj.origin.length)
+            rootRelativeOriginalLocationHref: window.location.href.slice(window.location.origin.length)
         });
         return { shouldLoadApp: true };
     }
 
-    const { authResponse } = (() => {
-        const authResponse: AuthResponse = { state: "" };
-
-        const searchParams = (() => {
-            switch (locationHrefAssessment.responseMode) {
-                case "fragment":
-                    return new URLSearchParams(location_urlObj.hash.replace(/^#/, ""));
-                case "query":
-                    return location_urlObj.searchParams;
-                default:
-                    assert<Equals<typeof locationHrefAssessment, never>>(false);
-            }
-        })();
-
-        for (const [key, value] of searchParams) {
-            authResponse[key] = value;
-        }
-
-        assert(authResponse.state !== "", "063965");
-
-        return { authResponse };
-    })();
+    const authResponse = extractOidcRedirectResponse(window.location.href, assessment.responseMode);
 
     const stateData = getStateData({ stateUrlParamValue: authResponse.state });
 
@@ -285,7 +222,7 @@ function handleOidcCallback(): {
         const rootRelativeRedirectUrl = location_urlObj.href.slice(location_urlObj.origin.length);
 
         const { prefix, delimiter, serializedParams, suffix } = (() => {
-            switch (locationHrefAssessment.responseMode) {
+            switch (assessment.responseMode) {
                 case "query": {
                     const queryStartIndex = rootRelativeRedirectUrl.indexOf("?");
                     assert(queryStartIndex !== -1);
@@ -317,7 +254,7 @@ function handleOidcCallback(): {
                     };
                 }
                 default:
-                    assert<Equals<typeof locationHrefAssessment, never>>(false);
+                    assert<Equals<typeof assessment, never>>(false);
             }
         })();
 
@@ -367,26 +304,19 @@ function handleOidcCallback(): {
         case "redirect": {
             // See: https://github.com/keycloakify/keycloak-account-ui/issues/10
             abort_case: {
-                const BASE_URL = getBASE_URL_earlyInit();
+                const oidcCallbackUrl = stateData.oidcCallbackUrl;
 
-                if (BASE_URL === undefined) {
+                // Redirects started before this field was added retain their previous behavior.
+                if (oidcCallbackUrl === undefined) {
                     break abort_case;
                 }
 
-                let BASE_URL_fullyQualified: string;
+                const expectedCallbackUrl = new URL(oidcCallbackUrl);
 
-                try {
-                    BASE_URL_fullyQualified = toFullyQualifiedUrl({
-                        urlish: BASE_URL,
-                        doAssertNoQueryParams: true,
-                        doOutputWithTrailingSlash: true
-                    });
-                } catch {
-                    break abort_case;
-                }
-
-                // NOTE: This should ALWAYS be true in normal circumstances.
-                if (new URL(BASE_URL_fullyQualified).pathname === location_urlObj.pathname) {
+                if (
+                    expectedCallbackUrl.origin === location_urlObj.origin &&
+                    expectedCallbackUrl.pathname === location_urlObj.pathname
+                ) {
                     break abort_case;
                 }
 
