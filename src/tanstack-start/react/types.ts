@@ -210,11 +210,11 @@ export namespace OidcRequestMiddleware {
     export type TanstackRequestMiddleware<T> = RequestMiddlewareAfterServer<{}, undefined, T>;
 }
 
-export type ParamsOfBootstrap<User_client, User_server, AutoLogin> =
-    | ParamsOfBootstrap.Real<User_server extends undefined ? false : true>
-    | ParamsOfBootstrap.Mock<User_server extends undefined ? false : true, AutoLogin>;
+export type RuntimeConfigs<User_client, User_server, AutoLogin> =
+    | RuntimeConfigs.Real<User_server extends undefined ? false : true>
+    | RuntimeConfigs.Mock<User_server extends undefined ? false : true, AutoLogin>;
 
-export namespace ParamsOfBootstrap {
+export namespace RuntimeConfigs {
     export type Real<HasServer> = {
         mode: "real";
         issuerUri: string;

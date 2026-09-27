@@ -1,7 +1,7 @@
 import { useState, useEffect, useLayoutEffect, useReducer } from "react";
 import type {
     OidcSpaUtils,
-    ParamsOfBootstrap,
+    RuntimeConfigs,
     Oidc_server,
     CreateClientUser,
     CreateServerUser,
@@ -17,7 +17,7 @@ import { isBrowser } from "../../tools/isBrowser";
 import { assert, type Equals, is } from "../../tools/tsafe/assert";
 import { createStatefulEvt } from "../../tools/StatefulEvt";
 import { id } from "../../tools/tsafe/id";
-import type { GetterOrDirectValue } from "../../tools/GetterOrDirectValue";
+import type { OptionallyAsyncGetterOrDirectValue } from "../../tools/GetterOrDirectValue";
 import { createServerFn, createMiddleware } from "@tanstack/react-start";
 // @ts-expect-error: Since our module is not labeled as ESM we don't have the types here.
 import { getRequest, setResponseHeader, setResponseStatus } from "@tanstack/react-start/server";
@@ -32,26 +32,26 @@ import {
     isObjectThatThrowIfAccessed
 } from "../../tools/createObjectThatThrowsIfAccessed";
 import { publicEnvNames, toRedactEnvNames } from "virtual:oidc-spa/tanstack-start-public-env";
+import { ValidateAndGetAccessTokenClaims } from "../../server";
+import * as runExclusive from "../../tools/run-exclusive";
 
 export function createUtils<User_client, User_server, AutoLogin extends boolean>(params: {
     autoLogin: AutoLogin;
     createClientUser: CreateClientUser<User_client>;
     createServerUser: CreateServerUser<User_server> | undefined;
-    getParamsOfBootstrapOrDirectValue: GetterOrDirectValue<
+    getRuntimeConfigsOrRuntimeConfigs: OptionallyAsyncGetterOrDirectValue<
         { process: { env: Record<string, string> } },
-        ParamsOfBootstrap<User_client, User_server, AutoLogin>
+        RuntimeConfigs<User_client, User_server, AutoLogin>
     >;
 }): OidcSpaUtils<User_client, User_server, AutoLogin> {
-    const { autoLogin, createClientUser, createServerUser, getParamsOfBootstrapOrDirectValue } = params;
+    const { autoLogin, createClientUser, createServerUser, getRuntimeConfigsOrRuntimeConfigs } = params;
 
-    const getParamsOfBootstrap =
-        typeof getParamsOfBootstrapOrDirectValue === "function"
-            ? getParamsOfBootstrapOrDirectValue
-            : () => getParamsOfBootstrapOrDirectValue;
+    const getRuntimeConfigs =
+        typeof getRuntimeConfigsOrRuntimeConfigs === "function"
+            ? getRuntimeConfigsOrRuntimeConfigs
+            : () => getRuntimeConfigsOrRuntimeConfigs;
 
     const dBootstrapClient = new Deferred<void>();
-
-    const dParamsOfBootstrap = new Deferred<ParamsOfBootstrap<User_client, User_server, AutoLogin>>();
 
     const dOidcOrInitializationError = new Deferred<Oidc_core<User_client> | OidcInitializationError>();
 
@@ -68,7 +68,7 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
     );
 
     dBootstrapClient.pr.then(async () => {
-        const paramsOfBootstrap = await (async () => {
+        const runtimeConfigs = await (async () => {
             class OidcSpaServerEnvRetrievalError extends Error {
                 constructor(params: { envName: string }) {
                     super(`oidc-spa: Env value ${params.envName} couldn't be pulled from server`);
@@ -102,31 +102,33 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
                 }
             ) as Record<string, string>;
 
-            let paramsOfBootstrap: ParamsOfBootstrap<User_client, User_server, AutoLogin>;
+            let runtimeConfigs: RuntimeConfigs<User_client, User_server, AutoLogin>;
 
             try {
-                paramsOfBootstrap = getParamsOfBootstrap({ process: { env: env_server_proxy } });
+                runtimeConfigs = await getRuntimeConfigs({ process: { env: env_server_proxy } });
             } catch (error) {
-                if (error instanceof OidcSpaServerEnvRetrievalError) {
-                    throw error;
-                }
-
-                throw new Error(
-                    [
-                        "oidc-spa: The function argument passed to bootstrapOidc",
-                        "has thrown when invoked."
-                    ].join(" "),
-                    //@ts-expect-error
-                    { cause: error }
+                dOidcOrInitializationError.resolve(
+                    new OidcInitializationError({
+                        isAuthServerLikelyDown: false,
+                        messageOrCause: new Error(
+                            "Error thrown while evaluating the runtime configs getter on the client",
+                            // @ts-expect-error
+                            { cause: error }
+                        )
+                    })
                 );
+
+                dResultOfGetUserOrInitializationErrorOrUndefined.resolve(undefined);
+
+                await new Promise<never>(() => {});
+
+                assert(false);
             }
 
-            return paramsOfBootstrap;
+            return runtimeConfigs;
         })();
 
-        dParamsOfBootstrap.resolve(paramsOfBootstrap);
-
-        switch (paramsOfBootstrap.mode) {
+        switch (runtimeConfigs.mode) {
             case "mock":
                 {
                     const [
@@ -143,15 +145,14 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
                         import("../../tools/decodeJwt")
                     ]);
 
-                    const clientId_mock =
-                        paramsOfBootstrap.client?.clientId_mock ?? ClIENT_ID_MOCK_DEFAULT;
+                    const clientId_mock = runtimeConfigs.client?.clientId_mock ?? ClIENT_ID_MOCK_DEFAULT;
 
-                    const issuerUri_mock = paramsOfBootstrap.issuerUri_mock ?? ISSUER_URI_MOCK_DEFAULT;
+                    const issuerUri_mock = runtimeConfigs.issuerUri_mock ?? ISSUER_URI_MOCK_DEFAULT;
 
                     const accessToken_mock =
-                        paramsOfBootstrap.accessToken_mock ?? ACCESS_TOKEN_MOCK_DEFAULT;
+                        runtimeConfigs.accessToken_mock ?? ACCESS_TOKEN_MOCK_DEFAULT;
 
-                    const idToken_mock = paramsOfBootstrap.client?.idTokenMock ?? ID_TOKEN_MOCK_DEFAULT;
+                    const idToken_mock = runtimeConfigs.client?.idTokenMock ?? ID_TOKEN_MOCK_DEFAULT;
 
                     const idTokenClaims_mock = (() => {
                         if (idToken_mock !== undefined) {
@@ -171,14 +172,13 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
                     const oidc = await createMockOidc_core({
                         // NOTE: The `as false` is lying here, it's just to preserve some level of type-safety.
                         autoLogin: autoLogin as false,
-                        isUserInitiallyLoggedIn:
-                            paramsOfBootstrap.client?.isUserInitiallyLoggedIn ?? true,
+                        isUserInitiallyLoggedIn: runtimeConfigs.client?.isUserInitiallyLoggedIn ?? true,
                         clientId_mock,
                         issuerUri_mock,
                         idToken_mock,
-                        idTokenClaims_mock: paramsOfBootstrap.client?.idTokenClaims_mock,
+                        idTokenClaims_mock: runtimeConfigs.client?.idTokenClaims_mock,
                         accessToken_mock,
-                        refreshToken_mock: paramsOfBootstrap.client?.refreshToken_mock,
+                        refreshToken_mock: runtimeConfigs.client?.refreshToken_mock,
                         user_mock: await createClientUser({
                             isMock: true,
                             idTokenClaims: idTokenClaims_mock,
@@ -224,23 +224,22 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
                     try {
                         oidcOrInitializationError = await createOidc<User_client, AutoLogin>({
                             autoLogin,
-                            issuerUri: paramsOfBootstrap.issuerUri,
-                            clientId: paramsOfBootstrap.client.clientId,
+                            issuerUri: runtimeConfigs.issuerUri,
+                            clientId: runtimeConfigs.client.clientId,
                             idleSessionLifetimeInSeconds:
-                                paramsOfBootstrap.client.idleSessionLifetimeInSeconds,
-                            scopes: paramsOfBootstrap.client.scopes,
-                            transformAuthorizationUrl:
-                                paramsOfBootstrap.client.transformAuthorizationUrl,
-                            authorizationParams: paramsOfBootstrap.client.authorizationParams,
-                            tokenParams: paramsOfBootstrap.client.tokenParams,
-                            sessionRestorationMethod: paramsOfBootstrap.client.sessionRestorationMethod,
-                            debugLogs: paramsOfBootstrap.debugLogs,
-                            __oidcProviderMetadata: paramsOfBootstrap.client.__oidcProviderMetadata,
+                                runtimeConfigs.client.idleSessionLifetimeInSeconds,
+                            scopes: runtimeConfigs.client.scopes,
+                            transformAuthorizationUrl: runtimeConfigs.client.transformAuthorizationUrl,
+                            authorizationParams: runtimeConfigs.client.authorizationParams,
+                            tokenParams: runtimeConfigs.client.tokenParams,
+                            sessionRestorationMethod: runtimeConfigs.client.sessionRestorationMethod,
+                            debugLogs: runtimeConfigs.debugLogs,
+                            __oidcProviderMetadata: runtimeConfigs.client.__oidcProviderMetadata,
                             autoLogout_redirectionTarget:
-                                paramsOfBootstrap.client.autoLogout_redirectionTarget,
-                            disableDPoP: paramsOfBootstrap.client.disableDPoP,
+                                runtimeConfigs.client.autoLogout_redirectionTarget,
+                            disableDPoP: runtimeConfigs.client.disableDPoP,
                             warnUserSecondsBeforeAutoLogout:
-                                paramsOfBootstrap.client.warnUserSecondsBeforeAutoLogout,
+                                runtimeConfigs.client.warnUserSecondsBeforeAutoLogout,
                             createUser: params =>
                                 createClientUser({
                                     isMock: false,
@@ -298,70 +297,7 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
         }
     });
 
-    (async function bootstrapServer() {
-        if (isBrowser) {
-            return;
-        }
-
-        if (createServerUser === undefined) {
-            return;
-        }
-        const missingEnvNames = new Set<string>();
-
-        const env_proxy = new Proxy<Record<string, string>>(
-            {},
-            {
-                get: (...[, envName]) => {
-                    assert(typeof envName === "string");
-
-                    const value = process.env[envName];
-
-                    if (!value) {
-                        missingEnvNames.add(envName);
-                    }
-
-                    return value;
-                },
-                has: (...[, envName]) => {
-                    assert(typeof envName === "string");
-                    return envName in process.env;
-                }
-            }
-        );
-
-        const paramsOfBootstrap = getParamsOfBootstrap({ process: { env: env_proxy } });
-
-        if (
-            paramsOfBootstrap.mode === "real" &&
-            (!paramsOfBootstrap.issuerUri || !paramsOfBootstrap.client.clientId)
-        ) {
-            throw new Error(
-                [
-                    "oidc-spa: Incorrect configuration provided:\n",
-                    JSON.stringify(paramsOfBootstrap, null, 2),
-                    ...(missingEnvNames.size === 0
-                        ? []
-                        : [
-                              "\nYou probably forgot to define the environnement variables:",
-                              Array.from(missingEnvNames).join(", ")
-                          ])
-                ].join(" ")
-            );
-        }
-
-        dParamsOfBootstrap.resolve(paramsOfBootstrap);
-    })();
-
     dOidcOrInitializationError.pr.then(oidcOrInitializationError => {
-        const { hasResolved, value: paramsOfBootstrap } = dParamsOfBootstrap.getState();
-
-        assert(hasResolved);
-
-        if (paramsOfBootstrap.mode === "mock") {
-            return;
-        }
-        assert<Equals<typeof paramsOfBootstrap.mode, "real">>;
-
         if (
             oidcOrInitializationError === undefined ||
             oidcOrInitializationError instanceof OidcInitializationError
@@ -850,49 +786,151 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
 
     enforceLogin[BEFORE_LOAD_FN_BRAND_PROPERTY_NAME] = true;
 
-    const prValidateAndGetAccessTokenClaims = isBrowser
-        ? undefined
-        : dParamsOfBootstrap.pr.then(async paramsOfBootstrap => {
-              if (paramsOfBootstrap.mode === "mock") {
-                  return undefined;
+    const { getLazyServerMaterial } = (() => {
+        type R = R_Success | R_Error;
+
+        type R_Success = { isSuccess: true } & (
+            | {
+                  isMock: true;
+                  runtimeConfigs_mock: RuntimeConfigs.Mock<true, AutoLogin>;
               }
-
-              assert<Equals<typeof paramsOfBootstrap.mode, "real">>;
-
-              if (createServerUser === undefined) {
-                  return undefined;
+            | {
+                  isMock: false;
+                  enableDebugLogs: boolean;
+                  validateAndGetAccessTokenClaims: ValidateAndGetAccessTokenClaims<AccessTokenClaims>;
               }
+        );
 
-              assert("server" in paramsOfBootstrap);
+        type R_Error = {
+            isSuccess: false;
+        };
 
-              const { oidcSpa: oidcSpa_server } = await import("../../server");
+        let cachedReturn: R_Success | undefined = undefined;
 
-              const { bootstrapAuth, validateAndGetAccessTokenClaims } = oidcSpa_server.createUtils();
+        const getLazyServerMaterial = runExclusive.build(async (): Promise<R> => {
+            if (cachedReturn !== undefined) {
+                return cachedReturn;
+            }
 
-              bootstrapAuth({
-                  mode: "real",
-                  issuerUri: paramsOfBootstrap.issuerUri,
-                  accessTokenValidation: (() => {
-                      switch (paramsOfBootstrap.server.accessTokenValidationMethod) {
-                          case "introspection endpoint":
-                              return {
-                                  method: "introspection endpoint",
-                                  clientId: paramsOfBootstrap.server.clientId,
-                                  clientSecret: paramsOfBootstrap.server.clientSecret
-                              };
-                          case "offline JWT validation":
-                              return {
-                                  method: "offline JWT validation",
-                                  expectedAudience: paramsOfBootstrap.server.expectedAccessTokenAudience
-                              };
-                          default:
-                              assert<Equals<typeof paramsOfBootstrap.server, never>>(false);
-                      }
-                  })()
-              });
+            const missingEnvNames = new Set<string>();
 
-              return validateAndGetAccessTokenClaims;
-          });
+            const env_proxy = new Proxy<Record<string, string>>(
+                {},
+                {
+                    get: (...[, envName]) => {
+                        assert(typeof envName === "string");
+
+                        const value = process.env[envName];
+
+                        if (!value) {
+                            missingEnvNames.add(envName);
+                        }
+
+                        return value;
+                    },
+                    has: (...[, envName]) => {
+                        assert(typeof envName === "string");
+                        return envName in process.env;
+                    }
+                }
+            );
+
+            let runtimeConfigs: RuntimeConfigs<User_client, User_server, AutoLogin>;
+
+            try {
+                runtimeConfigs = await getRuntimeConfigs({ process: { env: env_proxy } });
+            } catch (error) {
+                console.error(`oidc-spa: Error thrown by the getter of runtime configs`, error);
+                return { isSuccess: false };
+            }
+
+            assert("server" in runtimeConfigs);
+
+            if (
+                runtimeConfigs.mode === "real" &&
+                (!runtimeConfigs.issuerUri ||
+                    (() => {
+                        switch (runtimeConfigs.server.accessTokenValidationMethod) {
+                            case "introspection endpoint":
+                                return (
+                                    !runtimeConfigs.server.clientId ||
+                                    !runtimeConfigs.server.clientSecret
+                                );
+                            case "offline JWT validation":
+                                return !runtimeConfigs.server.expectedAccessTokenAudience;
+                            default:
+                                assert<Equals<typeof runtimeConfigs.server, never>>;
+                        }
+                    })())
+            ) {
+                throw new Error(
+                    [
+                        "oidc-spa: Incorrect configuration provided:\n",
+                        JSON.stringify(runtimeConfigs, null, 2),
+                        ...(missingEnvNames.size === 0
+                            ? []
+                            : [
+                                  "\nYou probably forgot to define the environnement variables:",
+                                  Array.from(missingEnvNames).join(", ")
+                              ])
+                    ].join(" ")
+                );
+            }
+
+            switch (runtimeConfigs.mode) {
+                case "mock": {
+                    assert(is<RuntimeConfigs.Mock<true, AutoLogin>>(runtimeConfigs));
+                    return {
+                        isSuccess: true,
+                        isMock: true as const,
+                        runtimeConfigs_mock: runtimeConfigs
+                    };
+                }
+                case "real": {
+                    assert("server" in runtimeConfigs);
+
+                    const { oidcSpa: oidcSpa_server } = await import("../../server");
+
+                    const { bootstrapAuth, validateAndGetAccessTokenClaims } =
+                        oidcSpa_server.createUtils();
+
+                    bootstrapAuth({
+                        mode: "real",
+                        issuerUri: runtimeConfigs.issuerUri,
+                        accessTokenValidation: (() => {
+                            switch (runtimeConfigs.server.accessTokenValidationMethod) {
+                                case "introspection endpoint":
+                                    return {
+                                        method: "introspection endpoint",
+                                        clientId: runtimeConfigs.server.clientId,
+                                        clientSecret: runtimeConfigs.server.clientSecret
+                                    };
+                                case "offline JWT validation":
+                                    return {
+                                        method: "offline JWT validation",
+                                        expectedAudience:
+                                            runtimeConfigs.server.expectedAccessTokenAudience
+                                    };
+                                default:
+                                    assert<Equals<typeof runtimeConfigs.server, never>>(false);
+                            }
+                        })()
+                    });
+
+                    return {
+                        isSuccess: true,
+                        isMock: false as const,
+                        validateAndGetAccessTokenClaims,
+                        enableDebugLogs: runtimeConfigs.debugLogs ?? false
+                    };
+                }
+                default:
+                    assert<Equals<typeof runtimeConfigs, never>>(false);
+            }
+        });
+
+        return { getLazyServerMaterial };
+    })();
 
     function createFunctionMiddlewareServerFn(params?: {
         require?: "authed request";
@@ -901,18 +939,22 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
         return async (options: {
             next: (options: { context: { oidc: Oidc_server<User_server> } }) => any;
         }): Promise<any> => {
-            assert(prValidateAndGetAccessTokenClaims !== undefined);
             assert(createServerUser !== undefined);
 
             const { next } = options;
 
-            const paramsOfBootstrap = await dParamsOfBootstrap.pr;
+            const serverMaterial = await getLazyServerMaterial();
 
-            if (paramsOfBootstrap.mode === "mock") {
-                assert(is<ParamsOfBootstrap.Mock<true, AutoLogin>>(paramsOfBootstrap));
+            if (!serverMaterial.isSuccess) {
+                setResponseStatus(500);
+                throw new Error("Internal Server Error");
+            }
+
+            if (serverMaterial.isMock) {
+                const { runtimeConfigs_mock } = serverMaterial;
 
                 const accessToken_mock =
-                    paramsOfBootstrap.accessToken_mock ??
+                    runtimeConfigs_mock.accessToken_mock ??
                     id<typeof import("../../core/createMockOidc").ACCESS_TOKEN_MOCK_DEFAULT>(
                         "mocked-access-token"
                     );
@@ -924,14 +966,18 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
                         isMock: true,
                         accessToken: accessToken_mock,
                         accessTokenClaims:
-                            paramsOfBootstrap.server?.accessTokenClaims_mock ??
+                            runtimeConfigs_mock.server?.accessTokenClaims_mock ??
                             createObjectThatThrowsIfAccessed<AccessTokenClaims>({
                                 debugMessage: "No accessTokenClaims_mock provided"
                             })
                     });
                 } catch (error) {
+                    console.error(
+                        `oidc-spa: Error thrown while calling createServerUser with mock identity`,
+                        error
+                    );
                     setResponseStatus(500);
-                    throw error;
+                    throw new Error("Internal Server Error");
                 }
 
                 return next({
@@ -947,7 +993,23 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
                 });
             }
 
-            assert<Equals<typeof paramsOfBootstrap.mode, "real">>;
+            const { validateAndGetAccessTokenClaims, enableDebugLogs } = serverMaterial;
+
+            const log = (() => {
+                if (!enableDebugLogs) {
+                    return undefined;
+                }
+
+                return id<typeof console.log>((...[first, ...rest]) => {
+                    const label = "oidc-spa";
+
+                    if (typeof first === "string") {
+                        console.log(...[`${label}: ${first}`, ...rest]);
+                    } else {
+                        console.log(...[`${label}:`, first, ...rest]);
+                    }
+                });
+            })();
 
             const { extractRequestAuthContext } = await import("../../server/extractRequestAuthContext");
 
@@ -983,16 +1045,17 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
                 throw new Error(wwwAuthenticateResponseHeaderValue);
             }
 
-            const validateAndGetAccessTokenClaims = await prValidateAndGetAccessTokenClaims;
-
-            assert(validateAndGetAccessTokenClaims !== undefined);
-
-            const { isSuccess, accessToken, accessTokenClaims, recommendedHttpErrorStatusCode } =
-                await validateAndGetAccessTokenClaims(requestAuthContext.accessTokenAndMetadata);
+            const {
+                isSuccess,
+                debugErrorMessage,
+                accessToken,
+                accessTokenClaims,
+                recommendedHttpErrorStatusCode
+            } = await validateAndGetAccessTokenClaims(requestAuthContext.accessTokenAndMetadata);
 
             if (!isSuccess) {
+                log?.(debugErrorMessage);
                 setResponseStatus(recommendedHttpErrorStatusCode);
-
                 const wwwAuthenticateResponseHeaderValue = `Bearer error="invalid_request", error_description="${(() => {
                     switch (recommendedHttpErrorStatusCode) {
                         case 401:
@@ -1016,8 +1079,9 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
                     accessTokenClaims
                 });
             } catch (error) {
+                log?.(`oidc-spa: Error thrown while calling createServerUser`, error);
                 setResponseStatus(500);
-                throw error;
+                throw new Error("Internal Server Error");
             }
 
             check_authorization: {
@@ -1032,13 +1096,16 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
                 try {
                     hasAuthorization = await getHasAuthorization({ user });
                 } catch (error) {
+                    log?.(`oidc-spa: Error thrown while calling hasAuthorization`, error);
                     setResponseStatus(500);
-                    throw error;
+                    throw new Error("Internal Server Error");
                 }
 
                 if (hasAuthorization) {
                     break check_authorization;
                 }
+
+                log?.("Unauthorized request rejected");
 
                 setResponseStatus(403);
 

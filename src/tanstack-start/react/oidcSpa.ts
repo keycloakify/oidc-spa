@@ -1,13 +1,13 @@
-import type { OidcSpaUtils, CreateClientUser, CreateServerUser, ParamsOfBootstrap } from "./types";
+import type { OidcSpaUtils, CreateClientUser, CreateServerUser, RuntimeConfigs } from "./types";
 import { createUtils } from "./createUtils";
 import { assert } from "tsafe";
-import type { GetterOrDirectValue } from "../../tools/GetterOrDirectValue";
+import type { OptionallyAsyncGetterOrDirectValue } from "../../tools/GetterOrDirectValue";
 
 export type OidcSpa<
     User_client,
     User_server,
     AutoLogin extends boolean,
-    Excluded extends "withAutoLogin" | "withClientUser" | "withServerUser" = never
+    Excluded extends "withAutoLogin" | "withClientUser" | "withServerUser" | "withRuntimeConfigs" = never
 > = Omit<
     {
         withAutoLogin: () => OidcSpa<User_client, User_server, true, Excluded | "withAutoLogin">;
@@ -20,14 +20,19 @@ export type OidcSpa<
     },
     Excluded
 > &
-    ("withClientUser" extends Excluded
+    ("withServerUser" extends Excluded
         ? {
-              createUtils: (
-                  getParamsOfBootstrapOrDirectValue: GetterOrDirectValue<
+              withRuntimeConfigs: (
+                  getRuntimeConfigsOrRuntimeConfigs: OptionallyAsyncGetterOrDirectValue<
                       { process: { env: Record<string, string> } },
-                      ParamsOfBootstrap<User_client, User_server, AutoLogin>
+                      RuntimeConfigs<User_client, User_server, AutoLogin>
                   >
-              ) => OidcSpaUtils<User_client, User_server, AutoLogin>;
+              ) => OidcSpa<User_client, User_server, AutoLogin, Excluded | "withRuntimeConfigs">;
+          }
+        : {}) &
+    ("withRuntimeConfigs" extends Excluded
+        ? {
+              createUtils: () => OidcSpaUtils<User_client, User_server, AutoLogin>;
           }
         : {});
 
@@ -35,34 +40,44 @@ function createOidcSpa<User_client, User_server, AutoLogin extends boolean>(para
     autoLogin: AutoLogin;
     createClientUser: CreateClientUser<User_client> | undefined;
     createServerUser: CreateServerUser<User_server> | undefined;
+    getRuntimeConfigsOrRuntimeConfigs:
+        | OptionallyAsyncGetterOrDirectValue<
+              { process: { env: Record<string, string> } },
+              RuntimeConfigs<User_client, any, any>
+          >
+        | undefined;
 }): OidcSpa<User_client, User_server, AutoLogin> {
     return {
         withAutoLogin: () =>
             createOidcSpa({
                 autoLogin: true,
                 createClientUser: params.createClientUser,
-                createServerUser: params.createServerUser
+                createServerUser: params.createServerUser,
+                getRuntimeConfigsOrRuntimeConfigs: params.getRuntimeConfigsOrRuntimeConfigs
             }),
         withClientUser: createClientUser =>
             createOidcSpa({
                 autoLogin: params.autoLogin,
                 createClientUser,
-                createServerUser: params.createServerUser
+                createServerUser: params.createServerUser,
+                getRuntimeConfigsOrRuntimeConfigs: params.getRuntimeConfigsOrRuntimeConfigs
             }) as any,
         withServerUser: createServerUser =>
             createOidcSpa({
                 autoLogin: params.autoLogin,
                 createClientUser: params.createClientUser,
-                createServerUser
-            }),
+                createServerUser: createServerUser,
+                getRuntimeConfigsOrRuntimeConfigs: params.getRuntimeConfigsOrRuntimeConfigs
+            }) as any,
         // @ts-expect-error
-        createUtils: getParamsOfBootstrapOrDirectValue => {
+        createUtils: () => {
             assert(params.createClientUser !== undefined);
+            assert(params.getRuntimeConfigsOrRuntimeConfigs !== undefined);
             return createUtils({
                 autoLogin: params.autoLogin,
                 createClientUser: params.createClientUser,
                 createServerUser: params.createServerUser,
-                getParamsOfBootstrapOrDirectValue
+                getRuntimeConfigsOrRuntimeConfigs: params.getRuntimeConfigsOrRuntimeConfigs
             });
         }
     };
@@ -71,5 +86,6 @@ function createOidcSpa<User_client, User_server, AutoLogin extends boolean>(para
 export const oidcSpa = createOidcSpa<unknown, undefined, false>({
     autoLogin: false,
     createClientUser: undefined,
-    createServerUser: undefined
+    createServerUser: undefined,
+    getRuntimeConfigsOrRuntimeConfigs: undefined
 });

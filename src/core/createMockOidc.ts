@@ -7,25 +7,7 @@ import { getRootRelativeOriginalLocationHref_earlyInit } from "../core/earlyInit
 import { INFINITY_TIME } from "../tools/INFINITY_TIME";
 import { getBASE_URL_earlyInit, prBASE_URL_earlyInit_set } from "./earlyInit_BASE_URL";
 import { decodeJwt } from "../tools/decodeJwt";
-import type { IdTokenClaims, OidcTokens } from "./types";
-
-export type ParamsOfCreateMockOidc<User, AutoLogin extends boolean> = {
-    user_mock?: User;
-    issuerUri_mock?: string;
-    clientId_mock?: string;
-    idTokenClaims_mock?: IdTokenClaims;
-    idToken_mock?: string;
-    accessToken_mock?: string;
-    accessTokenExpirationTime_mock?: number;
-    refreshToken_mock?: string;
-    refreshTokenExpirationTime_mock?: number;
-    autoLogin?: AutoLogin;
-    postLoginRedirectUrl?: string;
-} & (AutoLogin extends true
-    ? { isUserInitiallyLoggedIn?: true }
-    : {
-          isUserInitiallyLoggedIn: boolean;
-      });
+import type { IdTokenClaims, OidcTokens, ParamsOfCreateMockOidc } from "./types";
 
 const URL_SEARCH_PARAM_NAME = "isUserLoggedIn";
 
