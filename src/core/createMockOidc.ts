@@ -222,8 +222,8 @@ export async function createMockOidc<User = never, AutoLogin extends boolean = f
 
             return new Promise<never>(() => {});
         },
-        subscribeToAutoLogoutCountdown: () => ({
-            unsubscribeFromAutoLogoutCountdown: () => {}
+        subscribeToAutoLogoutState: () => ({
+            unsubscribeFromAutoLogoutState: () => {}
         }),
         goToAuthServer: async ({ redirectUrl }) => loginOrGoToAuthServer({ redirectUrl }),
         isNewBrowserSession: false,
