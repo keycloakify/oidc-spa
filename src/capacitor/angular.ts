@@ -65,7 +65,9 @@ export abstract class CapacitorOidcService<
         if (
             effectiveIsNativeApp &&
             baseParams.navigator !== undefined &&
-            (beforeBrowserOpen !== undefined || persistAcceptedLaunchCallbackToTokenStorage)
+            (beforeBrowserOpen !== undefined ||
+                persistAcceptedLaunchCallbackToTokenStorage ||
+                baseParams.prepareNativeAutomaticLoginRedirect !== undefined)
         ) {
             throw new Error(
                 "oidc-spa: native auth-flow options require the default CapacitorNavigator."

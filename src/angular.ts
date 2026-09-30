@@ -256,6 +256,8 @@ export type ParamsOfProvide = {
      *   then fallback to redirect if no valid local session can be restored.
      */
     nativeSessionRestoreMode?: "full-page-redirect" | "prefer-local-restore";
+    /** Native internal login redirects only; see ParamsOfCreateOidc. */
+    prepareNativeAutomaticLoginRedirect?: () => Promise<() => void | Promise<void>>;
 };
 
 assert<

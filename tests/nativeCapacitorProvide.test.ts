@@ -46,7 +46,10 @@ vi.mock("@capacitor/browser", () => ({
 }));
 
 type ProvideResult = {
-    params: { navigator?: CapacitorNavigator };
+    params: {
+        navigator?: CapacitorNavigator;
+        prepareNativeAutomaticLoginRedirect?: () => Promise<() => void | Promise<void>>;
+    };
     providers: Array<{ provide: unknown; useValue?: unknown }>;
 };
 
@@ -92,6 +95,17 @@ test("Capacitor provider passes the awaited hook to its real native navigator", 
     }
 });
 
+test("Capacitor provider forwards native automatic redirect registration to createOidc", () => {
+    const prepareNativeAutomaticLoginRedirect = async () => async () => {};
+    const result = CapacitorOidcService.provide({
+        issuerUri: "https://issuer.example",
+        clientId: "client",
+        isNativeApp: true,
+        prepareNativeAutomaticLoginRedirect
+    }) as unknown as ProvideResult;
+    assert.equal(result.params.prepareNativeAutomaticLoginRedirect, prepareNativeAutomaticLoginRedirect);
+});
+
 test("Capacitor provider leaves browser and PWA without a native navigator", () => {
     const result = CapacitorOidcService.provide({
         issuerUri: "https://issuer.example",
@@ -99,6 +113,9 @@ test("Capacitor provider leaves browser and PWA without a native navigator", () 
         isNativeApp: false,
         persistAcceptedLaunchCallbackToTokenStorage: true,
         beforeBrowserOpen: async () => {
+            throw new Error("should not run in PWA");
+        },
+        prepareNativeAutomaticLoginRedirect: async () => {
             throw new Error("should not run in PWA");
         }
     }) as unknown as ProvideResult;
@@ -112,6 +129,7 @@ test("Capacitor provider leaves browser and PWA without a native navigator", () 
 test("native hook with an externally supplied navigator fails closed", () => {
     for (const nativeOption of [
         { beforeBrowserOpen: async () => {} },
+        { prepareNativeAutomaticLoginRedirect: async () => async () => {} },
         { persistAcceptedLaunchCallbackToTokenStorage: true }
     ]) {
         assert.throws(

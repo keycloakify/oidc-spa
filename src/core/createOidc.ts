@@ -356,6 +356,16 @@ export type ParamsOfCreateOidc<
      *   then fallback to redirect if no valid local session can be restored.
      */
     nativeSessionRestoreMode?: "full-page-redirect" | "prefer-local-restore";
+
+    /**
+     * Native internal login redirects only. Register a non-authorizing outbound flow
+     * before OIDC creates its authorization request. Return a cleanup function that
+     * removes only that flow if preparation or navigation fails. This does not
+     * authenticate or unlock the user; the navigator still validates callbacks.
+     * If registration itself rejects after writing partial state, the hook must
+     * roll back that partial state before rejecting.
+     */
+    prepareNativeAutomaticLoginRedirect?: () => Promise<() => void | Promise<void>>;
 };
 
 const globalContext = {
@@ -549,7 +559,8 @@ export async function createOidc_nonMemoized<
         navigator,
         onNavigatorWarning,
         isNativeApp = false,
-        nativeSessionRestoreMode = "full-page-redirect"
+        nativeSessionRestoreMode = "full-page-redirect",
+        prepareNativeAutomaticLoginRedirect
     } = params;
 
     const effectiveStorageAdapter = storageAdapter ?? localStorageAdapter;
@@ -1111,6 +1122,46 @@ export async function createOidc_nonMemoized<
     const { loginOrGoToAuthServer } = loginOrGoToAuthServerResult;
     resetOngoingAction = loginOrGoToAuthServerResult.resetOngoingAction;
 
+    const automaticLoginRedirect = async (
+        params: Parameters<typeof loginOrGoToAuthServer>[0] & { action: "login" }
+    ): Promise<never> => {
+        if (!isNativeApp || prepareNativeAutomaticLoginRedirect === undefined) {
+            return loginOrGoToAuthServer(params);
+        }
+
+        let cleanupOutboundFlow: (() => void | Promise<void>) | undefined;
+
+        try {
+            return await loginOrGoToAuthServer({
+                ...params,
+                preRedirectHook: async () => {
+                    cleanupOutboundFlow = await prepareNativeAutomaticLoginRedirect();
+                    if (typeof cleanupOutboundFlow !== "function") {
+                        throw new Error(
+                            "Native automatic login redirect preparation must return a cleanup function."
+                        );
+                    }
+                    await params.preRedirectHook?.();
+                }
+            });
+        } catch (error) {
+            if (cleanupOutboundFlow !== undefined) {
+                try {
+                    await cleanupOutboundFlow();
+                } catch {
+                    try {
+                        onNavigatorWarning?.({
+                            code: "NATIVE_AUTOMATIC_REDIRECT_CLEANUP_FAILED",
+                            message: "Failed to clean up a native outbound authentication flow.",
+                            configId
+                        });
+                    } catch {}
+                }
+            }
+            throw error;
+        }
+    };
+
     if (!isNativeApp) {
         initializeNavigator();
     }
@@ -1650,7 +1701,7 @@ export async function createOidc_nonMemoized<
                             getPrSafelyRestoredFromBfCacheAfterLoginBackNavigationOrInitializationError()
                     });
 
-                    await loginOrGoToAuthServer({
+                    await automaticLoginRedirect({
                         action: "login",
                         doForceReloadOnBfCache: true,
                         redirectUrl: (() => {
@@ -2116,20 +2167,26 @@ export async function createOidc_nonMemoized<
                         storageAdapter: effectiveStorageAdapter
                     });
 
+                    const dUnlockOnFailure = new Deferred<void>();
                     await waitForAllOtherOngoingLoginOrRefreshProcessesToComplete({
-                        prUnlock: new Promise<never>(() => {})
+                        prUnlock: dUnlockOnFailure.pr
                     });
 
-                    await loginOrGoToAuthServer({
-                        action: "login",
-                        redirectUrl: window.location.href,
-                        doForceReloadOnBfCache: true,
-                        extraQueryParams_local: undefined,
-                        transformUrlBeforeRedirect_local: undefined,
-                        doNavigateBackToLastPublicUrlIfTheTheUserNavigateBack: true,
-                        interaction: "directly redirect if active session show login otherwise",
-                        preRedirectHook: undefined
-                    });
+                    try {
+                        await automaticLoginRedirect({
+                            action: "login",
+                            redirectUrl: window.location.href,
+                            doForceReloadOnBfCache: true,
+                            extraQueryParams_local: undefined,
+                            transformUrlBeforeRedirect_local: undefined,
+                            doNavigateBackToLastPublicUrlIfTheTheUserNavigateBack: true,
+                            interaction: "directly redirect if active session show login otherwise",
+                            preRedirectHook: undefined
+                        });
+                    } catch (error) {
+                        dUnlockOnFailure.resolve();
+                        throw error;
+                    }
                     assert(false, "136134");
                 };
 
@@ -2337,15 +2394,12 @@ export async function createOidc_nonMemoized<
 
                 const { pr } = ongoingCall;
 
-                pr.then(() => {
-                    assert(ongoingCall !== undefined, "549462");
-
-                    if (ongoingCall.pr !== pr) {
-                        return;
+                const clearOngoingCall = () => {
+                    if (ongoingCall?.pr === pr) {
+                        ongoingCall = undefined;
                     }
-
-                    ongoingCall = undefined;
-                });
+                };
+                void pr.then(clearOngoingCall, clearOngoingCall);
             }
 
             async function renewTokens_mutexed(params: {
@@ -2390,13 +2444,17 @@ export async function createOidc_nonMemoized<
             return params => {
                 const { extraTokenParams } = params ?? {};
 
-                prOngoingTokenRenewal = renewTokens_mutexed({ extraTokenParams });
+                const pr = renewTokens_mutexed({ extraTokenParams });
+                prOngoingTokenRenewal = pr;
 
-                prOngoingTokenRenewal.then(() => {
-                    prOngoingTokenRenewal = undefined;
-                });
+                const clearOngoingRenewal = () => {
+                    if (prOngoingTokenRenewal === pr) {
+                        prOngoingTokenRenewal = undefined;
+                    }
+                };
+                void pr.then(clearOngoingRenewal, clearOngoingRenewal);
 
-                return prOngoingTokenRenewal;
+                return pr;
             };
         })(),
         subscribeToTokensChange: onTokenChange => {
@@ -2437,12 +2495,25 @@ export async function createOidc_nonMemoized<
         })()
     });
 
+    const reportNativeAutomaticRenewalFailure = () => {
+        try {
+            onNavigatorWarning?.({
+                code: "NATIVE_AUTOMATIC_TOKEN_RENEWAL_FAILED",
+                message: "Native automatic token renewal or login redirect failed.",
+                configId
+            });
+        } catch {}
+    };
+
     if (resultOfLoginProcess.isRestoredFromSessionStorage) {
         const { isOnline, prOnline } = getIsOnline();
         if (isOnline) {
             await oidc_loggedIn.getTokens();
         } else {
-            prOnline.then(() => oidc_loggedIn.getTokens());
+            const prRestoredTokens = prOnline.then(() => oidc_loggedIn.getTokens());
+            if (isNativeApp) {
+                void prRestoredTokens.catch(reportNativeAutomaticRenewalFailure);
+            }
         }
     }
 
@@ -2488,7 +2559,10 @@ export async function createOidc_nonMemoized<
 
                 if (Math.abs(currentClockOffset - referenceClockOffset) > DRIFT_THRESHOLD_MS) {
                     log?.("Renewing token now as local time might have shifted");
-                    oidc_loggedIn.renewTokens();
+                    const prRenewal = oidc_loggedIn.renewTokens();
+                    if (isNativeApp) {
+                        void prRenewal.catch(reportNativeAutomaticRenewalFailure);
+                    }
                     return;
                 }
 
@@ -2691,7 +2765,15 @@ export async function createOidc_nonMemoized<
                     )}`
                 );
 
-                await oidc_loggedIn.renewTokens();
+                if (isNativeApp) {
+                    try {
+                        await oidc_loggedIn.renewTokens();
+                    } catch {
+                        reportNativeAutomaticRenewalFailure();
+                    }
+                } else {
+                    await oidc_loggedIn.renewTokens();
+                }
             },
             Math.min(
                 msBeforeExpiration - RENEW_MS_BEFORE_EXPIRES,
