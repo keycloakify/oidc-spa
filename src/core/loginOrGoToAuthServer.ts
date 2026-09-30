@@ -18,6 +18,8 @@ const globalContext = {
 
 type Params = Params.Login | Params.GoToAuthServer;
 
+type OngoingFlowAction = Params["action"];
+
 namespace Params {
     type Common = {
         redirectUrl: string;
@@ -33,7 +35,7 @@ namespace Params {
             | "ensure no interaction"
             | "ensure interaction"
             | "directly redirect if active session show login otherwise";
-        preRedirectHook: (() => void) | undefined;
+        preRedirectHook: (() => void | Promise<void>) | undefined;
     };
 
     export type GoToAuthServer = Common & {
@@ -72,6 +74,7 @@ export function createLoginOrGoToAuthServer(params: {
     evtInitializationOutcomeUserNotLoggedIn: NonPostableEvt<void>;
 
     log: typeof console.log | undefined;
+    oidcCallbackUrl: string;
 }) {
     const {
         configId,
@@ -86,7 +89,8 @@ export function createLoginOrGoToAuthServer(params: {
         stateUrlParamValue_instance,
         evtInitializationOutcomeUserNotLoggedIn,
 
-        log
+        log,
+        oidcCallbackUrl
     } = params;
 
     let lastPublicUrl: string | undefined = undefined;
@@ -232,6 +236,7 @@ export function createLoginOrGoToAuthServer(params: {
         const stateData: StateData.Redirect = {
             context: "redirect",
             rootRelativeRedirectUrl,
+            oidcCallbackUrl,
             extraQueryParams: {},
             configId,
             action: "login",
@@ -325,30 +330,38 @@ export function createLoginOrGoToAuthServer(params: {
         log?.(`redirectMethod: ${redirectMethod}`);
 
         if (rest.action === "login") {
-            rest.preRedirectHook?.();
+            try {
+                await rest.preRedirectHook?.();
+            } catch (error) {
+                globalContext.evtHasLoginBeenCalled.current = false;
+                throw error;
+            }
         }
+
+        const prompt: string | undefined = (() => {
+            switch (rest.action) {
+                case "go to auth server":
+                    return undefined;
+                case "login":
+                    switch (rest.interaction) {
+                        case "ensure no interaction":
+                            return "none";
+                        case "ensure interaction":
+                            return "login";
+                        case "directly redirect if active session show login otherwise":
+                            return undefined;
+                    }
+                    assert<Equals<typeof rest.interaction, never>>;
+            }
+            assert<Equals<typeof rest, never>>;
+        })();
 
         return oidcClientTsUserManager
             .signinRedirect({
                 state: stateData,
+                redirect_uri: oidcCallbackUrl,
                 redirectMethod,
-                prompt: (() => {
-                    switch (rest.action) {
-                        case "go to auth server":
-                            return undefined;
-                        case "login":
-                            switch (rest.interaction) {
-                                case "ensure no interaction":
-                                    return "none";
-                                case "ensure interaction":
-                                    return "login";
-                                case "directly redirect if active session show login otherwise":
-                                    return undefined;
-                            }
-                            assert<Equals<typeof rest.interaction, never>>;
-                    }
-                    assert<Equals<typeof rest, never>>;
-                })(),
+                prompt,
                 transformUrl: transformUrl_oidcClientTs,
                 extraTokenParams:
                     getExtraTokenParams === undefined ? undefined : noUndefined(getExtraTokenParams())
@@ -357,6 +370,10 @@ export function createLoginOrGoToAuthServer(params: {
                 () => new Promise<never>(() => {}),
                 error => {
                     assert(error instanceof Error, "393430");
+
+                    if (rest.action === "login") {
+                        globalContext.evtHasLoginBeenCalled.current = false;
+                    }
 
                     // Reaching the auth server can fail for reasons that are not a defect of
                     // this library: the network dropped mid-redirect, or the browser refused
@@ -375,10 +392,7 @@ export function createLoginOrGoToAuthServer(params: {
                         });
                     }
 
-                    assert(
-                        false,
-                        `This is a bug in oidc-spa (loginOrGoToAuthServer), please report: ${error.message}`
-                    );
+                    return Promise.reject(error);
                 }
             );
     }
@@ -394,6 +408,19 @@ export function createLoginOrGoToAuthServer(params: {
     });
 
     return {
-        loginOrGoToAuthServer
+        loginOrGoToAuthServer,
+        resetOngoingAction: (params: { action: OngoingFlowAction }) => {
+            const { action } = params;
+
+            switch (action) {
+                case "login":
+                    globalContext.evtHasLoginBeenCalled.current = false;
+                    return;
+                case "go to auth server":
+                    return;
+                default:
+                    assert<Equals<typeof action, never>>(false);
+            }
+        }
     };
 }
