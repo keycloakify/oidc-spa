@@ -366,21 +366,17 @@ export type ParamsOfCreateOidc<User, AutoLogin extends boolean> = {
 
 export type ParamsOfCreateMockOidc<User, AutoLogin extends boolean> = {
     createUser_mock?: CreateUser<User>;
+    autoLogin?: AutoLogin;
+    /** Default: true */
+    isUserInitiallyLoggedIn?: boolean;
     issuerUri_mock?: string;
     clientId_mock?: string;
     idTokenClaims_mock?: IdTokenClaims;
     idToken_mock?: string;
     accessToken_mock?: string;
-    accessTokenExpirationTime_mock?: number;
     refreshToken_mock?: string;
-    refreshTokenExpirationTime_mock?: number;
-    autoLogin?: AutoLogin;
-    postLoginRedirectUrl?: string;
-} & (AutoLogin extends true
-    ? { isUserInitiallyLoggedIn?: true }
-    : {
-          isUserInitiallyLoggedIn: boolean;
-      });
+    autoLogin_redirectUrl?: string;
+};
 
 export type OidcTokens = OidcTokens.WithRefreshToken | OidcTokens.WithoutRefreshToken;
 

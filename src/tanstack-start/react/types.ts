@@ -212,7 +212,7 @@ export namespace OidcRequestMiddleware {
 
 export type RuntimeConfigs<User_client, User_server, AutoLogin> =
     | RuntimeConfigs.Real<User_server extends undefined ? false : true>
-    | RuntimeConfigs.Mock<User_server extends undefined ? false : true, AutoLogin>;
+    | RuntimeConfigs.Mock<User_server extends undefined ? false : true>;
 
 export namespace RuntimeConfigs {
     export type Real<HasServer> = {
@@ -271,7 +271,7 @@ export namespace RuntimeConfigs {
         >
     >;
 
-    export type Mock<HasServer, AutoLogin> = {
+    export type Mock<HasServer> = {
         mode: "mock";
         issuerUri_mock?: string;
         accessToken_mock?: string;
@@ -279,14 +279,9 @@ export namespace RuntimeConfigs {
             clientId_mock?: string;
             idTokenClaims_mock?: IdTokenClaims;
             refreshToken_mock?: string;
-            idTokenMock?: string;
-        } & (AutoLogin extends true
-            ? {
-                  isUserInitiallyLoggedIn?: true;
-              }
-            : {
-                  isUserInitiallyLoggedIn: boolean;
-              });
+            idToken_mock?: string;
+            isUserInitiallyLoggedIn?: true;
+        };
     } & (HasServer extends true
         ? {
               server?: {

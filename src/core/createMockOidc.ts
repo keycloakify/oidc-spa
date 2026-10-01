@@ -1,5 +1,4 @@
 import type { Oidc } from "../core";
-import { createObjectThatThrowsIfAccessed } from "../tools/createObjectThatThrowsIfAccessed";
 import { id } from "../tools/tsafe/id";
 import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";
 import { getSearchParam, addOrUpdateSearchParam } from "../tools/urlSearchParams";
@@ -7,16 +6,13 @@ import { getRootRelativeOriginalLocationHref_earlyInit } from "../core/earlyInit
 import { INFINITY_TIME } from "../tools/INFINITY_TIME";
 import { getBASE_URL_earlyInit, prBASE_URL_earlyInit_set } from "./earlyInit_BASE_URL";
 import { decodeJwt } from "../tools/decodeJwt";
-import type { IdTokenClaims, OidcTokens, ParamsOfCreateMockOidc } from "./types";
+import type { OidcTokens, ParamsOfCreateMockOidc } from "./types";
 import { createGetUser } from "./createGetUser";
 import { createEvt } from "../tools/Evt";
 
 const URL_SEARCH_PARAM_NAME = "isUserLoggedIn";
 
-export const ClIENT_ID_MOCK_DEFAULT = "myclientmock";
-export const ISSUER_URI_MOCK_DEFAULT = "https://auth.mycompany.com/realms/mymockrealm";
 export const ACCESS_TOKEN_MOCK_DEFAULT = "mocked-access-token";
-export const ID_TOKEN_MOCK_DEFAULT = "mocked-id-token";
 
 export async function createMockOidc<User = never, AutoLogin extends boolean = false>(
     params: ParamsOfCreateMockOidc<User, AutoLogin>
@@ -29,11 +25,9 @@ export async function createMockOidc<User = never, AutoLogin extends boolean = f
         idTokenClaims_mock,
         idToken_mock,
         accessToken_mock,
-        accessTokenExpirationTime_mock,
         refreshToken_mock,
-        refreshTokenExpirationTime_mock,
         autoLogin = false,
-        postLoginRedirectUrl
+        autoLogin_redirectUrl
     } = params;
 
     {
@@ -91,8 +85,8 @@ export async function createMockOidc<User = never, AutoLogin extends boolean = f
     });
 
     const common: Oidc.Common = {
-        clientId: clientId_mock ?? ClIENT_ID_MOCK_DEFAULT,
-        issuerUri: issuerUri_mock ?? ISSUER_URI_MOCK_DEFAULT,
+        clientId: clientId_mock ?? "myclientmock",
+        issuerUri: issuerUri_mock ?? "https://auth.mycompany.com/realms/mymockrealm",
         validRedirectUri: homeUrl
     };
 
@@ -133,7 +127,7 @@ export async function createMockOidc<User = never, AutoLogin extends boolean = f
         });
         if (autoLogin) {
             await oidc.login({
-                redirectUrl: postLoginRedirectUrl,
+                redirectUrl: autoLogin_redirectUrl,
                 doesCurrentHrefRequiresAuth: true
             });
             // Never here
@@ -157,15 +151,19 @@ export async function createMockOidc<User = never, AutoLogin extends boolean = f
         }
     });
 
+    const now = Date.now();
+
     const oidc: Oidc.LoggedIn<User> = {
         ...common,
         isUserLoggedIn: true,
-        renewTokens: async () => {},
+        renewTokens: async () => {
+            evtTokensChange.post();
+        },
         ...(() => {
             const tokens_common: OidcTokens.Common = {
                 accessToken: accessToken_mock ?? ACCESS_TOKEN_MOCK_DEFAULT,
-                accessTokenExpirationTime: accessTokenExpirationTime_mock ?? INFINITY_TIME,
-                idToken: idToken_mock ?? ID_TOKEN_MOCK_DEFAULT,
+                accessTokenExpirationTime: INFINITY_TIME,
+                idToken: idToken_mock ?? "mocked-id-token",
                 idTokenClaims: (() => {
                     if (idTokenClaims_mock !== undefined) {
                         return idTokenClaims_mock;
@@ -177,12 +175,13 @@ export async function createMockOidc<User = never, AutoLogin extends boolean = f
                         } catch {}
                     }
 
-                    return createObjectThatThrowsIfAccessed<IdTokenClaims>({
-                        debugMessage: [
-                            "You haven't provided a mocked decodedIdToken",
-                            "See https://docs.oidc-spa.dev/v/v10/integration-guides/usage#mock-adapter"
-                        ].join("\n")
-                    });
+                    return {
+                        aud: common.clientId,
+                        exp: ~~(INFINITY_TIME / 1_000),
+                        iat: ~~(now / 1_000),
+                        iss: common.issuerUri,
+                        sub: "mocked-sub"
+                    };
                 })(),
                 issuedAtTime: Date.now(),
                 getServerDateNow: () => Date.now()
@@ -194,7 +193,7 @@ export async function createMockOidc<User = never, AutoLogin extends boolean = f
                           ...tokens_common,
                           hasRefreshToken: true,
                           refreshToken: refreshToken_mock,
-                          refreshTokenExpirationTime: refreshTokenExpirationTime_mock ?? INFINITY_TIME
+                          refreshTokenExpirationTime: INFINITY_TIME
                       })
                     : id<OidcTokens.WithoutRefreshToken>({
                           ...tokens_common,
