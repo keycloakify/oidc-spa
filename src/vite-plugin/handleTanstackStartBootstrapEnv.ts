@@ -4,13 +4,64 @@ import type { PluginContext } from "rollup";
 import type { ResolvedConfig, ViteDevServer } from "vite";
 import { babelParser, babelTraverse, type NodePath } from "../vendor/build-runtime/babel";
 
+/**
+ * Keep this runtime policy in sync with ParamsOfBootstrap. The companion type
+ * test deliberately imports the type and checks every property name.
+ */
+export const tanstackStartBootstrapEnvPolicy = {
+    real: {
+        mode: "public",
+        issuerUri: "public",
+        debugLogs: "public",
+        server: {
+            accessTokenValidationMethod: "public",
+            expectedAccessTokenAudience: "public",
+            clientId: "public",
+            clientSecret: "redact"
+        },
+        client: {
+            clientId: "public",
+            warnUserSecondsBeforeAutoLogout: "public",
+            idleSessionLifetimeInSeconds: "public",
+            scopes: "public",
+            transformUrlBeforeRedirect: "public",
+            extraQueryParams: "public",
+            extraTokenParams: "public",
+            sessionRestorationMethod: "public",
+            __unsafe_clientSecret: "public",
+            __metadata: "public",
+            __unsafe_useIdTokenAsAccessToken: "public",
+            autoLogoutParams: "public",
+            disableDPoP: "public"
+        }
+    },
+    mock: {
+        mode: "public",
+        issuerUri_mock: "public",
+        accessToken_mock: "public",
+        server: {
+            accessTokenClaims_mock: "public"
+        },
+        client: {
+            clientId_mock: "public",
+            idTokenClaims_mock: "public",
+            isUserInitiallyLoggedIn: "public"
+        }
+    }
+} as const;
+
 /** The manifest contains names only; values are read by the server at request time. */
 export function createHandleTanstackStartBootstrapEnv(params: { resolvedConfig: ResolvedConfig }) {
     const { resolvedConfig } = params;
     const virtualId = "virtual:oidc-spa/tanstack-start-public-env";
     const resolvedId = `\0${virtualId}`;
     const adapterId = "oidc-spa/react-tanstack-start";
-    let scanPromise: Promise<string[]> | undefined;
+    let scanPromise:
+        | Promise<{
+              publicEnvNames: string[];
+              toRedactEnvNames: string[];
+          }>
+        | undefined;
     let resolveFromServerEnvironment: Pick<PluginContext, "resolve">["resolve"] | undefined;
 
     const isSourceFile = (id: string) => /\.[cm]?[jt]sx?$/.test(id) && !/\.d\.[cm]?ts$/.test(id);
@@ -100,6 +151,14 @@ export function createHandleTanstackStartBootstrapEnv(params: { resolvedConfig: 
         }
 
         const names = new Set<string>();
+        const toRedactEnvNames = new Set<string>();
+        const envNameByExpression = new Map<object, string>();
+        const envNameByBinding = new Map<object, string>();
+        const redactedPropertyNames = new Set(
+            Object.entries(tanstackStartBootstrapEnvPolicy.real.server)
+                .filter(([, policy]) => policy === "redact")
+                .map(([propertyName]) => propertyName)
+        );
         const fail: (id: string, p: NodePath, reason: string) => never = (id, p, reason) => {
             const loc = p.node.loc?.start;
             throw new Error(
@@ -233,13 +292,7 @@ export function createHandleTanstackStartBootstrapEnv(params: { resolvedConfig: 
                 return undefined;
             const method = propertyName(callee);
             if (method === "createUtils") return "utils";
-            if (
-                [
-                    "withAutoLogin",
-                    "withExpectedDecodedIdTokenShape",
-                    "withAccessTokenValidation"
-                ].includes(method ?? "")
-            )
+            if (["withAutoLogin", "withClientUser", "withServerUser"].includes(method ?? ""))
                 return "builder";
             return undefined;
         };
@@ -306,6 +359,13 @@ export function createHandleTanstackStartBootstrapEnv(params: { resolvedConfig: 
                                 );
                             if (kind === "env") {
                                 names.add(name);
+                                const value = property.get("value");
+                                if (value.isIdentifier()) {
+                                    const binding = value.scope.getBinding(value.node.name);
+                                    if (binding !== undefined) {
+                                        envNameByBinding.set(binding, name);
+                                    }
+                                }
                                 continue;
                             }
                             if (name !== (kind === "argument" ? "process" : "env"))
@@ -356,6 +416,7 @@ export function createHandleTanstackStartBootstrapEnv(params: { resolvedConfig: 
                                 )
                                     fail(id, parent, "Do not mutate the bootstrap environment.");
                                 names.add(name);
+                                envNameByExpression.set(parent.node, name);
                                 return;
                             }
                             if (name !== (kind === "argument" ? "process" : "env"))
@@ -395,10 +456,88 @@ export function createHandleTanstackStartBootstrapEnv(params: { resolvedConfig: 
                     };
                     const parameter = callback.get("params")[0];
                     if (parameter) followPattern(parameter, "argument");
+
+                    const getEnvNamesFromExpression = (input: NodePath): Set<string> => {
+                        const result = new Set<string>();
+                        const visited = new Set<object>();
+
+                        const visit = (input: NodePath) => {
+                            const p = unwrap(input);
+
+                            if (!p.node || visited.has(p.node)) {
+                                return;
+                            }
+                            visited.add(p.node);
+
+                            const envName = envNameByExpression.get(p.node);
+                            if (envName !== undefined) {
+                                result.add(envName);
+                            }
+
+                            if (p.isIdentifier()) {
+                                const binding = p.scope.getBinding(p.node.name);
+
+                                if (binding !== undefined) {
+                                    const envName = envNameByBinding.get(binding);
+                                    if (envName !== undefined) {
+                                        result.add(envName);
+                                    }
+
+                                    if (binding.path.isVariableDeclarator()) {
+                                        const init = binding.path.get("init") as NodePath;
+                                        if (init.node !== null) {
+                                            visit(init);
+                                        }
+                                    }
+                                }
+                            }
+
+                            p.traverse({
+                                MemberExpression(member) {
+                                    const envName = envNameByExpression.get(member.node);
+                                    if (envName !== undefined) {
+                                        result.add(envName);
+                                    }
+                                },
+                                OptionalMemberExpression(member) {
+                                    const envName = envNameByExpression.get(member.node);
+                                    if (envName !== undefined) {
+                                        result.add(envName);
+                                    }
+                                },
+                                Identifier(identifier) {
+                                    if (identifier === p) {
+                                        return;
+                                    }
+                                    visit(identifier);
+                                }
+                            });
+                        };
+
+                        visit(input);
+
+                        return result;
+                    };
+
+                    callback.traverse({
+                        ObjectProperty(property) {
+                            const name = propertyName(property);
+                            if (name === undefined || !redactedPropertyNames.has(name)) {
+                                return;
+                            }
+
+                            for (const envName of getEnvNamesFromExpression(property.get("value"))) {
+                                toRedactEnvNames.add(envName);
+                            }
+                        }
+                    });
                 }
             });
         }
-        return [...names].sort();
+        return {
+            publicEnvNames: [...names].filter(name => !toRedactEnvNames.has(name)).sort(),
+            toRedactEnvNames: [...toRedactEnvNames].sort()
+        };
     };
 
     return {
@@ -421,10 +560,18 @@ export function createHandleTanstackStartBootstrapEnv(params: { resolvedConfig: 
                         "oidc-spa: The TanStack Start server resolver is unavailable while generating the public environment manifest."
                     );
                 }
-                context = { ...context, resolve: resolveFromServerEnvironment };
+                // Vite's context methods live on its prototype and depend on `this`.
+                context = {
+                    addWatchFile: context.addWatchFile.bind(context),
+                    resolve: resolveFromServerEnvironment
+                };
             }
-            const names = await (scanPromise ??= scan(context));
-            return `export const publicEnvNames = new Set(${JSON.stringify(names)});\n`;
+            const { publicEnvNames, toRedactEnvNames } = await (scanPromise ??= scan(context));
+            return [
+                `export const publicEnvNames = new Set(${JSON.stringify(publicEnvNames)});`,
+                `export const toRedactEnvNames = new Set(${JSON.stringify(toRedactEnvNames)});`,
+                ""
+            ].join("\n");
         },
         configureServer: (server: ViteDevServer) => {
             const serverEnvironment = Object.values(server.environments).find(

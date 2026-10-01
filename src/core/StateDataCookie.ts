@@ -5,12 +5,12 @@ export type StateDataCookie = StateDataCookie.Login | StateDataCookie.Logout;
 
 export namespace StateDataCookie {
     type Common = {
-        rootRelativeRedirectUrl: string;
+        rootRelativeReturnToUrl: string;
     };
 
     export type Login = Common & {
         action: "login";
-        rootRelativeRedirectUrl_consentRequiredCase: string;
+        rootRelativeReturnToUrl_consentRequiredCase: string;
     };
 
     export type Logout = Common & {
@@ -24,12 +24,12 @@ function serializeStateDataCookie(params: { stateDataCookie: StateDataCookie; ti
     const { stateDataCookie, time } = params;
 
     let cookieValue = `${Math.floor(time / 1_000)}`;
-    cookieValue += `${SEPARATOR}${encodeURIComponent(stateDataCookie.rootRelativeRedirectUrl)}`;
+    cookieValue += `${SEPARATOR}${encodeURIComponent(stateDataCookie.rootRelativeReturnToUrl)}`;
 
     switch (stateDataCookie.action) {
         case "login":
             cookieValue += `${SEPARATOR}${encodeURIComponent(
-                stateDataCookie.rootRelativeRedirectUrl_consentRequiredCase
+                stateDataCookie.rootRelativeReturnToUrl_consentRequiredCase
             )}`;
             break;
         case "logout":
@@ -61,16 +61,16 @@ function parseStateDataCookie(params: { stateDataCookie_str: string }):
         return undefined;
     }
 
-    const rootRelativeRedirectUrl = decodeURIComponent(rest[0]);
+    const rootRelativeReturnToUrl = decodeURIComponent(rest[0]);
 
-    const rootRelativeRedirectUrl_consentRequiredCase =
+    const rootRelativeReturnToUrl_consentRequiredCase =
         rest.length === 1 ? undefined : decodeURIComponent(rest[1]);
 
     for (const rootRelativeUrl of [
-        rootRelativeRedirectUrl,
-        rootRelativeRedirectUrl_consentRequiredCase
+        rootRelativeReturnToUrl,
+        rootRelativeReturnToUrl_consentRequiredCase
     ]) {
-        if (rootRelativeRedirectUrl === undefined) {
+        if (rootRelativeReturnToUrl === undefined) {
             continue;
         }
         try {
@@ -81,15 +81,15 @@ function parseStateDataCookie(params: { stateDataCookie_str: string }):
     }
 
     const stateDataCookie =
-        rootRelativeRedirectUrl_consentRequiredCase === undefined
+        rootRelativeReturnToUrl_consentRequiredCase === undefined
             ? id<StateDataCookie.Logout>({
                   action: "logout",
-                  rootRelativeRedirectUrl
+                  rootRelativeReturnToUrl
               })
             : id<StateDataCookie.Login>({
                   action: "login",
-                  rootRelativeRedirectUrl,
-                  rootRelativeRedirectUrl_consentRequiredCase
+                  rootRelativeReturnToUrl,
+                  rootRelativeReturnToUrl_consentRequiredCase
               });
 
     return { stateDataCookie, time };

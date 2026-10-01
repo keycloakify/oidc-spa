@@ -1,9 +1,8 @@
 import { Component } from '@angular/core';
 import { AsyncPipe } from '@angular/common';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
-import { Oidc } from './services/oidc.service';
+import { injectOidc } from './services/oidc.service';
 import { createKeycloakUtils } from 'oidc-spa/keycloak';
-import { inject } from '@angular/core';
 
 @Component({
   selector: 'app-root',
@@ -11,19 +10,25 @@ import { inject } from '@angular/core';
   templateUrl: './app.html',
 })
 export class App {
-  oidc = inject(Oidc);
+  oidc = injectOidc();
   get keycloakUtils() {
     return createKeycloakUtils({
       issuerUri: this.oidc.issuerUri,
     });
   }
 
-  get canShowAdminLink(): boolean {
+  get accountConsoleUrl() {
+    return this.keycloakUtils.getAccountUrl({
+      clientId: this.oidc.clientId,
+      validRedirectUri: this.oidc.validRedirectUri,
+    });
+  }
+
+  get shouldShowAdminLink(): boolean {
     if (!this.oidc.isUserLoggedIn) {
       return true;
     }
 
-    const roles = this.oidc.$decodedIdToken().realm_access?.roles ?? [];
-    return roles.includes('admin');
+    return this.oidc.user().canSeeAdminNavigation;
   }
 }

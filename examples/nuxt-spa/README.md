@@ -1,71 +1,71 @@
-# Nuxt SPA Example (`oidc-spa`)
+# Nuxt SPA example
 
-This example shows how to use the `oidc-spa` library in a **pure Nuxt SPA** project.
+A Nuxt 4 application with Nuxt UI and oidc-spa authentication. The setup follows the official minimal and Nuxt UI templates generated with `create-nuxt` 3.37.0.
 
-It is meant as a reference for teams who want to integrate `oidc-spa` in Nuxt with the built-in Nuxt support (`oidc-spa/nuxt-spa`) and standard Nuxt primitives (plugin, composables, middleware).
+## Getting started
 
-## ⚠️ Important Disclaimer
+Use Node.js 24.11+ (24.x LTS). Nuxt also supports Node.js 22.19+ (22.x) and 26+.
 
-> This setup is **SPA-only**.
->
-> It works only when `ssr: false` is set in `nuxt.config.ts`.
->
-> SSR/hybrid rendering is **not supported by this example** and should not be expected to work as-is.
+```bash
+npx gitpick keycloakify/oidc-spa/tree/main/examples/nuxt-spa start-oidc
+cd start-oidc
+npm install
+npm run dev
+```
 
-## What this example includes
+Open http://localhost:3000. Yarn and pnpm also work: use `yarn install` / `yarn dev` or `pnpm install` / `pnpm dev`.
 
--   **Nuxt module integration** via `modules: ["oidc-spa/nuxt-spa"]` in `nuxt.config.ts`
--   **Client plugin setup** in `app/plugins/01.oidc.client.ts`
-    -   Creates and provides `$oidc` with either:
-        -   `createOidc` (real provider), or
-        -   `createMockOidc` (mock mode)
--   **Typed app injection** in `app/types/plugins.d.ts` (`$oidc` type on `NuxtApp`)
--   **Auth composable** in `app/composables/useAuth.ts`
-    -   Exposes auth state and helpers (`login`, `logout`, `register`, `fetchWithAuth`, etc.)
-    -   Includes auto-logout countdown subscription handling
--   **Route middleware** in `app/middleware/auth.ts`
-    -   Protects routes
-    -   Triggers login redirects for unauthenticated users
-    -   Handles role-based checks through route meta
--   **Protected page examples** in `app/pages/protected.vue` and `app/pages/admin-only.vue`
+Installation creates `.env.local` from `.env.local.sample` if it does not already exist, and `nuxt prepare` generates the framework types and ESLint configuration. Set your provider values in `.env.local`, or use `NUXT_PUBLIC_OIDC_USE_MOCK=true` to try the application without an identity provider. Restart the development server after changing configuration.
 
-## Runtime config used
+From the oidc-spa repository root, `yarn start-nuxt-spa-example` builds and copies the local library before starting this example.
 
-Configured in `nuxt.config.ts` under `runtimeConfig.public`:
+## Commands
 
--   `oidcIssuerUri`
--   `oidcClientId`
--   `oidcUseMock`
+-   `npm run dev` — start the development server.
+-   `npm run build` — create a production build in `.output`.
+-   `npm run preview` — preview the production build locally.
+-   `npm run generate` — generate a static SPA in `.output/public`.
+-   `npm run typecheck` — check the application with Nuxt and `vue-tsc`.
+-   `npm run lint` — run the standard Nuxt ESLint configuration.
+-   `npm run lint:fix` — apply automatic lint fixes.
 
-These are typically provided with environment variables (see `.env.local.sample`).
+The development, build, generation, preview, and type-check commands load `.env.local` explicitly.
 
-## Quick start
+## OIDC integration
 
-From `examples/nuxt-spa`:
+See the [Nuxt integration guide](https://docs.oidc-spa.dev/integration-guides/nuxt).
 
-1. Copy env template:
+-   `nuxt.config.ts` sets `ssr: false` and enables `oidc-spa/nuxt-spa` for early client initialization.
+-   `app/oidc.user.ts` defines the application `User`, `createUser`, and `user_mock`. Token validation and provider-specific claims stay in this file; components consume `displayName`, `email`, `avatarImgUrl`, and `canSeeKeycloakAdminNavigation`.
+-   `app/plugins/01.oidc.client.ts` creates `$oidc`, awaits its initial user, and subscribes once to user changes and the auto-logout countdown. Nuxt infers the injected types from the plugin's return value.
+-   User state uses a [shallow ref](https://vuejs.org/api/reactivity-advanced.html#shallowref) to preserve core's user objects. Changes from token renewal or `refreshUser()` update every consumer.
+-   `app/composables/useAuth.ts` exposes the reactive `user`, `refreshUser()`, authentication and account actions, the auto-logout warning, and authenticated requests using `oidc.getAccessToken()`.
+-   `app/middleware/auth.ts` enforces login. The admin link and page use `user.canSeeKeycloakAdminNavigation`; they do not read token claims.
 
-    ```bash
-    cp .env.local.sample .env.local
-    ```
+In mock mode, the plugin passes `user_mock` directly to core, without constructing fake tokens or invoking `createUser`. The mock user is John Doe with admin navigation enabled. For real Keycloak sessions, the admin capability comes from the access token's `resource_access["realm-management"].roles`. Other providers do not need JWT access tokens for this example.
 
-2. Set your provider values in `.env.local` (or enable mock mode).
+This example authenticates in the browser and requires `ssr: false`. Its route guards control client navigation; APIs must validate access tokens independently.
 
-3. Install dependencies and run:
+Public runtime configuration uses these environment variables:
 
-    ```bash
-    yarn install
-    yarn dev
-    ```
+| Environment variable          | Runtime config key     |
+| ----------------------------- | ---------------------- |
+| `NUXT_PUBLIC_OIDC_ISSUER_URI` | `public.oidcIssuerUri` |
+| `NUXT_PUBLIC_OIDC_CLIENT_ID`  | `public.oidcClientId`  |
+| `NUXT_PUBLIC_OIDC_USE_MOCK`   | `public.oidcUseMock`   |
 
-## If you want to reuse this in your own Nuxt app
+## Routes and deployment
 
-At a high level, copy the same pattern:
+-   `/` — public landing page.
+-   `/protected` — guarded page with authenticated API requests.
+-   `/admin-only` — guarded page with an application-user capability check.
 
-1. Set `ssr: false` in `nuxt.config.ts`.
-2. Add `"oidc-spa/nuxt-spa"` to `modules`.
-3. Create a client plugin that provides `$oidc`.
-4. Add a composable (`useAuth`) to expose app-level auth helpers/state.
-5. Add route middleware for protected pages.
+For static hosting, run `npm run generate` and deploy `.output/public`. Configure the host to serve `index.html` for application routes (Nuxt also generates `200.html` and `404.html` fallbacks). Public runtime configuration is baked into static output, so set it before generation.
 
-This example is intentionally opinionated and practical, so you can use it as a starting point and adapt provider-specific options as needed.
+For a Node deployment, run `npm run build`, set the `NUXT_PUBLIC_OIDC_*` environment variables on the server, and start it with `node .output/server/index.mjs`. The production server does not automatically load `.env.local`.
+
+## Tooling
+
+Nuxt UI configures Tailwind and Nuxt Icon. Lucide icons are installed locally. Linting uses `@nuxt/eslint`, and TypeScript project references follow the Nuxt 4 starter.
+
+Direct dependencies are pinned, except `oidc-spa`, which stays on `latest`. No lockfile or package manager is imposed on users; transitive dependencies can still change between fresh installations. The pnpm build-script policy follows the official Nuxt UI starter (pnpm 10.26+).

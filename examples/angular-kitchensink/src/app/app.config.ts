@@ -1,21 +1,19 @@
-import {
-  ApplicationConfig,
-  inject,
-  provideBrowserGlobalErrorListeners,
-  provideZonelessChangeDetection,
-} from '@angular/core';
+import { ApplicationConfig, inject, provideBrowserGlobalErrorListeners } from '@angular/core';
 import { HttpClient, provideHttpClient, withInterceptors } from '@angular/common/http';
+import { provideClientHydration } from '@angular/platform-browser';
 import { provideRouter } from '@angular/router';
 import { routes } from './app.routes';
 import {
-  Oidc,
+  provideOidc,
+  injectOidc,
+  createOidcInterceptor,
   REQUIRE_ACCESS_TOKEN,
   INCLUDE_ACCESS_TOKEN_IF_LOGGED_IN,
 } from './services/oidc.service';
 import { firstValueFrom } from 'rxjs';
-import { environment } from '../environments/environment';
 
 type RemoteOidcConfig = {
+  useMock: boolean;
   issuerUri: string;
   clientId: string;
 };
@@ -23,19 +21,16 @@ type RemoteOidcConfig = {
 export const appConfig: ApplicationConfig = {
   providers: [
     provideBrowserGlobalErrorListeners(),
-    provideZonelessChangeDetection(),
     provideHttpClient(
       withInterceptors([
-        Oidc.createBearerInterceptor({
+        createOidcInterceptor({
           shouldInjectAccessToken: (req) => {
-            const oidc = inject(Oidc);
-
             if (req.context.get(REQUIRE_ACCESS_TOKEN)) {
               return true;
             }
 
             if (req.context.get(INCLUDE_ACCESS_TOKEN_IF_LOGGED_IN)) {
-              return oidc.isUserLoggedIn;
+              return injectOidc().isUserLoggedIn;
             }
 
             return false;
@@ -44,19 +39,25 @@ export const appConfig: ApplicationConfig = {
       ])
     ),
     provideRouter(routes),
-    environment.useMockOidc
-      ? Oidc.provideMock({
-          isUserInitiallyLoggedIn: true,
-        })
-      : Oidc.provide(async () => {
-          const http = inject(HttpClient);
-          const config = await firstValueFrom(http.get<RemoteOidcConfig>('./oidc-config.json'));
+    provideClientHydration(),
+    provideOidc(async () => {
+      const http = inject(HttpClient);
+      // No auth context flag: configuration must load before authentication can start.
+      const config = await firstValueFrom(http.get<RemoteOidcConfig>('/api/oidc-config'));
 
-          return {
-            issuerUri: config.issuerUri,
-            clientId: config.clientId,
-            debugLogs: true,
-          };
-        }),
+      if (config.useMock) {
+        return {
+          implementation: 'mock',
+          isUserInitiallyLoggedIn: true,
+        };
+      }
+
+      return {
+        implementation: 'real',
+        issuerUri: config.issuerUri,
+        clientId: config.clientId,
+        debugLogs: true,
+      };
+    }),
   ],
 };

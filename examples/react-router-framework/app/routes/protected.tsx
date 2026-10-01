@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import { useLoaderData } from "react-router";
 import { useOidc, enforceLogin, fetchWithAuth } from "~/oidc";
 import { isKeycloak, createKeycloakUtils } from "oidc-spa/keycloak";
 import type { Route } from "./+types/protected";
@@ -19,37 +18,33 @@ export async function clientLoader(params: Route.ClientLoaderArgs) {
     return { demoPosts };
 }
 
-export default function Protected() {
+export default function Protected({ loaderData }: Route.ComponentProps) {
     // Here we can safely assume that the user is logged in.
-    const { decodedIdToken, goToAuthServer, backFromAuthServer, issuerUri, clientId, validRedirectUri } =
-        useOidc({
-            assert: "user logged in"
-        });
+    const { user, goToAuthServer, backFromAuthServer, issuerUri, clientId, validRedirectUri } = useOidc({
+        assert: "user logged in"
+    });
 
     // Since oidc-spa is a generic adapter, all Keycloak specific features are provided via a standalone
     // util. And since this example should run as well with other provider we first test if we are integrating
     // against a Keycloak server or not.
     const keycloakUtils = isKeycloak({ issuerUri }) ? createKeycloakUtils({ issuerUri }) : undefined;
 
-    const { demoPosts } = useLoaderData<typeof clientLoader>();
+    const { demoPosts } = loaderData;
 
     return (
         <section className="space-y-6">
             <div className="space-y-1">
                 <p className="text-sm uppercase tracking-wide text-slate-400">Protected content</p>
-                <h1 className="text-2xl font-semibold text-white">Hello {decodedIdToken.name}</h1>
+                <h1 className="text-2xl font-semibold text-white">Hello {user.displayName}</h1>
                 <p className="text-base text-slate-300">
                     These actions come directly from your identity provider via oidc-spa.
                 </p>
             </div>
 
-            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-sm shadow-slate-950/40">
+            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-xs shadow-slate-950/40">
                 <dl className="grid gap-2 text-sm text-slate-400">
-                    <InfoRow label="Subject">{decodedIdToken.sub}</InfoRow>
-                    {decodedIdToken.email && <InfoRow label="Email">{decodedIdToken.email}</InfoRow>}
-                    {decodedIdToken.preferred_username && (
-                        <InfoRow label="Username">{decodedIdToken.preferred_username}</InfoRow>
-                    )}
+                    <InfoRow label="Name">{user.displayName}</InfoRow>
+                    {user.email && <InfoRow label="Email">{user.email}</InfoRow>}
                 </dl>
 
                 {keycloakUtils && (
@@ -86,7 +81,7 @@ export default function Protected() {
                                 Delete account
                             </button>
                             <a
-                                className="group inline-flex items-center gap-2 rounded-full border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-200 transition-colors hover:border-slate-500 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-200/40 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+                                className="group inline-flex items-center gap-2 rounded-full border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-200 transition-colors hover:border-slate-500 hover:text-white focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-slate-200/40 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
                                 href={keycloakUtils.getAccountUrl({
                                     clientId,
                                     validRedirectUri,
@@ -132,7 +127,7 @@ export default function Protected() {
                 )}
             </div>
 
-            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-sm shadow-slate-950/40">
+            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-xs shadow-slate-950/40">
                 <div className="space-y-2 text-sm text-slate-300">
                     <p>
                         The list below was fetched during the client loader with{" "}
@@ -152,7 +147,7 @@ export default function Protected() {
                     {demoPosts.map(post => (
                         <li
                             key={post.id}
-                            className="rounded-xl border border-slate-800/80 bg-slate-950/50 p-4 shadow-inner shadow-black/20"
+                            className="rounded-xl border border-slate-800/80 bg-slate-950/50 p-4 inset-shadow-sm inset-shadow-black/20"
                         >
                             <p className="text-sm font-semibold text-white">{post.title}</p>
                             <p className="mt-1 text-sm text-slate-400">{post.body}</p>

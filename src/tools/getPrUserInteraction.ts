@@ -25,3 +25,7 @@ export function getPrUserInteraction() {
         cancelPrUserInteraction: cleanup
     };
 }
+
+export function simulateUserInteraction() {
+    window.document.dispatchEvent(new Event("mousemove"));
+}
