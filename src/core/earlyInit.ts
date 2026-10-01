@@ -235,7 +235,7 @@ function handleOidcCallback(): {
 
     const stateData = getStateData({ stateUrlParamValue: authResponse.state });
 
-    const getRootRelativeRedirectUrl_strippedFromAuthResponse = () => {
+    const getRootRelativeReturnToUrl_strippedFromAuthResponse = () => {
         const authResponseParamNames = new Set([
             "state",
             "session_state",
@@ -246,37 +246,37 @@ function handleOidcCallback(): {
             "error_uri"
         ]);
 
-        const rootRelativeRedirectUrl = location_urlObj.href.slice(location_urlObj.origin.length);
+        const rootRelativeReturnToUrl = location_urlObj.href.slice(location_urlObj.origin.length);
 
         const { prefix, delimiter, serializedParams, suffix } = (() => {
             switch (locationHrefAssessment.responseMode) {
                 case "query": {
-                    const queryStartIndex = rootRelativeRedirectUrl.indexOf("?");
+                    const queryStartIndex = rootRelativeReturnToUrl.indexOf("?");
                     assert(queryStartIndex !== -1);
 
-                    const fragmentStartIndex = rootRelativeRedirectUrl.indexOf("#", queryStartIndex);
+                    const fragmentStartIndex = rootRelativeReturnToUrl.indexOf("#", queryStartIndex);
 
                     return {
-                        prefix: rootRelativeRedirectUrl.slice(0, queryStartIndex),
+                        prefix: rootRelativeReturnToUrl.slice(0, queryStartIndex),
                         delimiter: "?",
-                        serializedParams: rootRelativeRedirectUrl.slice(
+                        serializedParams: rootRelativeReturnToUrl.slice(
                             queryStartIndex + 1,
                             fragmentStartIndex === -1 ? undefined : fragmentStartIndex
                         ),
                         suffix:
                             fragmentStartIndex === -1
                                 ? ""
-                                : rootRelativeRedirectUrl.slice(fragmentStartIndex)
+                                : rootRelativeReturnToUrl.slice(fragmentStartIndex)
                     };
                 }
                 case "fragment": {
-                    const fragmentStartIndex = rootRelativeRedirectUrl.indexOf("#");
+                    const fragmentStartIndex = rootRelativeReturnToUrl.indexOf("#");
                     assert(fragmentStartIndex !== -1);
 
                     return {
-                        prefix: rootRelativeRedirectUrl.slice(0, fragmentStartIndex),
+                        prefix: rootRelativeReturnToUrl.slice(0, fragmentStartIndex),
                         delimiter: "#",
-                        serializedParams: rootRelativeRedirectUrl.slice(fragmentStartIndex + 1),
+                        serializedParams: rootRelativeReturnToUrl.slice(fragmentStartIndex + 1),
                         suffix: ""
                     };
                 }
@@ -301,13 +301,13 @@ function handleOidcCallback(): {
     };
 
     if (stateData === undefined) {
-        const rootRelativeRedirectUrl = getRootRelativeRedirectUrl_strippedFromAuthResponse();
+        const rootRelativeReturnToUrl = getRootRelativeReturnToUrl_strippedFromAuthResponse();
 
         setGetRootRelativeOriginalLocationHref_earlyInit({
-            rootRelativeOriginalLocationHref: rootRelativeRedirectUrl
+            rootRelativeOriginalLocationHref: rootRelativeReturnToUrl
         });
 
-        history.replaceState({}, "", rootRelativeRedirectUrl);
+        history.replaceState({}, "", rootRelativeReturnToUrl);
 
         return { shouldLoadApp: true };
     }
@@ -352,30 +352,30 @@ function handleOidcCallback(): {
                     break abort_case;
                 }
 
-                const rootRelativeRedirectUrl = getRootRelativeRedirectUrl_strippedFromAuthResponse();
+                const rootRelativeReturnToUrl = getRootRelativeReturnToUrl_strippedFromAuthResponse();
 
                 setGetRootRelativeOriginalLocationHref_earlyInit({
-                    rootRelativeOriginalLocationHref: rootRelativeRedirectUrl
+                    rootRelativeOriginalLocationHref: rootRelativeReturnToUrl
                 });
 
-                history.replaceState({}, "", rootRelativeRedirectUrl);
+                history.replaceState({}, "", rootRelativeReturnToUrl);
 
                 return { shouldLoadApp: true };
             }
 
             redirectAuthResponse = authResponse;
-            const rootRelativeRedirectUrl = (() => {
+            const rootRelativeReturnToUrl = (() => {
                 if (stateData.action === "login" && authResponse.error === "consent_required") {
-                    return stateData.rootRelativeRedirectUrl_consentRequiredCase;
+                    return stateData.rootRelativeReturnToUrl_consentRequiredCase;
                 }
-                return stateData.rootRelativeRedirectUrl;
+                return stateData.rootRelativeReturnToUrl;
             })();
 
             setGetRootRelativeOriginalLocationHref_earlyInit({
-                rootRelativeOriginalLocationHref: rootRelativeRedirectUrl
+                rootRelativeOriginalLocationHref: rootRelativeReturnToUrl
             });
 
-            history.replaceState({}, "", rootRelativeRedirectUrl);
+            history.replaceState({}, "", rootRelativeReturnToUrl);
             return { shouldLoadApp: true };
         }
         default:

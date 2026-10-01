@@ -29,10 +29,10 @@ import { getPersistedAuthState, persistAuthState } from "./persistedAuthState";
 import { createEvt } from "../tools/Evt";
 import { getHaveSharedParentDomain } from "../tools/haveSharedParentDomain";
 import {
-    createLoginOrGoToAuthServer,
+    createLoginOrStartAuthorization,
     getPrSafelyRestoredFromBfCacheAfterLoginBackNavigationOrInitializationError,
     getAuthorizationAudienceAndResourceParamsValues
-} from "./loginOrGoToAuthServer";
+} from "./loginOrStartAuthorization";
 import { createLazySessionStorage } from "../tools/lazySessionStorage";
 import {
     startLoginOrRefreshProcess,
@@ -71,7 +71,7 @@ import { noUndefined } from "../tools/tsafe/noUndefined";
 import { addOrUpdateSearchParam } from "../tools/urlSearchParams";
 import { getIsDeepLink } from "../tools/isDeepLink";
 import { deepLinkToRootRelativeUrl } from "../tools/deepLinkToRootRelativeUrl";
-import { simulateUserInteraction } from "../tools/getPrUserInteraction";
+import { simulateUserInteraction as resetAutoLogoutCountdown } from "../tools/getPrUserInteraction";
 
 // NOTE: Replaced at build time
 const VERSION = "{{OIDC_SPA_VERSION}}";
@@ -204,7 +204,6 @@ const createOidc_impl = runExclusive.build(async function <User, AutoLogin exten
         scopes: scopes_params,
         // NOTE: Evaluate now in case it's a getter, it needs to be stable.
         tokenParams,
-        autoLogin_redirectUrl,
         ...rest
     } = params;
 
@@ -470,8 +469,8 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
         autoLogin = false,
         createUser,
         idleSessionLifetimeInSeconds,
-        autoLogout_redirectionTarget = { redirectTo: "current page" },
-        autoLogin_redirectUrl,
+        autoLogout_returnToUrl,
+        autoLogin_returnToUrl,
         warnUserSecondsBeforeAutoLogout = 30
     } = params_forwarded;
 
@@ -791,7 +790,7 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
 
     const evtInitializationOutcomeUserNotLoggedIn = createEvt<void>();
 
-    const { loginOrGoToAuthServer } = createLoginOrGoToAuthServer({
+    const { loginOrStartAuthorization } = createLoginOrStartAuthorization({
         configId,
         oidcClientTsUserManager,
         transformAuthorizationUrl_paramOfCreateOidc: transformAuthorizationUrl,
@@ -827,7 +826,7 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
         | Error // Initialization error
         | {
               oidcClientTsUser: OidcClientTsUser;
-              backFromAuthServer: Oidc.LoggedIn["backFromAuthServer"]; // Undefined is silent signin
+              authorizationResult: Oidc.LoggedIn["authorizationResult"]; // Undefined is silent signin
               isRestoredFromSessionStorage: boolean;
           }
     > => {
@@ -868,7 +867,7 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
 
             return {
                 oidcClientTsUser,
-                backFromAuthServer: undefined,
+                authorizationResult: undefined,
                 isRestoredFromSessionStorage: true
             };
         }
@@ -986,8 +985,8 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
 
                         notifyOtherTabsOfLogin({ configId });
 
-                        if (stateData.redirectUrl_external !== undefined) {
-                            window.location.replace(stateData.redirectUrl_external);
+                        if (stateData.returnToUrl_external !== undefined) {
+                            window.location.replace(stateData.returnToUrl_external);
                             await new Promise<never>(() => {});
                         }
 
@@ -996,9 +995,9 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
                         return {
                             oidcClientTsUser,
                             isRestoredFromSessionStorage: false,
-                            backFromAuthServer: {
+                            authorizationResult: {
                                 authorizationParams: stateData.authorizationParams,
-                                result: Object.fromEntries(
+                                response: Object.fromEntries(
                                     Object.entries(authResponse)
                                         .map(([name, value]) => {
                                             if (
@@ -1037,8 +1036,8 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
                             sessionId: stateData.sessionId
                         });
 
-                        if (stateData.redirectUrl_external !== undefined) {
-                            window.location.replace(stateData.redirectUrl_external);
+                        if (stateData.returnToUrl_external !== undefined) {
+                            window.location.replace(stateData.returnToUrl_external);
                             await new Promise<never>(() => {});
                         }
 
@@ -1207,23 +1206,27 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
                             getPrSafelyRestoredFromBfCacheAfterLoginBackNavigationOrInitializationError()
                     });
 
-                    await loginOrGoToAuthServer({
+                    await loginOrStartAuthorization({
                         action: "login",
                         doForceReloadOnBfCache: true,
-                        redirectUrl: (() => {
-                            if (autoLogin_redirectUrl !== undefined) {
-                                return autoLogin_redirectUrl;
+                        returnToUrl: (() => {
+                            if (autoLogin && autoLogin_returnToUrl !== undefined) {
+                                return autoLogin_returnToUrl;
                             }
 
                             if (!evtIsThereMoreThanOneInstanceThatCantUserIframes.current) {
-                                return getRootRelativeOriginalLocationHref_earlyInit();
+                                return toFullyQualifiedUrl({
+                                    urlish: getRootRelativeOriginalLocationHref_earlyInit(),
+                                    doAssertNoQueryParams: false,
+                                    rootUrl_fullyQualified: window.location.origin
+                                });
                             }
 
                             return window.location.href;
                         })(),
                         doNavigateBackToLastPublicUrlIfTheTheUserNavigateBack: true,
-                        transformAuthorizationUrl_paramOfLoginOrGoToAuthServer: undefined,
-                        authorizationParams_paramOfLoginOrGoToAuthServer: undefined,
+                        transformAuthorizationUrl_paramOfLoginOrStartAuthorization: undefined,
+                        authorizationParams_paramOfLoginOrStartAuthorization: undefined,
                         interaction: (() => {
                             if (persistedAuthState === "explicitly logged out") {
                                 return "ensure interaction";
@@ -1259,7 +1262,7 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
 
             return {
                 oidcClientTsUser,
-                backFromAuthServer: undefined,
+                authorizationResult: undefined,
                 isRestoredFromSessionStorage: false
             };
         }
@@ -1336,8 +1339,8 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
                     ...oidc_common,
                     isUserLoggedIn: false,
                     login: async ({
-                        doesCurrentHrefRequiresAuth = false,
-                        redirectUrl,
+                        doesCurrentHrefEnforceLogin = false,
+                        returnToUrl = window.location.href,
                         authorizationParams,
                         transformAuthorizationUrl
                     } = {}) => {
@@ -1360,14 +1363,14 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
                             );
                         }
 
-                        return loginOrGoToAuthServer({
+                        return loginOrStartAuthorization({
                             action: "login",
                             doNavigateBackToLastPublicUrlIfTheTheUserNavigateBack:
-                                doesCurrentHrefRequiresAuth,
+                                doesCurrentHrefEnforceLogin,
                             doForceReloadOnBfCache: false,
-                            redirectUrl: redirectUrl ?? window.location.href,
-                            authorizationParams_paramOfLoginOrGoToAuthServer: authorizationParams,
-                            transformAuthorizationUrl_paramOfLoginOrGoToAuthServer:
+                            returnToUrl,
+                            authorizationParams_paramOfLoginOrStartAuthorization: authorizationParams,
+                            transformAuthorizationUrl_paramOfLoginOrStartAuthorization:
                                 transformAuthorizationUrl,
                             interaction:
                                 getPersistedAuthState({ configId }) === "explicitly logged out"
@@ -1432,12 +1435,12 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
                     prUnlock: new Promise<never>(() => {})
                 });
 
-                await loginOrGoToAuthServer({
+                await loginOrStartAuthorization({
                     action: "login",
-                    redirectUrl: window.location.href,
+                    returnToUrl: window.location.href,
                     doForceReloadOnBfCache: true,
-                    authorizationParams_paramOfLoginOrGoToAuthServer: undefined,
-                    transformAuthorizationUrl_paramOfLoginOrGoToAuthServer: undefined,
+                    authorizationParams_paramOfLoginOrStartAuthorization: undefined,
+                    transformAuthorizationUrl_paramOfLoginOrStartAuthorization: undefined,
                     doNavigateBackToLastPublicUrlIfTheTheUserNavigateBack: true,
                     interaction: "directly redirect if active session show login otherwise",
                     preRedirectHook: undefined
@@ -1729,12 +1732,20 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
 
     let wouldHaveAutoLoggedOutIfBrowserWasOnline = false;
 
+    const logoutAutomatically = (): Promise<never> =>
+        oidc_loggedIn.logout({
+            returnToUrl:
+                typeof autoLogout_returnToUrl === "function"
+                    ? autoLogout_returnToUrl()
+                    : autoLogout_returnToUrl
+        });
+
     const oidc_loggedIn = id<Oidc.LoggedIn<User>>({
         ...oidc_common,
         isUserLoggedIn: true,
         getTokens: async params_getTokens => {
             if (wouldHaveAutoLoggedOutIfBrowserWasOnline) {
-                await oidc_loggedIn.logout(autoLogout_redirectionTarget);
+                await logoutAutomatically();
                 assert(false);
             }
 
@@ -1744,8 +1755,8 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
                     clientId,
                     __oidcProviderMetadata: oidcProviderMetadata,
                     autoLogin: true,
-                    autoLogin_redirectUrl: params_getTokens.redirectUrl,
-                    autoLogout_redirectionTarget,
+                    autoLogin_returnToUrl: params_getTokens.returnToUrl ?? window.location.href,
+                    autoLogout_returnToUrl,
                     debugLogs: log !== undefined,
                     disableDPoP: (() => {
                         if (params_getTokens.disableDPoP !== undefined) {
@@ -1755,7 +1766,7 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
                     })(),
                     idleSessionLifetimeInSeconds: A_HUNDRED_YEARS_IN_SECONDS,
                     sessionRestorationMethod,
-                    scopes: params_getTokens.scope ?? scopes,
+                    scopes: params_getTokens.scopes ?? scopes,
                     tokenParams: {
                         ...tokenParams,
                         ...params_getTokens.tokenParams
@@ -1832,7 +1843,7 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
             const { accessToken } = await oidc_loggedIn.getTokens(params);
             return accessToken;
         },
-        logout: async params => {
+        logout: async ({ returnToUrl = window.location.href } = {}) => {
             if (globalContext.hasLogoutBeenCalled) {
                 log?.("logout() has already been called, ignoring the call");
                 return new Promise<never>(() => {});
@@ -1840,42 +1851,33 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
 
             globalContext.hasLogoutBeenCalled = true;
 
-            const { rootRelativeRedirectUrl, redirectUrl_external } = (() => {
-                const redirectUrl: string = (() => {
-                    switch (params.redirectTo) {
-                        case "current page":
-                            return window.location.href;
-                        case "home":
-                            return homeUrlAndRedirectUri;
-                        case "specific url":
-                            return toFullyQualifiedUrl({
-                                urlish: params.url,
-                                doAssertNoQueryParams: false,
-                                rootUrl_fullyQualified: homeUrlAndRedirectUri
-                            });
-                    }
-                })();
+            const { rootRelativeReturnToUrl, returnToUrl_external } = (() => {
+                const returnToUrl_fullyQualified = toFullyQualifiedUrl({
+                    urlish: returnToUrl,
+                    doAssertNoQueryParams: false,
+                    rootUrl_fullyQualified: homeUrlAndRedirectUri
+                });
 
-                log?.(`Post logout redirect url: ${redirectUrl}`);
+                log?.(`Post logout return URL: ${returnToUrl_fullyQualified}`);
 
                 const isDeepLink = getIsDeepLink({
-                    fullyQualifiedUrl: redirectUrl,
+                    fullyQualifiedUrl: returnToUrl_fullyQualified,
                     relativeTo_fullyQualified: homeUrlAndRedirectUri
                 });
 
                 if (isDeepLink) {
                     return {
-                        rootRelativeRedirectUrl: deepLinkToRootRelativeUrl({
-                            fullyQualifiedDeepLinkUrl: redirectUrl
+                        rootRelativeReturnToUrl: deepLinkToRootRelativeUrl({
+                            fullyQualifiedDeepLinkUrl: returnToUrl_fullyQualified
                         }),
-                        redirectUrl_external: undefined
+                        returnToUrl_external: undefined
                     };
                 } else {
                     return {
-                        rootRelativeRedirectUrl: deepLinkToRootRelativeUrl({
+                        rootRelativeReturnToUrl: deepLinkToRootRelativeUrl({
                             fullyQualifiedDeepLinkUrl: homeUrlAndRedirectUri
                         }),
-                        redirectUrl_external: redirectUrl
+                        returnToUrl_external: returnToUrl_fullyQualified
                     };
                 }
             })();
@@ -1900,7 +1902,7 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
                     sessionId
                 });
 
-                window.location.href = redirectUrl_external ?? rootRelativeRedirectUrl;
+                window.location.href = returnToUrl_external ?? rootRelativeReturnToUrl;
 
                 return new Promise<never>(() => {});
             }
@@ -1927,7 +1929,7 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
                 stateUrlParamValue_instance,
                 stateDataCookie: {
                     action: "logout",
-                    rootRelativeRedirectUrl
+                    rootRelativeReturnToUrl
                 }
             });
 
@@ -1936,8 +1938,8 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
                     state: id<StateData.Redirect>({
                         configId,
                         context: "redirect",
-                        rootRelativeRedirectUrl,
-                        redirectUrl_external,
+                        rootRelativeReturnToUrl,
+                        returnToUrl_external,
                         action: "logout",
                         sessionId
                     }),
@@ -1977,7 +1979,7 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
                 next({
                     shouldDisplayWarning: true,
                     secondsLeftBeforeAutoLogout: secondsLeft,
-                    simulateUserInteraction: () => simulateUserInteraction()
+                    resetAutoLogoutCountdown
                 });
             };
 
@@ -1989,14 +1991,18 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
 
             return { unsubscribeFromAutoLogoutState };
         },
-        goToAuthServer: ({ redirectUrl, authorizationParams, transformAuthorizationUrl }) =>
-            loginOrGoToAuthServer({
-                action: "go to auth server",
-                redirectUrl: redirectUrl ?? window.location.href,
-                authorizationParams_paramOfLoginOrGoToAuthServer: authorizationParams,
-                transformAuthorizationUrl_paramOfLoginOrGoToAuthServer: transformAuthorizationUrl
+        startAuthorization: ({
+            returnToUrl = window.location.href,
+            authorizationParams,
+            transformAuthorizationUrl
+        } = {}) =>
+            loginOrStartAuthorization({
+                action: "start authorization",
+                returnToUrl,
+                authorizationParams_paramOfLoginOrStartAuthorization: authorizationParams,
+                transformAuthorizationUrl_paramOfLoginOrStartAuthorization: transformAuthorizationUrl
             }),
-        backFromAuthServer: resultOfLoginProcess.backFromAuthServer,
+        authorizationResult: resultOfLoginProcess.authorizationResult,
         isNewBrowserSession: (() => {
             const value = getIsNewBrowserSession({ subjectId });
 
@@ -2362,7 +2368,7 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
                         return;
                     }
 
-                    await oidc_loggedIn.logout(autoLogout_redirectionTarget);
+                    await logoutAutomatically();
                 }
 
                 invokeAllCallbacks({ secondsLeft });

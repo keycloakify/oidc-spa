@@ -19,15 +19,15 @@ const globalContext = {
     evtHasLoginBeenCalled: createStatefulEvt(() => false)
 };
 
-type Params = Params.Login | Params.GoToAuthServer;
+type Params = Params.Login | Params.StartAuthorization;
 
 namespace Params {
     type Common = {
-        redirectUrl: string;
-        authorizationParams_paramOfLoginOrGoToAuthServer:
+        returnToUrl: string;
+        authorizationParams_paramOfLoginOrStartAuthorization:
             | Record<string, string | string[] | undefined>
             | undefined;
-        transformAuthorizationUrl_paramOfLoginOrGoToAuthServer:
+        transformAuthorizationUrl_paramOfLoginOrStartAuthorization:
             | ((params: { authorizationUrl: string }) => string)
             | undefined;
     };
@@ -43,8 +43,8 @@ namespace Params {
         preRedirectHook: (() => void) | undefined;
     };
 
-    export type GoToAuthServer = Common & {
-        action: "go to auth server";
+    export type StartAuthorization = Common & {
+        action: "start authorization";
     };
 }
 
@@ -61,7 +61,7 @@ export function getPrSafelyRestoredFromBfCacheAfterLoginBackNavigationOrInitiali
     return dOut.pr;
 }
 
-export function createLoginOrGoToAuthServer(params: {
+export function createLoginOrStartAuthorization(params: {
     configId: string;
     oidcClientTsUserManager: OidcClientTsUserManager;
     transformAuthorizationUrl_paramOfCreateOidc:
@@ -97,8 +97,8 @@ export function createLoginOrGoToAuthServer(params: {
 
     let lastPublicUrl: string | undefined = undefined;
 
-    async function loginOrGoToAuthServer(params: Params): Promise<never> {
-        log?.(`Calling loginOrGoToAuthServer ${JSON.stringify(params, null, 2)}`);
+    async function loginOrStartAuthorization(params: Params): Promise<never> {
+        log?.(`Calling loginOrStartAuthorization ${JSON.stringify(params, null, 2)}`);
 
         delay_until_online: {
             const { isOnline, prOnline } = getIsOnline();
@@ -183,45 +183,45 @@ export function createLoginOrGoToAuthServer(params: {
             }
         }
 
-        const { rootRelativeRedirectUrl, redirectUrl_external } = (() => {
-            const redirectUrl = toFullyQualifiedUrl({
-                urlish: params.redirectUrl,
+        const { rootRelativeReturnToUrl, returnToUrl_external } = (() => {
+            const returnToUrl = toFullyQualifiedUrl({
+                urlish: params.returnToUrl,
                 doAssertNoQueryParams: false,
                 rootUrl_fullyQualified: homeUrl
             });
 
-            log?.(`post ${params.action} redirect url: ${redirectUrl}`);
+            log?.(`post ${params.action} return URL: ${returnToUrl}`);
 
             const isDeepLink = getIsDeepLink({
-                fullyQualifiedUrl: redirectUrl,
+                fullyQualifiedUrl: returnToUrl,
                 relativeTo_fullyQualified: homeUrl
             });
 
             if (isDeepLink) {
                 return {
-                    rootRelativeRedirectUrl: deepLinkToRootRelativeUrl({
-                        fullyQualifiedDeepLinkUrl: redirectUrl
+                    rootRelativeReturnToUrl: deepLinkToRootRelativeUrl({
+                        fullyQualifiedDeepLinkUrl: returnToUrl
                     }),
-                    redirectUrl_external: undefined
+                    returnToUrl_external: undefined
                 };
             } else {
                 return {
-                    rootRelativeRedirectUrl: deepLinkToRootRelativeUrl({
+                    rootRelativeReturnToUrl: deepLinkToRootRelativeUrl({
                         fullyQualifiedDeepLinkUrl: homeUrl
                     }),
-                    redirectUrl_external: redirectUrl
+                    returnToUrl_external: returnToUrl
                 };
             }
         })();
 
-        const rootRelativeRedirectUrl_consentRequiredCase = (() => {
+        const rootRelativeReturnToUrl_consentRequiredCase = (() => {
             switch (params.action) {
                 case "login":
                     return deepLinkToRootRelativeUrl({
                         fullyQualifiedDeepLinkUrl: lastPublicUrl ?? homeUrl
                     });
-                case "go to auth server":
-                    return rootRelativeRedirectUrl;
+                case "start authorization":
+                    return rootRelativeReturnToUrl;
             }
         })();
 
@@ -230,19 +230,19 @@ export function createLoginOrGoToAuthServer(params: {
             stateUrlParamValue_instance,
             stateDataCookie: {
                 action: "login",
-                rootRelativeRedirectUrl,
-                rootRelativeRedirectUrl_consentRequiredCase
+                rootRelativeReturnToUrl,
+                rootRelativeReturnToUrl_consentRequiredCase
             }
         });
 
         const stateData: StateData.Redirect = {
             context: "redirect",
-            rootRelativeRedirectUrl,
+            rootRelativeReturnToUrl,
             authorizationParams: {},
             configId,
             action: "login",
-            rootRelativeRedirectUrl_consentRequiredCase,
-            redirectUrl_external
+            rootRelativeReturnToUrl_consentRequiredCase,
+            returnToUrl_external
         };
 
         const redirectMethod = (() => {
@@ -251,7 +251,7 @@ export function createLoginOrGoToAuthServer(params: {
                     return params.doNavigateBackToLastPublicUrlIfTheTheUserNavigateBack
                         ? "replace"
                         : "assign";
-                case "go to auth server":
+                case "start authorization":
                     return "assign";
             }
         })();
@@ -268,7 +268,7 @@ export function createLoginOrGoToAuthServer(params: {
                 redirectMethod,
                 prompt: (() => {
                     switch (params.action) {
-                        case "go to auth server":
+                        case "start authorization":
                             return undefined;
                         case "login":
                             switch (params.interaction) {
@@ -286,10 +286,10 @@ export function createLoginOrGoToAuthServer(params: {
                 transformUrl: (authorizationUrl: string): string =>
                     transformAuthorizationUrl_internal({
                         authorizationUrl,
-                        authorizationParams_paramOfLoginOrGoToAuthServer:
-                            params.authorizationParams_paramOfLoginOrGoToAuthServer,
-                        transformAuthorizationUrl_paramOfLoginOrGoToAuthServer:
-                            params.transformAuthorizationUrl_paramOfLoginOrGoToAuthServer,
+                        authorizationParams_paramOfLoginOrStartAuthorization:
+                            params.authorizationParams_paramOfLoginOrStartAuthorization,
+                        transformAuthorizationUrl_paramOfLoginOrStartAuthorization:
+                            params.transformAuthorizationUrl_paramOfLoginOrStartAuthorization,
                         transformAuthorizationUrl_paramOfCreateOidc,
                         getAuthorizationParams_paramsOfCreateOidc,
                         isSilentRedirect:
@@ -324,7 +324,7 @@ export function createLoginOrGoToAuthServer(params: {
 
                     assert(
                         false,
-                        `This is a bug in oidc-spa (loginOrGoToAuthServer), please report: ${error.message}`
+                        `This is a bug in oidc-spa (loginOrStartAuthorization), please report: ${error.message}`
                     );
                 }
             );
@@ -341,7 +341,7 @@ export function createLoginOrGoToAuthServer(params: {
     });
 
     return {
-        loginOrGoToAuthServer
+        loginOrStartAuthorization
     };
 }
 
@@ -357,10 +357,10 @@ const AUTHORIZATION_URL_BASE_QUERY_PARAMS_NAMES = [
 
 export function transformAuthorizationUrl_internal(params: {
     authorizationUrl: string;
-    authorizationParams_paramOfLoginOrGoToAuthServer:
+    authorizationParams_paramOfLoginOrStartAuthorization:
         | Record<string, string | string[] | undefined>
         | undefined;
-    transformAuthorizationUrl_paramOfLoginOrGoToAuthServer:
+    transformAuthorizationUrl_paramOfLoginOrStartAuthorization:
         | ((params: { authorizationUrl: string }) => string)
         | undefined;
     transformAuthorizationUrl_paramOfCreateOidc:
@@ -377,8 +377,8 @@ export function transformAuthorizationUrl_internal(params: {
 }): string {
     const {
         authorizationUrl,
-        authorizationParams_paramOfLoginOrGoToAuthServer,
-        transformAuthorizationUrl_paramOfLoginOrGoToAuthServer,
+        authorizationParams_paramOfLoginOrStartAuthorization,
+        transformAuthorizationUrl_paramOfLoginOrStartAuthorization,
         transformAuthorizationUrl_paramOfCreateOidc,
         getAuthorizationParams_paramsOfCreateOidc,
         isSilentRedirect,
@@ -391,8 +391,8 @@ export function transformAuthorizationUrl_internal(params: {
         [
             [getAuthorizationParams_paramsOfCreateOidc, transformAuthorizationUrl_paramOfCreateOidc],
             [
-                authorizationParams_paramOfLoginOrGoToAuthServer,
-                transformAuthorizationUrl_paramOfLoginOrGoToAuthServer
+                authorizationParams_paramOfLoginOrStartAuthorization,
+                transformAuthorizationUrl_paramOfLoginOrStartAuthorization
             ]
         ] as const
     ).forEach(([authorizationParams_maybeGetter, transformAuthorizationUrl], i) => {
@@ -438,9 +438,9 @@ export function transformAuthorizationUrl_internal(params: {
             }
 
             {
-                const isGoToAuthServerPass = i === 1;
+                const isRequestSpecificPass = i === 1;
 
-                if (!isGoToAuthServerPass) {
+                if (!isRequestSpecificPass) {
                     break handle_setStateDataAuthorizationParams;
                 }
             }
@@ -460,7 +460,7 @@ export function transformAuthorizationUrl_internal(params: {
                 }
 
                 stateData_authorizationParams[name] =
-                    values_current.length === 1 ? [values_current[0]] : values_current;
+                    values_current.length === 1 ? values_current[0] : values_current;
             }
 
             setStateDataAuthorizationParams({ authorizationParams: stateData_authorizationParams });
@@ -554,8 +554,8 @@ export function getAuthorizationAudienceAndResourceParamsValues(params: {
 
     const authorizationUrl_probe_transformed = transformAuthorizationUrl_internal({
         authorizationUrl: authorizationUrl_probe,
-        authorizationParams_paramOfLoginOrGoToAuthServer: undefined,
-        transformAuthorizationUrl_paramOfLoginOrGoToAuthServer: undefined,
+        authorizationParams_paramOfLoginOrStartAuthorization: undefined,
+        transformAuthorizationUrl_paramOfLoginOrStartAuthorization: undefined,
         transformAuthorizationUrl_paramOfCreateOidc,
         getAuthorizationParams_paramsOfCreateOidc,
         isSilentRedirect: true,

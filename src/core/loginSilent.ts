@@ -13,7 +13,7 @@ import { getIsDev } from "../tools/isDev";
 import { type AuthResponse } from "./AuthResponse";
 import { getIsOnline } from "../tools/getIsOnline";
 import type { Evt } from "../tools/Evt";
-import { transformAuthorizationUrl_internal } from "./loginOrGoToAuthServer";
+import { transformAuthorizationUrl_internal } from "./loginOrStartAuthorization";
 import { noUndefined } from "../tools/tsafe/noUndefined";
 
 type ResultOfLoginSilent =
@@ -182,8 +182,8 @@ export function createLoginSilent(params: {
                 transformUrl: (authorizationUrl: string) =>
                     transformAuthorizationUrl_internal({
                         authorizationUrl,
-                        authorizationParams_paramOfLoginOrGoToAuthServer: undefined,
-                        transformAuthorizationUrl_paramOfLoginOrGoToAuthServer: undefined,
+                        authorizationParams_paramOfLoginOrStartAuthorization: undefined,
+                        transformAuthorizationUrl_paramOfLoginOrStartAuthorization: undefined,
                         transformAuthorizationUrl_paramOfCreateOidc,
                         getAuthorizationParams_paramsOfCreateOidc,
                         isSilentRedirect: true,

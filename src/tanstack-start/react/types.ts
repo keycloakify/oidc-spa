@@ -36,8 +36,8 @@ export type Oidc_react<User_client> =
 
           logout?: never;
           renewTokens?: never;
-          goToAuthServer?: never;
-          backFromAuthServer?: never;
+          startAuthorization?: never;
+          authorizationResult?: never;
           isNewBrowserSession?: never;
 
           login?: never;
@@ -47,8 +47,8 @@ export type Oidc_react<User_client> =
     | (Oidc_react.NotLoggedIn & {
           logout?: never;
           renewTokens?: never;
-          goToAuthServer?: never;
-          backFromAuthServer?: never;
+          startAuthorization?: never;
+          authorizationResult?: never;
           isNewBrowserSession?: never;
           user?: never;
           refreshUser?: never;
@@ -73,11 +73,7 @@ export namespace Oidc_react {
         issuerUri: string;
         clientId: string;
         validRedirectUri: string;
-        login: (params?: {
-            extraQueryParams?: Record<string, string | undefined>;
-            redirectUrl?: string;
-            transformUrlBeforeRedirect?: (authorizationUrl: string) => string;
-        }) => Promise<never>;
+        login: Oidc_client.NotLoggedIn["login"];
         autoLogoutState: {
             shouldDisplayWarning: false;
         };
@@ -90,30 +86,14 @@ export namespace Oidc_react {
         issuerUri: string;
         clientId: string;
         validRedirectUri: string;
-        logout: (
-            params: { redirectTo: "home" | "current page" } | { redirectTo: "specific url"; url: string }
-        ) => Promise<never>;
-        renewTokens: () => Promise<void>;
-        goToAuthServer: (params: {
-            authorizationParams?: Record<string, string | string[] | undefined>;
-            transformAuthorizationUrl?: (params: { authorizationUrl: string }) => string;
-            redirectUrl?: string;
-        }) => Promise<never>;
-        backFromAuthServer:
-            | {
-                  authorizationParams: Record<string, string | string[]>;
-                  result: Record<string, string>;
-              }
-            | undefined;
+        logout: Oidc_client.LoggedIn["logout"];
+        renewTokens: Oidc_client.LoggedIn["renewTokens"];
+        startAuthorization: Oidc_client.LoggedIn["startAuthorization"];
+        authorizationResult: Oidc_client.LoggedIn["authorizationResult"];
         isNewBrowserSession: boolean;
-        autoLogoutState:
-            | {
-                  shouldDisplayWarning: true;
-                  secondsLeftBeforeAutoLogout: number;
-              }
-            | {
-                  shouldDisplayWarning: false;
-              };
+        autoLogoutState: Parameters<
+            Parameters<Oidc_client.LoggedIn["subscribeToAutoLogoutState"]>[0]
+        >[0];
         user: User_client;
         refreshUser: () => Promise<void>;
     };
@@ -236,14 +216,7 @@ export namespace RuntimeConfigs {
             tokenParams?: Record<string, string | string[] | undefined>;
             sessionRestorationMethod?: "iframe" | "full page redirect" | "auto";
             __oidcProviderMetadata?: OidcProviderMetadata;
-            autoLogout_redirectionTarget?:
-                | {
-                      redirectTo: "home" | "current page";
-                  }
-                | {
-                      redirectTo: "specific url";
-                      url: string;
-                  };
+            autoLogout_returnToUrl?: ParamsOfCreateOidc<unknown, boolean>["autoLogout_returnToUrl"];
             disableDPoP?: true;
         };
     } & (HasServer extends true
@@ -266,7 +239,7 @@ export namespace RuntimeConfigs {
             Real<false>["client"] & Pick<Real<false>, "issuerUri" | "debugLogs">,
             Omit<
                 ParamsOfCreateOidc<unknown, boolean>,
-                "createUser" | "autoLogin" | "autoLogin_redirectUrl"
+                "createUser" | "autoLogin" | "autoLogin_returnToUrl"
             >
         >
     >;

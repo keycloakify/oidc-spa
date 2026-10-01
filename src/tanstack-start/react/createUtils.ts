@@ -213,8 +213,7 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
                                         runtimeConfigs.client.sessionRestorationMethod,
                                     debugLogs: runtimeConfigs.debugLogs,
                                     __oidcProviderMetadata: runtimeConfigs.client.__oidcProviderMetadata,
-                                    autoLogout_redirectionTarget:
-                                        runtimeConfigs.client.autoLogout_redirectionTarget,
+                                    autoLogout_returnToUrl: runtimeConfigs.client.autoLogout_returnToUrl,
                                     disableDPoP: runtimeConfigs.client.disableDPoP,
                                     warnUserSecondsBeforeAutoLogout:
                                         runtimeConfigs.client.warnUserSecondsBeforeAutoLogout,
@@ -333,8 +332,8 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
                         return;
                     }
 
-                    oidc.subscribeToAutoLogoutState(autoLogountState => {
-                        evtAutoLogoutState.current = autoLogountState;
+                    oidc.subscribeToAutoLogoutState(autoLogoutState => {
+                        evtAutoLogoutState.current = autoLogoutState;
                     });
                 });
 
@@ -681,11 +680,7 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
                         clientId: state.oidc.clientId,
                         validRedirectUri: state.oidc.validRedirectUri,
                         autoLogoutState: { shouldDisplayWarning: false },
-                        login: params =>
-                            state.oidc.login({
-                                doesCurrentHrefRequiresAuth: false,
-                                ...params
-                            })
+                        login: state.oidc.login
                     });
                 }
 
@@ -697,8 +692,8 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
                     validRedirectUri: state.oidc.validRedirectUri,
                     logout: state.oidc.logout,
                     renewTokens: state.oidc.renewTokens,
-                    goToAuthServer: state.oidc.goToAuthServer,
-                    backFromAuthServer: state.oidc.backFromAuthServer,
+                    startAuthorization: state.oidc.startAuthorization,
+                    authorizationResult: state.oidc.authorizationResult,
                     isNewBrowserSession: state.oidc.isNewBrowserSession,
                     get autoLogoutState() {
                         evtIsAutoLogoutStateUsed.current = true;
@@ -715,7 +710,7 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
             return { useOidc };
         })();
 
-        let redirectUrl_temporaryOverride: string | undefined = undefined;
+        let returnToUrl_temporaryOverride: string | undefined = undefined;
 
         const { getOidc } = (() => {
             let oidc_cached: Oidc_client<User_client> | undefined = undefined;
@@ -774,7 +769,7 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
                                 }
                                 return oidc.getTokens({
                                     ...params,
-                                    redirectUrl: params.redirectUrl ?? redirectUrl_temporaryOverride
+                                    returnToUrl: params.returnToUrl ?? returnToUrl_temporaryOverride
                                 });
                             },
                             getAccessToken: async (params): Promise<string> => {
@@ -811,7 +806,7 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
 
             const { cause } = loaderContext;
 
-            const redirectUrl = (() => {
+            const returnToUrl = (() => {
                 if (loaderContext.location?.publicHref !== undefined) {
                     return toFullyQualifiedUrl({
                         urlish: loaderContext.location.publicHref,
@@ -826,7 +821,7 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
             const oidc = await getOidc();
 
             const isUrlAlreadyReplaced =
-                window.location.href.replace(/\/$/, "") === redirectUrl.replace(/\/$/, "");
+                window.location.href.replace(/\/$/, "") === returnToUrl.replace(/\/$/, "");
 
             if (!oidc.isUserLoggedIn) {
                 if (cause === "preload") {
@@ -840,17 +835,17 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
                 }
 
                 await oidc.login({
-                    redirectUrl,
-                    doesCurrentHrefRequiresAuth: isUrlAlreadyReplaced
+                    returnToUrl,
+                    doesCurrentHrefEnforceLogin: isUrlAlreadyReplaced
                 });
             }
 
-            set_redirectUrl_getTokens: {
+            set_returnToUrl_getTokens: {
                 if (isUrlAlreadyReplaced) {
-                    break set_redirectUrl_getTokens;
+                    break set_returnToUrl_getTokens;
                 }
 
-                redirectUrl_temporaryOverride = redirectUrl;
+                returnToUrl_temporaryOverride = returnToUrl;
 
                 const history_pushState = history.pushState;
                 const history_replaceState = history.replaceState;
@@ -858,7 +853,7 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
                 const onNavigated = () => {
                     history.pushState = history_pushState;
                     history.replaceState = history_replaceState;
-                    redirectUrl_temporaryOverride = undefined;
+                    returnToUrl_temporaryOverride = undefined;
                 };
 
                 history.pushState = function pushState(...args) {

@@ -17,13 +17,13 @@ export namespace StateData {
     export namespace Redirect {
         type Common_Redirect = Common & {
             context: "redirect";
-            rootRelativeRedirectUrl: string;
-            redirectUrl_external: string | undefined;
+            rootRelativeReturnToUrl: string;
+            returnToUrl_external: string | undefined;
         };
 
         export type Login = Common_Redirect & {
             action: "login";
-            rootRelativeRedirectUrl_consentRequiredCase: string;
+            rootRelativeReturnToUrl_consentRequiredCase: string;
             authorizationParams: Record<string, string | string[]>;
         };
 

@@ -114,7 +114,7 @@ export class Keycloak {
             enableLogging,
             scope,
             locale,
-            autoLogout_redirectionTarget
+            autoLogout_returnToUrl
         } = initOptions;
 
         if (this.#state.initOptions !== undefined) {
@@ -141,10 +141,10 @@ export class Keycloak {
             issuerUri,
             clientId: this.#state.constructorParams.clientId,
             autoLogin,
-            autoLogin_redirectUrl: redirectUri,
+            autoLogin_returnToUrl: redirectUri,
             debugLogs: enableLogging,
             scopes: scope?.split(" "),
-            autoLogout_redirectionTarget,
+            autoLogout_returnToUrl,
             authorizationParams:
                 !autoLogin || locale === undefined
                     ? undefined
@@ -228,19 +228,19 @@ export class Keycloak {
                 break onActionUpdate_call;
             }
 
-            const { backFromAuthServer } = oidc;
+            const { authorizationResult } = oidc;
 
-            if (backFromAuthServer === undefined) {
+            if (authorizationResult === undefined) {
                 break onActionUpdate_call;
             }
 
-            const status = backFromAuthServer.result.kc_action_status;
+            const status = authorizationResult.response.kc_action_status;
 
             if (!isAmong(["success", "cancelled", "error"], status)) {
                 break onActionUpdate_call;
             }
 
-            const action = backFromAuthServer.authorizationParams.kc_action;
+            const action = authorizationResult.authorizationParams.kc_action;
 
             if (typeof action !== "string") {
                 break onActionUpdate_call;
@@ -744,7 +744,7 @@ export class Keycloak {
      */
     login = this.#login.bind(this);
     async #login(
-        options?: KeycloakLoginOptions & { doesCurrentHrefRequiresAuth?: boolean }
+        options?: KeycloakLoginOptions & { doesCurrentHrefEnforceLogin?: boolean }
     ): Promise<never> {
         if (!this.didInitialize) {
             await this.#state.dInitialized.pr;
@@ -760,7 +760,7 @@ export class Keycloak {
             acrValues,
             idpHint,
             locale,
-            doesCurrentHrefRequiresAuth
+            doesCurrentHrefEnforceLogin
         } = options ?? {};
 
         assert(oidc !== undefined);
@@ -782,10 +782,10 @@ export class Keycloak {
             assert(action !== "register");
             assert(loginHint === undefined);
             assert(idpHint === undefined);
-            assert(doesCurrentHrefRequiresAuth === undefined);
+            assert(doesCurrentHrefEnforceLogin === undefined);
 
-            await oidc.goToAuthServer({
-                redirectUrl: redirectUri,
+            await oidc.startAuthorization({
+                returnToUrl: redirectUri,
                 authorizationParams: {
                     ...authorizationParams_common,
                     kc_action: action,
@@ -798,8 +798,8 @@ export class Keycloak {
         assert(action === undefined || action === "register");
 
         await oidc.login({
-            redirectUrl: redirectUri,
-            doesCurrentHrefRequiresAuth: doesCurrentHrefRequiresAuth ?? false,
+            returnToUrl: redirectUri,
+            doesCurrentHrefEnforceLogin: doesCurrentHrefEnforceLogin ?? false,
             authorizationParams: {
                 ...authorizationParams_common,
                 login_hint: loginHint,
@@ -831,9 +831,7 @@ export class Keycloak {
         const redirectUri = options?.redirectUri ?? initOptions.redirectUri;
 
         await oidc.logout({
-            ...(redirectUri === undefined
-                ? { redirectTo: "current page" }
-                : { redirectTo: "specific url", url: redirectUri })
+            returnToUrl: redirectUri
         });
         assert(false);
     }
@@ -908,7 +906,11 @@ export class Keycloak {
             clientId: this.clientId,
             validRedirectUri: (() => {
                 if (redirectUri !== undefined) {
-                    return redirectUri;
+                    return toFullyQualifiedUrl({
+                        urlish: redirectUri,
+                        doAssertNoQueryParams: false,
+                        rootUrl_fullyQualified: window.location.origin
+                    });
                 }
 
                 let BASE_URL: string;
@@ -922,7 +924,8 @@ export class Keycloak {
                 return toFullyQualifiedUrl({
                     urlish: BASE_URL,
                     doAssertNoQueryParams: true,
-                    doOutputWithTrailingSlash: true
+                    doOutputWithTrailingSlash: true,
+                    rootUrl_fullyQualified: window.location.origin
                 });
             })(),
             locale

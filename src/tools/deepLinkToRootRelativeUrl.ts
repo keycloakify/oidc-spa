@@ -5,7 +5,10 @@ export function deepLinkToRootRelativeUrl(params: { fullyQualifiedDeepLinkUrl: s
     const { fullyQualifiedDeepLinkUrl } = params;
 
     assert(
-        getIsDeepLink({ fullyQualifiedUrl: fullyQualifiedDeepLinkUrl }),
+        getIsDeepLink({
+            fullyQualifiedUrl: fullyQualifiedDeepLinkUrl,
+            relativeTo_fullyQualified: window.location.origin
+        }),
         `${fullyQualifiedDeepLinkUrl} is not a deep link`
     );
 

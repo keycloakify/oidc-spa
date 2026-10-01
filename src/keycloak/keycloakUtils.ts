@@ -203,12 +203,14 @@ export function createKeycloakUtils(params: { issuerUri: string }): KeycloakUtil
                         return toFullyQualifiedUrl({
                             urlish: validRedirectUri,
                             doAssertNoQueryParams: true,
-                            doOutputWithTrailingSlash: true
+                            doOutputWithTrailingSlash: true,
+                            rootUrl_fullyQualified: new URL(validRedirectUri).origin
                         });
                     } catch {
                         return toFullyQualifiedUrl({
                             urlish: validRedirectUri,
-                            doAssertNoQueryParams: false
+                            doAssertNoQueryParams: false,
+                            rootUrl_fullyQualified: new URL(validRedirectUri).origin
                         });
                     }
                 })()

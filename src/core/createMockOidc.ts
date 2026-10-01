@@ -27,7 +27,7 @@ export async function createMockOidc<User = never, AutoLogin extends boolean = f
         accessToken_mock,
         refreshToken_mock,
         autoLogin = false,
-        autoLogin_redirectUrl
+        autoLogin_returnToUrl
     } = params;
 
     {
@@ -90,19 +90,19 @@ export async function createMockOidc<User = never, AutoLogin extends boolean = f
         validRedirectUri: homeUrl
     };
 
-    const loginOrGoToAuthServer = async (params: {
-        redirectUrl: string | undefined;
+    const loginOrStartAuthorization = async (params: {
+        returnToUrl: string | undefined;
     }): Promise<never> => {
-        const { redirectUrl: redirectUrl_params } = params;
+        const { returnToUrl: returnToUrl_params } = params;
 
-        const redirectUrl = addOrUpdateSearchParam({
+        const returnToUrl = addOrUpdateSearchParam({
             url: (() => {
-                if (redirectUrl_params === undefined) {
+                if (returnToUrl_params === undefined) {
                     return window.location.href;
                 }
 
                 return toFullyQualifiedUrl({
-                    urlish: redirectUrl_params,
+                    urlish: returnToUrl_params,
                     doAssertNoQueryParams: false,
                     rootUrl_fullyQualified: homeUrl
                 });
@@ -113,7 +113,7 @@ export async function createMockOidc<User = never, AutoLogin extends boolean = f
             ifAlreadyPresent: "replace all by new values"
         });
 
-        window.location.href = redirectUrl;
+        window.location.href = returnToUrl;
 
         return new Promise<never>(() => {});
     };
@@ -122,13 +122,13 @@ export async function createMockOidc<User = never, AutoLogin extends boolean = f
         const oidc = id<Oidc.NotLoggedIn>({
             ...common,
             isUserLoggedIn: false,
-            login: ({ redirectUrl } = {}) => loginOrGoToAuthServer({ redirectUrl }),
+            login: ({ returnToUrl } = {}) => loginOrStartAuthorization({ returnToUrl }),
             initializationError: undefined
         });
         if (autoLogin) {
             await oidc.login({
-                redirectUrl: autoLogin_redirectUrl,
-                doesCurrentHrefRequiresAuth: true
+                returnToUrl: autoLogin_returnToUrl,
+                doesCurrentHrefEnforceLogin: true
             });
             // Never here
         }
@@ -216,38 +216,29 @@ export async function createMockOidc<User = never, AutoLogin extends boolean = f
                 unsubscribe: unsubscribeFromTokensChange
             };
         },
-        logout: params => {
-            const redirectUrl = addOrUpdateSearchParam({
-                url: (() => {
-                    switch (params.redirectTo) {
-                        case "current page":
-                            return window.location.href;
-                        case "home":
-                            return homeUrl;
-                        case "specific url":
-                            return toFullyQualifiedUrl({
-                                urlish: params.url,
-                                doAssertNoQueryParams: false,
-                                rootUrl_fullyQualified: homeUrl
-                            });
-                    }
-                })(),
+        logout: ({ returnToUrl = window.location.href } = {}) => {
+            const returnToUrl_withLoginState = addOrUpdateSearchParam({
+                url: toFullyQualifiedUrl({
+                    urlish: returnToUrl,
+                    doAssertNoQueryParams: false,
+                    rootUrl_fullyQualified: homeUrl
+                }),
                 name: URL_SEARCH_PARAM_NAME,
                 values: ["false"],
                 encodeMethod: "www-form",
                 ifAlreadyPresent: "replace all by new values"
             });
 
-            window.location.href = redirectUrl;
+            window.location.href = returnToUrl_withLoginState;
 
             return new Promise<never>(() => {});
         },
         subscribeToAutoLogoutState: () => ({
             unsubscribeFromAutoLogoutState: () => {}
         }),
-        goToAuthServer: async ({ redirectUrl }) => loginOrGoToAuthServer({ redirectUrl }),
+        startAuthorization: ({ returnToUrl } = {}) => loginOrStartAuthorization({ returnToUrl }),
         isNewBrowserSession: false,
-        backFromAuthServer: undefined,
+        authorizationResult: undefined,
         getUser,
         subscribeToUserChange,
         refreshUser
