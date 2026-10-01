@@ -1646,7 +1646,7 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
         return { renewTokens };
     })();
 
-    const { getUser } = createGetUser({
+    const { getUser, subscribeToUserChange, refreshUser } = createGetUser<User>({
         createUser,
         evtTokensChange: (() => {
             const evtTokensChange = createEvt<void>();
@@ -1657,12 +1657,12 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
 
             return evtTokensChange;
         })(),
-        getCurrentTokens: () => currentTokens,
+        getTokens: (): Promise<OidcTokens> => oidc_loggedIn.getTokens(),
         issuerUri,
         clientId,
         validRedirectUri: homeUrlAndRedirectUri,
         oidcProviderMetadata,
-        renewTokens: () => renewTokens()
+        renewTokens
     });
 
     detect_useless_idleSessionLifetimeInSeconds: {
@@ -2004,7 +2004,9 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
 
             return value;
         })(),
-        getUser
+        getUser,
+        subscribeToUserChange,
+        refreshUser
     });
 
     if (resultOfLoginProcess.isRestoredFromSessionStorage) {

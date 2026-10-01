@@ -115,7 +115,7 @@ export namespace Oidc_react {
                   shouldDisplayWarning: false;
               };
         user: User_client;
-        refreshUser: () => Promise<User_client>;
+        refreshUser: () => Promise<void>;
     };
 }
 

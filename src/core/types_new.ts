@@ -1,5 +1,6 @@
 import type { OidcInitializationError } from "./OidcInitializationError";
 import type { MaybeAsync } from "../tools/MaybeAsync";
+import type { GetterOrDirectValue } from "../tools/GetterOrDirectValue";
 import { assert } from "../tools/tsafe/assert";
 
 export declare type Oidc<User = unknown> =
@@ -9,11 +10,13 @@ export declare type Oidc<User = unknown> =
           getTokens?: never;
           getAccessToken?: never;
           logout?: never;
-          goToAuthServer?: never;
+          startAuthorization?: never;
           subscribeToAutoLogoutState?: never;
-          backFromAuthServer?: never;
+          authorizationResult?: never;
           isNewBrowserSession?: never;
           getUser?: never;
+          subscribeToUserChange?: never;
+          refreshUser?: never;
       })
     | (Oidc.LoggedIn<User> & {
           login?: never;
@@ -24,20 +27,34 @@ export declare namespace Oidc {
     export type Common = {
         issuerUri: string;
         clientId: string;
+        /**
+         * The single redirect URI used by oidc-spa. This exact value must be registered as a
+         * valid redirect URI for the client on the authorization server.
+         */
         validRedirectUri: string;
     };
 
     export type NotLoggedIn = Common & {
         isUserLoggedIn: false;
         login: (params?: {
-            doesCurrentHrefRequiresAuth?: boolean;
             /**
-             * Where to redirect after successful login.
-             * Default: window.location.href (here)
+             * Whether navigating to the current href while logged out causes the application to
+             * enforce login.
              *
-             * It does not need to include the origin, eg: "/dashboard"
+             * This enables oidc-spa to handle back navigation from the authorization server
+             * without immediately redirecting the user to it again.
+             *
+             * Default: false
              */
-            redirectUrl?: string;
+            doesCurrentHrefEnforceLogin?: boolean;
+            /**
+             * Where the user should be returned to after login.
+             *
+             * Default: `window.location.href` at the time `login()` is called.
+             *
+             * It does not need to include the origin, for example: `"/dashboard"`.
+             */
+            returnToUrl?: string;
 
             authorizationParams?: Record<string, string | string[] | undefined>;
             transformAuthorizationUrl?: (params: { authorizationUrl: string }) => string;
@@ -47,19 +64,55 @@ export declare namespace Oidc {
 
     export type LoggedIn<User = unknown> = Common & {
         isUserLoggedIn: true;
+        /**
+         * Forces the current token set to be renewed.
+         */
         renewTokens: () => Promise<void>;
+        /**
+         * Subscribes to changes to the primary token set.
+         *
+         * NOTE: Token sets obtained by passing parameters to `getTokens()` or `getAccessToken()` are
+         * managed separately and are not reported to this subscriber.
+         */
         subscribeToTokensChange: (next: (tokens: OidcTokens) => void) => {
             unsubscribeFromTokensChange: () => void;
         };
-        getTokens: (param?: ParamsOfGetToken) => Promise<OidcTokens>;
+        /**
+         * Returns a valid token set for the requested authorization configuration.
+         *
+         * Without parameters, this returns the primary token set, renewing it first when needed.
+         * When parameters are provided, oidc-spa obtains and separately manages a token set
+         * matching that configuration. This can cause a full-page redirect when silent
+         * authorization is not available.
+         */
+        getTokens: (params?: ParamsOfGetToken) => Promise<OidcTokens>;
+        /**
+         * Returns a valid access token for the requested authorization configuration.
+         *
+         * This is equivalent to calling `getTokens()` and reading its `accessToken` property.
+         */
         getAccessToken: (params?: ParamsOfGetToken) => Promise<string>;
-        logout: (
-            params: { redirectTo: "home" | "current page" } | { redirectTo: "specific url"; url: string }
-        ) => Promise<never>;
-        goToAuthServer: (params: {
+        /**
+         * Logs the user out and returns them to `returnToUrl`.
+         *
+         * By default, the user is returned to the current URL.
+         */
+        logout: (params?: { returnToUrl?: string }) => Promise<never>;
+        /**
+         * Starts a new authorization round trip for the logged-in user.
+         *
+         * This can be used for provider-specific actions such as updating the user's password.
+         * The outcome is exposed through `authorizationResult` after the user returns.
+         */
+        startAuthorization: (params?: {
             authorizationParams?: Record<string, string | string[] | undefined>;
             transformAuthorizationUrl?: (params: { authorizationUrl: string }) => string;
-            redirectUrl?: string;
+            /**
+             * Where the user should be redirected after authorization completes.
+             *
+             * Default: `window.location.href` at the time `startAuthorization()` is called.
+             */
+            returnToUrl?: string;
         }) => Promise<never>;
         subscribeToAutoLogoutState: (
             next: (
@@ -67,8 +120,8 @@ export declare namespace Oidc {
                     | {
                           shouldDisplayWarning: true;
                           secondsLeftBeforeAutoLogout: number;
-                          /** Enable to reset countdown */
-                          simulateUserInteraction: () => void;
+                          /** Resets the auto-logout countdown as if user activity was detected. */
+                          resetAutoLogoutCountdown: () => void;
                       }
                     | {
                           shouldDisplayWarning: false;
@@ -77,89 +130,45 @@ export declare namespace Oidc {
             ) => void
         ) => { unsubscribeFromAutoLogoutState: () => void };
         /**
-         * If you called `goToAuthServer` or `login` with extraQueryParams, this object let you know the outcome of the
-         * of the action that was intended.
+         * Describes the authorization round trip that brought the user back to the application.
          *
-         * For example, on a Keycloak server, if you called `goToAuthServer({ extraQueryParams: { kc_action: "UPDATE_PASSWORD" } })`
-         * you'll get back: `{ extraQueryParams: { kc_action: "UPDATE_PASSWORD" }, result: { kc_action_status: "success" } }` (or "cancelled")
+         * For example, after calling
+         * `startAuthorization({ authorizationParams: { kc_action: "UPDATE_PASSWORD" } })`
+         * with Keycloak, this can contain:
+         * `{ authorizationParams: { kc_action: "UPDATE_PASSWORD" }, response: { kc_action_status: "success" } }`.
+         *
+         * It is `undefined` when the session was restored silently rather than through a
+         * full-page authorization round trip.
          */
-        backFromAuthServer:
+        authorizationResult:
             | {
                   authorizationParams: Record<string, string | string[]>;
-                  result: Record<string, string>;
+                  response: Record<string, string>;
               }
             | undefined;
         /**
          * This is true when the user has just returned from the login pages.
-         * This is also true when the user navigate to your app and was able to be silently signed in because there was still a valid session.
-         * This false however when the use just reload the page.
+         * It is also true when the user navigates to the application and is silently signed in
+         * because a valid session still exists. It is false when the user merely reloads the page.
          *
-         * This can be used to perform some action related to session initialization
-         * but avoiding doing it repeatedly every time the user reload the page.
+         * This can be used to perform session-initialization work without repeating it every time
+         * the user reloads the page.
          *
-         * Note that this is referring to the browser session and not the OIDC session
-         * on the server side.
+         * This refers to the browser session, not the OIDC session on the authorization server.
          *
-         * If you want to perform an action only when a new OIDC session is created
-         * you can test oidc.isNewBrowserSession && oidc.backFromAuthServer !== undefined
+         * To perform an action only after a full-page authorization round trip, test
+         * `oidc.isNewBrowserSession && oidc.authorizationResult !== undefined`.
          */
         isNewBrowserSession: boolean;
 
         /**
-         * Returns the user representation produced by `createUser`.
+         * Returns the current user representation produced by `createUser`.
          *
-         * User creation is lazy: token acquisition and renewal do not invoke `createUser`
-         * until either `getUser` or `refreshUser` has been called at least once.
-         * `subscribeToUserChange` alone does not initialize the user.
-         *
-         * The call that initializes user creation invokes `createUser` with the latest tokens.
-         * Concurrent calls share the same computation. Once a user has been created
-         * successfully, it is cached. When no computation is in progress, this method returns
-         * the cached user without invoking `createUser` again.
-         *
-         * After user creation has been initialized, the user is recomputed automatically when
-         * token renewal changes the ID-token claims other than `exp`, `iat`, and `nonce`, or
-         * the decoded access-token claims other than `exp`, `iat`, `jti`, `nbf`, and `cnf`.
-         * Claims are compared structurally, so object key order and a change to a token's
-         * encoded value or signature alone do not cause a recomputation. When the access token
-         * is opaque, only changes to the ID-token claims can be detected automatically.
-         *
-         * If a user refresh or computation is in progress, this method waits for it, including
-         * any follow-up computation required by a token change that occurred in the meantime.
-         * This guarantees that calling `refreshUser()` and then `getUser()` without awaiting
-         * the former returns the refreshed user when the refresh succeeds.
-         *
-         * If `createUser` fails before any user has been created successfully, this method
-         * rejects with an `OidcInitializationError`. A later call retries the creation. If a
-         * recomputation fails after a user has been cached, the error is logged and this method
-         * returns the last successfully created user. When the failed recomputation was
-         * requested explicitly through `refreshUser`, that method's promise still rejects.
-         *
-         * `createUser` must not await `getUser` or `refreshUser`, directly or indirectly.
-         * Synchronous re-entry is rejected; suspected cycles after an asynchronous boundary
-         * are diagnosed with a warning after three seconds without rejecting slow requests.
-         * Calling `getAccessToken` or `getTokens` from `createUser` is supported.
-         *
-         * Rejects with an assertion error if `createUser` was not provided to `createOidc()`.
+         * Throws if `createUser` was not provided to `createOidc()`.
          */
         getUser: () => Promise<User>;
 
-        /**
-         * Subscribes to changes in the cached user representation produced by `createUser`.
-         *
-         * Subscribing does not invoke `createUser` and performs no network request. Once user
-         * creation is initialized by `getUser` or `refreshUser`, subscribers registered before
-         * the first successful creation are called with `user_previous` set to `undefined`.
-         * They are then called after each successful recomputation that produces a user which
-         * is not deeply equal to the cached user, with `user_previous` set to that cached value.
-         *
-         * A subscriber registered after a user has already been cached is not called
-         * immediately; use `getUser` to read the current value.
-         *
-         * Failed computations do not invoke the callback and do not replace the cached user.
-         *
-         * Throws an assertion error if `createUser` was not provided to `createOidc()`.
-         */
+        /** Subscribes to changes in the user representation produced by `createUser`. */
         subscribeToUserChange: (
             onUserChange: (params: { user: User; user_previous: User | undefined }) => void
         ) => {
@@ -167,21 +176,7 @@ export declare namespace Oidc {
         };
 
         /**
-         * Renews the tokens and forces a recomputation of the user representation, even when
-         * the relevant ID-token and access-token claims have not changed. Calling this method
-         * initializes lazy user creation if necessary.
-         *
-         * The returned promise resolves after the recomputation completes successfully and its
-         * result is available through `getUser`. Concurrent user computations are coalesced
-         * and `createUser` is never invoked concurrently. If tokens change while a computation
-         * is in progress, a follow-up computation uses the latest tokens.
-         *
-         * If token renewal or `createUser` fails, the promise rejects. Any previously cached
-         * user is preserved and remains available through `getUser`. If no user has ever been
-         * created successfully, a `createUser` failure is reported as an
-         * `OidcInitializationError`.
-         *
-         * Rejects with an assertion error if `createUser` was not provided to `createOidc()`.
+         * Renews the tokens and recomputes the user representation.
          */
         refreshUser: () => Promise<void>;
     };
@@ -189,8 +184,14 @@ export declare namespace Oidc {
     type ParamsOfGetToken = {
         authorizationParams?: Record<string, string | string[] | undefined>;
         tokenParams?: Record<string, string | string[] | undefined>;
-        scope?: string[];
-        redirectUrl?: string;
+        scopes?: string[];
+        /**
+         * Where the user should be returned if obtaining this token set requires a full-page
+         * authorization round trip.
+         *
+         * Default: `window.location.href` at the time the token set is requested.
+         */
+        returnToUrl?: string;
         disableDPoP?: boolean;
     };
 }
@@ -207,23 +208,31 @@ export type ParamsOfCreateOidc<User, AutoLogin extends boolean> = {
      */
     clientId: string;
     /**
-     * The scopes being requested from the OIDC/OAuth2 provider (default: `["profile"]`
-     * (the scope "openid" is added automatically as it's mandatory)
-     **/
+     * Scopes requested from the OIDC/OAuth2 provider.
+     *
+     * The `openid` scope is added automatically.
+     *
+     * Default: `["profile"]`.
+     */
     scopes?: string[];
 
-    /** If subscribeToAutoLogoutState has been set, the first next will be called
-     * with secondLeftBeforeAutoLogout set to this value.
-     * (Then every seconds until auto logout or user interaction)
-     * Default: 30 (30 seconds)
+    /**
+     * Number of seconds before automatic logout at which `subscribeToAutoLogoutState()`
+     * starts reporting that a warning should be displayed.
+     *
+     * Updates are then emitted every second until automatic logout or until the countdown is
+     * reset.
+     *
+     * Default: 30 seconds.
      */
     warnUserSecondsBeforeAutoLogout?: number;
 
     /**
-     * Transform the url (authorization endpoint) before redirecting to the login pages.
+     * Transforms an authorization endpoint URL before oidc-spa navigates to it.
      *
-     * The isSilentRedirect parameter is true when the redirect is initiated in the background iframe for silent signin.
-     * This can be used to omit ui related query parameters (like `ui_locales`).
+     * `isSilentRedirect` is true when authorization is performed in a background iframe. It can
+     * be used to omit UI-related query parameters, such as `ui_locales`, during silent
+     * authorization.
      */
     transformAuthorizationUrl?: (params: {
         authorizationUrl: string;
@@ -231,67 +240,64 @@ export type ParamsOfCreateOidc<User, AutoLogin extends boolean> = {
     }) => string;
 
     /**
-     * Extra query params to be added to the authorization endpoint url before redirecting or silent signing in.
-     * You can provide a function that returns those extra query params, it will be called
-     * when login() is called.
+     * Additional query parameters added to authorization endpoint URLs.
      *
-     * Example: extraQueryParams: ()=> ({ ui_locales: "fr" })
+     * A function can be provided when the parameters depend on whether authorization is being
+     * performed silently.
      *
-     * This parameter can also be passed to login() directly.
+     * This option provides defaults. Parameters passed directly to `login()`,
+     * `startAuthorization()`, `getTokens()`, or `getAccessToken()` are applied to their specific
+     * authorization request.
+     *
+     * @example
+     * authorizationParams: ({ isSilentRedirect }) =>
+     *     isSilentRedirect ? {} : { ui_locales: "fr" }
      */
     authorizationParams?:
         | Record<string, string | string[] | undefined>
         | ((params: { isSilentRedirect: boolean }) => Record<string, string | string[] | undefined>);
 
     /**
-     * Extra body params to be added to the /token POST request.
+     * Additional body parameters added to token endpoint requests.
      *
-     * It will be used when for the initial request, whenever the token is getting refreshed and if you call `renewTokens()`.
-     * You can also provide this parameter directly to the `renewTokens()` method.
+     * They are used for the initial token request and whenever the primary token set is renewed.
+     * Parameters can also be passed to `getTokens()` or `getAccessToken()` when requesting a
+     * token set for a different authorization configuration.
      *
-     * It can be either a string to string record or a function that returns a string to string record.
-     *
-     * Example: extraTokenParams: ()=> ({ selectedCustomer: "xxx" })
-     *          extraTokenParams: { selectedCustomer: "xxx" }
+     * @example
+     * tokenParams: { selectedCustomer: "xxx" }
      */
     tokenParams?: Record<string, string | string[] | undefined>;
 
     /**
-     * This parameter defines after how many seconds of inactivity the user should be
-     * logged out automatically.
+     * Defines after how many seconds of inactivity the user should be logged out automatically.
      *
-     * WARNING: It should be configured on the identity server side
-     * as it's the authoritative source for security policies and not the client.
+     * WARNING: It should be configured on the authorization server because the server, rather
+     * than the client, is the authoritative source for security policies.
      * If you don't provide this parameter it will be inferred from the refresh token expiration time.
-     * Some provider however don't issue a refresh token or do not correctly set the
-     * expiration time. This parameter enable you to hard code the value to compensate
-     * the shortcoming of your auth server.
-     * */
+     * Some providers, however, do not issue a refresh token or do not correctly report its
+     * expiration time. This parameter lets you provide an explicit value to compensate for
+     * those authorization-server limitations.
+     */
     idleSessionLifetimeInSeconds?: number;
 
     /**
-     * Where to redirect when auto logout happens due to session expiration
-     * on the Keycloak server.
+     * Where the user should be returned after automatic logout caused by session expiration on
+     * the authorization server.
      *
-     * Example:
-     * autoLogout_redirectionTarget: { redirectTo: "current page" } // Default
-     * autoLogout_redirectionTarget: { redirectTo: "home" }
-     * autoLogout_redirectionTarget: { redirectTo: "specific url", url: "/your-session-has-expired" }
-     * autoLogout_redirectionTarget: {
-     *      redirectTo: "specific url",
-     *      get url(){ return `/your-session-has-expired?return_url=${encodeURIComponent(location.href)}`; }
-     * }
+     * By default, the user is returned to the URL they were visiting when automatic logout
+     * occurred.
+     *
+     * @example
+     * autoLogout_returnToUrl: "/session-expired"
+     *
+     * A function can be provided to compute the URL when automatic logout occurs.
+     *
+     * @example
+     * autoLogout_returnToUrl: () =>
+     *     `/your-session-has-expired?return_url=${encodeURIComponent(location.href)}`
      */
-    autoLogout_redirectionTarget?:
-        | {
-              redirectTo: "home" | "current page";
-          }
-        | {
-              redirectTo: "specific url";
-              url: string;
-          };
-
-    autoLogin?: AutoLogin;
+    autoLogout_returnToUrl?: GetterOrDirectValue<void, string>;
 
     /**
      * NOTE: Can be provided as parameter to the Vite plugin or to oidcEarlyInit()
@@ -345,27 +351,25 @@ export type ParamsOfCreateOidc<User, AutoLogin extends boolean> = {
     /**
      * This is only for opting out of DPoP for a specific OIDC client instance.
      * To enable DPoP see: https://docs.oidc-spa.dev/v/v10/security-features/dpop
-     * */
+     */
     disableDPoP?: true;
 
+    autoLogin?: AutoLogin;
+
     /**
-     * This parameter take effect only when autoLogin is true.
-     * It tells where to redirect after a successful autoLogin.
+     * Where the user should be returned after a successful automatic login.
      *
-     * If you are not in autoLogin mode there is absolutely no reason to use
-     * this parameter since you can pass `login({ redirectUrl: "..." })`.
+     * This option takes effect only when `autoLogin` is true. Otherwise, pass `returnToUrl`
+     * directly to `login()`.
      *
-     * It can only be useful in some edge case with `autoLogin: true`
-     * When you want to precisely redirect somewhere after login.
-     *
-     * This can make sense if you have multiple clients to talk with different
-     * API and no iframe capabilities.
+     * This is useful, for example, when using multiple OIDC clients for different resource
+     * servers without iframe support.
      */
-    autoLogin_redirectUrl?: string;
+    autoLogin_returnToUrl?: string;
 };
 
 export type ParamsOfCreateMockOidc<User, AutoLogin extends boolean> = {
-    createUser_mock?: CreateUser<User>;
+    user_mock?: User;
     issuerUri_mock?: string;
     clientId_mock?: string;
     idTokenClaims_mock?: IdTokenClaims;
@@ -375,7 +379,7 @@ export type ParamsOfCreateMockOidc<User, AutoLogin extends boolean> = {
     refreshToken_mock?: string;
     refreshTokenExpirationTime_mock?: number;
     autoLogin?: AutoLogin;
-    postLoginRedirectUrl?: string;
+    autoLogin_returnToUrl?: string;
 } & (AutoLogin extends true
     ? { isUserInitiallyLoggedIn?: true }
     : {

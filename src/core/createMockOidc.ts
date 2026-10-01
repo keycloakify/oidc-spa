@@ -8,6 +8,8 @@ import { INFINITY_TIME } from "../tools/INFINITY_TIME";
 import { getBASE_URL_earlyInit, prBASE_URL_earlyInit_set } from "./earlyInit_BASE_URL";
 import { decodeJwt } from "../tools/decodeJwt";
 import type { IdTokenClaims, OidcTokens, ParamsOfCreateMockOidc } from "./types";
+import { createGetUser } from "./createGetUser";
+import { createEvt } from "../tools/Evt";
 
 const URL_SEARCH_PARAM_NAME = "isUserLoggedIn";
 
@@ -20,7 +22,7 @@ export async function createMockOidc<User = never, AutoLogin extends boolean = f
     params: ParamsOfCreateMockOidc<User, AutoLogin>
 ): Promise<AutoLogin extends true ? Oidc.LoggedIn<User> : Oidc<User>> {
     const {
-        user_mock,
+        createUser_mock,
         isUserInitiallyLoggedIn = true,
         issuerUri_mock,
         clientId_mock,
@@ -140,6 +142,21 @@ export async function createMockOidc<User = never, AutoLogin extends boolean = f
         return oidc;
     }
 
+    const evtTokensChange = createEvt<void>();
+
+    const { getUser, refreshUser, subscribeToUserChange } = createGetUser({
+        createUser: createUser_mock,
+        evtTokensChange,
+        getTokens: (): Promise<OidcTokens> => oidc.getTokens(),
+        issuerUri: common.issuerUri,
+        clientId: common.clientId,
+        validRedirectUri: common.validRedirectUri,
+        oidcProviderMetadata: {},
+        renewTokens: async () => {
+            evtTokensChange.post();
+        }
+    });
+
     const oidc: Oidc.LoggedIn<User> = {
         ...common,
         isUserLoggedIn: true,
@@ -228,19 +245,9 @@ export async function createMockOidc<User = never, AutoLogin extends boolean = f
         goToAuthServer: async ({ redirectUrl }) => loginOrGoToAuthServer({ redirectUrl }),
         isNewBrowserSession: false,
         backFromAuthServer: undefined,
-        getUser: () => {
-            if (user_mock === undefined) {
-                throw new Error("oidc-spa: No mock user provided");
-            }
-
-            return Promise.resolve({
-                refreshUser: () => Promise.resolve(user_mock),
-                subscribeToUserChange: () => {
-                    return { unsubscribeFromUserChange: () => {} };
-                },
-                user: user_mock
-            });
-        }
+        getUser,
+        subscribeToUserChange,
+        refreshUser
     };
 
     return oidc;
