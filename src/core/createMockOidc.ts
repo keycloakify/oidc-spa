@@ -136,77 +136,81 @@ export async function createMockOidc<User = never, AutoLogin extends boolean = f
         return oidc;
     }
 
+    const now = Date.now();
+
+    const tokens_common: OidcTokens.Common = {
+        accessToken: accessToken_mock ?? ACCESS_TOKEN_MOCK_DEFAULT,
+        accessTokenExpirationTime: INFINITY_TIME,
+        idToken: idToken_mock ?? "mocked-id-token",
+        idTokenClaims: (() => {
+            if (idTokenClaims_mock !== undefined) {
+                return idTokenClaims_mock;
+            }
+
+            if (idToken_mock !== undefined) {
+                try {
+                    return decodeJwt(idToken_mock);
+                } catch {}
+            }
+
+            return {
+                aud: common.clientId,
+                exp: Math.floor(INFINITY_TIME / 1_000),
+                iat: Math.floor(now / 1_000),
+                iss: common.issuerUri,
+                sub: "mocked-sub"
+            };
+        })(),
+        issuedAtTime: now,
+        getServerDateNow: () => Date.now()
+    };
+
+    const tokens: OidcTokens =
+        refreshToken_mock !== undefined
+            ? id<OidcTokens.WithRefreshToken>({
+                  ...tokens_common,
+                  hasRefreshToken: true,
+                  refreshToken: refreshToken_mock,
+                  refreshTokenExpirationTime: INFINITY_TIME
+              })
+            : id<OidcTokens.WithoutRefreshToken>({
+                  ...tokens_common,
+                  hasRefreshToken: false
+              });
+
     const evtTokensChange = createEvt<void>();
+    const onTokenChanges = new Set<(tokens: OidcTokens) => void>();
+
+    const renewTokens: Oidc.LoggedIn["renewTokens"] = async () => {
+        await Promise.resolve();
+        evtTokensChange.post();
+        Array.from(onTokenChanges).forEach(onTokenChange => onTokenChange(tokens));
+    };
 
     const { getUser, refreshUser, subscribeToUserChange } = createGetUser({
         createUser: createUser_mock,
         evtTokensChange,
-        getTokens: (): Promise<OidcTokens> => oidc.getTokens(),
+        getTokens: () => Promise.resolve(tokens),
         issuerUri: common.issuerUri,
         clientId: common.clientId,
         validRedirectUri: common.validRedirectUri,
         oidcProviderMetadata: {},
-        renewTokens: async () => {
-            evtTokensChange.post();
-        }
+        renewTokens
     });
-
-    const now = Date.now();
 
     const oidc: Oidc.LoggedIn<User> = {
         ...common,
         isUserLoggedIn: true,
-        renewTokens: async () => {
-            evtTokensChange.post();
-        },
-        ...(() => {
-            const tokens_common: OidcTokens.Common = {
-                accessToken: accessToken_mock ?? ACCESS_TOKEN_MOCK_DEFAULT,
-                accessTokenExpirationTime: INFINITY_TIME,
-                idToken: idToken_mock ?? "mocked-id-token",
-                idTokenClaims: (() => {
-                    if (idTokenClaims_mock !== undefined) {
-                        return idTokenClaims_mock;
-                    }
+        renewTokens,
+        getTokens: () => Promise.resolve(tokens),
+        getAccessToken: () => Promise.resolve(tokens.accessToken),
+        subscribeToTokensChange: onTokenChange => {
+            onTokenChanges.add(onTokenChange);
 
-                    if (idToken_mock !== undefined) {
-                        try {
-                            return decodeJwt(idToken_mock);
-                        } catch {}
-                    }
-
-                    return {
-                        aud: common.clientId,
-                        exp: ~~(INFINITY_TIME / 1_000),
-                        iat: ~~(now / 1_000),
-                        iss: common.issuerUri,
-                        sub: "mocked-sub"
-                    };
-                })(),
-                issuedAtTime: Date.now(),
-                getServerDateNow: () => Date.now()
+            const unsubscribeFromTokensChange = () => {
+                onTokenChanges.delete(onTokenChange);
             };
 
-            const tokens: OidcTokens =
-                refreshToken_mock !== undefined
-                    ? id<OidcTokens.WithRefreshToken>({
-                          ...tokens_common,
-                          hasRefreshToken: true,
-                          refreshToken: refreshToken_mock,
-                          refreshTokenExpirationTime: INFINITY_TIME
-                      })
-                    : id<OidcTokens.WithoutRefreshToken>({
-                          ...tokens_common,
-                          hasRefreshToken: false
-                      });
-
-            return {
-                getTokens: () => Promise.resolve(tokens),
-                getAccessToken: () => Promise.resolve(tokens.accessToken)
-            };
-        })(),
-        subscribeToTokensChange: () => {
-            const unsubscribeFromTokensChange = () => {};
             return {
                 unsubscribeFromTokensChange,
                 unsubscribe: unsubscribeFromTokensChange
