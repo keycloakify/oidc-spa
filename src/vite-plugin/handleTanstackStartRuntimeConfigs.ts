@@ -5,10 +5,10 @@ import type { ResolvedConfig, ViteDevServer } from "vite";
 import { babelParser, babelTraverse, type NodePath } from "../vendor/build-runtime/babel";
 
 /**
- * Keep this runtime policy in sync with ParamsOfBootstrap. The companion type
+ * Keep this runtime policy in sync with RuntimeConfigs. The companion type
  * test deliberately imports the type and checks every property name.
  */
-export const tanstackStartBootstrapEnvPolicy = {
+export const tanstackStartRuntimeConfigsEnvPolicy = {
     real: {
         mode: "public",
         issuerUri: "public",
@@ -24,14 +24,12 @@ export const tanstackStartBootstrapEnvPolicy = {
             warnUserSecondsBeforeAutoLogout: "public",
             idleSessionLifetimeInSeconds: "public",
             scopes: "public",
-            transformUrlBeforeRedirect: "public",
-            extraQueryParams: "public",
-            extraTokenParams: "public",
+            transformAuthorizationUrl: "public",
+            authorizationParams: "public",
+            tokenParams: "public",
             sessionRestorationMethod: "public",
-            __unsafe_clientSecret: "public",
-            __metadata: "public",
-            __unsafe_useIdTokenAsAccessToken: "public",
-            autoLogoutParams: "public",
+            __oidcProviderMetadata: "public",
+            autoLogout_returnToUrl: "public",
             disableDPoP: "public"
         }
     },
@@ -45,13 +43,15 @@ export const tanstackStartBootstrapEnvPolicy = {
         client: {
             clientId_mock: "public",
             idTokenClaims_mock: "public",
+            refreshToken_mock: "public",
+            idToken_mock: "public",
             isUserInitiallyLoggedIn: "public"
         }
     }
 } as const;
 
 /** The manifest contains names only; values are read by the server at request time. */
-export function createHandleTanstackStartBootstrapEnv(params: { resolvedConfig: ResolvedConfig }) {
+export function createHandleTanstackStartRuntimeConfigs(params: { resolvedConfig: ResolvedConfig }) {
     const { resolvedConfig } = params;
     const virtualId = "virtual:oidc-spa/tanstack-start-public-env";
     const resolvedId = `\0${virtualId}`;
@@ -155,14 +155,14 @@ export function createHandleTanstackStartBootstrapEnv(params: { resolvedConfig: 
         const envNameByExpression = new Map<object, string>();
         const envNameByBinding = new Map<object, string>();
         const redactedPropertyNames = new Set(
-            Object.entries(tanstackStartBootstrapEnvPolicy.real.server)
+            Object.entries(tanstackStartRuntimeConfigsEnvPolicy.real.server)
                 .filter(([, policy]) => policy === "redact")
                 .map(([propertyName]) => propertyName)
         );
         const fail: (id: string, p: NodePath, reason: string) => never = (id, p, reason) => {
             const loc = p.node.loc?.start;
             throw new Error(
-                `oidc-spa: Cannot determine public bootstrap environment variables in ${id}${
+                `oidc-spa: Cannot determine public runtime config environment variables in ${id}${
                     loc ? `:${loc.line}:${loc.column + 1}` : ""
                 }. ${reason}`
             );
@@ -185,13 +185,13 @@ export function createHandleTanstackStartBootstrapEnv(params: { resolvedConfig: 
                 p = p.get("expression") as NodePath;
             return p;
         };
-        type Origin = "namespace" | "builder" | "utils" | "bootstrap";
+        type Origin = "namespace" | "builder" | "withRuntimeConfigs";
         const memberOrigin = (
             origin: Origin | undefined,
             name: string | undefined
         ): Origin | undefined => {
             if (origin === "namespace" && name === "oidcSpa") return "builder";
-            if (origin === "utils" && name === "bootstrapOidc") return "bootstrap";
+            if (origin === "builder" && name === "withRuntimeConfigs") return "withRuntimeConfigs";
             return undefined;
         };
         const exportedOrigin = (id: string, name: string, seen: Set<object>): Origin | undefined => {
@@ -288,10 +288,10 @@ export function createHandleTanstackStartBootstrapEnv(params: { resolvedConfig: 
                 return memberOrigin(origin(p.get("object") as NodePath, id, seen), propertyName(p));
             if (!p.isCallExpression()) return undefined;
             const callee = p.get("callee");
+            if (origin(callee, id, seen) === "withRuntimeConfigs") return "builder";
             if (!callee.isMemberExpression() || origin(callee.get("object"), id, seen) !== "builder")
                 return undefined;
             const method = propertyName(callee);
-            if (method === "createUtils") return "utils";
             if (["withAutoLogin", "withClientUser", "withServerUser"].includes(method ?? ""))
                 return "builder";
             return undefined;
@@ -300,9 +300,9 @@ export function createHandleTanstackStartBootstrapEnv(params: { resolvedConfig: 
         for (const [id, source] of sources) {
             source.program.traverse({
                 CallExpression(call) {
-                    if (origin(call.get("callee"), id) !== "bootstrap") return;
+                    if (origin(call.get("callee"), id) !== "withRuntimeConfigs") return;
                     let callback: NodePath = call.get("arguments")[0];
-                    if (!callback) fail(id, call, "bootstrapOidc requires an argument.");
+                    if (!callback) fail(id, call, "withRuntimeConfigs requires an argument.");
                     callback = unwrap(callback);
                     const seenCallbacks = new Set<object>();
                     while (callback.isIdentifier()) {
@@ -324,8 +324,10 @@ export function createHandleTanstackStartBootstrapEnv(params: { resolvedConfig: 
                             callback,
                             "Use an inline callback or a locally declared callback so its environment accesses can be analyzed."
                         );
-                    if (callback.node.async || callback.node.generator)
-                        fail(id, callback, "The bootstrap callback must be synchronous.");
+                    if (callback.node.generator)
+                        fail(id, callback, "The runtime configs getter cannot be a generator.");
+                    // Async getters receive the same env proxy. Analyze their bodies
+                    // without executing them, just as for synchronous getters.
 
                     type ValueKind = "argument" | "process" | "env";
                     const visited = new Set<object>();
@@ -333,7 +335,11 @@ export function createHandleTanstackStartBootstrapEnv(params: { resolvedConfig: 
                         if (pattern.isIdentifier()) {
                             const binding = pattern.scope.getBinding(pattern.node.name);
                             if (!binding || !binding.constant)
-                                fail(id, pattern, "Do not reassign the bootstrap environment bindings.");
+                                fail(
+                                    id,
+                                    pattern,
+                                    "Do not reassign the runtime config environment bindings."
+                                );
                             if (visited.has(binding)) return;
                             visited.add(binding);
                             binding.referencePaths.forEach(reference =>
@@ -345,11 +351,11 @@ export function createHandleTanstackStartBootstrapEnv(params: { resolvedConfig: 
                             fail(
                                 id,
                                 pattern,
-                                "Use named properties when destructuring the bootstrap environment; rest and default bindings are unsupported."
+                                "Use named properties when destructuring the runtime config environment; rest and default bindings are unsupported."
                             );
                         for (const property of pattern.get("properties")) {
                             if (!property.isObjectProperty())
-                                fail(id, property, "Do not spread the bootstrap environment.");
+                                fail(id, property, "Do not spread the runtime config environment.");
                             const name = propertyName(property);
                             if (name === undefined)
                                 fail(
@@ -360,11 +366,16 @@ export function createHandleTanstackStartBootstrapEnv(params: { resolvedConfig: 
                             if (kind === "env") {
                                 names.add(name);
                                 const value = property.get("value");
-                                if (value.isIdentifier()) {
-                                    const binding = value.scope.getBinding(value.node.name);
-                                    if (binding !== undefined) {
-                                        envNameByBinding.set(binding, name);
-                                    }
+                                if (!value.isIdentifier()) {
+                                    fail(
+                                        id,
+                                        value,
+                                        "Use identifier bindings when destructuring environment variable values; nested and default bindings are unsupported."
+                                    );
+                                }
+                                const binding = value.scope.getBinding(value.node.name);
+                                if (binding !== undefined) {
+                                    envNameByBinding.set(binding, name);
                                 }
                                 continue;
                             }
@@ -372,7 +383,7 @@ export function createHandleTanstackStartBootstrapEnv(params: { resolvedConfig: 
                                 fail(
                                     id,
                                     property,
-                                    "Only process.env is available in the bootstrap environment."
+                                    "Only process.env is available in the runtime config environment."
                                 );
                             followPattern(
                                 property.get("value"),
@@ -398,7 +409,7 @@ export function createHandleTanstackStartBootstrapEnv(params: { resolvedConfig: 
                                 fail(
                                     id,
                                     reference,
-                                    "The bootstrap environment cannot be used as a property key."
+                                    "The runtime config environment cannot be used as a property key."
                                 );
                             const name = propertyName(parent);
                             if (name === undefined)
@@ -414,7 +425,7 @@ export function createHandleTanstackStartBootstrapEnv(params: { resolvedConfig: 
                                     use?.isUpdateExpression() ||
                                     use?.isUnaryExpression({ operator: "delete" })
                                 )
-                                    fail(id, parent, "Do not mutate the bootstrap environment.");
+                                    fail(id, parent, "Do not mutate the runtime config environment.");
                                 names.add(name);
                                 envNameByExpression.set(parent.node, name);
                                 return;
@@ -423,7 +434,7 @@ export function createHandleTanstackStartBootstrapEnv(params: { resolvedConfig: 
                                 fail(
                                     id,
                                     parent,
-                                    "Only process.env is available in the bootstrap environment."
+                                    "Only process.env is available in the runtime config environment."
                                 );
                             followReference(parent, kind === "argument" ? "process" : "env");
                             return;
@@ -451,7 +462,7 @@ export function createHandleTanstackStartBootstrapEnv(params: { resolvedConfig: 
                         fail(
                             id,
                             reference,
-                            "Do not pass, spread, or return the bootstrap environment object. Read its literal named variables inside the callback instead."
+                            "Do not pass, spread, or return the runtime config environment object. Read its literal named variables inside the callback instead."
                         );
                     };
                     const parameter = callback.get("params")[0];

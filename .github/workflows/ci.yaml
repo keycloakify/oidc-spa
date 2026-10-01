@@ -36,7 +36,7 @@ jobs:
     - uses: bahmutov/npm-install@v1
     - run: yarn test:angular
     - run: yarn test:react-nextjs
-    - run: yarn test:tanstack-start-bootstrap-env
+    - run: yarn test:tanstack-start-runtime-configs
     - run: yarn build
 
   check_if_version_upgraded:

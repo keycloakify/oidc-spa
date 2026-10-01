@@ -7,7 +7,7 @@ import { manageOptimizedDeps } from "./manageOptimizedDeps";
 import { transformCreateFileRoute } from "./transformTanstackRouterCreateFileRoute";
 import { getProjectType, type ProjectType } from "./projectType";
 import { createHandleTanstackStartClientOutput } from "./handleTanstackStartClientOutput";
-import { createHandleTanstackStartBootstrapEnv } from "./handleTanstackStartBootstrapEnv";
+import { createHandleTanstackStartRuntimeConfigs } from "./handleTanstackStartRuntimeConfigs";
 
 export type OidcSpaVitePluginParams = {
     /** See: https://docs.oidc-spa.dev/v/v10/security-features/browser-runtime-freeze */
@@ -57,7 +57,7 @@ export function oidcSpa(params: OidcSpaVitePluginParams = {}) {
 
     let projectType: ProjectType | undefined = undefined;
     let isBuild = false;
-    let bootstrapEnvHandler: ReturnType<typeof createHandleTanstackStartBootstrapEnv> | undefined;
+    let runtimeConfigsHandler: ReturnType<typeof createHandleTanstackStartRuntimeConfigs> | undefined;
 
     const plugin: Plugin = {
         name: "oidc-spa",
@@ -82,7 +82,7 @@ export function oidcSpa(params: OidcSpaVitePluginParams = {}) {
             });
 
             if (projectType === "tanstack-start") {
-                bootstrapEnvHandler = createHandleTanstackStartBootstrapEnv({ resolvedConfig });
+                runtimeConfigsHandler = createHandleTanstackStartRuntimeConfigs({ resolvedConfig });
             }
 
             const clientEntrypointHandler = createHandleClientEntrypoint({
@@ -133,7 +133,7 @@ export function oidcSpa(params: OidcSpaVitePluginParams = {}) {
         },
         resolveId(id) {
             return (
-                bootstrapEnvHandler?.resolveId(id) ??
+                runtimeConfigsHandler?.resolveId(id) ??
                 resolveId_handleTanstackStartClientOutput?.(id) ??
                 null
             );
@@ -142,11 +142,11 @@ export function oidcSpa(params: OidcSpaVitePluginParams = {}) {
             buildStart_handleTanstackStartClientOutput?.call(this);
         },
         configureServer(server) {
-            bootstrapEnvHandler?.configureServer(server);
+            runtimeConfigsHandler?.configureServer(server);
         },
         async load(id) {
             {
-                const r = await bootstrapEnvHandler?.load(id, this);
+                const r = await runtimeConfigsHandler?.load(id, this);
                 if (r !== null && r !== undefined) return r;
             }
             {

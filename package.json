@@ -11,7 +11,7 @@
         "build": "tsx scripts/build.ts",
         "test:angular": "tsc --project tests/angular/tsconfig.json && tsx scripts/test-angular.ts",
         "test:react-nextjs": "tsc --project tests/react-nextjs/tsconfig.json",
-        "test:tanstack-start-bootstrap-env": "tsx scripts/tests/tanstack-start-bootstrap-env.test.ts && tsc --project tests/tanstack-start-bootstrap-env/tsconfig.json",
+        "test:tanstack-start-runtime-configs": "tsx scripts/tests/tanstack-start-runtime-configs.test.ts && tsc --project tests/tanstack-start-runtime-configs/tsconfig.json",
         "_format": "prettier '**/*.{ts,tsx,json,md}'",
         "format": "yarn _format --write",
         "format:check": "yarn _format --list-different",

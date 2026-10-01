@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
-import { cp, mkdtemp, readFile, readdir, mkdir, symlink, writeFile } from "node:fs/promises";
+import { cp, mkdtemp, readFile, readdir, mkdir, symlink, writeFile, rm } from "node:fs/promises";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { tmpdir } from "node:os";
@@ -9,10 +9,11 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 // Run after building oidc-spa. Uses the example's installed dependencies, without
 // modifying its sources, node_modules, .env, or existing build output.
-test("packaged plugin builds a cold-start-safe environment endpoint", async t => {
+test("packaged plugin builds a cold-start-safe runtime config environment endpoint", async t => {
     const repository = fileURLToPath(new URL("../../", import.meta.url));
     const example = path.join(repository, "examples/tanstack-start");
     const root = await mkdtemp(path.join(tmpdir(), "oidc-spa-env-integration-"));
+    t.after(() => rm(root, { recursive: true, force: true }));
     console.log(`Integration fixture: ${root}`);
     for (const name of ["src", "public", "package.json", "tsconfig.json"]) {
         await cp(path.join(example, name), path.join(root, name), { recursive: true });
@@ -25,6 +26,40 @@ test("packaged plugin builds a cold-start-safe environment endpoint", async t =>
         export const Route = createRootRoute({ shellComponent: ({ children }) =>
             <html><head><HeadContent /></head><body>{children}<Scripts /></body></html>
         });
+    `
+    );
+    // Exercise both config modes and introspection redaction independently of
+    // the example's UI and provider settings.
+    await writeFile(
+        path.join(root, "src/oidc.ts"),
+        `
+        import { oidcSpa } from "oidc-spa/react-tanstack-start";
+        export const { useOidc, getOidc, enforceLogin, oidcFnMiddleware, oidcRequestMiddleware } = oidcSpa
+            .withClientUser(({ idTokenClaims }) => ({
+                displayName: idTokenClaims.sub, canSeeKeycloakAdminNavigation: true
+            }))
+            .withServerUser(({ accessTokenClaims }) => ({
+                id: accessTokenClaims.sub, isKeycloakAdmin: true
+            }))
+            .withRuntimeConfigs(async ({ process }) => {
+                if (process.env.OIDC_USE_MOCK === "true") {
+                    return { mode: "mock", client: { isUserInitiallyLoggedIn: true } };
+                }
+                const clientSecret = process.env.OIDC_CLIENT_SECRET__SERVER;
+                return {
+                    mode: "real", issuerUri: process.env.OIDC_ISSUER_URI,
+                    client: { clientId: process.env.OIDC_CLIENT_ID },
+                    server: { accessTokenValidationMethod: "introspection endpoint",
+                        clientId: process.env.OIDC_CLIENT_ID, clientSecret }
+                };
+            })
+            .createUtils();
+        export const fetchWithAuth: typeof fetch = async (input, init) => {
+            const oidc = await getOidc();
+            const headers = new Headers(init?.headers);
+            if (oidc.isUserLoggedIn) headers.set("Authorization", "Bearer " + await oidc.getAccessToken());
+            return fetch(input, { ...init, headers });
+        };
     `
     );
     await mkdir(path.join(root, "node_modules"));
@@ -68,8 +103,9 @@ test("packaged plugin builds a cold-start-safe environment endpoint", async t =>
             env: {
                 ...process.env,
                 OIDC_USE_MOCK: "true",
-                OIDC_ISSUER_URI: "https://issuer.example",
-                OIDC_CLIENT_ID: "test-client"
+                OIDC_ISSUER_URI: "https://build.example",
+                OIDC_CLIENT_ID: "build-client",
+                OIDC_CLIENT_SECRET__SERVER: "build-secret-must-not-leak"
             },
             maxBuffer: 10_000_000
         }
@@ -93,6 +129,17 @@ test("packaged plugin builds a cold-start-safe environment endpoint", async t =>
             /new Set\(\[\s*"OIDC_CLIENT_ID",\s*"OIDC_ISSUER_URI",\s*"OIDC_USE_MOCK"\s*\]/.test(code)
     );
     assert.ok(manifest, "The deployed server contains the complete static manifest");
+    assert.match(manifest.code, /new Set\(\[\s*"OIDC_CLIENT_SECRET__SERVER"\s*\]/);
+    for (const outputDirectory of [".output/server", ".output/public"]) {
+        for (const name of await readdir(path.join(root, outputDirectory), { recursive: true })) {
+            if (!/\.[mc]?js$/.test(name)) continue;
+            const code = await readFile(path.join(root, outputDirectory, name), "utf8");
+            assert.doesNotMatch(
+                code,
+                /build-client|https:\/\/build\.example|build-secret-must-not-leak/
+            );
+        }
+    }
     const provider = chunks.find(({ code }) => code.includes('name: "fetchServerEnvVariableValues"'));
     assert.ok(provider);
     assert.equal(
@@ -106,6 +153,7 @@ test("packaged plugin builds a cold-start-safe environment endpoint", async t =>
         OIDC_USE_MOCK: "true",
         OIDC_ISSUER_URI: "https://runtime.example",
         OIDC_CLIENT_ID: "runtime-client",
+        OIDC_CLIENT_SECRET__SERVER: "runtime-secret-must-not-leak",
         OIDC_SPA_TEST_SECRET: "must-not-leak"
     };
     for (const [name, value] of Object.entries(env)) {
@@ -132,14 +180,16 @@ test("packaged plugin builds a cold-start-safe environment endpoint", async t =>
             })
         );
     };
-    // This is the first request to the deployed server: no page render or bootstrap
-    // request has initialized an authorization list in this process.
+    // The first request needs no page render or runtime config getter evaluation
+    // to initialize an authorization list in this process.
     const firstResponse = await getEnv();
     assert.equal(firstResponse.status, 200);
     const firstBody = await firstResponse.text();
     assert.match(firstBody, /runtime-client/);
     assert.match(firstBody, /https:\/\/runtime\.example/);
     assert.match(firstBody, /OIDC_USE_MOCK/);
+    assert.match(firstBody, /OIDC_CLIENT_SECRET__SERVER/);
+    assert.match(firstBody, /redacted on client/);
     assert.doesNotMatch(firstBody, /must-not-leak|OIDC_SPA_TEST_SECRET|"PATH"/);
     delete process.env.OIDC_ISSUER_URI;
     process.env.OIDC_CLIENT_ID = "";
