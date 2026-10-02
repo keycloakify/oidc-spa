@@ -421,7 +421,13 @@ export function createHandleTanstackStartBootstrapEnv(params: { resolvedConfig: 
                         "oidc-spa: The TanStack Start server resolver is unavailable while generating the public environment manifest."
                     );
                 }
-                context = { ...context, resolve: resolveFromServerEnvironment };
+                // Vite's plugin context methods live on its prototype: spreading the
+                // context would drop addWatchFile, so delegate to it explicitly.
+                const pluginContext = context;
+                context = {
+                    resolve: resolveFromServerEnvironment,
+                    addWatchFile: id => pluginContext.addWatchFile(id)
+                };
             }
             const names = await (scanPromise ??= scan(context));
             return `export const publicEnvNames = new Set(${JSON.stringify(names)});\n`;
