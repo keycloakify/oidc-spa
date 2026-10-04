@@ -203,6 +203,39 @@ test("TanStack Start bootstrap environment manifest", async t => {
         assert.deepEqual([...serverResolvedSpecifiers].sort(), ["./auth", "@/barrel"]);
         httpServer.emit("close");
     });
+    await t.test("keeps the plugin context methods when loaded by the client", async () => {
+        const { handler, context } = await fixture({
+            "oidc.ts": `${setup} bootstrapOidc(({ process }) => ({ clientId: process.env.CLIENT }));`
+        });
+        const httpServer = new EventEmitter();
+        handler.configureServer({
+            watcher: new EventEmitter(),
+            httpServer,
+            environments: {
+                ssr: {
+                    config: { consumer: "server" },
+                    pluginContainer: { resolveId: context.resolve }
+                }
+            }
+        } as any);
+        // Like Vite's PluginContext, the methods live on the prototype, not on the instance.
+        class ClientPluginContext {
+            environment = { name: "client" };
+            watchedFiles: string[] = [];
+            addWatchFile(id: string) {
+                this.watchedFiles.push(id);
+            }
+            async resolve(): Promise<never> {
+                throw new Error("The client resolver must not scan application imports.");
+            }
+        }
+        const clientContext = new ClientPluginContext();
+        const id = handler.resolveId("virtual:oidc-spa/tanstack-start-public-env")!;
+        const clientCode = await handler.load(id, clientContext as any);
+        assert.deepEqual(JSON.parse(clientCode!.match(/new Set\((.*)\)/)![1]), ["CLIENT"]);
+        assert.ok(clientContext.watchedFiles.length > 0);
+        httpServer.emit("close");
+    });
     for (const expression of [
         `({ process }) => ({ clientId: process.env[name] })`,
         `({ process }) => configure(process.env)`,
