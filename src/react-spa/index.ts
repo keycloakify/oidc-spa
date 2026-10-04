@@ -1,4 +1,3 @@
 export type * from "./types";
-import { oidcSpaUtilsBuilder } from "./utilsBuilder";
-
-export const oidcSpa = oidcSpaUtilsBuilder;
+export { oidcSpa } from "./oidcSpa";
+export { OidcInitializationError } from "../core";

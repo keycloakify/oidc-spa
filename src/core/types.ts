@@ -35,7 +35,7 @@ export declare namespace Oidc {
 
     export type NotLoggedIn = Common & {
         isUserLoggedIn: false;
-        login: (params?: {
+        login: (params: {
             /**
              * Whether navigating to the current href while logged out causes the application to
              * enforce login.
@@ -45,7 +45,7 @@ export declare namespace Oidc {
              *
              * Default: false
              */
-            doesCurrentHrefEnforceLogin?: boolean;
+            doesCurrentHrefEnforceLogin: boolean;
             /**
              * Where the user should be returned to after login.
              *

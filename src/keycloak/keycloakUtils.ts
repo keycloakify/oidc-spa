@@ -9,7 +9,8 @@ export type KeycloakUtils = {
     getAccountUrl: (params: { clientId: string; validRedirectUri: string; locale?: string }) => string;
     fetchUserProfile: (params: { accessToken: string }) => Promise<KeycloakProfile>;
     fetchUserInfo: (params: { accessToken: string }) => Promise<OidcUserInfo>;
-    transformUrlBeforeRedirectForRegister: (params: { authorizationUrl: string }) => string;
+    /** Rewrites the authorization URL to open Keycloak's registration page. */
+    transformAuthorizationUrl_register: (params: { authorizationUrl: string }) => string;
 };
 
 export type KeycloakProfile = KeycloakProfile.AttributeValuesMap & {
@@ -204,13 +205,13 @@ export function createKeycloakUtils(params: { issuerUri: string }): KeycloakUtil
                             urlish: validRedirectUri,
                             doAssertNoQueryParams: true,
                             doOutputWithTrailingSlash: true,
-                            rootUrl_fullyQualified: new URL(validRedirectUri).origin
+                            rootUrl_fullyQualified: window.location.origin
                         });
                     } catch {
                         return toFullyQualifiedUrl({
                             urlish: validRedirectUri,
                             doAssertNoQueryParams: false,
-                            rootUrl_fullyQualified: new URL(validRedirectUri).origin
+                            rootUrl_fullyQualified: window.location.origin
                         });
                     }
                 })()
@@ -234,7 +235,7 @@ export function createKeycloakUtils(params: { issuerUri: string }): KeycloakUtil
                     Authorization: `Bearer ${accessToken}`
                 }
             }).then(r => r.json()),
-        transformUrlBeforeRedirectForRegister: ({ authorizationUrl }) => {
+        transformAuthorizationUrl_register: ({ authorizationUrl }) => {
             const urlObj = new URL(authorizationUrl);
             urlObj.pathname = urlObj.pathname.replace(/\/auth$/, "/registrations");
             return urlObj.href;

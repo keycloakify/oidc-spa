@@ -1339,11 +1339,11 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
                     ...oidc_common,
                     isUserLoggedIn: false,
                     login: async ({
-                        doesCurrentHrefEnforceLogin = false,
+                        doesCurrentHrefEnforceLogin,
                         returnToUrl = window.location.href,
                         authorizationParams,
                         transformAuthorizationUrl
-                    } = {}) => {
+                    }) => {
                         await waitForAllOtherOngoingLoginOrRefreshProcessesToComplete({
                             prUnlock:
                                 getPrSafelyRestoredFromBfCacheAfterLoginBackNavigationOrInitializationError()

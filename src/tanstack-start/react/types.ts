@@ -55,7 +55,7 @@ export type Oidc_react<User_client> =
       })
     | (Oidc_react.LoggedIn<User_client> & {
           login?: never;
-          oidcInitializationError?: never;
+          initializationError?: never;
       });
 
 export namespace Oidc_react {
@@ -64,7 +64,7 @@ export namespace Oidc_react {
         autoLogoutState: {
             shouldDisplayWarning: false;
         };
-        oidcInitializationError: OidcInitializationError | undefined;
+        initializationError: OidcInitializationError | undefined;
     };
 
     export type NotLoggedIn = {
@@ -73,11 +73,15 @@ export namespace Oidc_react {
         issuerUri: string;
         clientId: string;
         validRedirectUri: string;
-        login: Oidc_client.NotLoggedIn["login"];
+        login: (params: {
+            returnToUrl?: string;
+            authorizationParams?: Record<string, string | string[] | undefined>;
+            transformAuthorizationUrl?: (params: { authorizationUrl: string }) => string;
+        }) => Promise<never>;
         autoLogoutState: {
             shouldDisplayWarning: false;
         };
-        oidcInitializationError: OidcInitializationError | undefined;
+        initializationError: OidcInitializationError | undefined;
     };
 
     export type LoggedIn<User_client> = {
@@ -190,7 +194,7 @@ export namespace OidcRequestMiddleware {
     export type TanstackRequestMiddleware<T> = RequestMiddlewareAfterServer<{}, undefined, T>;
 }
 
-export type RuntimeConfigs<User_client, User_server, AutoLogin> =
+export type RuntimeConfigs<User_server> =
     | RuntimeConfigs.Real<User_server extends undefined ? false : true>
     | RuntimeConfigs.Mock<User_server extends undefined ? false : true>;
 
@@ -253,7 +257,7 @@ export namespace RuntimeConfigs {
             idTokenClaims_mock?: IdTokenClaims;
             refreshToken_mock?: string;
             idToken_mock?: string;
-            isUserInitiallyLoggedIn?: true;
+            isUserInitiallyLoggedIn?: boolean;
         };
     } & (HasServer extends true
         ? {
@@ -270,12 +274,7 @@ export type OidcSpaUtils<User_client, User_server, AutoLogin> = {
 } & (AutoLogin extends true
     ? {}
     : {
-          enforceLogin: (loaderContext: {
-              cause: "preload" | string;
-              location: {
-                  href: string;
-              };
-          }) => Promise<void | never>;
+          enforceLogin: (loaderContext: TanStackRouterLoaderContextLike) => Promise<void | never>;
       }) &
     (User_server extends undefined
         ? {}
@@ -287,6 +286,13 @@ export type OidcSpaUtils<User_client, User_server, AutoLogin> = {
                   ? OidcRequestMiddleware.WithAutoLogin<User_server>
                   : OidcRequestMiddleware<User_server>;
           });
+
+export type TanStackRouterLoaderContextLike = {
+    cause: "preload" | string;
+    location: {
+        href: string;
+    };
+};
 
 export type CreateClientUser<User_client> = (params: {
     isMock: boolean;

@@ -806,7 +806,7 @@ export class Keycloak {
                 kc_idp_hint: idpHint
             },
             transformAuthorizationUrl:
-                action !== "register" ? undefined : keycloakUtils.transformUrlBeforeRedirectForRegister
+                action !== "register" ? undefined : keycloakUtils.transformAuthorizationUrl_register
         });
         assert(false);
     }

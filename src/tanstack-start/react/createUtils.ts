@@ -7,7 +7,8 @@ import type {
     CreateServerUser,
     AccessTokenClaims,
     Oidc_react,
-    Oidc_client
+    Oidc_client,
+    TanStackRouterLoaderContextLike
 } from "./types";
 import type { Oidc as Oidc_core } from "../../core";
 import { OidcInitializationError } from "../../core/OidcInitializationError";
@@ -36,7 +37,7 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
     createServerUser: CreateServerUser<User_server> | undefined;
     getRuntimeConfigsOrRuntimeConfigs: OptionallyAsyncGetterOrDirectValue<
         { process: { env: Record<string, string> } },
-        RuntimeConfigs<User_client, User_server, AutoLogin>
+        RuntimeConfigs<User_server>
     >;
 }): OidcSpaUtils<User_client, User_server, AutoLogin> {
     const getRuntimeConfigs = (() => {
@@ -123,7 +124,7 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
                         }
                     ) as Record<string, string>;
 
-                    let runtimeConfigs: RuntimeConfigs<User_client, User_server, AutoLogin>;
+                    let runtimeConfigs: RuntimeConfigs<User_server>;
 
                     try {
                         runtimeConfigs = await getRuntimeConfigs({ process: { env: env_server_proxy } });
@@ -549,12 +550,9 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
                         return state.evtUser;
                     })();
 
-                    const [, reRenderIfUserChanged] = useState<User_client | undefined>(() => {
-                        if (evtUser === undefined) {
-                            return undefined;
-                        }
-                        return evtUser.current;
-                    });
+                    const [, reRender] = useReducer(n => n + 1, 0);
+
+                    const user_asReturned = evtUser?.current;
 
                     useEffect(() => {
                         if (evtUser === undefined) {
@@ -583,60 +581,67 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
                                 }
                             }
 
-                            reRenderIfUserChanged(evtUser.current);
-
-                            unsubscribe = evtUser.subscribe(user => {
-                                reRenderIfUserChanged(user);
+                            unsubscribe = evtUser.subscribe(() => {
+                                reRender();
                             }).unsubscribe;
+
+                            if (evtUser.current !== user_asReturned) {
+                                reRender();
+                            }
                         })();
 
                         return () => {
                             isActive = false;
                             unsubscribe?.();
                         };
-                    }, [evtUser]);
+                    }, [state.isPending]);
                 }
 
                 const [evtIsAutoLogoutStateUsed] = useState(() =>
                     createStatefulEvt<boolean>(() => false)
                 );
+                {
+                    const [, reRender] = useReducer(n => n + 1, 0);
 
-                const [, reRenderIfAutoLogoutStateChanged] = useState(() => evtAutoLogoutState.current);
+                    const autoLogountState_asReturned = evtAutoLogoutState.current;
 
-                useEffect(() => {
-                    let isActive = true;
-                    let unsubscribe: (() => void) | undefined = undefined;
+                    useEffect(() => {
+                        let isActive = true;
+                        let unsubscribe: (() => void) | undefined = undefined;
 
-                    (async () => {
-                        if (!evtIsAutoLogoutStateUsed.current) {
-                            const dAutoLogoutStateUsed = new Deferred<void>();
+                        (async () => {
+                            if (!evtIsAutoLogoutStateUsed.current) {
+                                const dAutoLogoutStateUsed = new Deferred<void>();
 
-                            const { unsubscribe: unsubscribe_scope } =
-                                evtIsAutoLogoutStateUsed.subscribe(() => {
-                                    unsubscribe_scope();
-                                    dAutoLogoutStateUsed.resolve();
-                                });
-                            unsubscribe = unsubscribe_scope;
+                                const { unsubscribe: unsubscribe_scope } =
+                                    evtIsAutoLogoutStateUsed.subscribe(() => {
+                                        unsubscribe_scope();
+                                        dAutoLogoutStateUsed.resolve();
+                                    });
+                                unsubscribe = unsubscribe_scope;
 
-                            await dAutoLogoutStateUsed.pr;
+                                await dAutoLogoutStateUsed.pr;
 
-                            if (!isActive) {
-                                return;
+                                if (!isActive) {
+                                    return;
+                                }
                             }
-                        }
 
-                        reRenderIfAutoLogoutStateChanged(evtAutoLogoutState.current);
+                            unsubscribe = evtAutoLogoutState.subscribe(() => {
+                                reRender();
+                            }).unsubscribe;
 
-                        unsubscribe = evtAutoLogoutState.subscribe(
-                            reRenderIfAutoLogoutStateChanged
-                        ).unsubscribe;
-                    })();
+                            if (evtAutoLogoutState.current !== autoLogountState_asReturned) {
+                                reRender();
+                            }
+                        })();
 
-                    return () => {
-                        isActive = false;
-                        unsubscribe?.();
-                    };
-                }, []);
+                        return () => {
+                            isActive = false;
+                            unsubscribe?.();
+                        };
+                    }, []);
+                }
 
                 const [hasHydrated, setHasHydratedToTrue] = useReducer(
                     () => true,
@@ -656,7 +661,7 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
                         autoLogoutState: {
                             shouldDisplayWarning: false
                         },
-                        oidcInitializationError: (() => {
+                        initializationError: (() => {
                             if (!hasHydrated) {
                                 return undefined;
                             }
@@ -675,12 +680,13 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
                     return id<Oidc_react.NotLoggedIn>({
                         isOidcReady: true,
                         isUserLoggedIn: false,
-                        oidcInitializationError: state.oidc.initializationError,
+                        initializationError: state.oidc.initializationError,
                         issuerUri: state.oidc.issuerUri,
                         clientId: state.oidc.clientId,
                         validRedirectUri: state.oidc.validRedirectUri,
                         autoLogoutState: { shouldDisplayWarning: false },
-                        login: state.oidc.login
+                        login: params =>
+                            state.oidc.login({ doesCurrentHrefEnforceLogin: false, ...params })
                     });
                 }
 
@@ -789,12 +795,9 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
             return { getOidc };
         })();
 
-        async function enforceLogin(loaderContext: {
-            cause: "preload" | string;
-            location: {
-                publicHref: string;
-            };
-        }): Promise<void | never> {
+        async function enforceLogin(
+            loaderContext: TanStackRouterLoaderContextLike
+        ): Promise<void | never> {
             if (!isBrowser) {
                 throw new Error(
                     [
@@ -804,27 +807,19 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
                 );
             }
 
-            const { cause } = loaderContext;
-
-            const returnToUrl = (() => {
-                if (loaderContext.location?.publicHref !== undefined) {
-                    return toFullyQualifiedUrl({
-                        urlish: loaderContext.location.publicHref,
-                        doAssertNoQueryParams: false,
-                        rootUrl_fullyQualified: window.location.origin
-                    });
-                }
-
-                return window.location.href;
-            })();
-
             const oidc = await getOidc();
+
+            const returnToUrl = toFullyQualifiedUrl({
+                urlish: loaderContext.location.href,
+                doAssertNoQueryParams: false,
+                rootUrl_fullyQualified: oidc.validRedirectUri
+            });
 
             const isUrlAlreadyReplaced =
                 window.location.href.replace(/\/$/, "") === returnToUrl.replace(/\/$/, "");
 
             if (!oidc.isUserLoggedIn) {
-                if (cause === "preload") {
+                if (loaderContext.cause === "preload") {
                     throw new Error(
                         [
                             "oidc-spa: User is not yet logged in.",
@@ -932,7 +927,7 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
                     }
                 );
 
-                let runtimeConfigs: RuntimeConfigs<User_client, User_server, AutoLogin>;
+                let runtimeConfigs: RuntimeConfigs<User_server>;
 
                 try {
                     runtimeConfigs = await getRuntimeConfigs({ process: { env: env_proxy } });

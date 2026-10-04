@@ -20,14 +20,19 @@ export type OidcSpa<
     },
     Excluded
 > &
-    ("withServerUser" extends Excluded
+    ("withClientUser" extends Excluded
         ? {
               withRuntimeConfigs: (
                   getRuntimeConfigsOrRuntimeConfigs: OptionallyAsyncGetterOrDirectValue<
                       { process: { env: Record<string, string> } },
-                      RuntimeConfigs<User_client, User_server, AutoLogin>
+                      RuntimeConfigs<User_server>
                   >
-              ) => OidcSpa<User_client, User_server, AutoLogin, Excluded | "withRuntimeConfigs">;
+              ) => OidcSpa<
+                  User_client,
+                  User_server,
+                  AutoLogin,
+                  Excluded | "withRuntimeConfigs" | "withServerUser"
+              >;
           }
         : {}) &
     ("withRuntimeConfigs" extends Excluded
@@ -43,7 +48,7 @@ function createOidcSpa<User_client, User_server, AutoLogin extends boolean>(para
     getRuntimeConfigsOrRuntimeConfigs:
         | OptionallyAsyncGetterOrDirectValue<
               { process: { env: Record<string, string> } },
-              RuntimeConfigs<User_client, any, any>
+              RuntimeConfigs<any>
           >
         | undefined;
 }): OidcSpa<User_client, User_server, AutoLogin> {
