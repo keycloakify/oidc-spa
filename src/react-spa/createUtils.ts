@@ -348,22 +348,27 @@ export function createUtils<User, AutoLogin extends boolean>(params: {
                             initializationError: ctx.initializationError
                         };
                     } else {
+                        const getAccessErrorMessage = (propertyName: string) =>
+                            `oidc-spa: Cannot read oidc.${propertyName} because OIDC initialization failed before a client was available. Check oidc.initializationError before accessing provider configuration.`;
+
                         return {
                             doWeHaveTheOidcObject: true as const,
                             isUserLoggedIn: false,
                             oidc: id<Oidc_core.NotLoggedIn>({
                                 isUserLoggedIn: false,
-                                // TODO
                                 get clientId(): string {
-                                    throw new Error("");
+                                    throw new Error(getAccessErrorMessage("clientId"));
                                 },
                                 get issuerUri(): string {
-                                    throw new Error();
+                                    throw new Error(getAccessErrorMessage("issuerUri"));
                                 },
                                 get validRedirectUri(): string {
-                                    throw new Error();
+                                    throw new Error(getAccessErrorMessage("validRedirectUri"));
                                 },
                                 login: async () => {
+                                    alert(
+                                        "Authentication is currently unavailable. Please try again later."
+                                    );
                                     return new Promise<never>(() => {});
                                 },
                                 initializationError: ctx.initializationError
