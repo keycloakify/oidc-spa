@@ -113,7 +113,7 @@ export namespace RuntimeConfigs {
 
     assert<
         Equals<
-            Real,
+            Omit<Real, "mode">,
             Omit<
                 ParamsOfCreateOidc<unknown, boolean>,
                 "createUser" | "autoLogin" | "autoLogin_returnToUrl"
