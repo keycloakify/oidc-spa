@@ -305,6 +305,10 @@ export function createLoginOrStartAuthorization(params: {
                 error => {
                     assert(error instanceof Error, "393430");
 
+                    if (error instanceof OidcInitializationError) {
+                        throw error;
+                    }
+
                     // Reaching the auth server can fail for reasons that are not a defect of
                     // this library: the network dropped mid-redirect, or the browser refused
                     // the request outright. Firefox's Local Network Access, for one, blocks a
@@ -405,7 +409,21 @@ export function transformAuthorizationUrl_internal(params: {
 
             const authorizationParams =
                 typeof authorizationParams_maybeGetter === "function"
-                    ? authorizationParams_maybeGetter({ isSilentRedirect })
+                    ? (() => {
+                          try {
+                              return authorizationParams_maybeGetter({ isSilentRedirect });
+                          } catch (error) {
+                              throw new OidcInitializationError({
+                                  messageOrCause: new Error(
+                                      "The authorizationParams getter provided throwed while evaluating.",
+                                      // @ts-expect-error
+                                      { cause: error }
+                                  ),
+                                  isAuthServerLikelyDown: false
+                                  //cause: error
+                              });
+                          }
+                      })()
                     : authorizationParams_maybeGetter;
 
             for (const [name, valueOrValues] of Object.entries(authorizationParams)) {
@@ -426,10 +444,22 @@ export function transformAuthorizationUrl_internal(params: {
             if (transformAuthorizationUrl === undefined) {
                 break handle_transformAuthorizationUrl;
             }
-            authorizationUrl_transformed = transformAuthorizationUrl({
-                authorizationUrl: authorizationUrl_transformed,
-                isSilentRedirect
-            });
+
+            try {
+                authorizationUrl_transformed = transformAuthorizationUrl({
+                    authorizationUrl: authorizationUrl_transformed,
+                    isSilentRedirect
+                });
+            } catch (error) {
+                throw new OidcInitializationError({
+                    messageOrCause: new Error(
+                        "The transformAuthorizationUrl function you provided throwed while evaluating.",
+                        // @ts-expect-error
+                        { cause: error }
+                    ),
+                    isAuthServerLikelyDown: false
+                });
+            }
         }
 
         handle_setStateDataAuthorizationParams: {
@@ -477,12 +507,13 @@ export function transformAuthorizationUrl_internal(params: {
 
         for (const name of AUTHORIZATION_URL_BASE_QUERY_PARAMS_NAMES) {
             if (JSON.stringify(params_before[name]) !== JSON.stringify(params_after[name])) {
-                throw new Error(
-                    [
+                throw new OidcInitializationError({
+                    messageOrCause: [
                         "oidc-spa: Illegal transformation of the authorizationUrl, can't alter the",
                         `${name} query parameter value.`
-                    ].join(" ")
-                );
+                    ].join(" "),
+                    isAuthServerLikelyDown: false
+                });
             }
         }
     }

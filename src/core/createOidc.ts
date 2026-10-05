@@ -1435,16 +1435,43 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
                     prUnlock: new Promise<never>(() => {})
                 });
 
-                await loginOrStartAuthorization({
-                    action: "login",
-                    returnToUrl: window.location.href,
-                    doForceReloadOnBfCache: true,
-                    authorizationParams_paramOfLoginOrStartAuthorization: undefined,
-                    transformAuthorizationUrl_paramOfLoginOrStartAuthorization: undefined,
-                    doNavigateBackToLastPublicUrlIfTheTheUserNavigateBack: true,
-                    interaction: "directly redirect if active session show login otherwise",
-                    preRedirectHook: undefined
-                });
+                try {
+                    await loginOrStartAuthorization({
+                        action: "login",
+                        returnToUrl: window.location.href,
+                        doForceReloadOnBfCache: true,
+                        authorizationParams_paramOfLoginOrStartAuthorization: undefined,
+                        transformAuthorizationUrl_paramOfLoginOrStartAuthorization: undefined,
+                        doNavigateBackToLastPublicUrlIfTheTheUserNavigateBack: true,
+                        interaction: "directly redirect if active session show login otherwise",
+                        preRedirectHook: undefined
+                    });
+                } catch (error) {
+                    if (!(error instanceof OidcInitializationError)) {
+                        throw error;
+                    }
+
+                    console.warn(
+                        [
+                            "oidc-spa: Failing to start autorization: ",
+                            `${error.message}\n`,
+                            "This is an unrecoverable error reloading the current page."
+                        ].join(" ")
+                    );
+
+                    const { isOnline, prOnline } = getIsOnline();
+
+                    if (!isOnline) {
+                        log?.(
+                            "Browser is currently offline, waiting for it to come back online to reload"
+                        );
+                        await prOnline;
+                    }
+
+                    window.location.reload();
+
+                    await new Promise<never>(() => {});
+                }
                 assert(false, "136134");
             };
 
@@ -1580,10 +1607,7 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
                                     authResponseToUrl(authResponse)
                                 );
                         } catch (error) {
-                            if (authResponse_error === undefined) {
-                                console.error(error);
-                                assert(false, `This is a bug in oidc-spa, please report.`);
-                            }
+                            console.error(error);
                         }
 
                         if (oidcClientTsUser_scope === undefined) {
@@ -1591,12 +1615,22 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
 
                             completeLoginOrRefreshProcess();
 
-                            log?.(
-                                [
-                                    "The user is probably not logged in anymore,",
-                                    "need to redirect to login pages"
-                                ].join(" ")
-                            );
+                            if (authResponse_error === undefined) {
+                                console.warn(
+                                    [
+                                        "oidc-spa: Error while echanging code for token",
+                                        "in the token renewal process. This isn't recoverable",
+                                        "starting a new authorization with redirect."
+                                    ].join(" ")
+                                );
+                            } else {
+                                log?.(
+                                    [
+                                        "The user is probably not logged in anymore,",
+                                        "need to redirect to login pages"
+                                    ].join(" ")
+                                );
+                            }
 
                             await fallbackToFullPageReload();
 
