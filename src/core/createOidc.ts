@@ -64,7 +64,6 @@ import type { Evt } from "../tools/Evt";
 import type { ParamsOfCreateGetServerDateNow } from "../tools/getServerDateNow";
 import { SESSION_STORAGE_GLOBAL_PREFIX } from "../tools/lazySessionStorage";
 import { createGetUser } from "./createGetUser";
-import * as runExclusive from "../tools/run-exclusive";
 import { getBASE_URL_earlyInit } from "./earlyInit_BASE_URL";
 import { fnv1aHashToHex } from "../tools/fnv1aHashToHex";
 import { noUndefined } from "../tools/tsafe/noUndefined";
@@ -72,6 +71,7 @@ import { addOrUpdateSearchParam } from "../tools/urlSearchParams";
 import { getIsDeepLink } from "../tools/isDeepLink";
 import { deepLinkToRootRelativeUrl } from "../tools/deepLinkToRootRelativeUrl";
 import { simulateUserInteraction as resetAutoLogoutCountdown } from "../tools/getPrUserInteraction";
+import { Mutex } from "../tools/async-mutex";
 
 // NOTE: Replaced at build time
 const VERSION = "{{OIDC_SPA_VERSION}}";
@@ -81,7 +81,9 @@ const globalContext = {
     hasLogoutBeenCalled: id<boolean>(false),
     dExports_earlyInit: new Deferred<Exports_earlyInit>(),
     dExports_tokenSubstitution: new Deferred<Exports_tokenSubstitution>(),
-    dExports_DPoP: new Deferred<Exports_DPoP>()
+    dExports_DPoP: new Deferred<Exports_DPoP>(),
+    mutex: new Mutex(),
+    createErroredOidcNotLoggedIn_cache: new WeakMap<OidcInitializationError, Oidc.NotLoggedIn>()
 };
 
 export type Exports_earlyInit = Exports_earlyInit.ShouldNotLoadApp | Exports_earlyInit.ShouldLoadApp;
@@ -155,282 +157,344 @@ export function registerExports_DPoP(exports: Exports_DPoP): void {
     globalContext.dExports_DPoP.resolve(exports);
 }
 /** @see: https://docs.oidc-spa.dev/v/v10/usage */
-export function createOidc<User = undefined, AutoLogin extends boolean = false>(
+export async function createOidc<User = undefined, AutoLogin extends boolean = false>(
     params: ParamsOfCreateOidc<User, AutoLogin>
 ): Promise<AutoLogin extends true ? Oidc.LoggedIn<User> : Oidc<User>> {
-    return createOidc_impl(params);
-}
+    const releaseMutex = await globalContext.mutex.acquire();
 
-const createOidc_impl = runExclusive.build(async function <User, AutoLogin extends boolean>(
-    params: ParamsOfCreateOidc<User, AutoLogin>
-): Promise<AutoLogin extends true ? Oidc.LoggedIn<User> : Oidc<User>> {
-    const exports_earlyInit = await (async () => {
-        const timer = window.setTimeout(() => {
-            console.warn(
-                [
-                    "oidc-spa: Setup error.",
-                    "oidcEarlyInit() wasn't called.",
-                    "This is supposed to be handled by the oidc-spa Vite plugin",
-                    "or manually in other environments."
-                ].join(" ")
-            );
-        }, 3_000);
+    try {
+        const exports_earlyInit = await (async () => {
+            const timer = window.setTimeout(() => {
+                console.warn(
+                    [
+                        "oidc-spa: Setup error.",
+                        "oidcEarlyInit() wasn't called.",
+                        "This is supposed to be handled by the oidc-spa Vite plugin",
+                        "or manually in other environments."
+                    ].join(" ")
+                );
+            }, 3_000);
 
-        const exports_earlyInit = await globalContext.dExports_earlyInit.pr;
+            const exports_earlyInit = await globalContext.dExports_earlyInit.pr;
 
-        window.clearTimeout(timer);
+            window.clearTimeout(timer);
 
-        return exports_earlyInit;
-    })();
-
-    if (!exports_earlyInit.shouldLoadApp) {
-        return new Promise<never>(() => {});
-    }
-
-    for (const name of ["issuerUri", "clientId"] as const) {
-        const value = params[name];
-        if (!value) {
-            throw new Error(
-                `oidc-spa: The parameter "${name}" is required, you provided: ${value}. (Forgot a .env variable?)`
-            );
-        }
-    }
-
-    const {
-        issuerUri: issuerUri_params,
-        clientId,
-        debugLogs,
-        __oidcProviderMetadata: oidcProviderMetadata_params,
-        scopes: scopes_params,
-        // NOTE: Evaluate now in case it's a getter, it needs to be stable.
-        tokenParams,
-        ...rest
-    } = params;
-
-    const issuerUri = toFullyQualifiedUrl({
-        urlish: issuerUri_params,
-        doAssertNoQueryParams: true,
-        doOutputWithTrailingSlash: false,
-        rootUrl_fullyQualified: window.location.origin
-    });
-
-    const oidcProviderMetadata =
-        oidcProviderMetadata_params ?? (await fetchOidcProviderMetadata({ issuerUri }));
-
-    const scopes = Array.from(new Set(["openid", ...(params.scopes ?? ["profile"])]));
-
-    const response_mode =
-        isKeycloak({ issuerUri }) && !getIsStateDataCookieEnabled() ? "fragment" : "query";
-
-    const homeUrlAndRedirectUri = toFullyQualifiedUrl({
-        urlish: getBASE_URL_earlyInit(),
-        doAssertNoQueryParams: true,
-        doOutputWithTrailingSlash: true,
-        rootUrl_fullyQualified: window.location.origin
-    });
-
-    if (
-        !getIsDeepLink({
-            fullyQualifiedUrl: homeUrlAndRedirectUri,
-            relativeTo_fullyQualified: window.location.origin
-        })
-    ) {
-        throw new Error(
-            [
-                "oidc-spa: Configuration Error,",
-                `\`oidcEarlyInit({ BASE_URL: "${getBASE_URL_earlyInit()}"})\` is not valid,`,
-                "BASE_URL is external to the current origin",
-                `BASE_URL is typically "/" or "/dashboard/"`
-            ].join(" ")
-        );
-    }
-
-    if (
-        !getIsDeepLink({
-            fullyQualifiedUrl: window.location.href,
-            relativeTo_fullyQualified: homeUrlAndRedirectUri
-        })
-    ) {
-        throw new Error(
-            [
-                "oidc-spa: Configuration Error,",
-                `We are currently at: ${window.location.origin}${window.location.pathname}\n`,
-                `however you've specified with \`oidcEarlyInit({ BASE_URL: "${getBASE_URL_earlyInit()}"})\``,
-                `that your whole app is supposed to be hosted under ${homeUrlAndRedirectUri}.\n`
-            ].join(" ")
-        );
-    }
-
-    const getAuthorizationParams = (():
-        | ((params: { isSilentRedirect: boolean }) => Record<string, string | string[] | undefined>)
-        | undefined => {
-        const propertyName = "authorizationParams";
-
-        assert<typeof propertyName extends keyof ParamsOfCreateOidc<unknown, true> ? true : false>;
-
-        const pd = Object.getOwnPropertyDescriptor(params, propertyName);
-
-        if (pd === undefined) {
-            return undefined;
-        }
-
-        if (pd.value === undefined) {
-            return undefined;
-        }
-
-        return ({ isSilentRedirect }) => {
-            const authorizationParamsOrGetter = params[propertyName];
-
-            assert(authorizationParamsOrGetter !== undefined);
-
-            if (typeof authorizationParamsOrGetter !== "function") {
-                const authorizationParams = authorizationParamsOrGetter;
-                return authorizationParams;
-            }
-            const getAuthorizationParams = authorizationParamsOrGetter;
-
-            return getAuthorizationParams({ isSilentRedirect });
-        };
-    })();
-
-    const configId_seed = (() => {
-        const authorizationParams = (() => {
-            if (oidcProviderMetadata === undefined) {
-                return undefined;
-            }
-
-            const { audience, resource } = getAuthorizationAudienceAndResourceParamsValues({
-                oidcProviderMetadata,
-                clientId,
-                homeUrlAndRedirectUri,
-                scopes,
-                response_mode,
-                transformAuthorizationUrl_paramOfCreateOidc: params.transformAuthorizationUrl,
-                getAuthorizationParams_paramsOfCreateOidc: getAuthorizationParams
-            });
-
-            if (audience === undefined && resource === undefined) {
-                return undefined;
-            }
-
-            const toPretty = (v: string[] | undefined) => {
-                if (v === undefined) {
-                    return undefined;
-                }
-                if (v.length === 1) {
-                    return v[0];
-                }
-                return v;
-            };
-
-            const authorizationParams = noUndefined({
-                audience: toPretty(audience),
-                resource: toPretty(resource)
-            });
-
-            if (Object.keys(authorizationParams).length === 0) {
-                return undefined;
-            }
-
-            return authorizationParams;
+            return exports_earlyInit;
         })();
 
-        return {
-            issuerUri,
-            clientId,
-            scopes: scopes.filter(scope => scope !== "oidc"),
-            authorizationParams,
-            tokenParams: (() => {
-                if (tokenParams === undefined) {
-                    return undefined;
-                }
-                if (Object.keys(noUndefined(tokenParams)).length === 0) {
-                    return undefined;
-                }
-                return tokenParams;
-            })(),
-            disableDPoP: params.disableDPoP
-        };
-    })();
-
-    const configId = fnv1aHashToHex(JSON.stringify(configId_seed));
-
-    const log = (() => {
-        if (!debugLogs) {
-            return undefined;
+        if (!exports_earlyInit.shouldLoadApp) {
+            return new Promise<never>(() => {});
         }
 
-        return id<typeof console.log>((...[first, ...rest]) => {
-            const label = "oidc-spa";
-
-            if (typeof first === "string") {
-                console.log(...[`${label}: ${first}`, ...rest]);
-            } else {
-                console.log(...[`${label}:`, first, ...rest]);
+        for (const name of ["issuerUri", "clientId"] as const) {
+            const value = params[name];
+            if (!value) {
+                throw new Error(
+                    `oidc-spa: The parameter "${name}" is required, you provided: ${value}. (Forgot a .env variable?)`
+                );
             }
-        });
-    })();
-
-    const { prOidcByConfigId } = globalContext;
-
-    use_previous_instance: {
-        const prOidc = prOidcByConfigId.get(configId);
-
-        if (prOidc === undefined) {
-            break use_previous_instance;
         }
+
+        const {
+            issuerUri: issuerUri_params,
+            clientId,
+            debugLogs,
+            __oidcProviderMetadata: oidcProviderMetadata_params,
+            scopes: scopes_params,
+            // NOTE: Evaluate now in case it's a getter, it needs to be stable.
+            tokenParams,
+            ...rest
+        } = params;
+
+        const issuerUri = toFullyQualifiedUrl({
+            urlish: issuerUri_params,
+            doAssertNoQueryParams: true,
+            doOutputWithTrailingSlash: false,
+            rootUrl_fullyQualified: window.location.origin
+        });
+
+        const oidcProviderMetadata =
+            oidcProviderMetadata_params ?? (await fetchOidcProviderMetadata({ issuerUri }));
+
+        const scopes = Array.from(new Set(["openid", ...(params.scopes ?? ["profile"])]));
+
+        const response_mode =
+            isKeycloak({ issuerUri }) && !getIsStateDataCookieEnabled() ? "fragment" : "query";
+
+        const homeUrlAndRedirectUri = toFullyQualifiedUrl({
+            urlish: getBASE_URL_earlyInit(),
+            doAssertNoQueryParams: true,
+            doOutputWithTrailingSlash: true,
+            rootUrl_fullyQualified: window.location.origin
+        });
+
+        if (
+            !getIsDeepLink({
+                fullyQualifiedUrl: homeUrlAndRedirectUri,
+                relativeTo_fullyQualified: window.location.origin
+            })
+        ) {
+            throw new Error(
+                [
+                    "oidc-spa: Configuration Error,",
+                    `\`oidcEarlyInit({ BASE_URL: "${getBASE_URL_earlyInit()}"})\` is not valid,`,
+                    "BASE_URL is external to the current origin",
+                    `BASE_URL is typically "/" or "/dashboard/"`
+                ].join(" ")
+            );
+        }
+
+        if (
+            !getIsDeepLink({
+                fullyQualifiedUrl: window.location.href,
+                relativeTo_fullyQualified: homeUrlAndRedirectUri
+            })
+        ) {
+            throw new Error(
+                [
+                    "oidc-spa: Configuration Error,",
+                    `We are currently at: ${window.location.origin}${window.location.pathname}\n`,
+                    `however you've specified with \`oidcEarlyInit({ BASE_URL: "${getBASE_URL_earlyInit()}"})\``,
+                    `that your whole app is supposed to be hosted under ${homeUrlAndRedirectUri}.\n`
+                ].join(" ")
+            );
+        }
+
+        const getAuthorizationParams = (():
+            | ((params: { isSilentRedirect: boolean }) => Record<string, string | string[] | undefined>)
+            | undefined => {
+            const propertyName = "authorizationParams";
+
+            assert<typeof propertyName extends keyof ParamsOfCreateOidc<unknown, true> ? true : false>;
+
+            const pd = Object.getOwnPropertyDescriptor(params, propertyName);
+
+            if (pd === undefined) {
+                return undefined;
+            }
+
+            if (pd.value === undefined) {
+                return undefined;
+            }
+
+            return ({ isSilentRedirect }) => {
+                const authorizationParamsOrGetter = params[propertyName];
+
+                assert(authorizationParamsOrGetter !== undefined);
+
+                if (typeof authorizationParamsOrGetter !== "function") {
+                    const authorizationParams = authorizationParamsOrGetter;
+                    return authorizationParams;
+                }
+                const getAuthorizationParams = authorizationParamsOrGetter;
+
+                return getAuthorizationParams({ isSilentRedirect });
+            };
+        })();
+
+        const configId_seed = (() => {
+            const authorizationParams = (() => {
+                if (oidcProviderMetadata === undefined) {
+                    return undefined;
+                }
+
+                const { audience, resource } = getAuthorizationAudienceAndResourceParamsValues({
+                    oidcProviderMetadata,
+                    clientId,
+                    homeUrlAndRedirectUri,
+                    scopes,
+                    response_mode,
+                    transformAuthorizationUrl_paramOfCreateOidc: params.transformAuthorizationUrl,
+                    getAuthorizationParams_paramsOfCreateOidc: getAuthorizationParams
+                });
+
+                if (audience === undefined && resource === undefined) {
+                    return undefined;
+                }
+
+                const toPretty = (v: string[] | undefined) => {
+                    if (v === undefined) {
+                        return undefined;
+                    }
+                    if (v.length === 1) {
+                        return v[0];
+                    }
+                    return v;
+                };
+
+                const authorizationParams = noUndefined({
+                    audience: toPretty(audience),
+                    resource: toPretty(resource)
+                });
+
+                if (Object.keys(authorizationParams).length === 0) {
+                    return undefined;
+                }
+
+                return authorizationParams;
+            })();
+
+            return {
+                issuerUri,
+                clientId,
+                scopes: scopes.filter(scope => scope !== "oidc"),
+                authorizationParams,
+                tokenParams: (() => {
+                    if (tokenParams === undefined) {
+                        return undefined;
+                    }
+                    if (Object.keys(noUndefined(tokenParams)).length === 0) {
+                        return undefined;
+                    }
+                    return tokenParams;
+                })(),
+                disableDPoP: params.disableDPoP
+            };
+        })();
+
+        const configId = fnv1aHashToHex(JSON.stringify(configId_seed));
+
+        releaseMutex();
+
+        const log = (() => {
+            if (!debugLogs) {
+                return undefined;
+            }
+
+            return id<typeof console.log>((...[first, ...rest]) => {
+                const label = "oidc-spa";
+
+                if (typeof first === "string") {
+                    console.log(...[`${label}: ${first}`, ...rest]);
+                } else {
+                    console.log(...[`${label}:`, first, ...rest]);
+                }
+            });
+        })();
+
+        const { prOidcByConfigId } = globalContext;
+
+        use_memoized_instance: {
+            const prOidc = prOidcByConfigId.get(configId);
+
+            if (prOidc === undefined) {
+                break use_memoized_instance;
+            }
+
+            log?.(
+                [
+                    `createOidc was called again with the same config seed (${JSON.stringify(
+                        configId_seed,
+                        null,
+                        2
+                    )})`,
+                    `Returning already existing instance.`
+                ].join(" ")
+            );
+
+            if (params.autoLogin) {
+                let oidc: Oidc<any>;
+
+                try {
+                    oidc = await prOidc;
+                } catch (error) {
+                    // @ts-expect-error: We know what we're doing
+                    return prOidc;
+                }
+
+                if (!oidc.isUserLoggedIn) {
+                    if (oidc.initializationError !== undefined) {
+                        window.location.reload();
+                        await new Promise<never>(() => {});
+                    }
+
+                    await oidc.login({
+                        doesCurrentHrefEnforceLogin: true,
+                        returnToUrl: params.autoLogin_returnToUrl
+                    });
+                    assert(false, "3333933");
+                }
+            } else {
+                let initializationError: OidcInitializationError | undefined;
+
+                try {
+                    await prOidc;
+                    initializationError = undefined;
+                } catch (error) {
+                    if (!(error instanceof OidcInitializationError)) {
+                        throw error;
+                    }
+
+                    initializationError = error;
+                }
+
+                if (initializationError !== undefined) {
+                    const oidc = createErroredOidcNotLoggedIn({
+                        oidc_common: {
+                            clientId,
+                            issuerUri,
+                            validRedirectUri: homeUrlAndRedirectUri
+                        },
+                        initializationError
+                    });
+
+                    // @ts-expect-error: We know what we're doing
+                    return oidc;
+                }
+            }
+
+            // @ts-expect-error: We know what we're doing
+            return prOidc;
+        }
+
+        const dOidc = new Deferred<Oidc<any>>();
+
+        prOidcByConfigId.set(configId, dOidc.pr);
 
         log?.(
-            [
-                `createOidc was called again with the same config seed (${JSON.stringify(
-                    configId_seed,
-                    null,
-                    2
-                )})`,
-                `Returning already existing instance.`
-            ].join(" ")
+            `createOidc v${VERSION} ${JSON.stringify(
+                {
+                    ...configId_seed,
+                    validRedirectUri: homeUrlAndRedirectUri
+                },
+                null,
+                2
+            )}`
         );
 
-        // @ts-expect-error: We know what we're doing
-        return prOidc;
-    }
+        let oidc: Oidc<User>;
 
-    const dOidc = new Deferred<Oidc<any>>();
-
-    prOidcByConfigId.set(configId, dOidc.pr);
-
-    log?.(
-        `createOidc v${VERSION} ${JSON.stringify(
-            {
-                ...configId_seed,
-                validRedirectUri: homeUrlAndRedirectUri
-            },
-            null,
-            2
-        )}`
-    );
-
-    const oidc = await createOidc_nonMemoized<User, AutoLogin>({
-        params_forwarded: rest,
-        params_preProcesses: {
-            issuerUri,
-            clientId,
-            configId,
-            getAuthorizationParams,
-            tokenParams,
-            oidcProviderMetadata,
-            exports_earlyInit,
-            homeUrlAndRedirectUri,
-            response_mode,
-            scopes,
-            log
+        try {
+            oidc = await createOidc_nonMemoized<User, AutoLogin>({
+                params_forwarded: rest,
+                params_preProcesses: {
+                    issuerUri,
+                    clientId,
+                    configId,
+                    getAuthorizationParams,
+                    tokenParams,
+                    oidcProviderMetadata,
+                    exports_earlyInit,
+                    homeUrlAndRedirectUri,
+                    response_mode,
+                    scopes,
+                    log
+                }
+            });
+        } catch (error) {
+            dOidc.reject(error);
+            // @ts-expect-error
+            return dOidc.pr;
         }
-    });
 
-    dOidc.resolve(oidc);
+        dOidc.resolve(oidc);
 
-    return oidc;
-});
+        // @ts-expect-error
+        return oidc;
+    } finally {
+        releaseMutex();
+    }
+}
 
 const A_HUNDRED_YEARS_IN_SECONDS = 3600 * 24 * 365 * 100;
 
@@ -1321,15 +1385,12 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
                     ].join("\n")
                 );
 
-                return id<Oidc.NotLoggedIn>({
-                    ...oidc_common,
-                    isUserLoggedIn: false,
-                    login: async () => {
-                        alert("Authentication is currently unavailable. Please try again later.");
-                        return new Promise<never>(() => {});
-                    },
+                const oidc_notLoggedIn_errored: Oidc.NotLoggedIn = createErroredOidcNotLoggedIn({
+                    oidc_common,
                     initializationError
                 });
+
+                return oidc_notLoggedIn_errored;
             }
 
             if (resultOfLoginProcess === undefined) {
@@ -2460,4 +2521,37 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
     }
 
     return oidc_loggedIn;
+}
+
+function createErroredOidcNotLoggedIn(params: {
+    oidc_common: Oidc.Common;
+    initializationError: OidcInitializationError;
+}) {
+    const { oidc_common, initializationError } = params;
+
+    const { createErroredOidcNotLoggedIn_cache: cache } = globalContext;
+
+    use_cache: {
+        const entry = cache.get(initializationError);
+
+        if (entry === undefined) {
+            break use_cache;
+        }
+
+        return entry;
+    }
+
+    const oidc = id<Oidc.NotLoggedIn>({
+        ...oidc_common,
+        isUserLoggedIn: false,
+        login: async () => {
+            alert("Authentication is currently unavailable. Please try again later.");
+            return new Promise<never>(() => {});
+        },
+        initializationError
+    });
+
+    cache.set(initializationError, oidc);
+
+    return oidc;
 }
