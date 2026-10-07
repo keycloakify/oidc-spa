@@ -15,8 +15,9 @@ export function authResponseToUrl(authResponse: AuthResponse): string {
         authResponseUrl = addOrUpdateSearchParam({
             url: authResponseUrl,
             name,
-            value,
-            encodeMethod: "www-form"
+            values: [value],
+            encodeMethod: "www-form",
+            ifAlreadyPresent: "replace all by new values"
         });
     }
 

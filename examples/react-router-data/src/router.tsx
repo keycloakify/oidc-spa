@@ -1,21 +1,8 @@
-import { createBrowserRouter, Outlet, redirect } from "react-router";
-import { Header } from "./components/Header";
-import { AutoLogoutWarningOverlay } from "./components/AutoLogoutWarningOverlay";
+import { createBrowserRouter, redirect } from "react-router";
+import { Layout } from "./Layout";
 import Home from "./pages/Home";
 import Protected, * as protected_ from "./pages/Protected";
 import AdminOnly, * as adminOnly from "./pages/AdminOnly";
-
-function Layout() {
-    return (
-        <>
-            <Header />
-            <main className="mx-auto flex w-full max-w-4xl flex-col gap-10 px-6 pb-16 pt-28">
-                <Outlet />
-            </main>
-            <AutoLogoutWarningOverlay />
-        </>
-    );
-}
 
 export const router = createBrowserRouter([
     {

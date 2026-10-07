@@ -2,7 +2,7 @@ import { assert, type Equals, objectFromEntries, id, isAmong } from "../vendor/s
 import type { IncomingMessage } from "node:http";
 import type { HonoRequest } from "hono";
 import type { FastifyRequest } from "fastify";
-import type { ValidateAndDecodeAccessToken } from "./types";
+import type { ValidateAndGetAccessTokenClaims } from "./types";
 
 export type AnyRequest =
     | AnyRequest.Unified
@@ -32,6 +32,7 @@ export namespace AnyRequest {
         };
         method?: string;
         url?: string;
+        originalUrl?: string;
         socket: Record<string, any>;
     };
 
@@ -149,7 +150,7 @@ function anyRequestToUnified(req: AnyRequest): AnyRequest.Unified {
                 ":scheme":
                     getHeaderValue(":scheme") || (req.socket.encrypted === true ? "https" : "http"),
                 ":authority": getHeaderValue(":authority") || getHeaderValue("host") || "localhost",
-                ":path": req.url
+                ":path": req.originalUrl ?? req.url
             },
             headers: objectFromEntries(
                 (
@@ -184,7 +185,7 @@ export type RequestAuthContext = RequestAuthContext.Success | RequestAuthContext
 export namespace RequestAuthContext {
     export type Success = {
         isWellFormed: true;
-        accessTokenAndMetadata: ValidateAndDecodeAccessToken.Params;
+        accessTokenAndMetadata: ValidateAndGetAccessTokenClaims.Params;
     };
 
     export type Errored = {
@@ -226,7 +227,7 @@ export function extractRequestAuthContext(params: {
     if (scheme === "Bearer") {
         return id<RequestAuthContext.Success>({
             isWellFormed: true,
-            accessTokenAndMetadata: id<ValidateAndDecodeAccessToken.Params.Bearer>({
+            accessTokenAndMetadata: id<ValidateAndGetAccessTokenClaims.Params.Bearer>({
                 scheme: "Bearer",
                 accessToken,
                 rejectIfAccessTokenDPoPBound: true
@@ -340,7 +341,7 @@ export function extractRequestAuthContext(params: {
 
     return id<RequestAuthContext.Success>({
         isWellFormed: true,
-        accessTokenAndMetadata: id<ValidateAndDecodeAccessToken.Params.DPoP>({
+        accessTokenAndMetadata: id<ValidateAndGetAccessTokenClaims.Params.DPoP>({
             scheme: "DPoP",
             accessToken,
             dpopProof: request_unified.headers.DPoP,

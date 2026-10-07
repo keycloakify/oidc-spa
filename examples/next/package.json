@@ -3,29 +3,37 @@
     "version": "0.1.0",
     "private": true,
     "scripts": {
-        "prepare": "[ ! -f .env.local ] && cp .env.local.sample .env.local || true",
-        "dev": "next dev --turbopack",
+        "dev": "next dev",
         "build": "next build",
         "start": "next start",
-        "typecheck": "tsc --noEmit",
-        "lint": "eslint ."
+        "lint": "eslint",
+        "prepare": "node scripts/setup-env.mjs",
+        "typecheck": "next typegen && tsc --noEmit",
+        "test": "node --conditions=react-server --import tsx --test tests/*.test.ts"
     },
     "dependencies": {
-        "next": "16.0.10",
+        "@trpc/client": "11.18.0",
+        "@trpc/server": "11.18.0",
+        "@upstash/redis": "1.38.4",
+        "next": "16.3.4",
         "oidc-spa": "latest",
-        "react": "19.0.0",
-        "react-dom": "19.0.0",
-        "zod": "4.3.6"
+        "react": "19.2.8",
+        "react-dom": "19.2.8",
+        "server-only": "0.0.1",
+        "zod": "4.5.4"
     },
     "devDependencies": {
-        "@eslint/eslintrc": "^3",
-        "@types/node": "^20",
-        "@types/react": "19.0.10",
-        "@types/react-dom": "19.0.4",
-        "eslint": "^9",
-        "eslint-config-next": "15.5.7",
-        "postcss": "^8",
-        "tailwindcss": "^3.4.1",
-        "typescript": "^5"
+        "@tailwindcss/postcss": "4.3.3",
+        "@types/node": "20.19.43",
+        "@types/react": "19.2.18",
+        "@types/react-dom": "19.2.7",
+        "eslint": "9.39.5",
+        "eslint-config-next": "16.3.4",
+        "tailwindcss": "4.3.3",
+        "tsx": "4.20.6",
+        "typescript": "5.9.3"
+    },
+    "engines": {
+        "node": ">=20.19.0"
     }
 }

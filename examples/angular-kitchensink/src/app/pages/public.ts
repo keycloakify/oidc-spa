@@ -1,38 +1,26 @@
 import { AsyncPipe } from '@angular/common';
 import { Component, inject } from '@angular/core';
 import { TodoService } from '../services/todo.service';
-import { Oidc } from '../services/oidc.service';
+import { injectOidc } from '../services/oidc.service';
 
 @Component({
   selector: 'app-public',
-  standalone: true,
   imports: [AsyncPipe],
   template: `
-    <h4>This is a page that do not requires the user to be authenticated</h4>
-    <section>
-      <p>
-        Public todos fetched @defer (when oidc.prInitialized | async) {
-        {{ oidc.isUserLoggedIn ? 'with' : 'without' }} } @placeholder { ... }
-        <code>Authorization: Bearer [access_token]</code> in the request's headers:
-      </p>
-      @if (todos$ | async; as todos) {
-      <ul>
-        @for (todo of todos; track todo.id) {
-        <li>
-          <strong>#{{ todo.id }}</strong>
-          {{ todo.title }}
-          <span>({{ todo.completed ? 'done' : 'pending' }})</span>
-        </li>
-        }
-      </ul>
-      } @else {
-      <p>Loading todos...</p>
-      }
-    </section>
+    <h4>This page does not require authentication</h4>
+    <p>The API greets you anonymously or by name when you are signed in.</p>
+    @defer (when oidc.prInitialized | async) { @if (greeting$ | async; as greeting) {
+    <p>{{ greeting }}</p>
+    } @else {
+    <p>Loading greeting...</p>
+    } } @placeholder {
+    <p>Waiting for authentication before loading the greeting...</p>
+    }
   `,
 })
 export class Public {
-  oidc = inject(Oidc);
+  oidc = injectOidc();
   private readonly todoService = inject(TodoService);
-  readonly todos$ = this.todoService.getPublicAndUserTodos();
+  // AsyncPipe subscribes inside @defer: the optional token depends on browser auth readiness.
+  readonly greeting$ = this.todoService.getGreeting();
 }
