@@ -352,8 +352,8 @@ function handleOidcCallback(): {
         case "iframe":
             if (parent !== top) {
                 const errorMessage = [
-                    "oidc-spa: For security reasons, refusing to post the auth response.",
-                    "If you want your app to be framable use sessionRestorationMethod: 'full page redirect'."
+                    "oidc-spa: Refusing to post the auth response from a nested iframe to prevent interception.",
+                    "For your app to work when rendered in an iframe, use sessionRestorationMethod: 'full page redirect'."
                 ].join(" ");
                 alert(errorMessage);
 

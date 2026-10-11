@@ -764,6 +764,25 @@ export async function createOidc_nonMemoized<
             return false;
         }
 
+        check_if_frammed: {
+            const isInIframe = window.self !== window.top;
+
+            if (!isInIframe) {
+                break check_if_frammed;
+            }
+
+            log?.(
+                [
+                    "Silent session restoration via iframe is disabled because the app is itself embedded in an iframe.",
+                    "\nAllowing iframe restoration in this configuration would let malicious JavaScript running on the app's origin",
+                    "initiate an authorization flow and intercept the response from a nested iframe.",
+                    '\nTo block this attack vector, falling back to sessionRestorationMethod: "full page redirect".'
+                ].join(" ")
+            );
+
+            return false;
+        }
+
         return true;
     })();
 
