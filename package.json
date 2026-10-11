@@ -1,6 +1,6 @@
 {
     "name": "oidc-spa",
-    "version": "10.2.16",
+    "version": "10.2.17",
     "description": "OpenID Connect / OAuth2 solution for client-first Web Applications",
     "repository": {
         "type": "git",
