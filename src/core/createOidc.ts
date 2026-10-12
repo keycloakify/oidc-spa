@@ -47,7 +47,7 @@ import { getRootRelativeOriginalLocationHref_earlyInit } from "./earlyInit_rootR
 import { getIsLikelyDevServer } from "../tools/isLikelyDevServer";
 import { createObjectThatThrowsIfAccessed } from "../tools/createObjectThatThrowsIfAccessed";
 import {
-    evtIsThereMoreThanOneInstanceThatCantUserIframes,
+    evtIsThereMoreThanOneInstanceThatCantUseIframes,
     notifyNewInstanceThatCantUseIframes
 } from "./instancesThatCantUseIframes";
 import { ensureNonBlankPaint } from "../tools/ensureNonBlankPaint";
@@ -799,7 +799,7 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
     if (!canUseIframe) {
         notifyNewInstanceThatCantUseIframes();
 
-        if (evtIsThereMoreThanOneInstanceThatCantUserIframes.current) {
+        if (evtIsThereMoreThanOneInstanceThatCantUseIframes.current) {
             log?.(
                 [
                     "More than one oidc instance can't use iframe",
@@ -834,10 +834,10 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
 
                     const storage = createLazySessionStorage({ storageId: configId });
 
-                    if (evtIsThereMoreThanOneInstanceThatCantUserIframes.current) {
+                    if (evtIsThereMoreThanOneInstanceThatCantUseIframes.current) {
                         storage.persistCurrentStateAndSubsequentChanges();
                     } else {
-                        evtIsThereMoreThanOneInstanceThatCantUserIframes.subscribe(() => {
+                        evtIsThereMoreThanOneInstanceThatCantUseIframes.subscribe(() => {
                             storage.persistCurrentStateAndSubsequentChanges();
                         });
                     }
@@ -1109,7 +1109,7 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
                 break restore_from_session_storage;
             }
 
-            if (!evtIsThereMoreThanOneInstanceThatCantUserIframes.current) {
+            if (!evtIsThereMoreThanOneInstanceThatCantUseIframes.current) {
                 break restore_from_session_storage;
             }
 
