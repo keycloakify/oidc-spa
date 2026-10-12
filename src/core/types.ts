@@ -370,7 +370,7 @@ export type ParamsOfCreateOidc<User, AutoLogin extends boolean> = {
      *
      * - **"auto" (default)**:
      *   Automatically selects the best method.
-     *   If the app’s domain shares a common parent domain with the authorization endpoint,
+     *   If the app and authorization endpoint are same-site
      *   an iframe is used for silent session restoration.
      *   Otherwise, a full-page redirect is used.
      *

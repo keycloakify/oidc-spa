@@ -27,7 +27,7 @@ import { createLoginSilent } from "./loginSilent";
 import { authResponseToUrl, type AuthResponse } from "./AuthResponse";
 import { getPersistedAuthState, persistAuthState } from "./persistedAuthState";
 import { createEvt } from "../tools/Evt";
-import { getHaveSharedParentDomain } from "../tools/haveSharedParentDomain";
+import { getAreSameSite } from "../tools/sameSite";
 import {
     createLoginOrStartAuthorization,
     getPrSafelyRestoredFromBfCacheAfterLoginBackNavigationOrInitializationError,
@@ -644,9 +644,8 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
                 "Missing authorization_endpoint on the provided __metadata"
             );
 
-            const isOidcServerThirdPartyRelativeToApp = !getHaveSharedParentDomain({
+            const isOidcServerThirdPartyRelativeToApp = !getAreSameSite({
                 url1: window.location.origin,
-                // TODO: No, here we should test against the authorization endpoint!
                 url2: authorization_endpoint
             });
 
@@ -746,7 +745,7 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
                         "Silent session restore via iframe is disabled.",
                         `\nAuth server: ${domain_auth}`,
                         `App domain:  ${domain_here}`,
-                        "\nThey do not share a common root domain.",
+                        "\nThey do not share the same scheme and root domain.",
                         ...(() => {
                             if (isIp) {
                                 return [];
@@ -1273,10 +1272,10 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
                     autoLogin ||
                     (persistedAuthState === "logged in" &&
                         (authResponse_error === undefined ||
-                            authResponse_error === "interaction_required" ||
+                            // An iframe may not see the AS session cookie. A full-page
+                            // request can still restore that session with prompt=none.
                             authResponse_error === "login_required" ||
-                            authResponse_error === "consent_required" ||
-                            authResponse_error === "account_selection_required"))
+                            authResponse_error === "interaction_required"))
                 ) {
                     log?.("Performing session restoration (or autoLogin) with full page redirect");
 
