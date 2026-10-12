@@ -1300,15 +1300,11 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
                                 return autoLogin_returnToUrl;
                             }
 
-                            if (!evtIsThereMoreThanOneInstanceThatCantUserIframes.current) {
-                                return toFullyQualifiedUrl({
-                                    urlish: getRootRelativeOriginalLocationHref_earlyInit(),
-                                    doAssertNoQueryParams: false,
-                                    rootUrl_fullyQualified: window.location.origin
-                                });
-                            }
-
-                            return window.location.href;
+                            return toFullyQualifiedUrl({
+                                urlish: getRootRelativeOriginalLocationHref_earlyInit(),
+                                doAssertNoQueryParams: false,
+                                rootUrl_fullyQualified: window.location.origin
+                            });
                         })(),
                         doNavigateBackToLastPublicUrlIfTheTheUserNavigateBack: true,
                         transformAuthorizationUrl_paramOfLoginOrStartAuthorization: undefined,
