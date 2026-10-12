@@ -921,40 +921,6 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
             });
         }
 
-        restore_from_session_storage: {
-            if (canUseIframe) {
-                break restore_from_session_storage;
-            }
-
-            if (!evtIsThereMoreThanOneInstanceThatCantUserIframes.current) {
-                break restore_from_session_storage;
-            }
-
-            let oidcClientTsUser: OidcClientTsUser | null;
-
-            try {
-                oidcClientTsUser = await oidcClientTsUserManager.getUser();
-            } catch {
-                // NOTE: Not sure if it can throw, but let's be safe.
-                oidcClientTsUser = null;
-                try {
-                    await oidcClientTsUserManager.removeUser();
-                } catch {}
-            }
-
-            if (oidcClientTsUser === null) {
-                break restore_from_session_storage;
-            }
-
-            log?.("Session was restored from session storage");
-
-            return {
-                oidcClientTsUser,
-                authorizationResult: undefined,
-                isRestoredFromSessionStorage: true
-            };
-        }
-
         handle_redirect_auth_response: {
             let stateDataAndAuthResponse:
                 | { stateData: StateData.Redirect; authResponse: AuthResponse }
@@ -1029,6 +995,10 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
                                 authResponseUrl
                             );
                         } catch (error) {
+                            try {
+                                await oidcClientTsUserManager.removeUser();
+                            } catch {}
+
                             assert(error instanceof Error, "741947");
 
                             if (isNetworkError(error)) {
@@ -1133,6 +1103,40 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
                 default:
                     assert<Equals<typeof stateData, never>>(false);
             }
+        }
+
+        restore_from_session_storage: {
+            if (canUseIframe) {
+                break restore_from_session_storage;
+            }
+
+            if (!evtIsThereMoreThanOneInstanceThatCantUserIframes.current) {
+                break restore_from_session_storage;
+            }
+
+            let oidcClientTsUser: OidcClientTsUser | null;
+
+            try {
+                oidcClientTsUser = await oidcClientTsUserManager.getUser();
+            } catch {
+                // NOTE: Not sure if it can throw, but let's be safe.
+                oidcClientTsUser = null;
+                try {
+                    await oidcClientTsUserManager.removeUser();
+                } catch {}
+            }
+
+            if (oidcClientTsUser === null) {
+                break restore_from_session_storage;
+            }
+
+            log?.("Session was restored from session storage");
+
+            return {
+                oidcClientTsUser,
+                authorizationResult: undefined,
+                isRestoredFromSessionStorage: true
+            };
         }
 
         silent_login_if_possible_and_auto_login: {
