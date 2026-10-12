@@ -261,7 +261,7 @@ export async function createOidc<User = undefined, AutoLogin extends boolean = f
         }
 
         const getAuthorizationParams = (():
-            | ((params: { isSilentRedirect: boolean }) => Record<string, string | string[] | undefined>)
+            | ((params: { isNonInteractive: boolean }) => Record<string, string | string[] | undefined>)
             | undefined => {
             const propertyName = "authorizationParams";
 
@@ -277,7 +277,7 @@ export async function createOidc<User = undefined, AutoLogin extends boolean = f
                 return undefined;
             }
 
-            return ({ isSilentRedirect }) => {
+            return ({ isNonInteractive }) => {
                 const authorizationParamsOrGetter = params[propertyName];
 
                 assert(authorizationParamsOrGetter !== undefined);
@@ -288,7 +288,7 @@ export async function createOidc<User = undefined, AutoLogin extends boolean = f
                 }
                 const getAuthorizationParams = authorizationParamsOrGetter;
 
-                return getAuthorizationParams({ isSilentRedirect });
+                return getAuthorizationParams({ isNonInteractive });
             };
         })();
 
@@ -514,7 +514,7 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
         clientId: string;
         configId: string;
         getAuthorizationParams:
-            | ((params: { isSilentRedirect: boolean }) => Record<string, string | string[] | undefined>)
+            | ((params: { isNonInteractive: boolean }) => Record<string, string | string[] | undefined>)
             | undefined;
         tokenParams: Record<string, string | string[] | undefined> | undefined;
         oidcProviderMetadata: OidcProviderMetadata | undefined;
@@ -624,7 +624,7 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
         switch (sessionRestorationMethod) {
             case "auto":
                 break;
-            case "full page redirect":
+            case "foreground redirect":
                 return false;
             case "iframe":
                 return true;
@@ -786,7 +786,7 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
                     "Silent session restoration via iframe is disabled because the app is itself embedded in an iframe.",
                     "\nAllowing iframe restoration in this configuration would let malicious JavaScript running on the app's origin",
                     "initiate an authorization flow and intercept the response from a nested iframe.",
-                    '\nTo block this attack vector, falling back to sessionRestorationMethod: "full page redirect".'
+                    '\nTo block this attack vector, falling back to sessionRestorationMethod: "foreground redirect".'
                 ].join(" ")
             );
 
@@ -1272,12 +1272,12 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
                     autoLogin ||
                     (persistedAuthState === "logged in" &&
                         (authResponse_error === undefined ||
-                            // An iframe may not see the AS session cookie. A full-page
-                            // request can still restore that session with prompt=none.
+                            // An iframe may not see the AS session cookie. A foreground
+                            // redirect can still restore that session with prompt=none.
                             authResponse_error === "login_required" ||
                             authResponse_error === "interaction_required"))
                 ) {
-                    log?.("Performing session restoration (or autoLogin) with full page redirect");
+                    log?.("Performing session restoration (or autoLogin) with foreground redirect");
 
                     completeLoginOrRefreshProcess();
 
@@ -1511,7 +1511,7 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
     const { renewTokens } = (() => {
         // NOTE: Cannot throw (or if it does it's our fault)
         async function renewTokens_nonMutexed() {
-            const fallbackToFullPageReload = async (): Promise<never> => {
+            const fallbackToForegroundRedirect = async (): Promise<never> => {
                 persistAuthState({ configId, state: undefined });
 
                 await waitForAllOtherOngoingLoginOrRefreshProcessesToComplete({
@@ -1568,7 +1568,7 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
                     ].join(" ")
                 );
 
-                await fallbackToFullPageReload();
+                await fallbackToForegroundRedirect();
 
                 assert(false, "136135");
             }
@@ -1652,7 +1652,7 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
 
                         completeLoginOrRefreshProcess();
 
-                        await fallbackToFullPageReload();
+                        await fallbackToForegroundRedirect();
 
                         assert(false, "136135");
                     }
@@ -1715,7 +1715,7 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
                                 );
                             }
 
-                            await fallbackToFullPageReload();
+                            await fallbackToForegroundRedirect();
 
                             assert(false, "136135");
                         }
@@ -1889,12 +1889,12 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
                         ...params_getTokens.tokenParams
                     },
                     authorizationParams: getAuthorizationParams,
-                    transformAuthorizationUrl: ({ authorizationUrl, isSilentRedirect }) => {
+                    transformAuthorizationUrl: ({ authorizationUrl, isNonInteractive }) => {
                         let authorizationUrl_modified = authorizationUrl;
                         if (transformAuthorizationUrl !== undefined) {
                             authorizationUrl_modified = transformAuthorizationUrl({
                                 authorizationUrl: authorizationUrl_modified,
-                                isSilentRedirect
+                                isNonInteractive
                             });
                         }
                         if (params_getTokens.authorizationParams !== undefined) {

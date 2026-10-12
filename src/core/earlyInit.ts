@@ -317,7 +317,7 @@ function handleOidcCallback(): {
             if (parent !== top) {
                 const errorMessage = [
                     "oidc-spa: Refusing to post the auth response from a nested iframe to prevent interception.",
-                    "For your app to work when rendered in an iframe, use sessionRestorationMethod: 'full page redirect'."
+                    "For your app to work when rendered in an iframe, use sessionRestorationMethod: 'foreground redirect'."
                 ].join(" ");
                 alert(errorMessage);
 

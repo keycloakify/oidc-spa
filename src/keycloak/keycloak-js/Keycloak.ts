@@ -35,10 +35,11 @@ type ConstructorParams = KeycloakServerConfig & {
      *   Automatically selects the best method.
      *   If the app’s domain shares a common parent domain with the authorization endpoint,
      *   an iframe is used for silent session restoration.
-     *   Otherwise, a full-page redirect is used.
+     *   Otherwise, a foreground redirect is used.
      *
-     * - **"full page redirect"**:
-     *   Forces full-page reloads for session restoration.
+     * - **"foreground redirect"**:
+     *   Restores the session by navigating the current document to the authorization server
+     *   and back. This unloads the application during the authorization round trip.
      *   Use this if your application is served with a restrictive CSP
      *   (e.g., `Content-Security-Policy: frame-ancestors "none"`)
      *   or `X-Frame-Options: DENY`, and you cannot modify those headers.
@@ -52,7 +53,7 @@ type ConstructorParams = KeycloakServerConfig & {
      *   to set third-party cookies this value will let you test your app
      *   with the local dev server as it will behave in production.
      */
-    sessionRestorationMethod?: "iframe" | "full page redirect" | "auto";
+    sessionRestorationMethod?: "iframe" | "foreground redirect" | "auto";
 };
 
 /**
@@ -148,8 +149,8 @@ export class Keycloak {
             authorizationParams:
                 !autoLogin || locale === undefined
                     ? undefined
-                    : ({ isSilentRedirect }) => {
-                          if (isSilentRedirect) {
+                    : ({ isNonInteractive }) => {
+                          if (isNonInteractive) {
                               return {};
                           }
                           if (hasCreateResolved) {

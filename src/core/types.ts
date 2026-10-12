@@ -81,7 +81,7 @@ export declare namespace Oidc {
          *
          * Without parameters, this returns the primary token set, renewing it first when needed.
          * When parameters are provided, oidc-spa obtains and separately manages a token set
-         * matching that configuration. This can cause a full-page redirect when silent
+         * matching that configuration. This can cause a foreground redirect when silent
          * authorization is not available.
          */
         getTokens: (params?: ParamsOfGetToken) => Promise<OidcTokens>;
@@ -137,7 +137,7 @@ export declare namespace Oidc {
          * `{ authorizationParams: { kc_action: "UPDATE_PASSWORD" }, response: { kc_action_status: "success" } }`.
          *
          * It is `undefined` when the session was restored silently rather than through a
-         * full-page authorization round trip.
+         * foreground authorization round trip.
          */
         authorizationResult:
             | {
@@ -155,7 +155,7 @@ export declare namespace Oidc {
          *
          * This refers to the browser session, not the OIDC session on the authorization server.
          *
-         * To perform an action only after a full-page authorization round trip, test
+         * To perform an action only after a foreground authorization round trip, test
          * `oidc.isNewBrowserSession && oidc.authorizationResult !== undefined`.
          */
         isNewBrowserSession: boolean;
@@ -246,7 +246,7 @@ export declare namespace Oidc {
         tokenParams?: Record<string, string | string[] | undefined>;
         scopes?: string[];
         /**
-         * Where the user should be returned if obtaining this token set requires a full-page
+         * Where the user should be returned if obtaining this token set requires a foreground
          * authorization round trip.
          *
          * Default: `window.location.href` at the time the token set is requested.
@@ -290,32 +290,35 @@ export type ParamsOfCreateOidc<User, AutoLogin extends boolean> = {
     /**
      * Transforms an authorization endpoint URL before oidc-spa navigates to it.
      *
-     * `isSilentRedirect` is true when authorization is performed in a background iframe. It can
-     * be used to omit UI-related query parameters, such as `ui_locales`, during silent
-     * authorization.
+     * `isNonInteractive` is true when authorization must complete without displaying UI or
+     * requiring user interaction, whether in a background iframe or through a foreground
+     * redirect. Use it to omit UI-related query parameters, such as locale or theme settings.
+     * When false, UI may be displayed, but an existing session can still allow authorization
+     * to complete without user interaction.
      */
     transformAuthorizationUrl?: (params: {
         authorizationUrl: string;
-        isSilentRedirect: boolean;
+        isNonInteractive: boolean;
     }) => string;
 
     /**
      * Additional query parameters added to authorization endpoint URLs.
      *
      * A function can be provided when the parameters depend on whether authorization is being
-     * performed silently.
+     * performed non-interactively. Use `isNonInteractive` to omit UI-related parameters
+     * when authorization must complete without displaying UI or requiring user interaction.
      *
      * This option provides defaults. Parameters passed directly to `login()`,
      * `startAuthorization()`, `getTokens()`, or `getAccessToken()` are applied to their specific
      * authorization request.
      *
      * @example
-     * authorizationParams: ({ isSilentRedirect }) =>
-     *     isSilentRedirect ? {} : { ui_locales: "fr" }
+     * authorizationParams: ({ isNonInteractive }) =>
+     *     isNonInteractive ? {} : { ui_locales: "fr" }
      */
     authorizationParams?:
         | Record<string, string | string[] | undefined>
-        | ((params: { isSilentRedirect: boolean }) => Record<string, string | string[] | undefined>);
+        | ((params: { isNonInteractive: boolean }) => Record<string, string | string[] | undefined>);
 
     /**
      * Additional body parameters added to token endpoint requests.
@@ -372,10 +375,11 @@ export type ParamsOfCreateOidc<User, AutoLogin extends boolean> = {
      *   Automatically selects the best method.
      *   If the app and authorization endpoint are same-site
      *   an iframe is used for silent session restoration.
-     *   Otherwise, a full-page redirect is used.
+     *   Otherwise, a foreground redirect is used.
      *
-     * - **"full page redirect"**:
-     *   Forces full-page reloads for session restoration.
+     * - **"foreground redirect"**:
+     *   Restores the session by navigating the current document to the authorization server
+     *   and back. This unloads the application during the authorization round trip.
      *   Use this if your application is served with a restrictive CSP
      *   (e.g., `Content-Security-Policy: frame-ancestors "none"`)
      *   or `X-Frame-Options: DENY`, and you cannot modify those headers.
@@ -391,7 +395,7 @@ export type ParamsOfCreateOidc<User, AutoLogin extends boolean> = {
      *
      *  See: https://docs.oidc-spa.dev/v/v10/resources/third-party-cookies-and-session-restoration
      */
-    sessionRestorationMethod?: "iframe" | "full page redirect" | "auto";
+    sessionRestorationMethod?: "iframe" | "foreground redirect" | "auto";
 
     debugLogs?: boolean;
 

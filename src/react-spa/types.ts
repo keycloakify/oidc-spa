@@ -99,13 +99,13 @@ export namespace RuntimeConfigs {
         scopes?: string[];
         transformAuthorizationUrl?: (params: {
             authorizationUrl: string;
-            isSilentRedirect: boolean;
+            isNonInteractive: boolean;
         }) => string;
         authorizationParams?:
             | Record<string, string | string[] | undefined>
-            | ((params: { isSilentRedirect: boolean }) => Record<string, string | string[] | undefined>);
+            | ((params: { isNonInteractive: boolean }) => Record<string, string | string[] | undefined>);
         tokenParams?: Record<string, string | string[] | undefined>;
-        sessionRestorationMethod?: "iframe" | "full page redirect" | "auto";
+        sessionRestorationMethod?: "iframe" | "foreground redirect" | "auto";
         __oidcProviderMetadata?: OidcProviderMetadata;
         autoLogout_returnToUrl?: ParamsOfCreateOidc<unknown, boolean>["autoLogout_returnToUrl"];
         disableDPoP?: true;

@@ -47,11 +47,11 @@ export function createLoginSilent(params: {
     configId: string;
 
     transformAuthorizationUrl_paramOfCreateOidc:
-        | ((params: { authorizationUrl: string; isSilentRedirect: boolean }) => string)
+        | ((params: { authorizationUrl: string; isNonInteractive: boolean }) => string)
         | undefined;
 
     getAuthorizationParams_paramsOfCreateOidc:
-        | ((params: { isSilentRedirect: boolean }) => Record<string, string | string[] | undefined>)
+        | ((params: { isNonInteractive: boolean }) => Record<string, string | string[] | undefined>)
         | undefined;
 
     tokenParams: Record<string, string | string[] | undefined> | undefined;
@@ -186,7 +186,7 @@ export function createLoginSilent(params: {
                         transformAuthorizationUrl_paramOfLoginOrStartAuthorization: undefined,
                         transformAuthorizationUrl_paramOfCreateOidc,
                         getAuthorizationParams_paramsOfCreateOidc,
-                        isSilentRedirect: true,
+                        isNonInteractive: true,
                         setStateDataAuthorizationParams: undefined
                     })
             })

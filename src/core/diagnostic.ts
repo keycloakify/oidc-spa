@@ -230,7 +230,7 @@ export async function createIframeTimeoutInitializationError(params: {
                             recommendedValue
                         ]}`,
                         `\n  - OR remove the frame-src directive from your CSP`,
-                        `\n  - OR, if you cannot change your CSP, call bootstrapOidc/createOidc with sessionRestorationMethod: "full page redirect"`,
+                        `\n  - OR, if you cannot change your CSP, call bootstrapOidc/createOidc with sessionRestorationMethod: "foreground redirect"`,
                         `\n\nMore info: https://docs.oidc-spa.dev/v/v10/resources/csp-configuration`
                     ].join(" ")
                 });
@@ -261,7 +261,7 @@ export async function createIframeTimeoutInitializationError(params: {
                         `\nTo fix this:`,
                         `\n  - Update your CSP to: frame-ancestors 'self'`,
                         `\n  - OR remove the frame-ancestors directive from your CSP`,
-                        `\n  - OR, if you cannot modify your CSP, call bootstrapOidc/createOidc with sessionRestorationMethod: "full page redirect"`,
+                        `\n  - OR, if you cannot modify your CSP, call bootstrapOidc/createOidc with sessionRestorationMethod: "foreground redirect"`,
                         `\n\nMore info: https://docs.oidc-spa.dev/v/v10/resources/csp-configuration`
                     ].join(" ")
                 });

@@ -65,11 +65,11 @@ export function createLoginOrStartAuthorization(params: {
     configId: string;
     oidcClientTsUserManager: OidcClientTsUserManager;
     transformAuthorizationUrl_paramOfCreateOidc:
-        | ((params: { authorizationUrl: string; isSilentRedirect: boolean }) => string)
+        | ((params: { authorizationUrl: string; isNonInteractive: boolean }) => string)
         | undefined;
 
     getAuthorizationParams_paramsOfCreateOidc:
-        | ((params: { isSilentRedirect: boolean }) => Record<string, string | string[] | undefined>)
+        | ((params: { isNonInteractive: boolean }) => Record<string, string | string[] | undefined>)
         | undefined;
 
     tokenParams: Record<string, string | string[] | undefined> | undefined;
@@ -292,7 +292,7 @@ export function createLoginOrStartAuthorization(params: {
                             params.transformAuthorizationUrl_paramOfLoginOrStartAuthorization,
                         transformAuthorizationUrl_paramOfCreateOidc,
                         getAuthorizationParams_paramsOfCreateOidc,
-                        isSilentRedirect:
+                        isNonInteractive:
                             params.action === "login" && params.interaction === "ensure no interaction",
                         setStateDataAuthorizationParams: ({ authorizationParams }) => {
                             stateData.authorizationParams = authorizationParams;
@@ -368,13 +368,13 @@ export function transformAuthorizationUrl_internal(params: {
         | ((params: { authorizationUrl: string }) => string)
         | undefined;
     transformAuthorizationUrl_paramOfCreateOidc:
-        | ((params: { authorizationUrl: string; isSilentRedirect: boolean }) => string)
+        | ((params: { authorizationUrl: string; isNonInteractive: boolean }) => string)
         | undefined;
 
     getAuthorizationParams_paramsOfCreateOidc:
-        | ((params: { isSilentRedirect: boolean }) => Record<string, string | string[] | undefined>)
+        | ((params: { isNonInteractive: boolean }) => Record<string, string | string[] | undefined>)
         | undefined;
-    isSilentRedirect: boolean;
+    isNonInteractive: boolean;
     setStateDataAuthorizationParams:
         | ((params: { authorizationParams: Record<string, string | string[]> }) => void)
         | undefined;
@@ -385,7 +385,7 @@ export function transformAuthorizationUrl_internal(params: {
         transformAuthorizationUrl_paramOfLoginOrStartAuthorization,
         transformAuthorizationUrl_paramOfCreateOidc,
         getAuthorizationParams_paramsOfCreateOidc,
-        isSilentRedirect,
+        isNonInteractive,
         setStateDataAuthorizationParams
     } = params;
 
@@ -411,7 +411,7 @@ export function transformAuthorizationUrl_internal(params: {
                 typeof authorizationParams_maybeGetter === "function"
                     ? (() => {
                           try {
-                              return authorizationParams_maybeGetter({ isSilentRedirect });
+                              return authorizationParams_maybeGetter({ isNonInteractive });
                           } catch (error) {
                               throw new OidcInitializationError({
                                   messageOrCause: new Error(
@@ -448,7 +448,7 @@ export function transformAuthorizationUrl_internal(params: {
             try {
                 authorizationUrl_transformed = transformAuthorizationUrl({
                     authorizationUrl: authorizationUrl_transformed,
-                    isSilentRedirect
+                    isNonInteractive
                 });
             } catch (error) {
                 throw new OidcInitializationError({
@@ -528,11 +528,11 @@ export function getAuthorizationAudienceAndResourceParamsValues(params: {
     scopes: string[];
     response_mode: "fragment" | "query";
     transformAuthorizationUrl_paramOfCreateOidc:
-        | ((params: { authorizationUrl: string; isSilentRedirect: boolean }) => string)
+        | ((params: { authorizationUrl: string; isNonInteractive: boolean }) => string)
         | undefined;
 
     getAuthorizationParams_paramsOfCreateOidc:
-        | ((params: { isSilentRedirect: boolean }) => Record<string, string | string[] | undefined>)
+        | ((params: { isNonInteractive: boolean }) => Record<string, string | string[] | undefined>)
         | undefined;
 }): {
     audience: string[] | undefined;
@@ -589,7 +589,7 @@ export function getAuthorizationAudienceAndResourceParamsValues(params: {
         transformAuthorizationUrl_paramOfLoginOrStartAuthorization: undefined,
         transformAuthorizationUrl_paramOfCreateOidc,
         getAuthorizationParams_paramsOfCreateOidc,
-        isSilentRedirect: true,
+        isNonInteractive: true,
         setStateDataAuthorizationParams: undefined
     });
 
