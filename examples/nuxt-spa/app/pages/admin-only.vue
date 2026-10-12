@@ -1,26 +1,17 @@
 <script setup lang="ts">
-definePageMeta({
-    middleware: "auth",
-    requiredRoles: ["realm-admin"]
-});
+definePageMeta({ middleware: "auth" });
 
-const { routeRoleAccess, keycloakUtils } = useAuth();
-
-const hasRequiredRole = computed(() => routeRoleAccess.value.hasRequiredRoles);
-
-const missingRolesText = computed(() => {
-    return routeRoleAccess.value.missingRoles.join(", ");
-});
+const { user, keycloakUtils } = useAuth();
 </script>
 
 <template>
-    <section v-if="!hasRequiredRole">
+    <section v-if="!user?.canSeeKeycloakAdminNavigation">
         <UAlert
             color="error"
             variant="soft"
             icon="i-lucide-shield-x"
             title="Access denied"
-            :description="`You are authenticated but missing required role(s): ${missingRolesText}.`"
+            description="You are signed in, but your account does not have access to the administration page."
         />
     </section>
 
@@ -34,7 +25,7 @@ const missingRolesText = computed(() => {
                 color="success"
                 variant="soft"
                 icon="i-lucide-shield-check"
-                :description="`Access is granted because your ID token includes all required role(s).`"
+                description="Your account has access to the Keycloak administration console."
             />
 
             <template #footer>

@@ -1,15 +1,38 @@
-import { Injectable } from '@angular/core';
-import { AbstractOidcService } from 'oidc-spa/angular';
+import { oidcSpa } from 'oidc-spa/angular';
 
-export type DecodedIdToken = {
-  name: string;
-  realm_access?: {
-    roles: string[];
-  };
+// App-specific user model exposed by `oidc.user()`.
+// Shape it around the information the UI needs to render.
+export type User = {
+  displayName: string;
 };
 
-@Injectable({ providedIn: 'root' })
-export class Oidc extends AbstractOidcService<DecodedIdToken> {
-  // For AutoLogin see: https://docs.oidc-spa.dev/v/v10/features/auto-login#angular
-  // For Non blocking rendering see: https://docs.oidc-spa.dev/v/v10/features/non-blocking-rendering#react-spas
-}
+export const {
+  provideOidc,
+  injectOidc,
+  // getOidc() asynchronously returns the imperative OIDC API for code outside
+  // Angular's injection context, such as standalone functions or API clients.
+  getOidc,
+  createOidcInterceptor,
+  enforceLoginGuard,
+} = oidcSpa
+  .withUser<User>({
+    createUser: async ({ decodedIdToken }) => {
+      const { name } = decodedIdToken;
+
+      if (typeof name !== 'string') {
+        throw new Error('The ID token must contain a name claim.');
+      }
+
+      const user: User = {
+        displayName: name,
+      };
+
+      return user;
+    },
+    user_mock: {
+      displayName: 'John Doe',
+    },
+  })
+  // .withAutoLogin()
+  // .withNonBlockingRendering()
+  .createUtils();

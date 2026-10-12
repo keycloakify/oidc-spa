@@ -10,7 +10,7 @@ export function AutoLogoutWarningOverlay() {
     }
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 backdrop-blur">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm">
             <div
                 aria-live="assertive"
                 aria-modal="true"

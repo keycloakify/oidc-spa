@@ -1,59 +1,10 @@
-import type { Oidc } from "oidc-spa/core";
 import { createKeycloakUtils, isKeycloak } from "oidc-spa/keycloak";
-import type { DecodedIdToken } from "~/schemas/oidc";
-export { Roles } from "~/constants/roles";
-
-type AutoLogoutState =
-    | {
-          shouldDisplayWarning: false;
-      }
-    | {
-          shouldDisplayWarning: true;
-          secondsLeftBeforeAutoLogout: number;
-      };
-
-const autoLogoutStateRef = shallowRef<AutoLogoutState>({
-    shouldDisplayWarning: false
-});
-
-let hasSubscribedToAutoLogout = false;
-
-function ensureAutoLogoutSubscription(oidc: Oidc<DecodedIdToken>) {
-    if (hasSubscribedToAutoLogout || !oidc.isUserLoggedIn) {
-        return;
-    }
-
-    hasSubscribedToAutoLogout = true;
-
-    oidc.subscribeToAutoLogoutCountdown(({ secondsLeft }) => {
-        if (secondsLeft === undefined || secondsLeft > 60) {
-            autoLogoutStateRef.value = { shouldDisplayWarning: false };
-            return;
-        }
-
-        autoLogoutStateRef.value = {
-            shouldDisplayWarning: true,
-            secondsLeftBeforeAutoLogout: secondsLeft
-        };
-    });
-}
 
 export function useAuth() {
-    const { $oidc } = useNuxtApp();
-    const routeRoleAccessState = useRouteRoleAccessState();
-
-    ensureAutoLogoutSubscription($oidc);
+    const { $oidc, $oidcUser, $oidcAutoLogoutState } = useNuxtApp();
 
     const isAuthenticated = computed(() => {
         return $oidc.isUserLoggedIn;
-    });
-
-    const idToken = computed(() => {
-        if (!$oidc.isUserLoggedIn) {
-            return null;
-        }
-
-        return $oidc.getDecodedIdToken();
     });
 
     const issuerUri = computed(() => $oidc.issuerUri);
@@ -112,7 +63,7 @@ export function useAuth() {
         const headers = new Headers(init?.headers);
 
         if ($oidc.isUserLoggedIn) {
-            const accessToken = (await $oidc.getTokens()).accessToken;
+            const accessToken = await $oidc.getAccessToken();
             headers.set("Authorization", `Bearer ${accessToken}`);
         }
 
@@ -122,11 +73,20 @@ export function useAuth() {
         });
     }
 
+    async function refreshUser() {
+        if (!$oidc.isUserLoggedIn) {
+            return;
+        }
+
+        const { refreshUser } = await $oidc.getUser();
+        return refreshUser();
+    }
+
     return {
         isAuthenticated,
-        idToken,
-        routeRoleAccess: computed(() => routeRoleAccessState.value),
-        autoLogoutState: readonly(autoLogoutStateRef),
+        user: $oidcUser,
+        refreshUser,
+        autoLogoutState: $oidcAutoLogoutState,
         issuerUri,
         keycloakUtils,
         clientId,
