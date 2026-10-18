@@ -101,7 +101,7 @@ export const {
     })
     // See: https://docs.oidc-spa.dev/features/auto-login#tanstack-start
     //.withAutoLogin()
-    .createUtils(({ process }) => {
+    .withRuntimeConfigs(({ process }) => {
         if (process.env.OIDC_USE_MOCK === "true") {
             return {
                 mode: "mock",
@@ -121,13 +121,14 @@ export const {
                 accessTokenValidationMethod: "offline JWT validation",
                 expectedAccessTokenAudience: process.env["ACCESS_TOKEN_EXPECTED_AUDIENCE"]
                 /*
-            accessTokenValidationMethod: "introspection endpoint",
-            clientId: process.env["OIDC_CLIENT_ID__SERVER"],
-            clientSecret: process.env["OIDC_CLIENT_SECRET__SERVER"],
-            */
+                accessTokenValidationMethod: "introspection endpoint",
+                clientId: process.env["OIDC_CLIENT_ID__SERVER"],
+                clientSecret: process.env["OIDC_CLIENT_SECRET__SERVER"],
+                */
             }
         };
-    });
+    })
+    .createUtils();
 
 export const fetchWithAuth: typeof fetch = async (input, init) => {
     const oidc = await getOidc();
