@@ -122,7 +122,7 @@ export async function createMockOidc<User = never, AutoLogin extends boolean = f
         const oidc = id<Oidc.NotLoggedIn>({
             ...common,
             isUserLoggedIn: false,
-            login: ({ returnToUrl } = {}) => loginOrStartAuthorization({ returnToUrl }),
+            login: ({ returnToUrl }) => loginOrStartAuthorization({ returnToUrl }),
             initializationError: undefined
         });
         if (autoLogin) {

@@ -53,6 +53,13 @@ function createOidcSpa<User, AutoLogin extends boolean>(params: {
                 getRuntimeConfigsOrRuntimeConfigs: params.getRuntimeConfigsOrRuntimeConfigs
             }) as any,
         // @ts-expect-error
+        withRuntimeConfigs: (
+            getRuntimeConfigsOrRuntimeConfigs: OptionallyAsyncGetterOrDirectValue<void, RuntimeConfigs>
+        ) =>
+            createOidcSpa({
+                ...params,
+                getRuntimeConfigsOrRuntimeConfigs
+            }),
         createUtils: () => {
             assert(params.createUser !== undefined);
             assert(params.getRuntimeConfigsOrRuntimeConfigs !== undefined);

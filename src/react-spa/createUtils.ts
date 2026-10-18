@@ -222,18 +222,13 @@ export function createUtils<User, AutoLogin extends boolean>(params: {
 
                 let evtUser: StatefulEvt<User> | undefined = undefined;
 
-                const { unsubscribeFromUserChange } = oidc.subscribeToUserChange(
-                    ({ user, user_previous }) => {
-                        if (user_previous === undefined) {
-                            return;
-                        }
-                        if (evtUser === undefined) {
-                            evtUser = createStatefulEvt(() => user);
-                        } else {
-                            evtUser.current = user;
-                        }
+                const { unsubscribeFromUserChange } = oidc.subscribeToUserChange(({ user }) => {
+                    if (evtUser === undefined) {
+                        evtUser = createStatefulEvt(() => user);
+                    } else {
+                        evtUser.current = user;
                     }
-                );
+                });
 
                 try {
                     await oidc.refreshUser();
@@ -567,6 +562,18 @@ export function createUtils<User, AutoLogin extends boolean>(params: {
                 }, []);
             }
 
+            // Cache login on first use for a stable reference across renders.
+            const [getLogin] = useState(() => {
+                let login: Oidc_react.NotLoggedIn["login"] | undefined;
+
+                return (oidc: Oidc_core.NotLoggedIn) =>
+                    (login ??= ({ doesCurrentHrefEnforceLogin = false, ...rest }) =>
+                        oidc.login({
+                            ...rest,
+                            doesCurrentHrefEnforceLogin
+                        }));
+            });
+
             if (!state.isUserLoggedIn) {
                 return id<Oidc_react.NotLoggedIn>({
                     isUserLoggedIn: false,
@@ -575,11 +582,7 @@ export function createUtils<User, AutoLogin extends boolean>(params: {
                     clientId: state.oidc.clientId,
                     validRedirectUri: state.oidc.validRedirectUri,
                     autoLogoutState: { shouldDisplayWarning: false },
-                    login: ({ doesCurrentHrefEnforceLogin = false, ...rest }) =>
-                        state.oidc.login({
-                            ...rest,
-                            doesCurrentHrefEnforceLogin
-                        })
+                    login: getLogin(state.oidc)
                 });
             }
 
@@ -806,6 +809,8 @@ export function createUtils<User, AutoLogin extends boolean>(params: {
         const [isReadyToRender, readyToRender] = useReducer(() => true, false);
 
         useEffect(() => {
+            triggerClientInitializationIfNotAlreadyDone();
+
             let isActive = true;
 
             (async () => {

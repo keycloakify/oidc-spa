@@ -273,18 +273,13 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
 
                     let evtUser: StatefulEvt<User_client> | undefined = undefined;
 
-                    const { unsubscribeFromUserChange } = oidc.subscribeToUserChange(
-                        ({ user, user_previous }) => {
-                            if (user_previous === undefined) {
-                                return;
-                            }
-                            if (evtUser === undefined) {
-                                evtUser = createStatefulEvt(() => user);
-                            } else {
-                                evtUser.current = user;
-                            }
+                    const { unsubscribeFromUserChange } = oidc.subscribeToUserChange(({ user }) => {
+                        if (evtUser === undefined) {
+                            evtUser = createStatefulEvt(() => user);
+                        } else {
+                            evtUser.current = user;
                         }
-                    );
+                    });
 
                     try {
                         await oidc.refreshUser();
@@ -655,6 +650,15 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
                     setHasHydratedToTrue();
                 }, []);
 
+                // Cache login once authentication is ready; initial renders can be pending.
+                const [getLogin] = useState(() => {
+                    let login: Oidc_react.NotLoggedIn["login"] | undefined;
+
+                    return (oidc: Oidc_core.NotLoggedIn) =>
+                        (login ??= params =>
+                            oidc.login({ doesCurrentHrefEnforceLogin: false, ...params }));
+                });
+
                 if (state.isPending || !state.doWeHaveTheOidcObject || hasHydrated === false) {
                     return id<Oidc_react.NotReady>({
                         isOidcReady: false,
@@ -685,8 +689,7 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
                         clientId: state.oidc.clientId,
                         validRedirectUri: state.oidc.validRedirectUri,
                         autoLogoutState: { shouldDisplayWarning: false },
-                        login: params =>
-                            state.oidc.login({ doesCurrentHrefEnforceLogin: false, ...params })
+                        login: getLogin(state.oidc)
                     });
                 }
 

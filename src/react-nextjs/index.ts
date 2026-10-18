@@ -1,53 +1,26 @@
 "use client";
 
 export * from "../react-spa";
-export type { OidcSpaUtils } from "./types";
 import { oidcSpa as oidcSpa_react } from "../react-spa";
-import type { OidcSpaUtilsBuilder as OidcSpaUtilsBuilder_react } from "../react-spa/utilsBuilder";
-import type { OidcSpaUtils } from "./types";
+import type { OidcSpa } from "../react-spa/oidcSpa";
 import { adaptOidcSpaUtils } from "./adaptOidcSpaUtils";
-import { assert, type Equals } from "../tools/tsafe/assert";
 
-type WithUser<User> = typeof oidcSpa_react.withUser<User>;
+type CompleteBuilder = typeof oidcSpa_react & OidcSpa<unknown, false, "withUser" | "withRuntimeConfigs">;
 
-type OidcSpaUtilsBuilder<
-    User,
-    AutoLogin,
-    ExcludedMethod extends keyof typeof oidcSpa_react = never
-> = Omit<
-    {
-        withAutoLogin: (
-            ...args: Parameters<OidcSpaUtilsBuilder_react<User, AutoLogin>["withAutoLogin"]>
-        ) => OidcSpaUtilsBuilder<User, true, ExcludedMethod | "withAutoLogin">;
-        withUser: <User>(
-            ...args: Parameters<WithUser<User>>
-        ) => OidcSpaUtilsBuilder<User, AutoLogin, ExcludedMethod | "withUser">;
-        createUtils: (
-            ...args: Parameters<OidcSpaUtilsBuilder_react<User, AutoLogin>["createUtils"]>
-        ) => OidcSpaUtils<User, AutoLogin>;
-    },
-    ExcludedMethod
->;
-
-// Generic builder methods need explicit return types to keep User inference and chaining.
-// Fail the build if React adds a builder method that also needs wrapping here.
-assert<Equals<keyof OidcSpaUtilsBuilder<never, false>, keyof typeof oidcSpa_react>>;
-
-function adaptBuilder<User, AutoLogin, ExcludedMethod extends keyof typeof oidcSpa_react>(
-    builder: OidcSpaUtilsBuilder_react<User, AutoLogin, ExcludedMethod>
-): OidcSpaUtilsBuilder<User, AutoLogin, ExcludedMethod> {
+function adaptBuilder<Builder>(builder: Builder): Builder {
     // React hides already-used methods in its types but keeps them at runtime.
-    const builder_base = builder as OidcSpaUtilsBuilder_react<User, AutoLogin>;
+    // Preserve the original builder type, including generic inference and chaining.
+    const builder_base = builder as Builder & CompleteBuilder;
 
-    const adapted: OidcSpaUtilsBuilder<User, AutoLogin> = {
+    return {
         ...builder,
-        withAutoLogin: (...args) => adaptBuilder(builder_base.withAutoLogin(...args)),
-        withUser: <User>(...args: Parameters<WithUser<User>>) =>
-            adaptBuilder(builder_base.withUser<User>(...args)),
-        createUtils: (...args) => adaptOidcSpaUtils(builder_base.createUtils(...args))
+        withAutoLogin: () => adaptBuilder(builder_base.withAutoLogin()),
+        withUser: (...args: Parameters<CompleteBuilder["withUser"]>) =>
+            adaptBuilder(builder_base.withUser(...args)),
+        withRuntimeConfigs: (...args: Parameters<CompleteBuilder["withRuntimeConfigs"]>) =>
+            adaptBuilder(builder_base.withRuntimeConfigs(...args)),
+        createUtils: () => adaptOidcSpaUtils(builder_base.createUtils())
     };
-
-    return adapted as OidcSpaUtilsBuilder<User, AutoLogin, ExcludedMethod>;
 }
 
 export const oidcSpa = adaptBuilder(oidcSpa_react);
