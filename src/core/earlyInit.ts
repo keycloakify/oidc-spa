@@ -7,6 +7,10 @@ import { createEvt, type Evt } from "../tools/Evt";
 import { setGetRootRelativeOriginalLocationHref_earlyInit } from "./earlyInit_rootRelativeOriginalLocationHref";
 import { prModuleCreateOidc } from "./earlyInit_prModuleCreateOidc";
 import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";
+import {
+    joinMicroFrontendOwner_earlyInit,
+    claimMicroFrontendOwner_earlyInit
+} from "./earlyInit_microFrontendOwner";
 
 const IFRAME_MESSAGE_PREFIX = "oidc-spa:cross-window-messaging:";
 
@@ -56,6 +60,14 @@ export type ParamsOfEarlyInit = {
         enableDPoP?: () => void;
         enableTokenSubstitution?: () => void;
     };
+
+    /**
+     * For micro-frontends that each bundle their own copy of oidc-spa. The first bundle to call
+     * oidcEarlyInit with this flag owns the oidc state, the others delegate createOidc to it.
+     * Every bundle must pass it and use the same oidc-spa version and BASE_URL. The owner is
+     * reachable through `window`, so only use this with trusted remotes.
+     */
+    isMicroFrontendSetup?: boolean;
 };
 
 let shouldLoadApp: boolean | undefined = undefined;
@@ -65,7 +77,36 @@ export function oidcEarlyInit(params?: ParamsOfEarlyInit) {
         return { shouldLoadApp };
     }
 
+    const isMicroFrontendSetup = isBrowser && params?.isMicroFrontendSetup === true;
+
+    if (isMicroFrontendSetup) {
+        const owner = joinMicroFrontendOwner_earlyInit();
+
+        if (owner !== undefined) {
+            if (
+                (params?.BASE_URL !== undefined && params.BASE_URL !== owner.BASE_URL) ||
+                params?.sessionRestorationMethod !== undefined ||
+                params?.securityDefenses !== undefined
+            ) {
+                console.warn(
+                    "oidc-spa: This bundle delegates to the micro-frontend owner, so only the owner's BASE_URL, sessionRestorationMethod and securityDefenses apply. Pass the same values to the owner's oidcEarlyInit."
+                );
+            }
+
+            shouldLoadApp = owner.shouldLoadApp;
+            return { shouldLoadApp };
+        }
+    }
+
     shouldLoadApp = oidcEarlyInit_nonMemoized(params).shouldLoadApp;
+
+    if (isMicroFrontendSetup) {
+        claimMicroFrontendOwner_earlyInit({
+            shouldLoadApp,
+            BASE_URL: getBASE_URL_earlyInit(),
+            prModuleCreateOidc
+        });
+    }
 
     return { shouldLoadApp };
 }
