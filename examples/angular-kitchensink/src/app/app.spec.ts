@@ -1,3 +1,4 @@
+import { oidcEarlyInit } from 'oidc-spa/entrypoint';
 import { ApplicationInitStatus } from '@angular/core';
 import { DeferBlockBehavior, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
@@ -8,16 +9,16 @@ describe('App', () => {
   // The test DOM does not load index.html; oidc-spa reads its base URL.
   const base = document.createElement('base');
   base.href = '/';
-  beforeAll(() => document.head.appendChild(base));
+  beforeAll(() => {
+    document.head.appendChild(base);
+    oidcEarlyInit({ BASE_URL: '/' });
+  });
   afterAll(() => base.remove());
 
   async function renderApp(isUserInitiallyLoggedIn: boolean) {
     await TestBed.configureTestingModule({
       imports: [App],
-      providers: [
-        provideRouter([]),
-        provideOidc({ implementation: 'mock', isUserInitiallyLoggedIn }),
-      ],
+      providers: [provideRouter([]), provideOidc({ mode: 'mock', isUserInitiallyLoggedIn })],
       deferBlockBehavior: DeferBlockBehavior.Playthrough,
     }).compileComponents();
 

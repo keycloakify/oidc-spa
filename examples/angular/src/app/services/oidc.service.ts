@@ -1,7 +1,6 @@
 import { oidcSpa } from 'oidc-spa/angular';
 
 // App-specific user model exposed by `oidc.user()`.
-// Shape it around the information the UI needs to render.
 export type User = {
   displayName: string;
 };
@@ -9,30 +8,22 @@ export type User = {
 export const {
   provideOidc,
   injectOidc,
-  // getOidc() asynchronously returns the imperative OIDC API for code outside
-  // Angular's injection context, such as standalone functions or API clients.
+  // getOidc() returns the core client, including tokens and user subscriptions.
   getOidc,
   createOidcInterceptor,
   enforceLoginGuard,
 } = oidcSpa
-  .withUser<User>({
-    createUser: async ({ decodedIdToken }) => {
-      const { name } = decodedIdToken;
+  .withUser<User>(({ isMock, idTokenClaims }) => {
+    if (isMock) {
+      return { displayName: 'John Doe' };
+    }
 
-      if (typeof name !== 'string') {
-        throw new Error('The ID token must contain a name claim.');
-      }
+    const { name } = idTokenClaims;
+    if (typeof name !== 'string') {
+      throw new Error('The ID token must contain a name claim.');
+    }
 
-      const user: User = {
-        displayName: name,
-      };
-
-      return user;
-    },
-    user_mock: {
-      displayName: 'John Doe',
-    },
+    return { displayName: name };
   })
   // .withAutoLogin()
-  // .withNonBlockingRendering()
   .createUtils();

@@ -25,6 +25,8 @@ export class App {
   }
 
   get shouldShowAdminLink(): boolean {
+    if (this.oidc.initializationError) return false;
+
     if (!this.oidc.isUserLoggedIn) {
       return true;
     }

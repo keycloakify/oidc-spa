@@ -19,7 +19,7 @@ async function main() {
                 name: "oidc-transport-fixture",
                 setup(build) {
                     build.onResolve({ filter: /^\.\.\/core$/ }, args =>
-                        args.importer.endsWith("/angular/createOidcSpaUtils.ts")
+                        args.importer.endsWith("/angular/createUtils.ts")
                             ? { path: resolve("tests/angular/core.ts") }
                             : undefined
                     );

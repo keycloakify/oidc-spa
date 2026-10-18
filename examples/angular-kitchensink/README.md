@@ -17,7 +17,7 @@ Open http://localhost:4200. Yarn and pnpm work too: use `yarn install` / `yarn s
 
 Installation creates `.env` from `.env.sample` if it does not already exist (using `postinstall`, supported by npm, Yarn, and pnpm). Configure the issuer, browser client, and expected API audience there. `.env` is ignored by Git. `src/server.ts` loads it with `dotenv/config`; environment variables supplied by your hosting platform take precedence. Restart the server after changing configuration.
 
-The server calls `bootstrapAuth()` when its module loads, without awaiting it. Token validation waits for readiness internally. The browser fetches `/api/oidc-config` inside `provideOidc()` to obtain the same configuration. Define the application user in `src/app/services/oidc.service.ts` with `oidcSpa.withUser()`. See the [user abstraction documentation](https://docs.oidc-spa.dev/features/user).
+The server calls `bootstrapAuth()` when its module loads. Token validation uses that configuration on each request. The browser fetches `/api/oidc-config` inside `provideOidc()` to obtain the same configuration. Define the application user in `src/app/services/oidc.service.ts` with `oidcSpa.withUser()`. See the [user abstraction documentation](https://docs.oidc-spa.dev/features/user).
 
 `src/main.ts` runs `oidcEarlyInit()` before dynamically loading Angular through `src/main.lazy.ts`. Keep this browser-only boundary so OIDC callback handling can finish before the application boots. The server bootstraps Angular separately through `src/main.server.ts`.
 
@@ -40,7 +40,7 @@ This single setting selects both the browser mock and the API's **Static Identit
 
 ## Express API
 
-`src/server/auth.ts` follows the [Express token-validation guide](https://docs.oidc-spa.dev/integration-guides/backend-token-validation/express.js): `bootstrapAuth` configures validation and `getUser({ req, res })` exposes the validated identity. `src/server/api.ts` contains the handlers and in-memory storage.
+`src/server/auth.ts` follows the [Express token-validation guide](https://docs.oidc-spa.dev/integration-guides/backend-token-validation/express.js): `bootstrapAuth` configures offline JWT validation, `validateAndGetAccessTokenClaims` validates credentials, and `getUser({ req, res })` exposes the validated identity. `src/server/api.ts` contains the handlers and in-memory storage.
 
 | Endpoint                | Authentication | Result                                   |
 | ----------------------- | -------------- | ---------------------------------------- |

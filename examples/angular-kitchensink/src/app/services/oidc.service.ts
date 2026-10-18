@@ -4,7 +4,6 @@ import { z } from 'zod';
 import { decodeJwt } from 'oidc-spa/decode-jwt';
 
 // App-specific user model exposed by `oidc.user()`.
-// Shape it around the information the UI needs to render.
 export type User = {
   displayName: string;
   canSeeAdminNavigation: boolean;
@@ -13,50 +12,35 @@ export type User = {
 export const {
   provideOidc,
   injectOidc,
-  // getOidc() asynchronously returns the imperative OIDC API for code outside
-  // Angular's injection context, such as standalone functions or API clients.
+  // getOidc() returns the core client, including tokens and user subscriptions.
   getOidc,
   createOidcInterceptor,
   enforceLoginGuard,
 } = oidcSpa
-  // See: https://docs.oidc-spa.dev/features/user
-  .withUser<User>({
-    createUser: async ({ decodedIdToken, accessToken }) => {
-      const { name } = z
-        .object({
-          name: z.string(),
-        })
-        .parse(decodedIdToken);
+  .withUser<User>(({ isMock, idTokenClaims, accessToken }) => {
+    if (isMock) {
+      return { displayName: 'John Doe', canSeeAdminNavigation: true };
+    }
 
-      const decodedAccessToken = z
-        .object({
-          resource_access: z
-            .object({
-              'realm-management': z.object({
-                roles: z.array(z.string()),
-              }),
-            })
-            .optional(),
-        })
-        .parse(decodeJwt(accessToken));
+    const { name } = z.object({ name: z.string() }).parse(idTokenClaims);
+    const decodedAccessToken = z
+      .object({
+        resource_access: z
+          .object({
+            'realm-management': z.object({ roles: z.array(z.string()) }),
+          })
+          .optional(),
+      })
+      .parse(decodeJwt(accessToken));
 
-      const user: User = {
-        displayName: name,
-        canSeeAdminNavigation:
-          decodedAccessToken.resource_access?.['realm-management'].roles.includes('realm-admin') ??
-          false,
-      };
-
-      return user;
-    },
-    user_mock: {
-      displayName: 'John Doe',
-      canSeeAdminNavigation: true,
-    },
+    return {
+      displayName: name,
+      canSeeAdminNavigation:
+        decodedAccessToken.resource_access?.['realm-management'].roles.includes('realm-admin') ??
+        false,
+    };
   })
-  // See: https://docs.oidc-spa.dev/v/v10/features/auto-login#angular
-  //.withAutoLogin()
-  // See: https://docs.oidc-spa.dev/v/v10/features/non-blocking-rendering#angular
+  // .withAutoLogin()
   .withNonBlockingRendering()
   .createUtils();
 

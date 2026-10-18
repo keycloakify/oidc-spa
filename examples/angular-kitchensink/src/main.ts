@@ -3,6 +3,7 @@ import { browserRuntimeFreeze } from 'oidc-spa/browser-runtime-freeze';
 import { DPoP } from 'oidc-spa/DPoP';
 
 const { shouldLoadApp } = oidcEarlyInit({
+  BASE_URL: document.querySelector('base')?.getAttribute('href') ?? '/',
   securityDefenses: {
     ...browserRuntimeFreeze({
       //excludes: [ "fetch", "XMLHttpRequest", "Promise"]

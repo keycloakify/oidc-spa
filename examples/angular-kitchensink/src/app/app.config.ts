@@ -47,13 +47,13 @@ export const appConfig: ApplicationConfig = {
 
       if (config.useMock) {
         return {
-          implementation: 'mock',
+          mode: 'mock',
           isUserInitiallyLoggedIn: true,
         };
       }
 
       return {
-        implementation: 'real',
+        mode: 'real',
         issuerUri: config.issuerUri,
         clientId: config.clientId,
         debugLogs: true,

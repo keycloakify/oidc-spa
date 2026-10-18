@@ -6,6 +6,7 @@ import {
     computed,
     createEnvironmentInjector,
     EnvironmentInjector,
+    ErrorHandler,
     inject,
     InjectionToken,
     Injector,
@@ -26,24 +27,43 @@ import {
     type HttpRequest
 } from "@angular/common/http";
 import { HttpTestingController, provideHttpClientTesting } from "@angular/common/http/testing";
-import { Router, type ActivatedRouteSnapshot, type RouterStateSnapshot } from "@angular/router";
-import { firstValueFrom } from "rxjs";
-import { oidcSpa, type InjectOidc } from "../../src/angular";
+import {
+    NavigationCancel,
+    NavigationCancellationCode,
+    NavigationEnd,
+    NavigationError,
+    NavigationSkipped,
+    Router,
+    type ActivatedRouteSnapshot,
+    type RouterStateSnapshot
+} from "@angular/router";
+import { firstValueFrom, Subject } from "rxjs";
+import { oidcSpa, type Oidc_angular } from "../../src/angular";
 import { OidcInitializationError } from "../../src/core/OidcInitializationError";
-import { getDesiredPostLoginRedirectUrl } from "../../src/core/desiredPostLoginRedirectUrl";
+import { setBASE_URL_earlyInit } from "../../src/core/earlyInit_BASE_URL";
+import { setGetRootRelativeOriginalLocationHref_earlyInit } from "../../src/core/earlyInit_rootRelativeOriginalLocationHref";
 import { resetCore } from "./core";
 
 const location = new URL("https://app.test/");
+let reloads = 0;
+let alerts = 0;
+Object.assign(location, { reload: () => reloads++ });
 const history = { pushState() {}, replaceState() {} };
 const document = { querySelector: () => ({ getAttribute: () => "/" }), cookie: "" };
-Object.assign(globalThis, { window: { location, history, document }, location, history, document });
+Object.assign(globalThis, {
+    window: { location, history, document, setTimeout, clearTimeout, alert: () => alerts++ },
+    location,
+    history,
+    document
+});
+setBASE_URL_earlyInit({ BASE_URL: "/" });
+setGetRootRelativeOriginalLocationHref_earlyInit({ rootRelativeOriginalLocationHref: "/" });
 const OPTIONAL = new HttpContextToken(() => false);
 const REQUIRED = new HttpContextToken(() => false);
 const INJECTED_NAME = new InjectionToken<string>("name");
 const API = new InjectionToken("UserApi", {
     factory: () => {
         const http = inject(HttpClient);
-        // Services may inject Oidc in their own factory; the public object must already exist.
         return {
             getUser: () =>
                 http.get<{ displayName: string }>("/api/user", {
@@ -52,7 +72,7 @@ const API = new InjectionToken("UserApi", {
         };
     }
 });
-const params = { implementation: "real" as const, issuerUri: "https://issuer.test", clientId: "client" };
+const params = { mode: "real" as const, issuerUri: "https://issuer.test", clientId: "client" };
 const injectors: EnvironmentInjector[] = [];
 function app(providers: (Provider | EnvironmentProviders)[]) {
     const injector = createEnvironmentInjector(
@@ -72,170 +92,153 @@ function app(providers: (Provider | EnvironmentProviders)[]) {
     return { injector, initialization };
 }
 const tick = () => new Promise<void>(resolve => setImmediate(resolve));
+const anonymousFactory = () => undefined;
+const causeOf = (error: Error): unknown => (error as Error & { cause: unknown }).cause;
+const mockClaims = (name: string) => ({
+    iss: "https://issuer.test",
+    sub: "mock-user",
+    aud: "client",
+    exp: 9999999999,
+    iat: 1,
+    name
+});
+const route = {} as ActivatedRouteSnapshot;
+const routerState = (url: string) => ({ url } as RouterStateSnapshot);
 afterEach(() => {
     injectors.splice(0).forEach(injector => {
         if (!injector.destroyed) injector.destroy();
     });
 });
-function predicate(oidc: InjectOidc.Oidc<unknown>, req: HttpRequest<unknown>) {
+function predicate(oidc: Oidc_angular<unknown>, req: HttpRequest<unknown>) {
     if (req.context.get(REQUIRED)) return true;
     if (req.context.get(OPTIONAL)) return oidc.isUserLoggedIn;
     return false;
 }
 
-for (const nonBlocking of [false, true]) {
-    test(
-        `authenticated injectable createUser and refresh, nonBlocking=${nonBlocking}`,
-        { timeout: 3000 },
-        async t => {
-            const core = resetCore();
-            let builds = 0;
-            const previousUsers: unknown[] = [];
-            const base = oidcSpa.withUser<{ displayName: string }>({
-                createUser: async ({ user_current }) => {
-                    const api = inject(API);
-                    const suffix = inject(INJECTED_NAME);
-                    builds++;
-                    previousUsers.push(user_current);
-                    const user = await firstValueFrom(api.getUser());
-                    return { displayName: `${user.displayName} ${suffix}` };
-                }
-            });
-            const utils = (nonBlocking ? base.withNonBlockingRendering() : base).createUtils();
-            const { injector, initialization } = app([
-                provideHttpClient(
-                    withInterceptors([
-                        utils.createOidcInterceptor({
-                            shouldInjectAccessToken: req => predicate(utils.injectOidc(), req)
-                        })
-                    ])
-                ),
-                provideHttpClientTesting(),
-                utils.provideOidc(async () => {
-                    const http = inject(HttpClient);
-                    return firstValueFrom(http.get<typeof params>("/oidc-config.json"));
-                })
-            ]);
-            const http = injector.get(HttpTestingController);
-            const oidc = runInInjectionContext(injector, () => utils.injectOidc());
-            const seen: string[] = [];
-            assert.throws(() => oidc.user!(), /User accessed before oidc.prInitialized resolved/);
-            assert.throws(() => oidc.isUserLoggedIn, /accessed before core authentication is ready/);
-            const config = http.expectOne("/oidc-config.json");
-            assert.equal(config.request.headers.has("Authorization"), false);
-            config.flush(params);
-            await tick();
-            assert.equal(initialization.done, nonBlocking);
-            core.ready.resolve();
-            await tick();
-            assert.equal(oidc.isUserLoggedIn, true);
-            assert.equal(initialization.done, nonBlocking);
-            let userReady = false;
-            void oidc.prInitialized.then(() => {
-                userReady = true;
-            });
-            const userRequest = http.expectOne("/api/user");
-            assert.equal(userRequest.request.headers.get("Authorization"), "Bearer access-token-1");
-            assert.equal(userReady, false);
-            userRequest.flush({ displayName: "Alice" });
-            await oidc.prInitialized;
-            await initialization.donePromise;
-            assert.equal(oidc.initializationError, undefined);
-            assert.equal(oidc.user!().displayName, "Alice injected");
-            const imperative = await utils.getOidc({ assert: "user logged in" });
-            const initialUser = await imperative.getUser();
-            assert.equal(initialUser.user, oidc.user!());
-            const { unsubscribeFromUserChange } = initialUser.subscribeToUserChange(({ user }) =>
-                seen.push(user.displayName)
-            );
-
-            const rotations: string[] = [];
-            imperative.subscribeToTokenRotation(({ accessToken }) => rotations.push(accessToken));
-            core.rotate(); // Routine rotation must not rebuild User.
-            await tick();
-            assert.equal(builds, 1);
-            http.expectNone("/api/user");
-            assert.equal(rotations.length, 1);
-
-            core.rotate("Alicia"); // Meaningful ID-token change does rebuild User.
-            await tick();
-            http.expectOne("/api/user").flush({ displayName: "Alicia" });
-            await tick();
-            assert.equal(oidc.user!().displayName, "Alicia injected");
-
-            const refreshed = oidc.refreshUser!();
-            await tick();
-            const refreshRequest = http.expectOne("/api/user");
-            assert.equal(refreshRequest.request.headers.get("Authorization"), "Bearer access-token-4");
-            refreshRequest.flush({ displayName: "Bob" });
-            assert.equal((await refreshed).displayName, "Bob injected");
-            assert.equal(builds, 3);
-            assert.deepEqual(previousUsers, [
-                undefined,
-                { displayName: "Alice injected" },
-                { displayName: "Alicia injected" }
-            ]);
-            assert.deepEqual(seen, ["Alicia injected", "Bob injected"]);
-
-            // Core retains the previous model on a later failure.
-            const loggedErrors: unknown[] = [];
-            const log = t.mock.method(console, "error", (...args: unknown[]) => {
-                loggedErrors.push(args);
-            });
-            const failedRefresh = oidc.refreshUser!();
-            await tick();
-            http.expectOne("/api/user").flush("unavailable", {
-                status: 503,
-                statusText: "Unavailable"
-            });
-            assert.equal((await failedRefresh).displayName, "Bob injected");
-            assert.equal(oidc.initializationError, undefined);
-            assert.equal(loggedErrors.length, 1);
-            log.mock.restore();
-
-            core.countdownListeners.forEach(next => next({ secondsLeft: 61 }));
-            assert.deepEqual(oidc.autoLogoutState(), { shouldDisplayWarning: false });
-            core.countdownListeners.forEach(next => next({ secondsLeft: 0 }));
-            assert.deepEqual(oidc.autoLogoutState(), {
-                shouldDisplayWarning: true,
-                secondsLeftBeforeAutoLogout: 0
-            });
-            core.countdownListeners.forEach(next => next({ secondsLeft: undefined }));
-            assert.deepEqual(oidc.autoLogoutState(), { shouldDisplayWarning: false });
-            http.verify();
-            unsubscribeFromUserChange();
-            injector.destroy();
-            assert.equal(core.tokenListeners.size, 0);
-            assert.equal(core.countdownListeners.size, 0);
-            assert.equal(core.userSubscriptions, 0);
-        }
-    );
+for (const autoLogin of [false, true]) {
+    for (const nonBlocking of [false, true]) {
+        test(
+            `injectable user lifecycle with authenticated HttpClient, nonBlocking=${nonBlocking}, autoLogin=${autoLogin}`,
+            { timeout: 3000 },
+            async t => {
+                const core = resetCore();
+                let builds = 0;
+                const previousUsers: unknown[] = [];
+                const base = oidcSpa.withUser<{ displayName: string }>(
+                    async ({ isMock, idTokenClaims, user_current }) => {
+                        assert.equal(isMock, false);
+                        assert.equal(typeof idTokenClaims.name, "string");
+                        const api = inject(API);
+                        const suffix = inject(INJECTED_NAME);
+                        builds++;
+                        previousUsers.push(user_current);
+                        const user = await firstValueFrom(api.getUser());
+                        return { displayName: `${user.displayName} ${suffix}` };
+                    }
+                );
+                const builder = nonBlocking ? base.withNonBlockingRendering() : base;
+                const utils = (autoLogin ? builder.withAutoLogin() : builder).createUtils();
+                const { injector, initialization } = app([
+                    provideHttpClient(
+                        withInterceptors([
+                            utils.createOidcInterceptor({
+                                shouldInjectAccessToken: req => predicate(utils.injectOidc(), req)
+                            })
+                        ])
+                    ),
+                    provideHttpClientTesting(),
+                    utils.provideOidc(() =>
+                        firstValueFrom(inject(HttpClient).get<typeof params>("/oidc-config.json"))
+                    )
+                ]);
+                const http = injector.get(HttpTestingController);
+                const oidc = runInInjectionContext(injector, () => utils.injectOidc());
+                assert.throws(() => oidc.user!(), /before oidc.prInitialized resolved/);
+                assert.throws(() => oidc.isUserLoggedIn, /before core authentication is ready/);
+                const config = http.expectOne("/oidc-config.json");
+                assert.equal(config.request.headers.has("Authorization"), false);
+                config.flush({ ...params, warnUserSecondsBeforeAutoLogout: 12 });
+                await tick();
+                assert.equal(initialization.done, nonBlocking);
+                core.ready.resolve();
+                await tick();
+                assert.equal(oidc.isUserLoggedIn, true);
+                assert.equal(initialization.done, nonBlocking);
+                assert.equal(core.params?.warnUserSecondsBeforeAutoLogout, 12);
+                const request = http.expectOne("/api/user");
+                assert.equal(request.request.headers.get("Authorization"), "Bearer access-token-2");
+                request.flush({ displayName: "Alice" });
+                await oidc.prInitialized;
+                await initialization.donePromise;
+                const imperative = await utils.getOidc({ assert: "user logged in" });
+                assert.equal(await imperative.getUser(), oidc.user!());
+                const seen: string[] = [];
+                imperative.subscribeToUserChange(({ user }) => seen.push(user.displayName));
+                const rotations: string[] = [];
+                imperative.subscribeToTokensChange(({ accessToken }) => rotations.push(accessToken));
+                core.rotate();
+                await tick();
+                assert.equal(builds, 1);
+                http.expectNone("/api/user");
+                assert.equal(rotations.length, 1);
+                core.rotate("Alicia");
+                await tick();
+                http.expectOne("/api/user").flush({ displayName: "Alicia" });
+                await tick();
+                assert.equal(oidc.user!().displayName, "Alicia injected");
+                const refreshed = oidc.refreshUser!();
+                await tick();
+                http.expectOne("/api/user").flush({ displayName: "Bob" });
+                assert.equal(await refreshed, undefined);
+                assert.equal(oidc.user!().displayName, "Bob injected");
+                assert.deepEqual(previousUsers, [
+                    undefined,
+                    { displayName: "Alice injected" },
+                    { displayName: "Alicia injected" }
+                ]);
+                assert.deepEqual(seen, ["Alicia injected", "Bob injected"]);
+                const log = t.mock.method(console, "error", () => {});
+                const failed = oidc.refreshUser!();
+                await tick();
+                http.expectOne("/api/user").flush("unavailable", {
+                    status: 503,
+                    statusText: "Unavailable"
+                });
+                await assert.rejects(failed);
+                assert.equal(oidc.user!().displayName, "Bob injected");
+                assert.equal(log.mock.calls.length, 1);
+                const warning = {
+                    shouldDisplayWarning: true as const,
+                    secondsLeftBeforeAutoLogout: 0,
+                    resetAutoLogoutCountdown() {}
+                };
+                core.emitAutoLogout(warning);
+                assert.equal(oidc.autoLogoutState(), warning);
+                core.emitAutoLogout({ shouldDisplayWarning: false });
+                assert.deepEqual(oidc.autoLogoutState(), { shouldDisplayWarning: false });
+                http.verify();
+                injector.destroy();
+                assert.equal(core.tokenListeners.size, 0);
+                assert.equal(core.autoLogoutListeners.size, 0);
+                assert.equal(core.userSubscriptions, 0);
+            }
+        );
+    }
 }
 
-test("requests wait for core and re-evaluate inside the injection context, without simulated states", async () => {
+test("optional requests retry their predicate in the injection context when core is ready", async () => {
     const core = resetCore();
     core.loggedIn = false;
-    const predicateError = new Error("broken predicate");
     let evaluations = 0;
-    let builds = 0;
-    const utils = oidcSpa
-        .withUser({
-            createUser: () => {
-                builds++;
-                return "unused";
-            }
-        })
-        .withNonBlockingRendering()
-        .createUtils();
+    const predicateError = new Error("broken predicate");
+    const utils = oidcSpa.withUser(anonymousFactory).withNonBlockingRendering().createUtils();
     const { injector } = app([
         utils.provideOidc(params),
         provideHttpClient(
             withInterceptors([
                 utils.createOidcInterceptor({
                     shouldInjectAccessToken: req => {
-                        if (req.url === "/broken-predicate") {
-                            throw predicateError;
-                        }
+                        if (req.url === "/broken") throw predicateError;
                         evaluations++;
                         return predicate(utils.injectOidc(), req);
                     }
@@ -246,192 +249,244 @@ test("requests wait for core and re-evaluate inside the injection context, witho
     ]);
     const http = injector.get(HttpClient);
     const testing = injector.get(HttpTestingController);
-    await assert.rejects(
-        firstValueFrom(http.get("/broken-predicate")),
-        error => error === predicateError
-    );
-    testing.expectNone("/broken-predicate");
-    const result = firstValueFrom(
+    await assert.rejects(firstValueFrom(http.get("/broken")), error => error === predicateError);
+    const response = firstValueFrom(
         http.get("/optional", { context: new HttpContext().set(OPTIONAL, true) })
     );
     testing.expectNone("/optional");
     assert.equal(evaluations, 1);
     core.ready.resolve();
     await tick();
+    assert.equal(evaluations, 2);
     const request = testing.expectOne("/optional");
     assert.equal(request.request.headers.has("Authorization"), false);
-    assert.equal(evaluations, 2);
     request.flush("public");
-    await result;
-    assert.equal(builds, 0);
-    assert.equal(runInInjectionContext(injector, () => utils.injectOidc()).isUserLoggedIn, false);
-    assert.throws(
-        () => runInInjectionContext(injector, () => utils.injectOidc()).user!(),
-        /not logged in/
-    );
-    await assert.rejects(
-        runInInjectionContext(injector, () => utils.injectOidc()).getAccessToken!(),
-        /not logged in/
-    );
+    await response;
     await assert.rejects(
         firstValueFrom(http.get("/required", { context: new HttpContext().set(REQUIRED, true) })),
         /not logged in/
     );
-    testing.expectNone("/required");
+    const oidc = runInInjectionContext(injector, () => utils.injectOidc());
+    assert.throws(() => oidc.user!(), /not logged in/);
     testing.verify();
 });
 
-for (const isAsync of [false, true]) {
-    test(`provider configuration failures propagate unchanged, async=${isAsync}`, async () => {
+for (const autoLogin of [false, true]) {
+    for (const isAsync of [false, true]) {
+        test(`runtime config errors settle initialization, autoLogin=${autoLogin}, async=${isAsync}`, async () => {
+            const core = resetCore();
+            const cause = new Error("config failed");
+            const base = oidcSpa.withUser(anonymousFactory);
+            const utils = (autoLogin ? base.withAutoLogin() : base).createUtils();
+            const getter = () => {
+                throw cause;
+            };
+            const { injector, initialization } = app([
+                utils.provideOidc(isAsync ? async () => getter() : getter)
+            ]);
+            await initialization.donePromise;
+            const oidc = runInInjectionContext(injector, () => utils.injectOidc());
+            const error =
+                "injectOidcInitializationError" in utils
+                    ? runInInjectionContext(injector, utils.injectOidcInitializationError)()
+                    : "initializationError" in oidc
+                    ? oidc.initializationError
+                    : undefined;
+            assert.ok(error instanceof OidcInitializationError);
+            assert.equal(error.isAuthServerLikelyDown, false);
+            assert.equal(causeOf(causeOf(error) as Error), cause);
+            assert.equal(core.calls, 0);
+            if (!autoLogin) {
+                assert.equal(oidc.isUserLoggedIn, false);
+                const before = alerts;
+                void oidc.login!({});
+                await tick();
+                assert.equal(alerts, before + 1);
+            }
+        });
+    }
+}
+
+test("unexpected core and subscription errors propagate unchanged", async () => {
+    for (const duringSubscription of [false, true]) {
         const core = resetCore();
-        const cause = new Error("config failed");
-        const utils = oidcSpa.createUtils();
-        const getParams = () => {
-            throw cause;
-        };
-        const { initialization } = app([
-            utils.provideOidc(isAsync ? async () => getParams() : getParams)
-        ]);
+        const cause = new Error("unexpected bug");
+        if (duringSubscription) {
+            const createOidc = core.createOidc;
+            core.createOidc = async params => {
+                const oidc = await createOidc(params);
+                assert.ok(oidc.isUserLoggedIn);
+                oidc.subscribeToAutoLogoutState = () => {
+                    throw cause;
+                };
+                return oidc;
+            };
+        } else core.error = cause;
+        const utils = oidcSpa.withUser(anonymousFactory).createUtils();
+        const { initialization } = app([utils.provideOidc(params)]);
+        core.ready.resolve();
         await assert.rejects(initialization.donePromise, error => error === cause);
-        assert.equal(core.calls, 0);
+    }
+});
+
+for (const autoLogin of [false, true]) {
+    test(`core initialization failures use the UI error path, autoLogin=${autoLogin}`, async () => {
+        const core = resetCore();
+        core.error = new OidcInitializationError({
+            messageOrCause: "issuer unavailable",
+            isAuthServerLikelyDown: true
+        });
+        const base = oidcSpa.withUser(anonymousFactory);
+        const utils = (autoLogin ? base.withAutoLogin() : base).createUtils();
+        const { injector, initialization } = app([utils.provideOidc(params)]);
+        core.ready.resolve();
+        await initialization.donePromise;
+        const oidc = runInInjectionContext(injector, () => utils.injectOidc());
+        if ("injectOidcInitializationError" in utils) {
+            assert.equal(
+                runInInjectionContext(injector, utils.injectOidcInitializationError)(),
+                core.error
+            );
+            assert.throws(() => oidc.isUserLoggedIn, /injectOidcInitializationError/);
+            let settled = false;
+            void utils.getOidc().then(() => {
+                settled = true;
+            });
+            await tick();
+            assert.equal(settled, false);
+        } else {
+            assert.equal(oidc.isUserLoggedIn, false);
+            assert.equal(oidc.initializationError, core.error);
+            assert.equal((await utils.getOidc()).initializationError, core.error);
+        }
+    });
+
+    test(`initial user failure preserves imperative tokens, autoLogin=${autoLogin}`, async () => {
+        const core = resetCore();
+        const cause = new Error("profile unavailable");
+        const base = oidcSpa.withUser(async () => {
+            throw cause;
+        });
+        const utils = (autoLogin ? base.withAutoLogin() : base).createUtils();
+        const { injector, initialization } = app([
+            utils.provideOidc(params),
+            { provide: Router, useValue: { events: new Subject(), getCurrentNavigation: () => null } }
+        ]);
+        const oidc = runInInjectionContext(injector, () => utils.injectOidc());
+        core.ready.resolve();
+        await initialization.donePromise;
+        const error =
+            "injectOidcInitializationError" in utils
+                ? runInInjectionContext(injector, utils.injectOidcInitializationError)()
+                : "initializationError" in oidc
+                ? oidc.initializationError
+                : undefined;
+        assert.ok(error instanceof OidcInitializationError);
+        assert.equal(error.isAuthServerLikelyDown, false);
+        assert.throws(() => oidc.user!(), error);
+        const imperative = await utils.getOidc({ assert: "user logged in" });
+        assert.match(await imperative.getAccessToken(), /^access-token-/);
+        if ("enforceLoginGuard" in utils) {
+            assert.equal(oidc.isUserLoggedIn, false);
+            await assert.rejects(
+                runInInjectionContext(injector, () =>
+                    utils.enforceLoginGuard(route, routerState("/protected"))
+                ),
+                error
+            );
+            const before = reloads;
+            void oidc.login!({});
+            await tick();
+            assert.equal(reloads, before + 1);
+        }
     });
 }
 
-test("unexpected createOidc errors propagate unchanged", async () => {
-    const core = resetCore();
-    const cause = new Error("unexpected core bug");
-    core.error = cause;
-    const utils = oidcSpa.withAutoLogin().createUtils();
-    const { initialization } = app([utils.provideOidc(params)]);
-    core.ready.resolve();
-    await assert.rejects(initialization.donePromise, error => error === cause);
-});
-
-test("subscription setup errors propagate even when they are OidcInitializationError", async () => {
-    const core = resetCore();
-    const cause = new OidcInitializationError({
-        messageOrCause: "unexpected subscription failure",
-        isAuthServerLikelyDown: false
-    });
-    const createOidc = core.createOidc;
-    core.createOidc = async params => {
-        const oidc = await createOidc(params);
-        assert.ok(oidc.isUserLoggedIn);
-        oidc.subscribeToAutoLogoutCountdown = () => {
-            throw cause;
-        };
-        return oidc;
-    };
-    const utils = oidcSpa.createUtils();
-    const { initialization } = app([utils.provideOidc(params)]);
-    core.ready.resolve();
-    await assert.rejects(initialization.donePromise, error => error === cause);
-});
-
-test("core initialization rejection is handled, including auto-login", async () => {
-    const core = resetCore();
-    core.error = new OidcInitializationError({
-        messageOrCause: "auth unavailable",
-        isAuthServerLikelyDown: true
-    });
-    const utils = oidcSpa.withAutoLogin().createUtils();
-    const { injector, initialization } = app([utils.provideOidc(params)]);
-    core.ready.resolve();
-    await initialization.donePromise;
-    const oidc = runInInjectionContext(injector, () => utils.injectOidc());
-    assert.equal(oidc.initializationError, core.error);
-    assert.throws(() => oidc.isUserLoggedIn, /auth unavailable/);
-    await assert.rejects(oidc.getAccessToken!(), /auth unavailable/);
-});
-
 for (const nonBlocking of [false, true]) {
-    test(`mock overrides and independent applications, nonBlocking=${nonBlocking}`, async () => {
-        resetCore();
-        let builds = 0;
-        const base = oidcSpa.withUser({
-            createUser: () => {
-                builds++;
-                return { name: "real" };
-            },
-            user_mock: { name: "default" }
-        });
+    test(`mock user factory and runtime token overrides, nonBlocking=${nonBlocking}`, async () => {
+        const core = resetCore();
+        const calls: unknown[] = [];
+        const base = oidcSpa.withUser<{ name: unknown; suffix: string }>(
+            ({ isMock, idTokenClaims, accessToken, user_current }) => {
+                calls.push({ isMock, idTokenClaims, accessToken, user_current });
+                return { name: idTokenClaims.name, suffix: inject(INJECTED_NAME) };
+            }
+        );
         const builder = nonBlocking ? base.withNonBlockingRendering() : base;
         const first = builder.createUtils();
         const second = builder.createUtils();
-        const firstApp = app([
-            first.provideOidc({ implementation: "mock", isUserInitiallyLoggedIn: true })
-        ]);
-        const secondApp = app([
+        const a = app([first.provideOidc({ mode: "mock", idTokenClaims_mock: mockClaims("Alice") })]);
+        const b = app([
             second.provideOidc({
-                implementation: "mock",
-                isUserInitiallyLoggedIn: true,
-                user_mock: { name: "override" },
+                mode: "mock",
+                idTokenClaims_mock: mockClaims("Bob"),
+                accessToken_mock: "custom",
+                refreshToken_mock: "refresh",
+                idToken_mock: "id",
                 issuerUri_mock: "https://other.test",
                 clientId_mock: "other"
             })
         ]);
-        const a = runInInjectionContext(firstApp.injector, () => first.injectOidc());
-        const b = runInInjectionContext(secondApp.injector, () => second.injectOidc());
-        await Promise.all([a.prInitialized, b.prInitialized]);
-        assert.notEqual(a, b);
-        assert.equal(a.user!().name, "default");
-        assert.equal(b.user!().name, "override");
-        assert.equal((await b.refreshUser!()).name, "override");
-        assert.equal((await second.getOidc()).issuerUri, "https://other.test");
-        assert.equal((await second.getOidc()).clientId, "other");
-        assert.equal(builds, 0);
+        const oidcA = runInInjectionContext(a.injector, () => first.injectOidc());
+        const oidcB = runInInjectionContext(b.injector, () => second.injectOidc());
+        await Promise.all([oidcA.prInitialized, oidcB.prInitialized]);
+        assert.notEqual(oidcA, oidcB);
+        assert.deepEqual(oidcA.user!(), { name: "Alice", suffix: "injected" });
+        assert.deepEqual(oidcB.user!(), { name: "Bob", suffix: "injected" });
+        const imperative = await second.getOidc({ assert: "user logged in" });
+        const tokens = await imperative.getTokens();
+        assert.equal(tokens.accessToken, "custom");
+        assert.equal(tokens.idToken, "id");
+        assert.equal(tokens.refreshToken, "refresh");
+        assert.equal(imperative.clientId, "other");
+        assert.equal(imperative.issuerUri, "https://other.test");
+        await oidcB.refreshUser!();
+        assert.equal(calls.length, 3);
+        assert.equal(core.calls, 0);
     });
 }
 
-test("no user configuration is valid, but reading User explains the missing configuration", async () => {
-    const utils = oidcSpa.createUtils();
-    const { injector } = app([
-        utils.provideOidc({ implementation: "mock", isUserInitiallyLoggedIn: true })
-    ]);
-    await runInInjectionContext(injector, () => utils.injectOidc()).prInitialized;
-    assert.equal(
-        runInInjectionContext(injector, () => utils.injectOidc()).initializationError,
-        undefined
-    );
-    assert.throws(() => runInInjectionContext(injector, () => utils.injectOidc()).user!(), /withUser/);
-});
-
 test("builder branches are independent and auto-login reaches core", async () => {
     const core = resetCore();
-    const base = oidcSpa.withUser({ createUser: () => "Alice" });
+    const base = oidcSpa.withUser(() => "Alice");
     const utils = base.withAutoLogin().createUtils();
-    const { injector } = app([utils.provideOidc(params)]);
+    assert.equal("enforceLoginGuard" in utils, false);
+    const first = app([utils.provideOidc(params)]);
     core.ready.resolve();
-    await runInInjectionContext(injector, () => utils.injectOidc()).prInitialized;
+    await first.initialization.donePromise;
     assert.equal(core.params?.autoLogin, true);
-    const otherUtils = base.createUtils();
-    const second = app([
-        otherUtils.provideOidc({ implementation: "mock", isUserInitiallyLoggedIn: false })
-    ]);
-    await runInInjectionContext(second.injector, () => otherUtils.injectOidc()).prInitialized;
     assert.equal(
-        runInInjectionContext(second.injector, () => otherUtils.injectOidc()).isUserLoggedIn,
-        false
+        runInInjectionContext(first.injector, utils.injectOidcInitializationError)(),
+        undefined
     );
+    const other = base.createUtils();
+    assert.equal("injectOidcInitializationError" in other, false);
+    const second = app([other.provideOidc({ mode: "mock", isUserInitiallyLoggedIn: false })]);
+    await second.initialization.donePromise;
+    assert.equal(runInInjectionContext(second.injector, () => other.injectOidc()).isUserLoggedIn, false);
 });
 
-test("guard waits for User and preserves the complete target URL", async () => {
+test("guard waits for user and supplies the target URL to parameterized token requests", async () => {
     const core = resetCore();
     let resolveUser!: (user: string) => void;
     const utils = oidcSpa
-        .withUser({
-            createUser: () =>
+        .withUser(
+            () =>
                 new Promise<string>(resolve => {
                     resolveUser = resolve;
                 })
-        })
+        )
         .withNonBlockingRendering()
         .createUtils();
-    const { injector } = app([utils.provideOidc(params), { provide: Router, useValue: {} }]);
-    const target = "/nested/protected?tab=profile#details";
+    const events = new Subject();
+    const { injector } = app([
+        utils.provideOidc(params),
+        { provide: Router, useValue: { events, getCurrentNavigation: () => null } }
+    ]);
     let allowed = false;
+    const target = "/nested/protected?tab=profile#details";
     const guard = runInInjectionContext(injector, () =>
-        utils.enforceLoginGuard({} as ActivatedRouteSnapshot, { url: target } as RouterStateSnapshot)
+        utils.enforceLoginGuard(route, routerState(target))
     );
     void guard.then(() => {
         allowed = true;
@@ -439,78 +494,184 @@ test("guard waits for User and preserves the complete target URL", async () => {
     core.ready.resolve();
     await tick();
     assert.equal(allowed, false);
+    const imperative = await utils.getOidc({ assert: "user logged in" });
+    const expected = "https://app.test/base" + target;
+    await imperative.getTokens({ scopes: ["email"] });
+    assert.deepEqual(core.tokenRequests.slice(-1)[0], { scopes: ["email"], returnToUrl: expected });
+    await imperative.getAccessToken({ authorizationParams: { audience: "api" } });
+    assert.equal(core.tokenRequests.slice(-1)[0]?.returnToUrl, expected);
+    await imperative.getTokens({ returnToUrl: "/explicit" });
+    assert.equal(core.tokenRequests.slice(-1)[0]?.returnToUrl, "/explicit");
+    await imperative.getTokens();
+    assert.equal(core.tokenRequests.slice(-1)[0], undefined);
     resolveUser("Alice");
     assert.equal(await guard, true);
-    assert.equal(getDesiredPostLoginRedirectUrl(), "https://app.test" + target);
-    history.pushState();
-    assert.equal(getDesiredPostLoginRedirectUrl(), undefined);
+    events.next(new NavigationEnd(1, target, target));
+    await imperative.getTokens({ scopes: ["email"] });
+    assert.equal(core.tokenRequests.slice(-1)[0]?.returnToUrl, undefined);
 });
 
-test("server provider does not invoke configuration or start browser OIDC", async () => {
-    const core = resetCore();
-    let configCalls = 0;
-    const utils = oidcSpa.createUtils();
-    const { initialization } = app([
-        utils.provideOidc(async () => {
-            configCalls++;
-            return params;
-        }),
-        { provide: PLATFORM_ID, useValue: "server" }
-    ]);
-    await initialization.donePromise;
-    assert.equal(configCalls, 0);
-    assert.equal(core.calls, 0);
-});
-
-for (const autoLogin of [false, true]) {
-    test(`initial createUser failure settles UI initialization but leaves tokens usable, autoLogin=${autoLogin}`, async () => {
+for (const event of [
+    new NavigationCancel(1, "/protected", "cancelled", NavigationCancellationCode.GuardRejected),
+    new NavigationError(1, "/protected", new Error("navigation failed")),
+    new NavigationSkipped(1, "/protected", "skipped")
+]) {
+    test(`navigation ${event.constructor.name} clears the token return URL`, async () => {
         const core = resetCore();
-        const cause = new Error("profile unavailable");
-        const base = oidcSpa.withUser({
-            createUser: async () => {
-                throw cause;
-            }
-        });
-        const utils = (autoLogin ? base.withAutoLogin() : base).createUtils();
+        const utils = oidcSpa.withUser(() => "Alice").createUtils();
+        const events = new Subject();
         const { injector, initialization } = app([
             utils.provideOidc(params),
-            { provide: Router, useValue: {} }
+            { provide: Router, useValue: { events, getCurrentNavigation: () => null } }
         ]);
-        const oidc = runInInjectionContext(injector, () => utils.injectOidc());
         core.ready.resolve();
         await initialization.donePromise;
-        await oidc.prInitialized;
-        const error = oidc.initializationError;
-        assert.ok(error instanceof OidcInitializationError);
-        assert.equal(error.isAuthServerLikelyDown, false);
-        assert.equal(
-            (error as unknown as Error & { cause: Error & { cause: unknown } }).cause.cause,
-            cause
+        await runInInjectionContext(injector, () =>
+            utils.enforceLoginGuard(route, routerState("/protected"))
         );
-        assert.throws(() => oidc.user!(), error);
-        assert.equal(await oidc.getAccessToken!(), "access-token-1");
+        events.next(event);
         const imperative = await utils.getOidc({ assert: "user logged in" });
-        assert.equal(await imperative.getAccessToken(), "access-token-1");
-        if ("enforceLoginGuard" in utils) {
-            await assert.rejects(
+        await imperative.getAccessToken({ scopes: ["email"] });
+        assert.equal(core.tokenRequests.slice(-1)[0]?.returnToUrl, undefined);
+    });
+}
+
+test("anonymous guard preserves query and fragment in the requested route", async () => {
+    const core = resetCore();
+    core.loggedIn = false;
+    const utils = oidcSpa.withUser(anonymousFactory).createUtils();
+    const { injector } = app([
+        utils.provideOidc(params),
+        { provide: Router, useValue: { getCurrentNavigation: () => null } }
+    ]);
+    core.ready.resolve();
+    void runInInjectionContext(injector, () =>
+        utils.enforceLoginGuard(route, routerState("/protected?tab=2#section"))
+    );
+    await tick();
+    assert.deepEqual(core.loginParams, {
+        returnToUrl: "https://app.test/base/protected?tab=2#section",
+        doesCurrentHrefEnforceLogin: false
+    });
+});
+
+for (const loggedIn of [false, true]) {
+    test(`assertions and stable imperative object, loggedIn=${loggedIn}`, async () => {
+        const core = resetCore();
+        core.loggedIn = loggedIn;
+        const utils = oidcSpa.withUser(() => "Alice").createUtils();
+        const { injector, initialization } = app([utils.provideOidc(params)]);
+        assert.throws(
+            () => runInInjectionContext(injector, () => utils.injectOidc({ assert: "user logged in" })),
+            /before core authentication is ready/
+        );
+        core.ready.resolve();
+        await initialization.donePromise;
+        const first = await utils.getOidc();
+        assert.equal(first, await utils.getOidc());
+        const correct = loggedIn ? "user logged in" : "user not logged in";
+        const wrong = loggedIn ? "user not logged in" : "user logged in";
+        assert.equal(await utils.getOidc({ assert: correct as "user logged in" }), first);
+        await assert.rejects(utils.getOidc({ assert: wrong as "user logged in" }), /Called getOidc/);
+        assert.throws(
+            () =>
                 runInInjectionContext(injector, () =>
-                    utils.enforceLoginGuard({} as ActivatedRouteSnapshot)
+                    utils.injectOidc({ assert: wrong as "user logged in" })
                 ),
-                error
-            );
+            /Called injectOidc/
+        );
+        assert.throws(() => utils.injectOidc(), /injection context/);
+        const oidc = runInInjectionContext(injector, () => utils.injectOidc());
+        if (loggedIn) {
+            assert.equal(oidc.user!(), "Alice");
+            assert.deepEqual(oidc.authorizationResult, {
+                authorizationParams: { kc_action: "UPDATE_PASSWORD" },
+                response: { kc_action_status: "success" }
+            });
+            void oidc.startAuthorization!({
+                returnToUrl: "/profile",
+                authorizationParams: { kc_action: "UPDATE_PASSWORD" }
+            });
+            await tick();
+            assert.deepEqual(core.authorizationParams, {
+                returnToUrl: "/profile",
+                authorizationParams: { kc_action: "UPDATE_PASSWORD" }
+            });
+            void oidc.logout!({ returnToUrl: "/" });
+            await tick();
+            assert.deepEqual(core.logoutParams, { returnToUrl: "/" });
+            assert.equal("getAccessToken" in oidc, false);
+        } else {
+            void oidc.login!({});
+            await tick();
+            assert.deepEqual(core.loginParams, { doesCurrentHrefEnforceLogin: false });
+            void oidc.login!({ doesCurrentHrefEnforceLogin: true, returnToUrl: "/protected" });
+            await tick();
+            assert.deepEqual(core.loginParams, {
+                doesCurrentHrefEnforceLogin: true,
+                returnToUrl: "/protected"
+            });
         }
     });
 }
 
-test("user-dependent interceptor fails clearly during createUser instead of waiting on itself", async () => {
+test("getOidc can wait before the provider and acquire tokens inside createUser", async () => {
     const core = resetCore();
     const utils = oidcSpa
-        .withUser({
-            createUser: async () => {
-                return firstValueFrom(inject(API).getUser());
-            }
+        .withUser<string>(async (): Promise<string> => {
+            const oidc = await utils.getOidc({ assert: "user logged in" });
+            return `User with ${await oidc.getAccessToken()}`;
         })
         .createUtils();
+    const pending = utils.getOidc({ assert: "user logged in" });
+    let settled = false;
+    void pending.then(() => {
+        settled = true;
+    });
+    await tick();
+    assert.equal(settled, false);
+    const { injector, initialization } = app([utils.provideOidc(params)]);
+    core.ready.resolve();
+    assert.match(await (await pending).getAccessToken(), /^access-token-/);
+    await initialization.donePromise;
+    assert.match(
+        runInInjectionContext(injector, () => utils.injectOidc()).user!(),
+        /^User with access-token-/
+    );
+});
+
+test("tokens remain available while the user is pending; destroying the app detaches subscriptions", async () => {
+    const core = resetCore();
+    let resolveUser!: (user: string) => void;
+    const utils = oidcSpa
+        .withUser(
+            () =>
+                new Promise<string>(resolve => {
+                    resolveUser = resolve;
+                })
+        )
+        .withNonBlockingRendering()
+        .createUtils();
+    const { injector } = app([utils.provideOidc(params)]);
+    const oidc = runInInjectionContext(injector, () => utils.injectOidc());
+    core.ready.resolve();
+    const imperative = await utils.getOidc({ assert: "user logged in" });
+    assert.match(await imperative.getAccessToken(), /^access-token-/);
+    assert.throws(() => oidc.user!(), /before oidc.prInitialized resolved/);
+    imperative.subscribeToTokensChange(() => {});
+    imperative.subscribeToUserChange(() => {});
+    imperative.subscribeToAutoLogoutState(() => {});
+    injector.destroy();
+    resolveUser("Alice");
+    await oidc.prInitialized;
+    assert.equal(core.userSubscriptions, 0);
+    assert.equal(core.tokenListeners.size, 0);
+    assert.equal(core.autoLogoutListeners.size, 0);
+});
+
+test("user-dependent interceptors report the initialization cycle", async () => {
+    const core = resetCore();
+    const utils = oidcSpa.withUser(() => firstValueFrom(inject(API).getUser())).createUtils();
     const { injector, initialization } = app([
         utils.provideOidc(params),
         provideHttpClient(
@@ -526,341 +687,42 @@ test("user-dependent interceptor fails clearly during createUser instead of wait
     await initialization.donePromise;
     const error = runInInjectionContext(injector, () => utils.injectOidc()).initializationError;
     assert.ok(error instanceof OidcInitializationError);
-    assert.match(
-        String((error as unknown as Error & { cause: Error & { cause: unknown } }).cause.cause),
-        /Requests made by createUser/
-    );
+    assert.match(String(causeOf(error)), /Requests made by createUser/);
     injector.get(HttpTestingController).expectNone("/api/user");
 });
 
-test("destroying an injector while User is loading does not leak subscriptions", async () => {
-    const core = resetCore();
-    let resolveUser!: (user: string) => void;
-    const utils = oidcSpa
-        .withUser({
-            createUser: () =>
-                new Promise<string>(resolve => {
-                    resolveUser = resolve;
-                })
-        })
-        .withNonBlockingRendering()
-        .createUtils();
-    const { injector } = app([utils.provideOidc(params)]);
-    const oidc = runInInjectionContext(injector, () => utils.injectOidc());
-    core.ready.resolve();
-    await tick();
-    injector.destroy();
-    resolveUser("Alice");
-    await oidc.prInitialized;
-    assert.equal(core.userSubscriptions, 0);
-    assert.equal(core.tokenListeners.size, 0);
-    assert.equal(core.countdownListeners.size, 0);
-});
-
-test("anonymous guard redirects to the requested nested route", async () => {
-    const core = resetCore();
-    core.loggedIn = false;
-    const utils = oidcSpa.createUtils();
-    const { injector } = app([utils.provideOidc(params), { provide: Router, useValue: {} }]);
-    core.ready.resolve();
-    await runInInjectionContext(injector, () => utils.injectOidc()).prInitialized;
-    void runInInjectionContext(injector, () =>
-        utils.enforceLoginGuard(
-            {} as ActivatedRouteSnapshot,
-            {
-                url: "/parent/protected?tab=2#section"
-            } as RouterStateSnapshot
-        )
-    );
-    await tick();
-    assert.deepEqual(core.loginParams, {
-        doesCurrentHrefRequiresAuth: false,
-        redirectUrl: "https://app.test/parent/protected?tab=2#section"
-    });
-});
-
-for (const loggedIn of [false, true]) {
-    test(`injectOidc and getOidc assert authentication, loggedIn=${loggedIn}`, async () => {
-        const core = resetCore();
-        core.loggedIn = loggedIn;
-        const utils = oidcSpa.withUser({ createUser: () => "Alice" }).createUtils();
-        const { injector, initialization } = app([utils.provideOidc(params)]);
-        assert.throws(
-            () => runInInjectionContext(injector, () => utils.injectOidc({ assert: "user logged in" })),
-            /before core authentication is ready/
-        );
-        core.ready.resolve();
-        await initialization.donePromise;
-        const correct = loggedIn ? "user logged in" : "user not logged in";
-        const wrong = loggedIn ? "user not logged in" : "user logged in";
-        const [first, second] = await Promise.all([utils.getOidc(), utils.getOidc()]);
-        assert.equal(first, second);
-        const extended = Object.assign(first, { customMethod: () => "custom" });
-        assert.equal(await utils.getOidc(), extended);
-        // The assertion is selected dynamically only in this test.
-        assert.equal(
-            runInInjectionContext(injector, () =>
-                utils.injectOidc({ assert: correct as "user logged in" })
-            ).isUserLoggedIn,
-            loggedIn
-        );
-        assert.throws(
-            () =>
-                runInInjectionContext(injector, () =>
-                    utils.injectOidc({ assert: wrong as "user logged in" })
-                ),
-            /Called injectOidc/
-        );
-        assert.equal(await utils.getOidc({ assert: correct as "user logged in" }), first);
-        await assert.rejects(utils.getOidc({ assert: wrong as "user logged in" }), /Called getOidc/);
-        assert.throws(() => utils.injectOidc(), /injection context/);
-        if (loggedIn) {
-            const oidc = runInInjectionContext(injector, () =>
-                utils.injectOidc({ assert: "user logged in" })
-            );
-            assert.equal(oidc.user(), "Alice");
-            assert.equal(oidc.user(), oidc.user());
-            assert.equal("user$" in oidc, false);
-            assert.equal("$user" in oidc, false);
-        }
-    });
-}
-
-test("getOidc can wait before provideOidc and resolve inside createUser before UI readiness", async () => {
-    const core = resetCore();
-    const utils = oidcSpa
-        .withUser<string>({
-            createUser: async (): Promise<string> => {
-                const oidc = await utils.getOidc({ assert: "user logged in" });
-                return `User with ${await oidc.getAccessToken()}`;
-            }
-        })
-        .createUtils();
-    let settled = false;
-    const pending = utils.getOidc({ assert: "user logged in" });
-    void pending.then(() => {
-        settled = true;
-    });
-    await tick();
-    assert.equal(settled, false);
-    const { injector, initialization } = app([utils.provideOidc(params)]);
-    core.ready.resolve();
-    const imperative = await pending;
-    assert.equal(await imperative.getAccessToken(), "access-token-1");
-    await initialization.donePromise;
-    assert.equal(
-        runInInjectionContext(injector, () => utils.injectOidc({ assert: "user logged in" })).user(),
-        "User with access-token-1"
-    );
-});
-
-test("getOidc reaches tokens while the asynchronous user is still pending", async () => {
-    const core = resetCore();
-    let resolveUser!: (user: string) => void;
-    const utils = oidcSpa
-        .withUser({
-            createUser: () =>
-                new Promise<string>(resolve => {
-                    resolveUser = resolve;
-                })
-        })
-        .createUtils();
-    const { injector, initialization } = app([utils.provideOidc(params)]);
-    const oidc = runInInjectionContext(injector, () => utils.injectOidc());
-    core.ready.resolve();
-    const imperative = await utils.getOidc({ assert: "user logged in" });
-    assert.equal(await imperative.getAccessToken(), "access-token-1");
-    assert.equal(initialization.done, false);
-    assert.throws(() => oidc.user!(), /before oidc.prInitialized resolved/);
-    resolveUser("Alice");
-    await initialization.donePromise;
-    assert.equal(oidc.user!(), "Alice");
-});
-
-test("imperative subscriptions match the signal and detach on unsubscribe or injector destruction", async () => {
-    const core = resetCore();
-    const utils = oidcSpa.createUtils();
-    const { injector, initialization } = app([
-        utils.provideOidc({ ...params, warnUserSecondsBeforeAutoLogout: 10 })
-    ]);
-    core.ready.resolve();
-    await initialization.donePromise;
-    const imperative = await utils.getOidc({ assert: "user logged in" });
-    const oidc = runInInjectionContext(injector, () => utils.injectOidc());
-    const states: unknown[] = [];
-    const { unsubscribeFromAutoLogoutState } = imperative.subscribeToAutoLogoutState(state => {
-        assert.equal(oidc.autoLogoutState(), state);
-        states.push(state);
-    });
-    const rotations: unknown[] = [];
-    const { unsubscribeFromTokenRotation } = imperative.subscribeToTokenRotation(tokens => {
-        assert.equal(tokens.decodedIdToken, imperative.getDecodedIdToken());
-        rotations.push(tokens);
-    });
-    const countdown = [...core.countdownListeners][0];
-    countdown({ secondsLeft: 11 });
-    assert.equal(states.length, 1);
-    countdown({ secondsLeft: 10 });
-    assert.deepEqual(states[1], { shouldDisplayWarning: true, secondsLeftBeforeAutoLogout: 10 });
-    assert.equal(states[1], oidc.autoLogoutState());
-    core.rotate();
-    assert.deepEqual(rotations, [
-        {
-            accessToken: "access-token-2",
-            decodedIdToken: {
-                iss: "https://issuer.test",
-                sub: "alice",
-                aud: "client",
-                exp: 9999999999,
-                iat: 2,
-                name: "Alice"
-            }
-        }
-    ]);
-    unsubscribeFromTokenRotation();
-    unsubscribeFromTokenRotation();
-    unsubscribeFromAutoLogoutState();
-    countdown({ secondsLeft: undefined });
-    assert.equal(states.length, 2);
-    assert.equal(core.tokenListeners.size, 0);
-    imperative.subscribeToTokenRotation(() => {});
-    injector.destroy();
-    assert.equal(core.tokenListeners.size, 0);
-    assert.equal(core.countdownListeners.size, 0);
-});
-
-test("auto-login retains HTTP interceptors and injectable user construction", async () => {
-    const core = resetCore();
-    const utils = oidcSpa
-        .withAutoLogin()
-        .withUser({
-            createUser: () => firstValueFrom(inject(API).getUser())
-        })
-        .createUtils();
-    assert.equal("enforceLoginGuard" in utils, false);
-    const { injector, initialization } = app([
-        utils.provideOidc(params),
-        provideHttpClient(
-            withInterceptors([
-                utils.createOidcInterceptor({
-                    shouldInjectAccessToken: req => predicate(utils.injectOidc(), req)
-                })
-            ])
-        ),
-        provideHttpClientTesting()
-    ]);
-    core.ready.resolve();
-    await tick();
-    const testing = injector.get(HttpTestingController);
-    const request = testing.expectOne("/api/user");
-    assert.equal(request.request.headers.get("Authorization"), "Bearer access-token-1");
-    request.flush({ displayName: "Alice" });
-    await initialization.donePromise;
-    assert.equal(runInInjectionContext(injector, utils.injectOidc).user().displayName, "Alice");
-    testing.verify();
-});
-
-test("injected login respects doesCurrentHrefRequiresAuth, defaulting to false", async () => {
-    const core = resetCore();
-    core.loggedIn = false;
-    const utils = oidcSpa.createUtils();
-    const { injector, initialization } = app([utils.provideOidc(params)]);
-    core.ready.resolve();
-    await initialization.donePromise;
-    const oidc = runInInjectionContext(injector, () =>
-        utils.injectOidc({ assert: "user not logged in" })
-    );
-    void oidc.login();
-    await tick();
-    assert.equal(core.loginParams?.doesCurrentHrefRequiresAuth, false);
-    void oidc.login({ doesCurrentHrefRequiresAuth: true, redirectUrl: "/protected" });
-    await tick();
-    assert.deepEqual(core.loginParams, { doesCurrentHrefRequiresAuth: true, redirectUrl: "/protected" });
-});
-
-test("one active app per utilities, with reuse after injector destruction", async () => {
-    const utils = oidcSpa.withUser({ createUser: () => "real", user_mock: "first" }).createUtils();
-    const first = app([utils.provideOidc({ implementation: "mock", isUserInitiallyLoggedIn: true })]);
+test("one active browser app per utils, with fresh state after destruction", async () => {
+    const utils = oidcSpa.withUser(({ idTokenClaims }) => idTokenClaims.name).createUtils();
+    const first = app([utils.provideOidc({ mode: "mock", idTokenClaims_mock: mockClaims("first") })]);
     await first.initialization.donePromise;
-    const firstOidc = await utils.getOidc();
-    assert.throws(
-        () => app([utils.provideOidc({ implementation: "mock", isUserInitiallyLoggedIn: true })]),
-        /one active application injector/
-    );
+    const firstOidc = await utils.getOidc({ assert: "user logged in" });
+    assert.throws(() => app([utils.provideOidc({ mode: "mock" })]), /one active application injector/);
     first.injector.destroy();
     const pending = utils.getOidc({ assert: "user logged in" });
-    const third = app([
-        utils.provideOidc({ implementation: "mock", isUserInitiallyLoggedIn: true, user_mock: "third" })
-    ]);
-    await third.initialization.donePromise;
-    const thirdOidc = await pending;
-    assert.notEqual(thirdOidc, firstOidc);
-    assert.equal(await utils.getOidc(), thirdOidc);
-    assert.equal((await thirdOidc.getUser()).user, "third");
-});
-
-test("without auto-login, authentication failure remains a logged-out result", async () => {
-    const core = resetCore();
-    core.error = new OidcInitializationError({
-        messageOrCause: "issuer unavailable",
-        isAuthServerLikelyDown: true
-    });
-    let builds = 0;
-    const utils = oidcSpa
-        .withUser({
-            createUser: () => {
-                builds++;
-                return "Alice";
-            }
-        })
-        .createUtils();
-    const { injector, initialization } = app([utils.provideOidc(params)]);
-    core.ready.resolve();
-    await initialization.donePromise;
-    const oidc = runInInjectionContext(injector, () =>
-        utils.injectOidc({ assert: "user not logged in" })
-    );
-    assert.equal(oidc.initializationError, core.error);
-    assert.equal(oidc.isUserLoggedIn, false);
-    const imperative = await utils.getOidc({ assert: "user not logged in" });
-    assert.equal(imperative.initializationError, core.error);
-    assert.equal(builds, 0);
-});
-
-test("getOidc stays pending on core auto-login failure, matching React's escape hatch", async () => {
-    const core = resetCore();
-    core.error = new OidcInitializationError({
-        messageOrCause: "issuer unavailable",
-        isAuthServerLikelyDown: true
-    });
-    const utils = oidcSpa.withAutoLogin().createUtils();
-    let settled = false;
-    void utils.getOidc().then(() => {
-        settled = true;
-    });
-    const { injector, initialization } = app([utils.provideOidc(params)]);
-    core.ready.resolve();
-    await initialization.donePromise;
-    await tick();
-    assert.equal(settled, false);
-    assert.equal(runInInjectionContext(injector, utils.injectOidc).initializationError, core.error);
+    const second = app([utils.provideOidc({ mode: "mock", idTokenClaims_mock: mockClaims("second") })]);
+    await second.initialization.donePromise;
+    const secondOidc = await pending;
+    assert.notEqual(firstOidc, secondOidc);
+    assert.equal(await secondOidc.getUser(), "second");
 });
 
 for (const nonBlocking of [false, true]) {
     for (const autoLogin of [false, true]) {
-        test(`SSR injection defers authentication, nonBlocking=${nonBlocking}, autoLogin=${autoLogin}`, async () => {
+        test(`SSR leaves auth pending, nonBlocking=${nonBlocking}, autoLogin=${autoLogin}`, async () => {
             const core = resetCore();
             let userCalls = 0;
-            const base = oidcSpa.withUser({
-                createUser: () => {
-                    userCalls++;
-                    return { name: "Alice" };
-                }
+            let configCalls = 0;
+            const base = oidcSpa.withUser(() => {
+                userCalls++;
+                return "Alice";
             });
             const builder = nonBlocking ? base.withNonBlockingRendering() : base;
             const utils = (autoLogin ? builder.withAutoLogin() : builder).createUtils();
             const { injector, initialization } = app([
-                utils.provideOidc(params),
+                utils.provideOidc(() => {
+                    configCalls++;
+                    return params;
+                }),
                 { provide: PLATFORM_ID, useValue: "server" }
             ]);
             await initialization.donePromise;
@@ -875,81 +737,44 @@ for (const nonBlocking of [false, true]) {
             });
             await tick();
             assert.equal(ready, false);
+            assert.equal(configCalls, 0);
             assert.equal(core.calls, 0);
             assert.equal(userCalls, 0);
             assert.throws(() => oidc.isUserLoggedIn, /before core authentication is ready/);
-            assert.throws(() => oidc.initializationError, /before oidc.prInitialized resolved/);
             assert.throws(() => oidc.user!(), /before oidc.prInitialized resolved/);
+            if ("enforceLoginGuard" in utils) {
+                await assert.rejects(
+                    runInInjectionContext(injector, () => utils.enforceLoginGuard(route)),
+                    /enforceLoginGuard.*RenderMode.Client.*app.routes.server.ts/
+                );
+            }
         });
     }
 }
 
-test("SSR requests have separate pending state and do not capture or release the active browser runtime", async () => {
+test("SSR runtimes do not capture or release the active browser app", async () => {
     const utils = oidcSpa
+        .withUser(() => "Alice")
         .withNonBlockingRendering()
-        .withUser({ createUser: () => "Alice" })
         .createUtils();
-    const browser = app([
-        utils.provideOidc({ implementation: "mock", isUserInitiallyLoggedIn: true, user_mock: "Alice" })
-    ]);
+    const browser = app([utils.provideOidc({ mode: "mock" })]);
     const imperative = await utils.getOidc({ assert: "user logged in" });
-    assert.equal((await imperative.getUser()).user, "Alice");
-    const serverRequests = [0, 1].map(() =>
-        app([
-            utils.provideOidc({
-                implementation: "mock",
-                isUserInitiallyLoggedIn: true,
-                user_mock: "server"
-            }),
-            { provide: PLATFORM_ID, useValue: "server" }
-        ])
+    const serverApps = [0, 1].map(() =>
+        app([utils.provideOidc({ mode: "mock" }), { provide: PLATFORM_ID, useValue: "server" }])
     );
-    const serverOidcs = serverRequests.map(({ injector }) =>
+    const serverOidcs = serverApps.map(({ injector }) =>
         runInInjectionContext(injector, () => utils.injectOidc())
     );
     assert.notEqual(serverOidcs[0], serverOidcs[1]);
     assert.notEqual(serverOidcs[0].prInitialized, serverOidcs[1].prInitialized);
-    for (const { injector, initialization } of serverRequests) {
-        await initialization.donePromise;
-        for (const injectWithAssertion of [
-            () => utils.injectOidc({ assert: "user logged in" }),
-            () => utils.injectOidc({ assert: "user not logged in" })
-        ]) {
-            assert.throws(
-                () => runInInjectionContext(injector, () => injectWithAssertion()),
-                /before core authentication is ready/
-            );
-        }
-        injector.destroy();
-    }
-    assert.equal((await (await utils.getOidc({ assert: "user logged in" })).getUser()).user, "Alice");
+    serverApps.forEach(({ injector }) => injector.destroy());
+    assert.equal(await utils.getOidc(), imperative);
     await runInInjectionContext(browser.injector, () => utils.injectOidc()).prInitialized;
+    assert.equal(await imperative.getUser(), "Alice");
 });
 
-test("SSR guard rejects promptly with client-rendering instructions", { timeout: 1000 }, async () => {
-    const utils = oidcSpa.createUtils();
-    const { injector, initialization } = app([
-        utils.provideOidc(params),
-        { provide: PLATFORM_ID, useValue: "server" }
-    ]);
-    await initialization.donePromise;
-    // No Router is needed: the SSR diagnostic must precede navigation or waiting for OIDC.
-    await assert.rejects(
-        runInInjectionContext(injector, () => utils.enforceLoginGuard({} as ActivatedRouteSnapshot)),
-        /enforceLoginGuard.*renderMode: RenderMode.Client.*app.routes.server.ts/
-    );
-});
-
-test("imperative getOidc rejects outside the browser", async () => {
-    const utils = oidcSpa.createUtils();
-    const { injector, initialization } = app([
-        utils.provideOidc(params),
-        { provide: PLATFORM_ID, useValue: "server" }
-    ]);
-    await initialization.donePromise;
-    assert.ok(
-        runInInjectionContext(injector, () => utils.injectOidc()).prInitialized instanceof Promise
-    );
+test("imperative access rejects outside the browser", async () => {
+    const utils = oidcSpa.withUser(anonymousFactory).createUtils();
     const previousWindow = globalThis.window;
     Reflect.deleteProperty(globalThis, "window");
     try {
@@ -959,18 +784,10 @@ test("imperative getOidc rejects outside the browser", async () => {
     }
 });
 
-test("equal user refreshes preserve the signal value and do not recompute consumers", async () => {
+test("deeply equal users preserve the signal value without recomputing consumers", async () => {
     const core = resetCore();
-    let displayName = "Alice";
-    let builds = 0;
-    const utils = oidcSpa
-        .withUser({
-            createUser: () => {
-                builds++;
-                return { displayName, roles: ["member"] };
-            }
-        })
-        .createUtils();
+    let name = "Alice";
+    const utils = oidcSpa.withUser(() => ({ name, roles: ["member"] })).createUtils();
     const { injector, initialization } = app([utils.provideOidc(params)]);
     core.ready.resolve();
     await initialization.donePromise;
@@ -978,52 +795,96 @@ test("equal user refreshes preserve the signal value and do not recompute consum
     let computations = 0;
     const label = computed(() => {
         computations++;
-        return oidc.user().displayName;
+        return oidc.user().name;
     });
     const initial = oidc.user();
     assert.equal(label(), "Alice");
-    assert.equal(await oidc.refreshUser(), initial);
-    assert.equal(builds, 2);
+    await oidc.refreshUser();
     assert.equal(oidc.user(), initial);
     assert.equal(label(), "Alice");
     assert.equal(computations, 1);
-    displayName = "Bob";
+    name = "Bob";
     await oidc.refreshUser();
     assert.equal(label(), "Bob");
     assert.equal(computations, 2);
 });
 
-test("raw mock claims remain separate from the application user", async () => {
-    const decodedIdToken = {
-        iss: "https://issuer.test",
-        sub: "mock-subject",
-        aud: "client",
-        exp: 9999999999,
-        iat: 1,
-        name: "Raw name"
-    };
-    const utils = oidcSpa
-        .withUser({
-            createUser: (): { displayName: string } => {
-                throw new Error("must not create users in mock mode");
-            },
-            user_mock: { displayName: "Application name" }
-        })
-        .createUtils();
-    const { injector, initialization } = app([
-        utils.provideOidc({
-            implementation: "mock",
-            isUserInitiallyLoggedIn: true,
-            decodedIdToken_mock: decodedIdToken
-        })
+test("undefined is a valid application user", async () => {
+    const utils = oidcSpa.withUser(() => undefined).createUtils();
+    const { injector, initialization } = app([utils.provideOidc({ mode: "mock" })]);
+    await initialization.donePromise;
+    assert.equal(
+        runInInjectionContext(injector, () => utils.injectOidc({ assert: "user logged in" })).user(),
+        undefined
+    );
+});
+
+test("unexpected non-blocking initialization errors reach Angular's ErrorHandler", async () => {
+    const core = resetCore();
+    const cause = new Error("unexpected core failure");
+    core.error = cause;
+    const errors: unknown[] = [];
+    const utils = oidcSpa.withUser(anonymousFactory).withNonBlockingRendering().createUtils();
+    const { initialization } = app([
+        utils.provideOidc(params),
+        { provide: ErrorHandler, useValue: { handleError: (error: unknown) => errors.push(error) } }
     ]);
     await initialization.donePromise;
-    const oidc = await utils.getOidc({ assert: "user logged in" });
-    assert.deepEqual(oidc.getDecodedIdToken(), decodedIdToken);
-    assert.equal((await oidc.getUser()).user.displayName, "Application name");
-    assert.equal(
-        runInInjectionContext(injector, () => utils.injectOidc({ assert: "user logged in" })).user()
-            .displayName,
-        "Application name"
+    core.ready.resolve();
+    await tick();
+    assert.deepEqual(errors, [cause]);
+});
+
+for (const failure of ["configs", "user"] as const) {
+    test(`non-blocking auto-login exposes ${failure} errors after the gate resolves`, async () => {
+        const core = resetCore();
+        const cause = new Error("initialization failed");
+        const utils = oidcSpa
+            .withAutoLogin()
+            .withNonBlockingRendering()
+            .withUser(() => {
+                throw cause;
+            })
+            .createUtils();
+        const { injector, initialization } = app([
+            utils.provideOidc(
+                failure === "configs"
+                    ? async () => {
+                          throw cause;
+                      }
+                    : params
+            )
+        ]);
+        const oidc = runInInjectionContext(injector, utils.injectOidc);
+        const errorSignal = runInInjectionContext(injector, utils.injectOidcInitializationError);
+        assert.throws(errorSignal, /before core authentication is ready/);
+        await initialization.donePromise;
+        core.ready.resolve();
+        await oidc.prInitialized;
+        assert.ok(errorSignal() instanceof OidcInitializationError);
+    });
+}
+
+test("a navigation cancelled before core is ready cannot redirect or install a return URL", async () => {
+    const core = resetCore();
+    const utils = oidcSpa
+        .withUser(() => "Alice")
+        .withNonBlockingRendering()
+        .createUtils();
+    let navigation: { id: number } | null = { id: 1 };
+    const events = new Subject();
+    const { injector } = app([
+        utils.provideOidc(params),
+        { provide: Router, useValue: { events, getCurrentNavigation: () => navigation } }
+    ]);
+    const guard = runInInjectionContext(injector, () =>
+        utils.enforceLoginGuard(route, routerState("/cancelled"))
     );
+    navigation = null;
+    core.ready.resolve();
+    assert.equal(await guard, true);
+    const oidc = await utils.getOidc({ assert: "user logged in" });
+    await oidc.getTokens({ scopes: ["email"] });
+    assert.equal(core.tokenRequests.slice(-1)[0]?.returnToUrl, undefined);
+    assert.equal(core.loginParams, undefined);
 });

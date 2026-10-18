@@ -1,104 +1,155 @@
 # Angular user abstraction
 
-The Angular adapter uses a builder and a typed injection token. The injected value is a plain object; applications do not subclass a service.
+The Angular adapter follows the React SPA adapter's user model, runtime configuration, and imperative core API. Angular uses signals for reactive values and a provider for runtime configuration.
 
 ## Configure the adapter
 
 ```ts
 // services/oidc.service.ts
 import { oidcSpa } from 'oidc-spa/angular';
-import { createUser, user_mock, type User } from './oidc.user';
 
-export const { Oidc } = oidcSpa
-  .withUser<User>({ createUser, user_mock })
-  // .withAutoLogin()
-  // .withNonBlockingRendering()
-  .createUtils();
+export type User = { displayName: string };
+
+export const { provideOidc, injectOidc, getOidc, createOidcInterceptor, enforceLoginGuard } =
+  oidcSpa
+    .withUser<User>(({ isMock, idTokenClaims }) => {
+      if (isMock) return { displayName: 'John Doe' };
+      if (typeof idTokenClaims.name !== 'string') throw new Error('Missing name claim');
+      return { displayName: idTokenClaims.name };
+    })
+    .withNonBlockingRendering()
+    .createUtils();
 ```
 
-Register `Oidc.provide({ issuerUri, clientId, ... })` in application providers. It also accepts an async callback that can inject services before its first `await`, as shown in [app.config.ts](src/app/app.config.ts). Configuration requests must pass through the interceptor without waiting for authentication.
+`withUser` takes the user factory directly, as in React. The factory receives `isMock`, `idTokenClaims`, `accessToken`, `fetchUserInfo`, provider configuration, and `user_current`. Handle mock users inside the factory with `isMock`; the same factory runs in both modes, including refreshes.
 
-`Oidc.provideMock({ isUserInitiallyLoggedIn: true })` uses `user_mock` directly, without invoking `createUser`. A `user_mock` passed to `Oidc.provideMock` overrides the builder default. With auto-login, the mock starts logged in.
+Register runtime configuration in `app.config.ts`:
 
-`Oidc` is both the injection token and the namespace for `provide`, `provideMock`, `createBearerInterceptor`, and `enforceLoginGuard`. Import it wherever you configure or consume authentication. `inject(Oidc)` and `injector.get(Oidc)` infer the application user type without application-side casts.
+```ts
+provideOidc({
+  mode: 'real',
+  issuerUri: 'https://issuer.example.com/realms/example',
+  clientId: 'my-app',
+});
+```
+
+`provideOidc` also accepts a synchronous or asynchronous configuration getter. It runs in Angular's injection context, so inject services before the first `await`. The kitchen sink loads `/api/oidc-config` this way. Configuration requests must return `false` from the interceptor predicate before reading authentication state.
+
+Use `provideOidc({ mode: 'mock' })` to start signed in without an identity provider. Set `isUserInitiallyLoggedIn: false` for an anonymous session. Optional `idTokenClaims_mock`, `idToken_mock`, `accessToken_mock`, `refreshToken_mock`, `issuerUri_mock`, and `clientId_mock` override the mock's inputs.
+
+In `main.ts`, call `oidcEarlyInit({ BASE_URL: ... })` before dynamically importing Angular. The adapter no longer supplies the base URL to core during initialization.
 
 ## Read and refresh the user
 
 ```ts
-readonly oidc = inject(Oidc);
+readonly oidc = injectOidc();
 
 async saveProfile() {
-    await this.profileService.save();
-    await this.oidc.refreshUser();
+  await this.profileService.save();
+  await this.oidc.refreshUser!();
 }
 ```
 
+On a guarded route, use `injectOidc({ assert: 'user logged in' })` to obtain the logged-in type without optional methods. The login guard waits for the application user before activating the component.
+
 ```html
-@defer (when oidc.prInitialized | async) { @if (oidc.initializationError) {
-<p role="alert">{{ oidc.initializationError.message }}</p>
+@defer (when oidc.prInitialized | async) { @if (oidc.initializationError; as error) {
+<p role="alert">{{ error.message }}</p>
 } @else if (oidc.isUserLoggedIn) {
-<p>Hello {{ oidc.$user().displayName }}</p>
+<p>Hello {{ oidc.user().displayName }}</p>
 } @else {
-<button (click)="oidc.login()">Log in</button>
+<button (click)="oidc.login({})">Log in</button>
 } } @placeholder {
 <p>Loading authentication...</p>
 }
 ```
 
-Include Angular's `AsyncPipe` in the component imports for this template. Default rendering waits for initialization. `.withNonBlockingRendering()` renders immediately, so gate user-dependent UI as above. `prInitialized` settles on success and handled authentication or initial-user failures; check `initializationError` before reading the user. Configuration errors and unexpected adapter/core errors propagate from initialization instead of being converted into `OidcInitializationError`. Authentication getters alone do not guarantee that the user model is ready.
+Include `AsyncPipe` in the component imports. By default, the application initializer waits for authentication and the first user. `.withNonBlockingRendering()` lets the application render immediately; gate authentication-dependent UI as above. `prInitialized` remains pending during SSR, leaving the placeholders visible on the server.
 
-`$user()` is a read-only signal. `user$` replays the current user to RxJS subscribers and exposes `getValue()`. Subscriptions made during initialization wait for the first user; anonymous or unconfigured user streams complete without emitting. An initial user-build failure errors the stream. Synchronous user reads before readiness, while anonymous, or without user configuration throw an explanatory error.
+`user()` and `autoLogoutState()` are read-only signals. `refreshUser()` returns `Promise<void>`: core renews tokens, recomputes the user, and notifies the signal when the resulting user changes. Routine token rotation with unchanged meaningful claims does not rebuild the user. Deeply equal results retain their identity. A failed later refresh rejects while retaining the previous user.
 
-For imperative core-style access, `await oidc.getUser()` returns `{ user, subscribeToUserChange, refreshUser }`. The returned `user` is a snapshot; use the signal or subscription for updates. Core owns meaningful token-change detection and refresh behavior, as in React. Routine rotation-only changes do not rebuild the user. `refreshUser()` renews tokens and rebuilds the real user; mocks return the configured user. A later `createUser` failure retains the previous model according to core's behavior.
+Runtime configuration failures and initial user failures settle `prInitialized` and expose an `OidcInitializationError`. Without auto-login, the injected UI reports a logged-out state with `initializationError`. A user factory failure can leave core authentication usable; `getOidc()` still exposes tokens independently of the UI's failed user model. Unexpected core or adapter errors propagate through Angular initialization, or through Angular's `ErrorHandler` in non-blocking mode.
+
+## Use the imperative client
+
+```ts
+const oidc = await getOidc({ assert: 'user logged in' });
+const user = await oidc.getUser();
+const tokens = await oidc.getTokens();
+const claims = tokens.idTokenClaims;
+const accessToken = await oidc.getAccessToken({
+  authorizationParams: { audience: 'another-api' },
+});
+const { unsubscribeFromUserChange } = oidc.subscribeToUserChange(({ user }) => {
+  console.log(user.displayName);
+});
+```
+
+`getOidc()` returns `Oidc_client<User>`, the same core API used by React SPA. It does not wait for initial user construction to finish. It includes `getTokens`, `getAccessToken`, `subscribeToTokensChange`, `getUser`, `subscribeToUserChange`, `refreshUser`, and `subscribeToAutoLogoutState`. The adapter releases imperative subscriptions when the application injector is destroyed; callers can unsubscribe sooner.
+
+Use `login({ returnToUrl, authorizationParams, transformAuthorizationUrl })`, `logout({ returnToUrl })`, and `startAuthorization({ returnToUrl, authorizationParams })`. Inspect `authorizationResult` after returning from an authorization round trip. `autoLogoutState()` forwards core's warning state, including `resetAutoLogoutCountdown()` when a warning is displayed.
+
+When a guard runs before the browser URL changes, parameterized token requests inherit the route's destination as their return URL unless an explicit `returnToUrl` is supplied. The override clears when navigation ends, fails, is cancelled, or is skipped.
 
 ## Call an authenticated API inside createUser
 
-Every real invocation of `createUser`, including refreshes, runs in the provider's Angular injection context. Inject dependencies before the first `await`; use those service references afterward.
+Every invocation of the factory runs in the provider's Angular injection context, including mock mode and refreshes. Inject dependencies before the first `await`:
 
 ```ts
-// services/oidc.user.ts
 import { inject } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
-import type { CreateUser } from 'oidc-spa/angular';
+import type { CreateClientUser } from 'oidc-spa/angular';
 import { UserApi } from './user-api.service';
 
-export type User = { displayName: string };
-
-export const createUser: CreateUser<User> = async () => {
-  const api = inject(UserApi);
-  return firstValueFrom(api.getUser());
+export const createUser: CreateClientUser<User> = async ({ isMock }) => {
+  if (isMock) return { displayName: 'John Doe' };
+  return firstValueFrom(inject(UserApi).getUser());
 };
-
-export const user_mock: User = { displayName: 'John Doe' };
 ```
 
-`UserApi.getUser()` can use `HttpClient` with `INCLUDE_ACCESS_TOKEN_IF_LOGGED_IN` or `REQUIRE_ACCESS_TOKEN`, just like the existing todo service. Validate the response in the API service or `createUser` before returning the application model. The HTTP context tokens are application-defined; the interceptor callback in `app.config.ts` gives them their behavior.
+Core authentication becomes available before user construction. `UserApi` can therefore use the same authenticated `HttpClient` interceptor as other services. An interceptor predicate that reads pending authentication state is retried once core is ready, in Angular's injection context. A predicate that immediately returns `false` bypasses authentication.
 
-The startup sequence is:
+Requests that build the initial user must not read that user in `shouldInjectAccessToken`. Do not await `getUser()`, `refreshUser()`, or `prInitialized` inside the factory: those operations wait for user construction. Acquiring tokens through `getOidc()` is supported.
 
-1. Load runtime configuration and establish core authentication.
-2. Make authentication getters and `getAccessToken()` usable.
-3. Build the user, including any authenticated HTTP requests.
-4. Publish the user and settle `prInitialized`.
+## Auto-login errors
 
-Thus the interceptor can call `inject(Oidc).isUserLoggedIn` and acquire a token during step 3, even with blocking rendering. It never waits for the user model to obtain a token. If a callback reads core state before step 2, it is re-evaluated once core is ready, in the interceptor's injection context. Keep the callback free of side effects. A callback that returns `false` immediately bypasses authentication.
+With `.withAutoLogin()`, `injectOidc()` and `getOidc()` have logged-in return types. `enforceLoginGuard` is omitted. The utilities instead expose `injectOidcInitializationError()`, the Angular equivalent of React's `OidcInitializationErrorGate`:
 
-Requests needed to construct the initial user cannot depend on that user in `shouldInjectAccessToken`. Also do not await `getUser()`, `refreshUser()`, or `prInitialized` from inside `createUser`: that would wait for the operation currently being executed.
+```ts
+readonly oidc = injectOidc();
+readonly initializationError = injectOidcInitializationError();
+```
 
-## Migrate from the class adapter
+```html
+@defer (when oidc.prInitialized | async) { @if (initializationError(); as error) {
+<p role="alert">{{ error.message }}</p>
+} @else {
+<p>Hello {{ oidc.user().displayName }}</p>
+} }
+```
 
-| Previous API                                     | New API                                        |
-| ------------------------------------------------ | ---------------------------------------------- |
-| Extend `AbstractOidcService<DecodedIdToken>`     | Configure `oidcSpa.withUser<User>(...)`        |
-| Override `autoLogin`                             | `.withAutoLogin()`                             |
-| Override `providerAwaitsInitialization = false`  | `.withNonBlockingRendering()`                  |
-| `$decodedIdToken()` / `decodedIdToken$`          | `$user()` / `user$`                            |
-| `decodedIdTokenSchema` and mocked decoded tokens | Validation inside `createUser` and `user_mock` |
+Read the error signal before rendering authenticated UI. As in React, imperative `getOidc()` stays pending if initialization fails before core can return a client.
 
-Continue injecting `Oidc` with Angular's `inject()` function. Pass both `(route, state)` when composing `Oidc.enforceLoginGuard` inside another guard so the complete target URL is available.
+## Breaking changes from the previous Angular adapter
 
-This adapter remains browser-oriented. Its provider skips OIDC initialization during server rendering; gate browser-dependent content. This change does not introduce Angular SSR authentication.
+| Previous API                                      | Current API                                               |
+| ------------------------------------------------- | --------------------------------------------------------- |
+| `withUser({ createUser, user_mock })`             | `withUser(({ isMock, ...params }) => ...)`                |
+| `ParamsOfProvide` and `implementation`            | `RuntimeConfigs` and `mode`                               |
+| `InjectOidc.Oidc` / `GetOidc.Oidc`                | `Oidc_angular` / `Oidc_client`                            |
+| `decodedIdToken`                                  | `idTokenClaims`                                           |
+| `getDecodedIdToken()`                             | `(await getTokens()).idTokenClaims`                       |
+| `subscribeToTokenRotation()`                      | `subscribeToTokensChange()`                               |
+| `(await getUser()).user`                          | `await getUser()`                                         |
+| Subscriptions and refresh returned by `getUser()` | Methods directly on the client                            |
+| `goToAuthServer` / `backFromAuthServer`           | `startAuthorization` / `authorizationResult`              |
+| `redirectUrl` / `redirectTo`                      | `returnToUrl`                                             |
+| `extraQueryParams` / `extraTokenParams`           | `authorizationParams` / `tokenParams`                     |
+| `transformUrlBeforeRedirect`                      | `transformAuthorizationUrl`                               |
+| `doesCurrentHrefRequiresAuth`                     | `doesCurrentHrefEnforceLogin`                             |
+| `sessionRestorationMethod: 'full page redirect'`  | `'foreground redirect'`                                   |
+| User returned by `refreshUser()`                  | `Promise<void>`; read the signal or `getUser()` afterward |
 
-## Verify this branch
+Runtime configuration remains in `provideOidc` in `app.config.ts`. Pass both `(route, state)` when composing `enforceLoginGuard` so the complete target URL is available. Protected routes must use `RenderMode.Client` in `app.routes.server.ts`; public content can render on the server with deferred authentication UI.
 
-From the repository root, run `yarn test:angular` to check type inference and Angular integration behavior. The tests use Angular's injector, application initializer, and HTTP testing backend with core's real user lifecycle. Only the OIDC transport is replaced by a deterministic fixture; they do not require credentials or a live identity provider.
+Run `yarn test:angular` from the repository root for public API type checks and Angular integration tests. The tests use Angular's injector and HTTP testing backend with core's real user lifecycle; only the OIDC transport is replaced.

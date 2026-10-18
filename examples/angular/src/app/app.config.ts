@@ -19,7 +19,7 @@ export const appConfig: ApplicationConfig = {
     ),
     provideRouter(routes),
     provideOidc({
-      implementation: 'real',
+      mode: 'real',
       issuerUri: 'https://phasetwo.oidc-spa.dev/realms/demo-realm',
       clientId: 'example-app',
       debugLogs: true,

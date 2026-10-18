@@ -4,31 +4,33 @@ import type { Request, Response } from 'express';
 
 // Follows the Express guide: validate the token, then expose the application's user.
 // https://docs.oidc-spa.dev/integration-guides/backend-token-validation/express.js
-const { bootstrapAuth, validateAndDecodeAccessToken } = oidcSpa
-  .withExpectedDecodedAccessTokenShape({
-    decodedAccessTokenSchema: z.object({
+const { bootstrapAuth, validateAndGetAccessTokenClaims } = oidcSpa
+  .withAccessTokenClaimsSchema(
+    z.object({
       sub: z.string(),
       name: z.string(),
       email: z.string().optional(),
-    }),
-  })
+    })
+  )
   .createUtils();
 
 bootstrapAuth(
   process.env['OIDC_USE_MOCK'] === 'true'
     ? {
-        implementation: 'mock',
-        behavior: 'use static identity',
-        decodedAccessToken_mock: {
+        mode: 'mock',
+        accessTokenClaims_mock: {
           sub: 'mock-user',
           name: 'John Doe',
           email: 'john.doe@example.com',
         },
       }
     : {
-        implementation: 'real',
+        mode: 'real',
         issuerUri: process.env['OIDC_ISSUER_URI']!,
-        expectedAudience: process.env['OIDC_ACCESS_TOKEN_EXPECTED_AUDIENCE']!,
+        accessTokenValidation: {
+          method: 'offline JWT validation',
+          expectedAudience: process.env['OIDC_ACCESS_TOKEN_EXPECTED_AUDIENCE']!,
+        },
       }
 );
 
@@ -50,7 +52,7 @@ export function isAnonymousRequest(req: Request) {
 export async function getUser(params: { req: Request; res: Response }): Promise<User> {
   const { req, res } = params;
 
-  const bail = (statusCode: 400 | 401) => {
+  const bail = (statusCode: 400 | 401 | 500 | 503) => {
     res.sendStatus(statusCode);
     return new Promise<never>(() => {});
   };
@@ -69,15 +71,13 @@ export async function getUser(params: { req: Request; res: Response }): Promise<
     return bail(400);
   }
 
-  const { isSuccess, debugErrorMessage, decodedAccessToken } = await validateAndDecodeAccessToken(
-    requestAuthContext.accessTokenAndMetadata
-  );
+  const result = await validateAndGetAccessTokenClaims(requestAuthContext.accessTokenAndMetadata);
 
-  if (!isSuccess) {
-    console.warn(debugErrorMessage);
-    return bail(401);
+  if (!result.isSuccess) {
+    console.warn(result.debugErrorMessage);
+    return bail(result.recommendedHttpErrorStatusCode);
   }
 
-  const { sub, name, email } = decodedAccessToken;
+  const { sub, name, email } = result.accessTokenClaims;
   return { id: sub, name, email };
 }

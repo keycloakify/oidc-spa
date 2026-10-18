@@ -1,20 +1,22 @@
 // Substitute only the OIDC transport. User construction/refresh uses the real core implementation.
-import type { Oidc, ParamsOfCreateOidc } from "../../src/core";
+import type { Oidc, OidcTokens, ParamsOfCreateOidc } from "../../src/core";
 import { createGetUser } from "../../src/core/createGetUser";
 import { createEvt } from "../../src/tools/Evt";
 import { OidcInitializationError } from "../../src/core/OidcInitializationError";
 import { Deferred } from "../../src/tools/Deferred";
 
+type AutoLogoutState = Parameters<Parameters<Oidc.LoggedIn["subscribeToAutoLogoutState"]>[0]>[0];
+
 export function createCoreController() {
     const ready = new Deferred<void>();
-    const tokenListeners = new Set<(tokens: Oidc.Tokens) => void>();
-    const countdownListeners = new Set<(params: { secondsLeft: number | undefined }) => void>();
-    let tokens: Oidc.Tokens = {
+    const tokenListeners = new Set<(tokens: OidcTokens) => void>();
+    const autoLogoutListeners = new Set<(state: AutoLogoutState) => void>();
+    let tokens: OidcTokens = {
         hasRefreshToken: false,
         accessToken: "access-token-1",
         accessTokenExpirationTime: Date.now() + 3600_000,
         idToken: "id-token",
-        decodedIdToken: {
+        idTokenClaims: {
             iss: "https://issuer.test",
             sub: "alice",
             aud: "client",
@@ -34,16 +36,21 @@ export function createCoreController() {
         renewals: 0,
         userSubscriptions: 0,
         params: undefined as ParamsOfCreateOidc<any, boolean> | undefined,
-        loginParams: undefined as Parameters<Oidc.NotLoggedIn["login"]>[0],
-        logoutParams: undefined as Parameters<Oidc.LoggedIn["logout"]>[0] | undefined,
+        tokenRequests: [] as (Oidc.ParamsOfGetToken | undefined)[],
+        loginParams: undefined as Parameters<Oidc.NotLoggedIn["login"]>[0] | undefined,
+        logoutParams: undefined as Parameters<Oidc.LoggedIn["logout"]>[0],
+        authorizationParams: undefined as Parameters<Oidc.LoggedIn["startAuthorization"]>[0],
         tokenListeners,
-        countdownListeners,
+        autoLogoutListeners,
+        emitAutoLogout(state: AutoLogoutState) {
+            autoLogoutListeners.forEach(next => next(state));
+        },
         rotate(name?: string) {
             tokens = {
                 ...tokens,
                 accessToken: `access-token-${++controller.renewals + 1}`,
-                decodedIdToken: {
-                    ...tokens.decodedIdToken,
+                idTokenClaims: {
+                    ...tokens.idTokenClaims,
                     iat: controller.renewals + 1,
                     ...(name === undefined ? {} : { name })
                 }
@@ -63,9 +70,9 @@ export function createCoreController() {
             const common = {
                 issuerUri: params.issuerUri,
                 clientId: params.clientId,
-                validRedirectUri: "https://app.test/"
+                validRedirectUri: "https://app.test/base/"
             };
-            if (!controller.loggedIn || initializationError !== undefined)
+            if (!controller.loggedIn || initializationError !== undefined) {
                 return {
                     ...common,
                     isUserLoggedIn: false,
@@ -75,28 +82,39 @@ export function createCoreController() {
                         return new Promise<never>(() => {});
                     }
                 };
-            const { getUser } = createGetUser({
+            }
+            const renewTokens = async () => controller.rotate();
+            const userMethods = createGetUser({
                 ...common,
                 createUser: params.createUser,
-                getCurrentTokens: () => tokens,
+                getTokens: async () => tokens,
                 evtTokensChange,
-                renewTokens: async () => controller.rotate(),
-                oidcMetadata: {}
+                renewTokens,
+                oidcProviderMetadata: {}
             });
             return {
                 ...common,
+                ...userMethods,
                 isUserLoggedIn: true,
-                getTokens: async () => tokens,
+                getTokens: async params => {
+                    controller.tokenRequests.push(params);
+                    return tokens;
+                },
                 getAccessToken: async () => tokens.accessToken,
-                getDecodedIdToken: () => tokens.decodedIdToken,
-                renewTokens: async () => controller.rotate(),
+                renewTokens,
                 logout: async params => {
                     controller.logoutParams = params;
                     return new Promise<never>(() => {});
                 },
-                goToAuthServer: async () => new Promise<never>(() => {}),
+                startAuthorization: async params => {
+                    controller.authorizationParams = params;
+                    return new Promise<never>(() => {});
+                },
                 isNewBrowserSession: true,
-                backFromAuthServer: undefined,
+                authorizationResult: {
+                    authorizationParams: { kc_action: "UPDATE_PASSWORD" },
+                    response: { kc_action_status: "success" }
+                },
                 subscribeToTokensChange: next => {
                     tokenListeners.add(next);
                     return {
@@ -105,27 +123,21 @@ export function createCoreController() {
                         }
                     };
                 },
-                subscribeToAutoLogoutCountdown: next => {
-                    countdownListeners.add(next);
+                subscribeToAutoLogoutState: next => {
+                    autoLogoutListeners.add(next);
                     return {
-                        unsubscribeFromAutoLogoutCountdown: () => {
-                            countdownListeners.delete(next);
+                        unsubscribeFromAutoLogoutState: () => {
+                            autoLogoutListeners.delete(next);
                         }
                     };
                 },
-                getUser: async () => {
-                    const result = await getUser();
+                subscribeToUserChange: next => {
+                    controller.userSubscriptions++;
+                    const sub = userMethods.subscribeToUserChange(next);
                     return {
-                        ...result,
-                        subscribeToUserChange: next => {
-                            controller.userSubscriptions++;
-                            const sub = result.subscribeToUserChange(next);
-                            return {
-                                unsubscribeFromUserChange: () => {
-                                    controller.userSubscriptions--;
-                                    sub.unsubscribeFromUserChange();
-                                }
-                            };
+                        unsubscribeFromUserChange: () => {
+                            controller.userSubscriptions--;
+                            sub.unsubscribeFromUserChange();
                         }
                     };
                 }

@@ -53,19 +53,21 @@
   </div>
 
   @defer (when oidc.prInitialized | async) {
-    @if (oidc.isUserLoggedIn) {
+    @if (oidc.initializationError; as error) {
+      <p role="alert">Authentication unavailable: {{ error.message }}</p>
+    } @else if (oidc.isUserLoggedIn) {
       <div>
         <a href="{{ accountConsoleUrl }}">Hello {{ oidc.user().displayName }}</a>
         &nbsp; &nbsp;
-        <button (click)="oidc.logout({ redirectTo: 'home' })">Logout</button>
+        <button (click)="oidc.logout({ returnToUrl: oidc.validRedirectUri })">Logout</button>
       </div>
     } @else {
       <div>
-        <button (click)="oidc.login()">Login</button>
+        <button (click)="oidc.login({})">Login</button>
         <button
           (click)="
             oidc.login({
-              transformUrlBeforeRedirect: keycloakUtils.transformUrlBeforeRedirectForRegister,
+              transformAuthorizationUrl: keycloakUtils.transformAuthorizationUrl_register,
             })
           "
         >
@@ -103,6 +105,7 @@
     >
       <div>
         <p>Are you still there?</p>
+        <button (click)="autoLogoutState.resetAutoLogoutCountdown()">Stay signed in</button>
         <p>You will be logged out in {{ autoLogoutState.secondsLeftBeforeAutoLogout }}</p>
       </div>
     </div>
