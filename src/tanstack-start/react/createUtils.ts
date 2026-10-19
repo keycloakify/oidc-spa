@@ -939,11 +939,10 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
                     return { isSuccess: false };
                 }
 
-                assert("server" in runtimeConfigs);
-
-                if (
-                    runtimeConfigs.mode === "real" &&
-                    (!runtimeConfigs.issuerUri ||
+                if (runtimeConfigs.mode === "real") {
+                    assert("server" in runtimeConfigs);
+                    if (
+                        !runtimeConfigs.issuerUri ||
                         (() => {
                             switch (runtimeConfigs.server.accessTokenValidationMethod) {
                                 case "introspection endpoint":
@@ -956,20 +955,21 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
                                 default:
                                     assert<Equals<typeof runtimeConfigs.server, never>>;
                             }
-                        })())
-                ) {
-                    throw new Error(
-                        [
-                            "oidc-spa: Incorrect configuration provided:\n",
-                            JSON.stringify(runtimeConfigs, null, 2),
-                            ...(missingEnvNames.size === 0
-                                ? []
-                                : [
-                                      "\nYou probably forgot to define the environnement variables:",
-                                      Array.from(missingEnvNames).join(", ")
-                                  ])
-                        ].join(" ")
-                    );
+                        })()
+                    ) {
+                        throw new Error(
+                            [
+                                "oidc-spa: Incorrect configuration provided:\n",
+                                JSON.stringify(runtimeConfigs, null, 2),
+                                ...(missingEnvNames.size === 0
+                                    ? []
+                                    : [
+                                          "\nYou probably forgot to define the environnement variables:",
+                                          Array.from(missingEnvNames).join(", ")
+                                      ])
+                            ].join(" ")
+                        );
+                    }
                 }
 
                 switch (runtimeConfigs.mode) {

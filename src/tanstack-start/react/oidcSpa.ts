@@ -75,6 +75,13 @@ function createOidcSpa<User_client, User_server, AutoLogin extends boolean>(para
                 getRuntimeConfigsOrRuntimeConfigs: params.getRuntimeConfigsOrRuntimeConfigs
             }) as any,
         // @ts-expect-error
+        withRuntimeConfigs: getRuntimeConfigsOrRuntimeConfigs =>
+            createOidcSpa({
+                autoLogin: params.autoLogin,
+                createClientUser: params.createClientUser,
+                createServerUser: params.createServerUser,
+                getRuntimeConfigsOrRuntimeConfigs
+            }) as any,
         createUtils: () => {
             assert(params.createClientUser !== undefined);
             assert(params.getRuntimeConfigsOrRuntimeConfigs !== undefined);
