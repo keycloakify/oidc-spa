@@ -72,7 +72,23 @@ export function initializeExternalRedirectUrl(params: {
                 }
 
                 if (persistLaunchUrl) {
-                    await setExternalRedirectUrl({ configId, url, storageAdapter, tokenStorageAdapter });
+                    // iOS can report the warm callback again via getLaunchUrl() after a reload.
+                    // Reuse its fresh, non-superseded record without renewing its lifetime or
+                    // writing a supersession marker that a duplicate handoff could leave behind.
+                    const persistedUrl = await peekExternalRedirectUrl({
+                        configId,
+                        storageAdapter,
+                        tokenStorageAdapter
+                    });
+
+                    if (persistedUrl !== url) {
+                        await setExternalRedirectUrl({
+                            configId,
+                            url,
+                            storageAdapter,
+                            tokenStorageAdapter
+                        });
+                    }
                 } else {
                     externalRedirectUrlByConfigId_memory.set(configId, {
                         url,

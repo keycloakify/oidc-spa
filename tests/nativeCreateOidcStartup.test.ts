@@ -104,6 +104,7 @@ async function runStartup({
     stopAfterRestoredUser = false,
     stateAction = "login",
     persistAcceptedLaunchCallbackToTokenStorage = false,
+    persistedCallback,
     failCallbackWrite = false
 }: {
     callback?: string;
@@ -117,6 +118,7 @@ async function runStartup({
     stopAfterRestoredUser?: boolean;
     stateAction?: "login" | "logout";
     persistAcceptedLaunchCallbackToTokenStorage?: boolean;
+    persistedCallback?: string;
     failCallbackWrite?: boolean;
 } = {}) {
     const configId = `https://issuer.example:client-${++scenarioNumber}`;
@@ -135,6 +137,12 @@ async function runStartup({
     ]);
     let userRemovalAttempts = 0;
     if (outbound) tokenEntries.set("outbound-proof", "non-authorizing-proof");
+    if (persistedCallback !== undefined) {
+        tokenEntries.set(
+            `oidc-spa:external-redirect-url:${configId}`,
+            JSON.stringify({ url: persistedCallback, createdAt: Date.now() - 1_000 })
+        );
+    }
     if (explicitlyLoggedOut) {
         stateEntries.set(
             `oidc-spa:auth-state:${configId}`,
@@ -462,6 +470,23 @@ test(
         assert.equal(events.at(-1), "history.replaceState");
     }
 );
+
+test("repeated iOS launch callback reaches processing without rewriting the active handoff", async () => {
+    const { events, outcome } = await runStartup({
+        callback: `${callbackBase}?code=code&state=${state}`,
+        persistedCallback: `${callbackBase}?code=code&state=${state}`,
+        validState: true,
+        persistAcceptedLaunchCallbackToTokenStorage: true,
+        failCallbackWrite: true
+    });
+
+    assert.ok(events.includes("stateStore.getItem"));
+    assert.ok(events.includes("token.getItem"));
+    assert.equal(events.includes("redirect.setItem"), false);
+    assert.equal(events.includes("length"), false);
+    assert.equal(outcome?.message, "STOP_AFTER_STARTUP_DECISION");
+    assert.equal(events.at(-1), "history.replaceState");
+});
 
 test("failed opted-in callback persistence falls back to the protected user-store scan", async () => {
     const originalWarn = console.warn;

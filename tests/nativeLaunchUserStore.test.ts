@@ -8,6 +8,8 @@ let launchUrl: string | undefined;
 let appUrlOpenListener: ((event: { url: string }) => Promise<void>) | undefined;
 let browserOpenCalls: string[] = [];
 let browserOpenError: Error | undefined;
+let platform = "android";
+let browserCloseCalls = 0;
 let browserListenerRemovals = 0;
 let appListenerRemovals = 0;
 const localEntries = new Map<string, string>();
@@ -50,7 +52,9 @@ vi.mock("@capacitor/browser", () => ({
                 browserListenerRemovals++;
             }
         }),
-        close: async () => {},
+        close: async () => {
+            browserCloseCalls++;
+        },
         open: async ({ url }: { url: string }) => {
             browserOpenCalls.push(url);
             if (browserOpenError !== undefined) throw browserOpenError;
@@ -58,7 +62,7 @@ vi.mock("@capacitor/browser", () => ({
     }
 }));
 vi.mock("@capacitor/core", () => ({
-    Capacitor: { getPlatform: async () => "android" }
+    Capacitor: { getPlatform: async () => platform }
 }));
 
 const { CapacitorNavigator } = await import("../src/capacitor/CapacitorNavigator");
@@ -638,6 +642,216 @@ test("appUrlOpen still persists the callback and reloads the webview", async () 
         cleanupExternalRedirectUrlContext({ configId });
     }
 });
+
+test("iOS reload reuses the persisted warm callback without a second handoff write", async () => {
+    const configId = "native-ios-warm-reload";
+    const storage = makeStorage(configId);
+    const markerStorage = makeStorage(`${configId}-marker`);
+    const redirectKey = `oidc-spa:external-redirect-url:${configId}`;
+    const markerKey = `oidc-spa:superseded-external-redirect-url:${configId}`;
+    const warnings: BaseNavigatorWarning[] = [];
+    const previousPlatform = platform;
+    const initialBrowserCloseCalls = browserCloseCalls;
+    let reloads = 0;
+    testGlobals.window = { location: { reload: () => reloads++ } };
+    platform = "ios";
+    launchUrl = undefined;
+
+    const initialize = (navigator: InstanceType<typeof CapacitorNavigator>) =>
+        navigator.initialize({
+            configId,
+            callbackUrl,
+            tokenStorageAdapter: storage,
+            storageAdapter: markerStorage,
+            isValidForCurrentFlow: async url => url === callbackWithCode,
+            onWarning: warning => warnings.push(warning)
+        });
+
+    try {
+        const navigator = new CapacitorNavigator({
+            callbackUrlPolicy: "strict",
+            persistAcceptedLaunchCallbackToTokenStorage: true
+        });
+        assert.equal(await initialize(navigator), false);
+        await navigator.prepare({});
+        await appUrlOpenListener!({ url: callbackWithCode });
+
+        assert.equal(reloads, 1);
+        assert.equal(browserCloseCalls, initialBrowserCloseCalls + 1);
+        const persistedValue = storage.entries.get(redirectKey);
+        assert.ok(persistedValue);
+
+        // A WebView reload loses the JS context, but iOS still returns the last opened URL.
+        cleanupExternalRedirectUrlContext({ configId });
+        launchUrl = callbackWithCode;
+        storage.operations.length = 0;
+        markerStorage.operations.length = 0;
+        storage.setItem = async () => {
+            throw new Error("An authentication callback is already active.");
+        };
+
+        assert.equal(
+            await initialize(
+                new CapacitorNavigator({
+                    callbackUrlPolicy: "strict",
+                    persistAcceptedLaunchCallbackToTokenStorage: true
+                })
+            ),
+            true
+        );
+        assert.equal(storage.entries.get(redirectKey), persistedValue);
+        assert.equal(markerStorage.entries.has(markerKey), false);
+        assert.deepEqual(storage.operations, ["getItem"]);
+        assert.deepEqual(markerStorage.operations, ["getItem"]);
+        assert.equal(
+            await peekExternalRedirectUrl({
+                configId,
+                tokenStorageAdapter: storage,
+                storageAdapter: markerStorage
+            }),
+            callbackWithCode
+        );
+        assert.deepEqual(warnings, []);
+    } finally {
+        platform = previousPlatform;
+        launchUrl = undefined;
+        delete testGlobals.window;
+        appUrlOpenListener = undefined;
+        cleanupExternalRedirectUrlContext({ configId });
+    }
+});
+
+test("an identical persisted launch URL still requires a valid current OIDC state", async () => {
+    const configId = "native-repeated-launch-invalid-state";
+    const storage = makeStorage(configId);
+    const redirectKey = `oidc-spa:external-redirect-url:${configId}`;
+    const persistedValue = JSON.stringify({ url: callbackWithCode, createdAt: Date.now() });
+    storage.entries.set(redirectKey, persistedValue);
+    launchUrl = callbackWithCode;
+    const warnings: BaseNavigatorWarning[] = [];
+    const originalWarn = console.warn;
+    console.warn = () => {};
+
+    try {
+        const navigator = new CapacitorNavigator({
+            callbackUrlPolicy: "strict",
+            persistAcceptedLaunchCallbackToTokenStorage: true
+        });
+        assert.equal(
+            await navigator.initialize({
+                configId,
+                callbackUrl,
+                tokenStorageAdapter: storage,
+                isValidForCurrentFlow: async () => false,
+                onWarning: warning => warnings.push(warning)
+            }),
+            false
+        );
+        assert.deepEqual(storage.operations, []);
+        assert.equal(storage.entries.get(redirectKey), persistedValue);
+        assert.equal(warnings[0]?.code, "CAPACITOR_CALLBACK_STATE_REJECTED");
+    } finally {
+        console.warn = originalWarn;
+        launchUrl = undefined;
+        cleanupExternalRedirectUrlContext({ configId });
+    }
+});
+
+test("a different launch callback with the same state cannot reuse the old callback", async () => {
+    const configId = "native-repeated-launch-different-code";
+    const storage = makeStorage(configId);
+    const markerStorage = makeStorage(`${configId}-marker`);
+    const redirectKey = `oidc-spa:external-redirect-url:${configId}`;
+    const olderCallback = callbackWithCode.replace("code=code", "code=older-code");
+    const warnings: BaseNavigatorWarning[] = [];
+    storage.entries.set(redirectKey, JSON.stringify({ url: olderCallback, createdAt: Date.now() }));
+    let writeAttempts = 0;
+    storage.setItem = async () => {
+        writeAttempts++;
+        throw new Error("protected write denied");
+    };
+    launchUrl = callbackWithCode;
+    const originalWarn = console.warn;
+    console.warn = () => {};
+
+    try {
+        const navigator = new CapacitorNavigator({
+            callbackUrlPolicy: "strict",
+            persistAcceptedLaunchCallbackToTokenStorage: true
+        });
+        assert.equal(
+            await navigator.initialize({
+                configId,
+                callbackUrl,
+                tokenStorageAdapter: storage,
+                storageAdapter: markerStorage,
+                isValidForCurrentFlow: async () => true,
+                onWarning: warning => warnings.push(warning)
+            }),
+            false
+        );
+        assert.equal(writeAttempts, 1);
+        assert.equal(warnings[0]?.code, "CAPACITOR_LAUNCH_URL_INIT_FAILED");
+        assert.equal(
+            await peekExternalRedirectUrl({
+                configId,
+                tokenStorageAdapter: storage,
+                storageAdapter: markerStorage
+            }),
+            undefined
+        );
+        assert.equal(storage.entries.has(redirectKey), false);
+    } finally {
+        console.warn = originalWarn;
+        launchUrl = undefined;
+        cleanupExternalRedirectUrlContext({ configId });
+    }
+});
+
+test.each(["expired", "future", "superseded"])(
+    "an identical %s callback record is not reused on launch",
+    async reason => {
+        const configId = `native-repeated-launch-${reason}`;
+        const storage = makeStorage(configId);
+        const markerStorage = makeStorage(`${configId}-marker`);
+        const redirectKey = `oidc-spa:external-redirect-url:${configId}`;
+        const markerKey = `oidc-spa:superseded-external-redirect-url:${configId}`;
+        const createdAt =
+            reason === "expired"
+                ? Date.now() - 16 * 60_000
+                : reason === "future"
+                ? Date.now() + 60_000
+                : Date.now();
+        const persistedValue = JSON.stringify({ url: callbackWithCode, createdAt });
+        storage.entries.set(redirectKey, persistedValue);
+        if (reason === "superseded") markerStorage.entries.set(markerKey, "newer-callback");
+        launchUrl = callbackWithCode;
+
+        try {
+            const navigator = new CapacitorNavigator({
+                callbackUrlPolicy: "strict",
+                persistAcceptedLaunchCallbackToTokenStorage: true
+            });
+            assert.equal(
+                await navigator.initialize({
+                    configId,
+                    callbackUrl,
+                    tokenStorageAdapter: storage,
+                    storageAdapter: markerStorage,
+                    isValidForCurrentFlow: async () => true
+                }),
+                true
+            );
+            assert.ok(storage.operations.includes("setItem"));
+            assert.notEqual(storage.entries.get(redirectKey), persistedValue);
+            assert.equal(JSON.parse(storage.entries.get(redirectKey)!).url, callbackWithCode);
+            assert.equal(markerStorage.entries.has(markerKey), false);
+        } finally {
+            launchUrl = undefined;
+            cleanupExternalRedirectUrlContext({ configId });
+        }
+    }
+);
 
 test("unknown warm callback leaves the active login open for its real callback", async () => {
     const configId = "native-warm-unknown-state";
