@@ -3,6 +3,7 @@ import { defineConfig } from "vite";
 import viteReact from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { nitro } from "nitro/vite";
+import { oidcSpa } from "oidc-spa/vite-plugin";
 
 export default defineConfig({
     server: {
@@ -17,6 +18,16 @@ export default defineConfig({
             srcDirectory: "src"
         }),
         viteReact(),
-        nitro()
+        nitro(),
+        oidcSpa({
+            browserRuntimeFreeze: {
+                enabled: true
+                //excludes: [ "fetch", "XMLHttpRequest"]
+            },
+            DPoP: {
+                enabled: true,
+                mode: "auto"
+            }
+        })
     ]
 });
