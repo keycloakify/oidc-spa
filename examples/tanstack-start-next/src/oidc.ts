@@ -86,30 +86,73 @@ export const {
     // See: https://docs.oidc-spa.dev/features/auto-login#tanstack-start
     //.withAutoLogin()
     .withRuntimeConfigs(({ process }) => {
-        if (process.env.OIDC_USE_MOCK === "true") {
-            return {
-                mode: "mock",
-                client: {
-                    isUserInitiallyLoggedIn: true
-                }
-            };
+        switch (process.env["OIDC_PROVIDER"]) {
+            case "mock":
+                return {
+                    mode: "mock",
+                    client: {
+                        isUserInitiallyLoggedIn: true
+                    }
+                };
+            case "Keycloak":
+                return {
+                    mode: "real",
+                    issuerUri: process.env["KEYCLOAK_ISSUER_URI"],
+                    client: {
+                        clientId: process.env["KEYCLOAK_CLIENT_ID"]
+                    },
+                    server: {
+                        accessTokenValidationMethod: "offline JWT validation",
+                        expectedAccessTokenAudience:
+                            process.env["KEYCLOAK_EXPECTED_ACCESS_TOKEN_AUDIENCE"]
+                    }
+                };
+            case "Keycloak2":
+                return {
+                    mode: "real",
+                    issuerUri: process.env["KEYCLOAK2_ISSUER_URI"],
+                    client: {
+                        clientId: process.env["KEYCLOAK2_CLIENT_ID"]
+                    },
+                    server: {
+                        accessTokenValidationMethod: "introspection endpoint",
+                        clientId: process.env["KEYCLOAK2_API_CLIENT_ID"],
+                        clientSecret: process.env["KEYCLOAK2_API_CLIENT_SECRET"]
+                    }
+                };
+            case "Auth0":
+                return {
+                    mode: "real",
+                    issuerUri: process.env["AUTH0_ISSUER_URI"],
+                    client: {
+                        clientId: process.env["AUTH0_CLIENT_ID"],
+                        authorizationParams: {
+                            audience: process.env["AUTH0_API_IDENTIFIER"]
+                        },
+                        idleSessionLifetimeInSeconds: parseInt(
+                            process.env["AUTH0_SSO_SESSION_IDLE_SECONDS"]
+                        )
+                    },
+                    server: {
+                        accessTokenValidationMethod: "offline JWT validation",
+                        expectedAccessTokenAudience: process.env["AUTH0_API_IDENTIFIER"]
+                    }
+                };
+            case "EntraID":
+                return {
+                    mode: "real",
+                    issuerUri: process.env["ENTRA_ISSUER_URI"],
+                    client: {
+                        clientId: process.env["ENTRA_CLIENT_ID"],
+                        scopes: ["profile", process.env["ENTRA_API_ACCESS_SCOPE"]]
+                    },
+                    server: {
+                        accessTokenValidationMethod: "offline JWT validation",
+                        expectedAccessTokenAudience: process.env["ENTRA_API_CLIENT_ID"]
+                    }
+                };
+            default:
+                throw new Error("Unknown provider");
         }
-
-        return {
-            mode: "real",
-            issuerUri: process.env["OIDC_ISSUER_URI"],
-            client: {
-                clientId: process.env["OIDC_CLIENT__CLIENT_ID"]
-            },
-            server: {
-                accessTokenValidationMethod: "introspection endpoint",
-                clientId: process.env["OIDC_SERVER__CLIENT_ID"],
-                clientSecret: process.env["OIDC_SERVER__CLIENT_SECRET"]
-                /*
-                accessTokenValidationMethod: "offline JWT validation",
-                expectedAccessTokenAudience: process.env["OIDC_SERVER__CLIENT_ID"]
-                */
-            }
-        };
     })
     .createUtils();

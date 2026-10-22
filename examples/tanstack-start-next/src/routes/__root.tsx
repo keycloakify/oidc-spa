@@ -1,6 +1,7 @@
 /// <reference types="vite/client" />
-import { HeadContent, Link, Scripts, createRootRoute } from "@tanstack/react-router";
+import { HeadContent, Scripts, createRootRoute } from "@tanstack/react-router";
 import type { ReactNode } from "react";
+import { AppHeader } from "~/components/AppHeader";
 
 export const Route = createRootRoute({
     head: () => ({
@@ -27,19 +28,7 @@ function RootDocument({ children }: { children: ReactNode }) {
                 <HeadContent />
             </head>
             <body>
-                <nav aria-label="Main navigation">
-                    <ul>
-                        <li>
-                            <Link to="/">Home</Link>
-                        </li>
-                        <li>
-                            <Link to="/todo-list">Todo List</Link>
-                        </li>
-                        <li>
-                            <Link to="/todo-list-admin">Todo List Admin</Link>
-                        </li>
-                    </ul>
-                </nav>
+                <AppHeader />
                 <main>{children}</main>
                 <Scripts />
             </body>
