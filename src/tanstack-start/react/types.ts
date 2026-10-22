@@ -73,7 +73,7 @@ export namespace Oidc_react {
         issuerUri: string;
         clientId: string;
         validRedirectUri: string;
-        login: (params: {
+        login: (params?: {
             returnToUrl?: string;
             authorizationParams?: Record<string, string | string[] | undefined>;
             transformAuthorizationUrl?: (params: { authorizationUrl: string }) => string;
