@@ -1,36 +1,33 @@
-# TanStack Start - Basic Example
+# TanStack Start Example
 
-This is the basic TanStack Start example, demonstrating the fundamentals of building applications with TanStack Router and TanStack Start.
+A minimal TanStack Start v1 example with three unstyled pages:
 
--   [TanStack Router Docs](https://tanstack.com/router)
+-   Home: `/`
+-   Todo List: `/todo-list`
+-   Todo List Admin: `/todo-list-admin`
 
-It's deployed automagically with Netlify!
+The todo pages are placeholders for the next steps of the example.
 
--   [Netlify](https://netlify.com/)
+## Development
 
-## Start a new project based on this example
-
-To start a new project based on this example, run:
+From this directory:
 
 ```sh
-npx gitpick TanStack/router/tree/main/examples/react/start-basic start-basic
+yarn install
+yarn dev
 ```
 
-## Getting Started
+Open <http://localhost:3000>.
 
-From your terminal:
+To run against the local oidc-spa source, run this from the repository root:
 
 ```sh
-pnpm install
-pnpm dev
+yarn start-tanstack-start-next-example
 ```
 
-This starts your app in development mode, rebuilding assets on file changes.
-
-## Build
-
-To build the app for production:
+## Production
 
 ```sh
-pnpm build
+yarn build
+yarn start
 ```

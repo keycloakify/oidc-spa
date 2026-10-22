@@ -8,4 +8,7 @@
 /examples/tanstack-start/src/routeTree.gen.ts
 /examples/tanstack-start/.output
 /examples/tanstack-start/.nitro
+/examples/tanstack-start-next/src/routeTree.gen.ts
+/examples/tanstack-start-next/.output
+/examples/tanstack-start-next/.nitro
 .angular

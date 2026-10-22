@@ -1,7 +1,7 @@
 import { oidcSpa } from "oidc-spa/react-tanstack-start";
 import { z } from "zod";
 import { decodeJwt } from "oidc-spa/decode-jwt";
-import avatarFallbackSvgUrl from "./components/userPictureFallback.svg";
+import avatarFallbackSvgUrl from "./assets/userPictureFallback.svg";
 
 // App-specific user model exposed by `useOidc()`.
 // Shape it around the information the UI needs to render.
