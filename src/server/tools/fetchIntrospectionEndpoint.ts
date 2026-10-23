@@ -1,5 +1,5 @@
-import { z } from "zod";
-import { assert, id, is, type Equals } from "tsafe";
+import { z } from "../../vendor/server/zod";
+import { assert, id, is, type Equals } from "../../vendor/server/tsafe";
 
 export async function fetchIntrospectionEndpoint(params: { issuerUri: string }): Promise<string> {
     const { issuerUri } = params;

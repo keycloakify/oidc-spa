@@ -1,6 +1,6 @@
 import { createLocalJWKSet } from "../../vendor/server/jose";
-import { assert, type Equals, is } from "tsafe";
-import { z } from "zod";
+import { assert, type Equals, is } from "../../vendor/server/tsafe";
+import { z } from "../../vendor/server/zod";
 
 export type PublicSigningKeys = {
     keyResolver: ReturnType<typeof createLocalJWKSet>;
