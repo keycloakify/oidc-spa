@@ -10,12 +10,18 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AccountRouteImport } from './routes/account'
 import { Route as TodoListRouteImport } from './routes/todo-list'
 import { Route as TodoListAdminRouteImport } from './routes/todo-list-admin'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AccountRoute = AccountRouteImport.update({
+  id: '/account',
+  path: '/account',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TodoListRoute = TodoListRouteImport.update({
@@ -31,30 +37,34 @@ const TodoListAdminRoute = TodoListAdminRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/account': typeof AccountRoute
   '/todo-list': typeof TodoListRoute
   '/todo-list-admin': typeof TodoListAdminRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/account': typeof AccountRoute
   '/todo-list': typeof TodoListRoute
   '/todo-list-admin': typeof TodoListAdminRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/account': typeof AccountRoute
   '/todo-list': typeof TodoListRoute
   '/todo-list-admin': typeof TodoListAdminRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/todo-list' | '/todo-list-admin'
+  fullPaths: '/' | '/account' | '/todo-list' | '/todo-list-admin'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/todo-list' | '/todo-list-admin'
-  id: '__root__' | '/' | '/todo-list' | '/todo-list-admin'
+  to: '/' | '/account' | '/todo-list' | '/todo-list-admin'
+  id: '__root__' | '/' | '/account' | '/todo-list' | '/todo-list-admin'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AccountRoute: typeof AccountRoute
   TodoListRoute: typeof TodoListRoute
   TodoListAdminRoute: typeof TodoListAdminRoute
 }
@@ -66,6 +76,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/account': {
+      id: '/account'
+      path: '/account'
+      fullPath: '/account'
+      preLoaderRoute: typeof AccountRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/todo-list': {
@@ -87,6 +104,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AccountRoute: AccountRoute,
   TodoListRoute: TodoListRoute,
   TodoListAdminRoute: TodoListAdminRoute,
 }

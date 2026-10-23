@@ -33,13 +33,15 @@ function AuthButtonsLoggedIn() {
 
     return (
         <>
-            <img
-                src={user.avatarImgUrl}
-                alt={`${user.displayName}'s avatar`}
-                width={32}
-                height={32}
-                style={{ borderRadius: "50%", objectFit: "cover" }}
-            />
+            <Link to="/account" aria-label="Open your account">
+                <img
+                    src={user.avatarImgUrl}
+                    alt={`${user.displayName}'s avatar`}
+                    width={32}
+                    height={32}
+                    style={{ borderRadius: "50%", objectFit: "cover" }}
+                />
+            </Link>
             <button type="button" onClick={() => logout()}>
                 Logout
             </button>
