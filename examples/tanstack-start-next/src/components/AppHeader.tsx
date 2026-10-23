@@ -25,37 +25,43 @@ function AuthButtons() {
         return null;
     }
 
-    if (oidc.isUserLoggedIn) {
-        return (
-            <>
-                <img
-                    src={oidc.user.avatarImgUrl}
-                    alt={`${oidc.user.displayName}'s avatar`}
-                    width={32}
-                    height={32}
-                    style={{ borderRadius: "50%", objectFit: "cover" }}
-                />
-                <button type="button" onClick={() => oidc.logout({ returnToUrl: "/" })}>
-                    Logout
-                </button>
-            </>
-        );
-    }
+    return oidc.isUserLoggedIn ? <AuthButtonsLoggedIn /> : <AuthButtonsNotLoggedIn />;
+}
 
-    const keycloakUtils = isKeycloak({ issuerUri: oidc.issuerUri })
-        ? createKeycloakUtils({ issuerUri: oidc.issuerUri })
-        : undefined;
+function AuthButtonsLoggedIn() {
+    const { user, logout } = useOidc({ assert: "user logged in" });
 
     return (
         <>
-            <button type="button" onClick={() => oidc.login({})}>
+            <img
+                src={user.avatarImgUrl}
+                alt={`${user.displayName}'s avatar`}
+                width={32}
+                height={32}
+                style={{ borderRadius: "50%", objectFit: "cover" }}
+            />
+            <button type="button" onClick={() => logout()}>
+                Logout
+            </button>
+        </>
+    );
+}
+
+function AuthButtonsNotLoggedIn() {
+    const { login, issuerUri } = useOidc({ assert: "user not logged in" });
+
+    const keycloakUtils = isKeycloak({ issuerUri }) ? createKeycloakUtils({ issuerUri }) : undefined;
+
+    return (
+        <>
+            <button type="button" onClick={() => login({})}>
                 Login
             </button>
             {keycloakUtils !== undefined && (
                 <button
                     type="button"
                     onClick={() =>
-                        oidc.login({
+                        login({
                             transformAuthorizationUrl: keycloakUtils.transformAuthorizationUrl_register
                         })
                     }

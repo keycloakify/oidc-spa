@@ -18,3 +18,4 @@ yarn.lock
 /blob-report/
 /playwright/.cache/
 .tanstack
+/todos_*

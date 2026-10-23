@@ -1,12 +1,13 @@
 # TanStack Start Example
 
-A minimal TanStack Start v1 example with three unstyled pages:
+A minimal TanStack Start v1 example with three pages:
 
 -   Home: `/`
 -   Todo List: `/todo-list`
 -   Todo List Admin: `/todo-list-admin`
 
-The todo pages are placeholders for the next steps of the example.
+The Todo List page loads and adds per-user todos through authenticated server functions.
+Todo List Admin lets admins view todos grouped by user ID and delete individual items.
 
 ## Development
 

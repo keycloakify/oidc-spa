@@ -85,7 +85,7 @@ export const {
     })
     // See: https://docs.oidc-spa.dev/features/auto-login#tanstack-start
     //.withAutoLogin()
-    .withRuntimeConfigs(({ process }) => {
+    .withRuntimeConfigs(async ({ process }) => {
         switch (process.env["OIDC_PROVIDER"]) {
             case "mock":
                 return {
