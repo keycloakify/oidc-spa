@@ -1,35 +1,22 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import type { ReactNode } from "react";
 import "./globals.css";
 import { OidcInitializationGate } from "@/lib/oidc";
 import { AutoLogoutWarningOverlay } from "@/components/auto-logout-warning-overlay";
-import { DemoShell } from "@/components/demo-shell";
-
-const geistSans = Geist({
-    variable: "--font-geist-sans",
-    subsets: ["latin"]
-});
-
-const geistMono = Geist_Mono({
-    variable: "--font-geist-mono",
-    subsets: ["latin"]
-});
+import { AppHeader } from "@/components/app-header";
 
 export const metadata: Metadata = {
-    title: "oidc-spa · Next.js",
-    description: "OpenID Connect authentication in a Next.js App Router application."
+    title: "oidc-spa + Next.js",
+    description: "A minimal Next.js example with oidc-spa and tRPC."
 };
 
-export default function RootLayout({
-    children
-}: Readonly<{
-    children: React.ReactNode;
-}>) {
+export default function RootLayout({ children }: { children: ReactNode }) {
     return (
         <html lang="en">
-            <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+            <body>
                 <OidcInitializationGate>
-                    <DemoShell>{children}</DemoShell>
+                    <AppHeader />
+                    <main>{children}</main>
                     <AutoLogoutWarningOverlay />
                 </OidcInitializationGate>
             </body>

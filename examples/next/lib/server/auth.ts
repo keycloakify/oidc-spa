@@ -2,43 +2,72 @@ import "server-only";
 import { TRPCError } from "@trpc/server";
 import { oidcSpa, extractRequestAuthContext } from "oidc-spa/server";
 import { z } from "zod";
+import type { User_server } from "../oidc";
 
-const { bootstrapAuth, validateAndDecodeAccessToken } = oidcSpa
-    .withExpectedDecodedAccessTokenShape({
-        decodedAccessTokenSchema: z.object({
+const { validateAndGetAccessTokenClaims } = oidcSpa
+    .withAccessTokenClaimsSchema(
+        z.object({
             sub: z.string(),
-            resource_access: z
-                .object({
-                    "realm-management": z.object({ roles: z.array(z.string()) }).optional()
-                })
-                .optional()
+            roles: z.array(z.string()).optional()
         })
+    )
+    .withRuntimeConfigs(async () => {
+        switch (process.env.NEXT_PUBLIC_OIDC_PROVIDER) {
+            case "mock":
+                return {
+                    mode: "mock",
+                    accessTokenClaims_mock: {
+                        sub: "mock-user-id",
+                        roles: ["admin"]
+                    }
+                };
+            case "Keycloak":
+                return {
+                    mode: "real",
+                    issuerUri: process.env.NEXT_PUBLIC_KEYCLOAK_ISSUER_URI!,
+                    accessTokenValidation: {
+                        method: "offline JWT validation",
+                        expectedAudience: process.env["KEYCLOAK_EXPECTED_ACCESS_TOKEN_AUDIENCE"]!
+                    }
+                };
+                break;
+            case "Keycloak2":
+                return {
+                    mode: "real",
+                    issuerUri: process.env.NEXT_PUBLIC_KEYCLOAK2_ISSUER_URI!,
+                    accessTokenValidation: {
+                        method: "introspection endpoint",
+                        clientId: process.env["KEYCLOAK2_API_CLIENT_ID"]!,
+                        clientSecret: process.env["KEYCLOAK2_API_CLIENT_SECRET"]!
+                    }
+                };
+            case "Auth0":
+                return {
+                    mode: "real",
+                    issuerUri: process.env.NEXT_PUBLIC_AUTH0_ISSUER_URI!,
+                    accessTokenValidation: {
+                        method: "offline JWT validation",
+                        expectedAudience: process.env.NEXT_PUBLIC_AUTH0_API_IDENTIFIER!
+                    }
+                };
+            case "EntraID":
+                return {
+                    mode: "real",
+                    issuerUri: process.env.NEXT_PUBLIC_ENTRA_ISSUER_URI!,
+                    accessTokenValidation: {
+                        method: "offline JWT validation",
+                        expectedAudience: process.env["ENTRA_API_CLIENT_ID"]!
+                    }
+                };
+            default:
+                throw new Error("Unknown provider");
+        }
     })
     .createUtils();
 
-bootstrapAuth(
-    process.env.NEXT_PUBLIC_OIDC_USE_MOCK === "true"
-        ? {
-              implementation: "mock",
-              behavior: "use static identity",
-              decodedAccessToken_mock: {
-                  sub: "mock-user-id",
-                  resource_access: { "realm-management": { roles: ["realm-admin"] } }
-              }
-          }
-        : {
-              implementation: "real",
-              issuerUri: process.env.NEXT_PUBLIC_OIDC_ISSUER_URI!,
-              expectedAudience: process.env.NEXT_PUBLIC_OIDC_ACCESS_TOKEN_EXPECTED_AUDIENCE!
-          }
-);
+export async function getUser(params: { req: Request }): Promise<User_server> {
+    const { req } = params;
 
-export type User = {
-    id: string;
-    isKeycloakAdmin: boolean;
-};
-
-export async function getUser({ req }: { req: Request }): Promise<User> {
     const requestAuthContext = extractRequestAuthContext({ request: req, trustProxy: true });
 
     if (!requestAuthContext) {
@@ -48,7 +77,7 @@ export async function getUser({ req }: { req: Request }): Promise<User> {
         throw new TRPCError({ code: "BAD_REQUEST" });
     }
 
-    const result = await validateAndDecodeAccessToken(requestAuthContext.accessTokenAndMetadata);
+    const result = await validateAndGetAccessTokenClaims(requestAuthContext.accessTokenAndMetadata);
 
     if (!result.isSuccess) {
         console.warn(result.debugErrorMessage);
@@ -57,12 +86,9 @@ export async function getUser({ req }: { req: Request }): Promise<User> {
         });
     }
 
-    const user: User = {
-        id: result.decodedAccessToken.sub,
-        isKeycloakAdmin:
-            result.decodedAccessToken.resource_access?.["realm-management"]?.roles.includes(
-                "realm-admin"
-            ) ?? false
+    const user: User_server = {
+        id: result.accessTokenClaims.sub,
+        isAdmin: result.accessTokenClaims.roles?.includes("admin") ?? false
     };
 
     return user;

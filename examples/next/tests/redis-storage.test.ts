@@ -1,7 +1,7 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
 import { createServer } from "node:http";
-import { randomUUID } from "node:crypto";
+import { createKvStoreTodoStore } from "../lib/server/data/todos/todos_kvStore";
 
 test("Upstash REST storage persists and isolates user lists", async t => {
     const values = new Map<string, string>();
@@ -17,8 +17,8 @@ test("Upstash REST storage persists and isolates user lists", async t => {
             if (command.toUpperCase() === "SCAN") {
                 scanCalls++;
                 assert.equal(value.toUpperCase(), "MATCH");
-                assert.equal(pattern, "oidc-spa:next:todos:*");
-                const keys = [...values.keys()].filter(key => key.startsWith("oidc-spa:next:todos:"));
+                assert.equal(pattern, "todos:*");
+                const keys = [...values.keys()].filter(key => key.startsWith("todos:"));
                 // Exercise multiple pages and Redis SCAN's possible duplicate keys.
                 const cursor = Number(key);
                 return {
@@ -49,23 +49,24 @@ test("Upstash REST storage persists and isolates user lists", async t => {
     );
     const address = server.address();
     assert(address && typeof address !== "string");
-    process.env.KV_REST_API_URL = `http://127.0.0.1:${address.port}`;
-    process.env.KV_REST_API_TOKEN = "test-redis-token";
-    const { todosStore: store } = await import("../lib/server/todos");
-    assert.deepEqual(await store.readTodos("alice"), []);
-    const todos = [{ id: randomUUID(), name: "Redis task", completed: false }];
-    await store.updateTodos("alice", todos);
-    assert.deepEqual(await store.readTodos("alice"), todos);
-    assert.deepEqual(JSON.parse(values.get("oidc-spa:next:todos:alice")!), todos);
-    assert.deepEqual(await store.readTodos("bob"), []);
-    await store.updateTodos("bob", []);
-    await store.updateTodos("user:with/slashes", todos);
-    assert.deepEqual(await store.listAllUserTodos(), [
+    const store = createKvStoreTodoStore({
+        restUrl: `http://127.0.0.1:${address.port}`,
+        restToken: "test-redis-token"
+    });
+    assert.equal((await store.readTodos({ userId: "alice" })).length, 2);
+    const todos = [{ id: 3, name: "Redis task" }];
+    await store.updateTodos({ userId: "alice", todos: todos });
+    assert.deepEqual(await store.readTodos({ userId: "alice" }), todos);
+    assert.deepEqual(JSON.parse(values.get("todos:alice")!), todos);
+    assert.equal((await store.readTodos({ userId: "bob" })).length, 2);
+    await store.updateTodos({ userId: "bob", todos: [] });
+    await store.updateTodos({ userId: "user:with/slashes", todos: todos });
+    assert.deepEqual(await store.readAllTodos(), [
         { userId: "alice", todos },
         { userId: "bob", todos: [] },
         { userId: "user:with/slashes", todos }
     ]);
     assert.equal(scanCalls, 3);
-    await store.updateTodos("alice", []);
-    assert.deepEqual(await store.readTodos("alice"), []);
+    await store.updateTodos({ userId: "alice", todos: [] });
+    assert.deepEqual(await store.readTodos({ userId: "alice" }), []);
 });

@@ -1,5 +1,5 @@
 import { TodoPage } from "@/components/todo-page";
 
-export default function Todos() {
+export default function TodoList() {
     return <TodoPage />;
 }

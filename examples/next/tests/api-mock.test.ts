@@ -1,3 +1,3 @@
 import { testApi } from "./api";
 
-testApi(true);
+testApi("mock");

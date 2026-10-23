@@ -1,11 +1,11 @@
 import type { ZodSchemaLike } from "../tools/ZodSchemaLike";
 import type {
     OidcSpaUtils,
-    ParamsOfBootstrap,
+    RuntimeConfigs,
     ValidateAndGetAccessTokenClaims,
     AccessTokenClaims_specs
 } from "./types";
-import { Deferred } from "../tools/Deferred";
+import type { OptionallyAsyncGetterOrDirectValue } from "../tools/GetterOrDirectValue";
 import {
     decodeProtectedHeader,
     jwtVerify,
@@ -23,19 +23,45 @@ import { fetchIntrospectionEndpoint } from "./tools/fetchIntrospectionEndpoint";
 
 export function createUtils<AccessTokenClaims>(params: {
     accessTokenClaimsSchema: ZodSchemaLike<AccessTokenClaims_specs, AccessTokenClaims> | undefined;
+    getRuntimeConfigsOrRuntimeConfigs: OptionallyAsyncGetterOrDirectValue<
+        void,
+        RuntimeConfigs<AccessTokenClaims>
+    >;
 }): OidcSpaUtils<AccessTokenClaims> {
     const { accessTokenClaimsSchema } = params;
 
-    const dParamsOfBootstrap = new Deferred<ParamsOfBootstrap<AccessTokenClaims>>();
+    const { getRuntimeConfigs } = (() => {
+        const { getRuntimeConfigsOrRuntimeConfigs } = params;
+
+        const getRuntimeConfigs_nonMemoized =
+            typeof getRuntimeConfigsOrRuntimeConfigs === "function"
+                ? getRuntimeConfigsOrRuntimeConfigs
+                : () => getRuntimeConfigsOrRuntimeConfigs;
+
+        let prRuntimeConfigs: Promise<RuntimeConfigs<AccessTokenClaims>> | undefined = undefined;
+
+        function getRuntimeConfigs(): Promise<RuntimeConfigs<AccessTokenClaims>> {
+            // Defer calling the getter so even a synchronous throw clears the
+            // cached promise after it has been assigned, allowing the next request to retry.
+            return (prRuntimeConfigs ??= Promise.resolve()
+                .then(() => getRuntimeConfigs_nonMemoized())
+                .catch(error => {
+                    prRuntimeConfigs = undefined;
+                    throw error;
+                }));
+        }
+
+        return { getRuntimeConfigs };
+    })();
 
     const { getIntrospectionEndpoint } = (() => {
         let prIntrospectionEndpoint: Promise<string> | undefined = undefined;
 
         function getIntrospectionEndpoint(): Promise<string> {
             return (prIntrospectionEndpoint ??= (async () => {
-                const paramsOfBootstrap = await dParamsOfBootstrap.pr;
-                assert(paramsOfBootstrap.mode === "real", "22933023");
-                const { issuerUri } = paramsOfBootstrap;
+                const runtimeConfigs = await getRuntimeConfigs();
+                assert(runtimeConfigs.mode === "real", "22933023");
+                const { issuerUri } = runtimeConfigs;
 
                 let introspectionEndpoint: string;
 
@@ -62,11 +88,11 @@ export function createUtils<AccessTokenClaims>(params: {
             const publicSigningKeys_new = await (async function callee(
                 count: number
             ): Promise<PublicSigningKeys | undefined> {
-                const paramsOfBootstrap = await dParamsOfBootstrap.pr;
+                const runtimeConfigs = await getRuntimeConfigs();
 
-                assert(paramsOfBootstrap.mode === "real", "22933023");
+                assert(runtimeConfigs.mode === "real", "22933023");
 
-                const { issuerUri } = paramsOfBootstrap;
+                const { issuerUri } = runtimeConfigs;
 
                 let wrap: PublicSigningKeys | undefined;
 
@@ -135,15 +161,6 @@ export function createUtils<AccessTokenClaims>(params: {
 
     type Out = OidcSpaUtils<AccessTokenClaims>;
 
-    const bootstrapAuth: Out["bootstrapAuth"] = paramsOfBootstrap => {
-        if (dParamsOfBootstrap.getState().hasResolved) {
-            console.warn("oidc-spa: bootstrapAuth() has already been called, ignoring");
-            return;
-        }
-
-        dParamsOfBootstrap.resolve(paramsOfBootstrap);
-    };
-
     const { getIsDpopPoofSeenRecordIfNotSeen } = (() => {
         const timeSeenByDpopProofId = new Map<string, number>();
 
@@ -197,39 +214,51 @@ export function createUtils<AccessTokenClaims>(params: {
     const { validateAndGetAccessTokenClaims } = (() => {
         const validateAndGetAccessTokenClaims_nonMemoized: Out["validateAndGetAccessTokenClaims"] =
             async params => {
-                const paramsOfBootstrap = await dParamsOfBootstrap.pr;
+                let runtimeConfigs: RuntimeConfigs<AccessTokenClaims>;
 
-                if (paramsOfBootstrap.mode === "mock") {
+                try {
+                    runtimeConfigs = await getRuntimeConfigs();
+                } catch (error) {
+                    return id<ValidateAndGetAccessTokenClaims.ReturnType.Errored>({
+                        isSuccess: false,
+                        recommendedHttpErrorStatusCode: 503,
+                        debugErrorMessage: `Failed to get auth runtime configs: ${
+                            error instanceof Error ? error.message : String(error)
+                        }`
+                    });
+                }
+
+                if (runtimeConfigs.mode === "mock") {
                     return id<ValidateAndGetAccessTokenClaims.ReturnType.Success<AccessTokenClaims>>({
                         isSuccess: true,
-                        accessTokenClaims: paramsOfBootstrap.accessTokenClaims_mock,
+                        accessTokenClaims: runtimeConfigs.accessTokenClaims_mock,
                         get accessToken() {
-                            if (paramsOfBootstrap.accessToken_mock === undefined) {
+                            if (runtimeConfigs.accessToken_mock === undefined) {
                                 throw new Error(
                                     [
                                         "oidc-spa: No mock provided for accessToken.",
-                                        "Provide accessToken_mock to bootstrapAuth"
+                                        "Provide accessToken_mock to .withRuntimeConfigs()"
                                     ].join(" ")
                                 );
                             }
 
-                            return paramsOfBootstrap.accessToken_mock;
+                            return runtimeConfigs.accessToken_mock;
                         },
                         get accessTokenClaims_original() {
-                            if (paramsOfBootstrap.accessTokenClaims_original_mock === undefined) {
+                            if (runtimeConfigs.accessTokenClaims_original_mock === undefined) {
                                 if (accessTokenClaimsSchema === undefined) {
-                                    return paramsOfBootstrap.accessTokenClaims_mock as AccessTokenClaims_specs;
+                                    return runtimeConfigs.accessTokenClaims_mock as AccessTokenClaims_specs;
                                 }
 
                                 throw new Error(
                                     [
                                         "oidc-spa: No mock provided for accessTokenClaims_original.",
-                                        "Provide accessTokenClaims_original_mock to bootstrapAuth"
+                                        "Provide accessTokenClaims_original_mock to .withRuntimeConfigs()"
                                     ].join(" ")
                                 );
                             }
 
-                            return paramsOfBootstrap.accessTokenClaims_original_mock;
+                            return runtimeConfigs.accessTokenClaims_original_mock;
                         }
                     });
                 }
@@ -237,7 +266,7 @@ export function createUtils<AccessTokenClaims>(params: {
                 let accessTokenClaims_original: unknown;
 
                 validation: {
-                    if (paramsOfBootstrap.mode === "unsafe decode only") {
+                    if (runtimeConfigs.mode === "unsafe decode only") {
                         accessTokenClaims_original = decodeJwt(params.accessToken);
 
                         try {
@@ -260,9 +289,9 @@ export function createUtils<AccessTokenClaims>(params: {
                         break validation;
                     }
 
-                    assert<Equals<typeof paramsOfBootstrap.mode, "real">>;
+                    assert<Equals<typeof runtimeConfigs.mode, "real">>;
 
-                    switch (paramsOfBootstrap.accessTokenValidation.method) {
+                    switch (runtimeConfigs.accessTokenValidation.method) {
                         case "offline JWT validation":
                             {
                                 let kid: string;
@@ -400,7 +429,7 @@ export function createUtils<AccessTokenClaims>(params: {
 
                                 // Validate issuer
                                 {
-                                    const { issuerUri } = paramsOfBootstrap;
+                                    const { issuerUri } = runtimeConfigs;
 
                                     const normalize = (url: string) => url.replace(/\/$/, "");
 
@@ -421,7 +450,7 @@ export function createUtils<AccessTokenClaims>(params: {
 
                                 // Validate audience
                                 {
-                                    const { expectedAudience } = paramsOfBootstrap.accessTokenValidation;
+                                    const { expectedAudience } = runtimeConfigs.accessTokenValidation;
 
                                     const audiences =
                                         accessTokenClaims_original.aud instanceof Array
@@ -448,7 +477,7 @@ export function createUtils<AccessTokenClaims>(params: {
                                 const {
                                     issuerUri,
                                     accessTokenValidation: { clientId, clientSecret }
-                                } = paramsOfBootstrap;
+                                } = runtimeConfigs;
 
                                 let introspectionEndpoint: string;
 
@@ -949,7 +978,6 @@ export function createUtils<AccessTokenClaims>(params: {
     })();
 
     return {
-        bootstrapAuth,
         validateAndGetAccessTokenClaims
     };
 }

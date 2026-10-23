@@ -69,12 +69,12 @@ export namespace ValidateAndGetAccessTokenClaims {
     }
 }
 
-export type ParamsOfBootstrap<AccessTokenClaims> =
-    | ParamsOfBootstrap.Real
-    | ParamsOfBootstrap.Mock<AccessTokenClaims>
-    | ParamsOfBootstrap.DecodeOnly;
+export type RuntimeConfigs<AccessTokenClaims = AccessTokenClaims_specs> =
+    | RuntimeConfigs.Real
+    | RuntimeConfigs.Mock<AccessTokenClaims>
+    | RuntimeConfigs.DecodeOnly;
 
-export namespace ParamsOfBootstrap {
+export namespace RuntimeConfigs {
     export type Real = {
         mode: "real";
         issuerUri: string;
@@ -112,6 +112,5 @@ export namespace ParamsOfBootstrap {
 }
 
 export type OidcSpaUtils<AccessTokenClaims> = {
-    bootstrapAuth: (params: ParamsOfBootstrap<AccessTokenClaims>) => void;
     validateAndGetAccessTokenClaims: ValidateAndGetAccessTokenClaims<AccessTokenClaims>;
 };

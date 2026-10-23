@@ -134,7 +134,9 @@ export const {
                         },
                         idleSessionLifetimeInSeconds: parseInt(
                             process.env["AUTH0_SSO_SESSION_IDLE_SECONDS"]
-                        )
+                        ),
+                        // DPoP is only available for paying Auth0 customer.
+                        disableDPoP: true
                     },
                     server: {
                         accessTokenValidationMethod: "offline JWT validation",

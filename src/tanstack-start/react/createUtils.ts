@@ -986,31 +986,30 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
 
                         const { oidcSpa: oidcSpa_server } = await import("../../server");
 
-                        const { bootstrapAuth, validateAndGetAccessTokenClaims } =
-                            oidcSpa_server.createUtils();
-
-                        bootstrapAuth({
-                            mode: "real",
-                            issuerUri: runtimeConfigs.issuerUri,
-                            accessTokenValidation: (() => {
-                                switch (runtimeConfigs.server.accessTokenValidationMethod) {
-                                    case "introspection endpoint":
-                                        return {
-                                            method: "introspection endpoint",
-                                            clientId: runtimeConfigs.server.clientId,
-                                            clientSecret: runtimeConfigs.server.clientSecret
-                                        };
-                                    case "offline JWT validation":
-                                        return {
-                                            method: "offline JWT validation",
-                                            expectedAudience:
-                                                runtimeConfigs.server.expectedAccessTokenAudience
-                                        };
-                                    default:
-                                        assert<Equals<typeof runtimeConfigs.server, never>>(false);
-                                }
-                            })()
-                        });
+                        const { validateAndGetAccessTokenClaims } = oidcSpa_server
+                            .withRuntimeConfigs({
+                                mode: "real",
+                                issuerUri: runtimeConfigs.issuerUri,
+                                accessTokenValidation: (() => {
+                                    switch (runtimeConfigs.server.accessTokenValidationMethod) {
+                                        case "introspection endpoint":
+                                            return {
+                                                method: "introspection endpoint",
+                                                clientId: runtimeConfigs.server.clientId,
+                                                clientSecret: runtimeConfigs.server.clientSecret
+                                            };
+                                        case "offline JWT validation":
+                                            return {
+                                                method: "offline JWT validation",
+                                                expectedAudience:
+                                                    runtimeConfigs.server.expectedAccessTokenAudience
+                                            };
+                                        default:
+                                            assert<Equals<typeof runtimeConfigs.server, never>>(false);
+                                    }
+                                })()
+                            })
+                            .createUtils();
 
                         return (cachedReturn = {
                             isSuccess: true,
