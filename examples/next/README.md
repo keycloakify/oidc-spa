@@ -72,11 +72,9 @@ See the [oidc-spa documentation](https://docs.oidc-spa.dev/) for more details.
 ```sh
 yarn typecheck
 yarn lint
-yarn test
 yarn build
 yarn start
 ```
 
-Tests use local identity-provider and Redis fixtures; no external accounts are required.
 Direct dependencies, including the oidc-spa v11 release candidate, are pinned.
 No lockfile or package manager is imposed.
