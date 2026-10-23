@@ -1,32 +1,23 @@
-import { useState, type FormEvent } from "react";
+import { useState, type SubmitEvent } from "react";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
-import { createServerFn } from "@tanstack/react-start";
-import { z } from "zod";
-import { enforceLogin, oidcFnMiddleware } from "~/oidc";
-import { getTodosStore, type TodoItem } from "~/data/todos";
+import { enforceLogin, getOidc } from "~/oidc";
+import type { TodoItem } from "~/data/todos";
 
-const getTodos = createServerFn({ method: "GET" })
-    .middleware([oidcFnMiddleware({ require: "authed request" })])
-    .handler(async ({ context: { oidc } }) => {
-        return getTodosStore().readTodos({ userId: oidc.user.id });
-    });
-
-const addTodo = createServerFn({ method: "POST" })
-    .validator(z.string().trim().min(1))
-    .middleware([oidcFnMiddleware({ require: "authed request" })])
-    .handler(async ({ data, context: { oidc } }) => {
-        const todosStore = getTodosStore();
-        const userId = oidc.user.id;
-        const todos = await todosStore.readTodos({ userId });
-
-        const todo: TodoItem = { id: Date.now(), name: data };
-
-        await todosStore.updateTodos({ userId, todos: [...todos, todo] });
-    });
-
-export const Route = createFileRoute("/todo-list")({
+export const Route = createFileRoute("/todo-list-api")({
     beforeLoad: enforceLogin,
-    loader: () => getTodos(),
+    loader: async () => {
+        const oidc = await getOidc({ assert: "user logged in" });
+        const response = await fetch("/api/todos", {
+            headers: { Authorization: `Bearer ${await oidc.getAccessToken()}` }
+        });
+
+        if (!response.ok) {
+            throw new Error("Could not load todos.");
+        }
+
+        const todos: TodoItem[] = await response.json();
+        return todos;
+    },
     component: TodoList,
     pendingComponent: () => <p>Loading todos...</p>
 });
@@ -38,7 +29,7 @@ function TodoList() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string>();
 
-    async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    async function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
         event.preventDefault();
 
         if (isSubmitting || newTodo.trim() === "") {
@@ -48,8 +39,22 @@ function TodoList() {
         setIsSubmitting(true);
         setError(undefined);
 
+        const oidc = await getOidc({ assert: "user logged in" });
+
         try {
-            await addTodo({ data: newTodo });
+            const response = await fetch("/api/todos", {
+                method: "POST",
+                headers: {
+                    Authorization: `Bearer ${await oidc.getAccessToken()}`,
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({ name: newTodo })
+            });
+
+            if (!response.ok) {
+                throw new Error("Could not add todo.");
+            }
+
             setNewTodo("");
             await router.invalidate();
         } catch (error) {
@@ -61,7 +66,7 @@ function TodoList() {
 
     return (
         <>
-            <h1>Todo List</h1>
+            <h1>Todo List (API)</h1>
             {todos.length === 0 ? (
                 <p>No todos yet.</p>
             ) : (

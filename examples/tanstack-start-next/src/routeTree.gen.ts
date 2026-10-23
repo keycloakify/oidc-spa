@@ -11,8 +11,10 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AccountRouteImport } from './routes/account'
-import { Route as TodoListRouteImport } from './routes/todo-list'
 import { Route as TodoListAdminRouteImport } from './routes/todo-list-admin'
+import { Route as TodoListApiRouteImport } from './routes/todo-list-api'
+import { Route as TodoListServerFunctionRouteImport } from './routes/todo-list-server-function'
+import { Route as ApiTodosRouteImport } from './routes/api/todos'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -24,49 +26,86 @@ const AccountRoute = AccountRouteImport.update({
   path: '/account',
   getParentRoute: () => rootRouteImport,
 } as any)
-const TodoListRoute = TodoListRouteImport.update({
-  id: '/todo-list',
-  path: '/todo-list',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const TodoListAdminRoute = TodoListAdminRouteImport.update({
   id: '/todo-list-admin',
   path: '/todo-list-admin',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TodoListApiRoute = TodoListApiRouteImport.update({
+  id: '/todo-list-api',
+  path: '/todo-list-api',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TodoListServerFunctionRoute = TodoListServerFunctionRouteImport.update({
+  id: '/todo-list-server-function',
+  path: '/todo-list-server-function',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiTodosRoute = ApiTodosRouteImport.update({
+  id: '/api/todos',
+  path: '/api/todos',
   getParentRoute: () => rootRouteImport,
 } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/account': typeof AccountRoute
-  '/todo-list': typeof TodoListRoute
   '/todo-list-admin': typeof TodoListAdminRoute
+  '/todo-list-api': typeof TodoListApiRoute
+  '/todo-list-server-function': typeof TodoListServerFunctionRoute
+  '/api/todos': typeof ApiTodosRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/account': typeof AccountRoute
-  '/todo-list': typeof TodoListRoute
   '/todo-list-admin': typeof TodoListAdminRoute
+  '/todo-list-api': typeof TodoListApiRoute
+  '/todo-list-server-function': typeof TodoListServerFunctionRoute
+  '/api/todos': typeof ApiTodosRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/account': typeof AccountRoute
-  '/todo-list': typeof TodoListRoute
   '/todo-list-admin': typeof TodoListAdminRoute
+  '/todo-list-api': typeof TodoListApiRoute
+  '/todo-list-server-function': typeof TodoListServerFunctionRoute
+  '/api/todos': typeof ApiTodosRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/account' | '/todo-list' | '/todo-list-admin'
+  fullPaths:
+    | '/'
+    | '/account'
+    | '/todo-list-admin'
+    | '/todo-list-api'
+    | '/todo-list-server-function'
+    | '/api/todos'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/account' | '/todo-list' | '/todo-list-admin'
-  id: '__root__' | '/' | '/account' | '/todo-list' | '/todo-list-admin'
+  to:
+    | '/'
+    | '/account'
+    | '/todo-list-admin'
+    | '/todo-list-api'
+    | '/todo-list-server-function'
+    | '/api/todos'
+  id:
+    | '__root__'
+    | '/'
+    | '/account'
+    | '/todo-list-admin'
+    | '/todo-list-api'
+    | '/todo-list-server-function'
+    | '/api/todos'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AccountRoute: typeof AccountRoute
-  TodoListRoute: typeof TodoListRoute
   TodoListAdminRoute: typeof TodoListAdminRoute
+  TodoListApiRoute: typeof TodoListApiRoute
+  TodoListServerFunctionRoute: typeof TodoListServerFunctionRoute
+  ApiTodosRoute: typeof ApiTodosRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -85,18 +124,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AccountRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/todo-list': {
-      id: '/todo-list'
-      path: '/todo-list'
-      fullPath: '/todo-list'
-      preLoaderRoute: typeof TodoListRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/todo-list-admin': {
       id: '/todo-list-admin'
       path: '/todo-list-admin'
       fullPath: '/todo-list-admin'
       preLoaderRoute: typeof TodoListAdminRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/todo-list-api': {
+      id: '/todo-list-api'
+      path: '/todo-list-api'
+      fullPath: '/todo-list-api'
+      preLoaderRoute: typeof TodoListApiRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/todo-list-server-function': {
+      id: '/todo-list-server-function'
+      path: '/todo-list-server-function'
+      fullPath: '/todo-list-server-function'
+      preLoaderRoute: typeof TodoListServerFunctionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/todos': {
+      id: '/api/todos'
+      path: '/api/todos'
+      fullPath: '/api/todos'
+      preLoaderRoute: typeof ApiTodosRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -105,8 +158,10 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AccountRoute: AccountRoute,
-  TodoListRoute: TodoListRoute,
   TodoListAdminRoute: TodoListAdminRoute,
+  TodoListApiRoute: TodoListApiRoute,
+  TodoListServerFunctionRoute: TodoListServerFunctionRoute,
+  ApiTodosRoute: ApiTodosRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

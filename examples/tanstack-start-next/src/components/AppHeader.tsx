@@ -3,13 +3,18 @@ import { createKeycloakUtils, isKeycloak } from "oidc-spa/keycloak";
 import { useOidc } from "~/oidc";
 
 export function AppHeader() {
+    const { isUserLoggedIn, user } = useOidc();
+
     return (
         <header style={{ display: "flex", alignItems: "center", gap: "2rem", flexWrap: "wrap" }}>
             <Link to="/">My App</Link>
             <nav aria-label="Main navigation" style={{ display: "flex", gap: "1rem", flex: 1 }}>
                 <Link to="/">Home</Link>
-                <Link to="/todo-list">Todo List</Link>
-                <Link to="/todo-list-admin">Todo List Admin</Link>
+                <Link to="/todo-list-server-function">Todo List (Server Function)</Link>
+                <Link to="/todo-list-api">Todo List (API)</Link>
+                {isUserLoggedIn && user.canSeeAdminNavigation && (
+                    <Link to="/todo-list-admin">Todo List Admin</Link>
+                )}
             </nav>
             <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
                 <AuthButtons />

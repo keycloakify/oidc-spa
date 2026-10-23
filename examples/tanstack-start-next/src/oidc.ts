@@ -24,7 +24,8 @@ export const {
     // will automatically switch this route to `ssr: false`.
     // This ensures that everything that can be SSR'd is and the rest is delayed to the client.
     enforceLogin,
-    oidcFnMiddleware
+    oidcFnMiddleware,
+    oidcRequestMiddleware
 } = oidcSpa
     .withClientUser<User_client>(async ({ isMock, idTokenClaims, accessToken }) => {
         if (isMock) {
