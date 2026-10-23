@@ -6,18 +6,24 @@ export function AppHeader() {
     const { isUserLoggedIn, user } = useOidc();
 
     return (
-        <header style={{ display: "flex", alignItems: "center", gap: "2rem", flexWrap: "wrap" }}>
-            <Link to="/">My App</Link>
-            <nav aria-label="Main navigation" style={{ display: "flex", gap: "1rem", flex: 1 }}>
-                <Link to="/">Home</Link>
-                <Link to="/todo-list-server-function">Todo List (Server Function)</Link>
-                <Link to="/todo-list-api">Todo List (API)</Link>
-                {isUserLoggedIn && user.canSeeAdminNavigation && (
-                    <Link to="/todo-list-admin">Todo List Admin</Link>
-                )}
-            </nav>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                <AuthButtons />
+        <header className="app-header">
+            <div className="header-inner">
+                <Link to="/" className="brand">
+                    My App
+                </Link>
+                <nav aria-label="Main navigation">
+                    <Link to="/" activeOptions={{ exact: true }}>
+                        Home
+                    </Link>
+                    <Link to="/todo-list-server-function">Todos · Server function</Link>
+                    <Link to="/todo-list-api">Todos · API</Link>
+                    {isUserLoggedIn && user.canSeeAdminNavigation && (
+                        <Link to="/todo-list-admin">Admin</Link>
+                    )}
+                </nav>
+                <div className="actions">
+                    <AuthButtons />
+                </div>
             </div>
         </header>
     );
@@ -38,13 +44,12 @@ function AuthButtonsLoggedIn() {
 
     return (
         <>
-            <Link to="/account" aria-label="Open your account">
+            <Link to="/account" className="avatar" aria-label="Open your account">
                 <img
                     src={user.avatarImgUrl}
                     alt={`${user.displayName}'s avatar`}
                     width={32}
                     height={32}
-                    style={{ borderRadius: "50%", objectFit: "cover" }}
                 />
             </Link>
             <button type="button" onClick={() => logout()}>
@@ -61,7 +66,7 @@ function AuthButtonsNotLoggedIn() {
 
     return (
         <>
-            <button type="button" onClick={() => login({})}>
+            <button type="button" className="button-primary" onClick={() => login({})}>
                 Login
             </button>
             {keycloakUtils !== undefined && (

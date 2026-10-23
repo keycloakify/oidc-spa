@@ -95,19 +95,23 @@ function TodoListAdmin() {
     return (
         <>
             <h1>Todo List Admin</h1>
-            {usersTodos.length === 0 && <p>No user todos yet.</p>}
+            <p>Todos from every user, grouped by user ID.</p>
+            {usersTodos.length === 0 && <p className="empty-state">No user todos yet.</p>}
             {usersTodos.map(({ userId, todos }) => (
-                <section key={userId}>
-                    <h2>User: {userId}</h2>
+                <section key={userId} className="todo-group">
+                    <h2>
+                        User: <code>{userId}</code>
+                    </h2>
                     {todos.length === 0 ? (
-                        <p>No todos.</p>
+                        <p className="empty-state">No todos.</p>
                     ) : (
-                        <ul>
+                        <ul className="todo-list">
                             {todos.map(todo => (
                                 <li key={todo.id}>
-                                    {todo.name}{" "}
+                                    <span>{todo.name}</span>
                                     <button
                                         type="button"
+                                        className="button-danger"
                                         disabled={isDeleting}
                                         aria-label={`Delete ${todo.name} for ${userId}`}
                                         onClick={() => handleDelete(userId, todo.id)}

@@ -12,6 +12,8 @@ export type User_client = {
     canSeeAdminNavigation: boolean;
 };
 
+// App-specific user model exposed to the backend request handler.
+// Shape it around what you need to identify and authorize the user.
 export type User_server = {
     id: string;
     isAdmin: boolean;

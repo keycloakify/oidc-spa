@@ -17,6 +17,7 @@ function Account() {
     return (
         <>
             <h1>Account</h1>
+            <p>Your profile and account settings.</p>
             <dl>
                 <dt>Name</dt>
                 <dd>{user.displayName}</dd>
@@ -29,7 +30,7 @@ function Account() {
             </dl>
             {keycloakUtils !== undefined && (
                 <>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
+                    <div className="actions">
                         <button
                             type="button"
                             onClick={() =>
@@ -57,6 +58,7 @@ function Account() {
                                     authorizationParams: { kc_action: "delete_account" }
                                 })
                             }
+                            className="button-danger"
                         >
                             Delete account
                         </button>

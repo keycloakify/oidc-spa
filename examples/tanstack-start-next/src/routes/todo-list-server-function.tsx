@@ -62,23 +62,22 @@ function TodoList() {
     return (
         <>
             <h1>Todo List (Server Function)</h1>
+            <p>Your personal todo list, backed by a server function.</p>
             {todos.length === 0 ? (
-                <p>No todos yet.</p>
+                <p className="empty-state">No todos yet.</p>
             ) : (
-                <ul>
+                <ul className="todo-list">
                     {todos.map(todo => (
                         <li key={todo.id}>{todo.name}</li>
                     ))}
                 </ul>
             )}
-            <form
-                onSubmit={handleSubmit}
-                style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}
-            >
+            <form onSubmit={handleSubmit} className="todo-form">
                 <label htmlFor="new-todo">New todo</label>
                 <input
                     id="new-todo"
                     name="todo"
+                    placeholder="What needs to be done?"
                     value={newTodo}
                     onChange={event => setNewTodo(event.target.value)}
                     disabled={isSubmitting}
