@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import "./globals.css";
 import { OidcInitializationGate } from "@/lib/oidc";
-import { AutoLogoutWarningOverlay } from "@/components/auto-logout-warning-overlay";
-import { AppHeader } from "@/components/app-header";
+import { AutoLogoutWarningOverlay } from "@/components/AutoLogoutWarningOverlay";
+import { AppHeader } from "@/components/AppHeader";
 
 export const metadata: Metadata = {
     title: "oidc-spa + Next.js",
