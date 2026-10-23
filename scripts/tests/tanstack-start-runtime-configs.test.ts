@@ -327,6 +327,36 @@ test("TanStack Start runtime config environment manifest", async t => {
         assert.deepEqual(serverResolvedSpecifiers.sort(), ["./auth", "@/barrel", "vitest"]);
         httpServer.emit("close");
     });
+    await t.test("watches source files in dev without registering directories as imports", async () => {
+        for (const command of ["serve", "build"] as const) {
+            const { root, handler, context, read } = await fixture(
+                {
+                    "src/routes/api/todos.ts": `${setup} withRuntimeConfigs(({ process }) => ({
+                        mode: "mock", client: { clientId_mock: process.env.CLIENT }
+                    }));`
+                },
+                { command }
+            );
+            const watchedFiles = new Set<string>();
+            assert.deepEqual(
+                await read(handler, {
+                    ...context,
+                    addWatchFile(id: string) {
+                        watchedFiles.add(id);
+                    }
+                } as any),
+                { publicEnvNames: ["CLIENT"], toRedactEnvNames: [] }
+            );
+            assert(watchedFiles.has(path.join(root, "src/routes/api/todos.ts")));
+            for (const directory of ["", "src", "src/routes", "src/routes/api"]) {
+                assert.equal(
+                    watchedFiles.has(path.join(root, directory)),
+                    command === "build",
+                    `Directory watch registration for ${command}: ${directory || "."}`
+                );
+            }
+        }
+    });
     await t.test("fails closed when the dev client has no server resolver", async () => {
         const { handler, context, read } = await fixture({
             "oidc.ts": `${setup} withRuntimeConfigs(({ process }) => ({ mode: "mock", client: { clientId_mock: process.env.CLIENT } }));`

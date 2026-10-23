@@ -1,6 +1,6 @@
 import type { OidcSpaUtils, CreateClientUser, RuntimeConfigs } from "./types";
 import { createUtils } from "./createUtils";
-import { assert } from "tsafe";
+import { assert } from "../tools/tsafe/assert";
 import type { OptionallyAsyncGetterOrDirectValue } from "../tools/GetterOrDirectValue";
 
 export type OidcSpa<

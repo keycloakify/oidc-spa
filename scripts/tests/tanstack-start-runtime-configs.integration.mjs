@@ -163,9 +163,10 @@ test("packaged plugin builds a cold-start-safe runtime config environment endpoi
             previous === undefined ? delete process.env[name] : (process.env[name] = previous)
         );
     }
-    const { default: server } = await import(
-        pathToFileURL(path.join(root, ".output/server/_ssr/ssr.mjs")).href
-    );
+    const ssr = await import(pathToFileURL(path.join(root, ".output/server/_ssr/ssr.mjs")).href);
+    // Nitro may retain the entry in its namespace when splitting the SSR bundle.
+    const server = ssr.default ?? ssr.ssr_exports?.default;
+    assert.equal(typeof server?.fetch, "function");
     const getEnv = async () => {
         const url = new URL(
             `http://localhost/_serverFn/${functionId}?envVarNames=OIDC_SPA_TEST_SECRET&envVarNames=PATH`
@@ -206,4 +207,63 @@ test("packaged plugin builds a cold-start-safe runtime config environment endpoi
     );
     assert.equal(typeof babelTraverse, "function");
     assert.equal(typeof babelGenerate, "function");
+});
+
+test("packaged plugin refreshes the manifest in Vite 8 with nested API directories", async t => {
+    const repository = fileURLToPath(new URL("../../", import.meta.url));
+    const example = path.join(repository, "examples/tanstack-start-next");
+    const { createServer } = await import(
+        pathToFileURL(path.join(example, "node_modules/vite/dist/node/index.js")).href
+    );
+    const { oidcSpa } = await import(
+        pathToFileURL(path.join(repository, "dist/esm/vite-plugin/index.mjs")).href
+    );
+    const root = await mkdtemp(path.join(tmpdir(), "oidc-spa-env-vite8-"));
+    t.after(() => rm(root, { recursive: true, force: true }));
+    const configSource = name => `
+        import { oidcSpa } from "oidc-spa/react-tanstack-start";
+        oidcSpa.withClientUser(() => ({})).withRuntimeConfigs(({ process }) => ({
+            mode: "mock", client: { clientId_mock: process.env.${name} }
+        })).createUtils();
+    `;
+    await mkdir(path.join(root, "src/routes/api"), { recursive: true });
+    // All parent directories can resolve as modules, but the API directory has
+    // no index. Watching it must not turn it into a virtual-module import.
+    for (const directory of ["", "src", "src/routes"]) {
+        await writeFile(path.join(root, directory, "index.ts"), "export {};");
+    }
+    await writeFile(path.join(root, "src/client.ts"), "export {};");
+    await writeFile(path.join(root, "src/server.ts"), "export default {};");
+    await writeFile(path.join(root, "src/oidc.ts"), configSource("CLIENT"));
+    await writeFile(
+        path.join(root, "src/routes/api/todos.ts"),
+        'export const GET = () => new Response("todos");'
+    );
+    const server = await createServer({
+        configFile: false,
+        root,
+        logLevel: "silent",
+        plugins: [{ name: "tanstack-react-start:config" }, oidcSpa()],
+        server: { middlewareMode: true },
+        optimizeDeps: { noDiscovery: true }
+    });
+    try {
+        const loadManifest = async () => {
+            const result = await server.environments.client.transformRequest(
+                "virtual:oidc-spa/tanstack-start-public-env"
+            );
+            assert(result);
+            return result.code;
+        };
+        assert.match(await loadManifest(), /new Set\(\["CLIENT"\]\)/);
+        const file = path.join(root, "src/routes/api/config.ts");
+        await writeFile(file, configSource("NEW_CLIENT"));
+        server.watcher.emit("add", file);
+        assert.match(await loadManifest(), /new Set\(\["CLIENT","NEW_CLIENT"\]\)/);
+        await rm(file);
+        server.watcher.emit("unlink", file);
+        assert.match(await loadManifest(), /new Set\(\["CLIENT"\]\)/);
+    } finally {
+        await server.close();
+    }
 });

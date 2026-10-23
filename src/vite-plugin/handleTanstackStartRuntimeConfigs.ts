@@ -85,7 +85,10 @@ export function createHandleTanstackStartRuntimeConfigs(params: { resolvedConfig
         // Scan before generating the virtual module, including lazy routes. Collecting
         // names in transform() would make authorization depend on module load order.
         const discover = async (directory: string): Promise<string[]> => {
-            context.addWatchFile(directory);
+            // Vite watches the project root recursively. In dev, addWatchFile also
+            // registers module imports, which cannot resolve directories in Vite 8.
+            // Keep directory watches for builds to discover newly added sources.
+            if (resolvedConfig.command === "build") context.addWatchFile(directory);
             const entries = await fs.readdir(directory, { withFileTypes: true });
             const files = await Promise.all(
                 entries.map(async entry => {

@@ -1956,7 +1956,7 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
             const { accessToken } = await oidc_loggedIn.getTokens(params);
             return accessToken;
         },
-        logout: async ({ returnToUrl = window.location.href } = {}) => {
+        logout: async ({ returnToUrl = homeUrlAndRedirectUri } = {}) => {
             if (globalContext.hasLogoutBeenCalled) {
                 log?.("logout() has already been called, ignoring the call");
                 return new Promise<never>(() => {});

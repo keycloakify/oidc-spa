@@ -1,20 +1,26 @@
-import { defineConfig } from "vite";
-import { devtools } from "@tanstack/devtools-vite";
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
+import { defineConfig } from "vite";
 import viteReact from "@vitejs/plugin-react";
-import tailwindcss from "@tailwindcss/vite";
 import { nitro } from "nitro/vite";
 import { oidcSpa } from "oidc-spa/vite-plugin";
 
-const config = defineConfig({
+export default defineConfig({
+    server: {
+        port: 3000,
+        strictPort: true,
+        // Auth0: We use https://app.localhost instead of the default
+        // http://localhost to avoid having to grant consent on every reload.
+        host: "app.localhost"
+    },
     resolve: {
         tsconfigPaths: true
     },
     plugins: [
-        devtools(),
-        nitro({ rollupConfig: { external: [/^@sentry\//] } }),
-        tailwindcss(),
-        tanstackStart(),
+        tanstackStart({
+            srcDirectory: "src"
+        }),
+        viteReact(),
+        nitro(),
         oidcSpa({
             browserRuntimeFreeze: {
                 enabled: true
@@ -24,9 +30,6 @@ const config = defineConfig({
                 enabled: true,
                 mode: "auto"
             }
-        }),
-        viteReact()
+        })
     ]
 });
-
-export default config;
