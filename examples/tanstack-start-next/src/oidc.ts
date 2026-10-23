@@ -145,7 +145,7 @@ export const {
                     issuerUri: process.env["ENTRA_ISSUER_URI"],
                     client: {
                         clientId: process.env["ENTRA_CLIENT_ID"],
-                        scopes: ["profile", process.env["ENTRA_API_ACCESS_SCOPE"]]
+                        scopes: ["profile", process.env["ENTRA_API_SCOPE"]]
                     },
                     server: {
                         accessTokenValidationMethod: "offline JWT validation",
