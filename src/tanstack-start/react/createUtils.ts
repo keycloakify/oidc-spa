@@ -975,11 +975,11 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
                 switch (runtimeConfigs.mode) {
                     case "mock": {
                         assert(is<RuntimeConfigs.Mock<true>>(runtimeConfigs));
-                        return {
+                        return (cachedReturn = {
                             isSuccess: true,
                             isMock: true as const,
                             runtimeConfigs_mock: runtimeConfigs
-                        };
+                        });
                     }
                     case "real": {
                         assert("server" in runtimeConfigs);
@@ -1012,12 +1012,12 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
                             })()
                         });
 
-                        return {
+                        return (cachedReturn = {
                             isSuccess: true,
                             isMock: false as const,
                             validateAndGetAccessTokenClaims,
                             enableDebugLogs: runtimeConfigs.debugLogs ?? false
-                        };
+                        });
                     }
                     default:
                         assert<Equals<typeof runtimeConfigs, never>>(false);
@@ -1026,6 +1026,13 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
 
             return { getLazyServerMaterial };
         })();
+
+        // Middleware instances share validation only within the same server request.
+        // Keep the pending promise too, so concurrent calls cannot consume a proof twice.
+        const accessTokenValidationByRequest = new WeakMap<
+            Request,
+            ReturnType<ValidateAndGetAccessTokenClaims<AccessTokenClaims>>
+        >();
 
         function createFunctionMiddlewareServerFn(params?: {
             require?: "authed request";
@@ -1108,8 +1115,9 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
                     "../../server/extractRequestAuthContext"
                 );
 
+                const request = getRequest() as Request;
                 const requestAuthContext = extractRequestAuthContext({
-                    request: getRequest() as Request,
+                    request,
                     trustProxy: true
                 });
 
@@ -1140,13 +1148,22 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
                     throw new Error(wwwAuthenticateResponseHeaderValue);
                 }
 
+                let prAccessTokenValidation = accessTokenValidationByRequest.get(request);
+
+                if (prAccessTokenValidation === undefined) {
+                    prAccessTokenValidation = validateAndGetAccessTokenClaims(
+                        requestAuthContext.accessTokenAndMetadata
+                    );
+                    accessTokenValidationByRequest.set(request, prAccessTokenValidation);
+                }
+
                 const {
                     isSuccess,
                     debugErrorMessage,
                     accessToken,
                     accessTokenClaims,
                     recommendedHttpErrorStatusCode
-                } = await validateAndGetAccessTokenClaims(requestAuthContext.accessTokenAndMetadata);
+                } = await prAccessTokenValidation;
 
                 if (!isSuccess) {
                     log?.(debugErrorMessage);
