@@ -1027,13 +1027,6 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
             return { getLazyServerMaterial };
         })();
 
-        // Middleware instances share validation only within the same server request.
-        // Keep the pending promise too, so concurrent calls cannot consume a proof twice.
-        const accessTokenValidationByRequest = new WeakMap<
-            Request,
-            ReturnType<ValidateAndGetAccessTokenClaims<AccessTokenClaims>>
-        >();
-
         function createFunctionMiddlewareServerFn(params?: {
             require?: "authed request";
             hasAuthorization?: (params: { user: User_server }) => MaybeAsync<boolean>;
@@ -1115,9 +1108,8 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
                     "../../server/extractRequestAuthContext"
                 );
 
-                const request = getRequest() as Request;
                 const requestAuthContext = extractRequestAuthContext({
-                    request,
+                    request: getRequest() as Request,
                     trustProxy: true
                 });
 
@@ -1148,22 +1140,13 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
                     throw new Error(wwwAuthenticateResponseHeaderValue);
                 }
 
-                let prAccessTokenValidation = accessTokenValidationByRequest.get(request);
-
-                if (prAccessTokenValidation === undefined) {
-                    prAccessTokenValidation = validateAndGetAccessTokenClaims(
-                        requestAuthContext.accessTokenAndMetadata
-                    );
-                    accessTokenValidationByRequest.set(request, prAccessTokenValidation);
-                }
-
                 const {
                     isSuccess,
                     debugErrorMessage,
                     accessToken,
                     accessTokenClaims,
                     recommendedHttpErrorStatusCode
-                } = await prAccessTokenValidation;
+                } = await validateAndGetAccessTokenClaims(requestAuthContext.accessTokenAndMetadata);
 
                 if (!isSuccess) {
                     log?.(debugErrorMessage);

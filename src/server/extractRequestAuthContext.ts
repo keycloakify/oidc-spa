@@ -194,7 +194,35 @@ export namespace RequestAuthContext {
     };
 }
 
+const requestAuthContextByRequest_trustProxy = new WeakMap<AnyRequest, RequestAuthContext | undefined>();
+const requestAuthContextByRequest_dontTrustProxy = new WeakMap<
+    AnyRequest,
+    RequestAuthContext | undefined
+>();
+
 export function extractRequestAuthContext(params: {
+    request: AnyRequest;
+    trustProxy: boolean;
+}): RequestAuthContext | undefined {
+    const { request, trustProxy } = params;
+
+    const requestAuthContextByRequest = trustProxy
+        ? requestAuthContextByRequest_trustProxy
+        : requestAuthContextByRequest_dontTrustProxy;
+
+    if (requestAuthContextByRequest.has(request)) {
+        const requestAuthContext = requestAuthContextByRequest.get(request);
+        return requestAuthContext;
+    }
+
+    const requestAuthContext = extractRequestAuthContext_nonMemoized(params);
+
+    requestAuthContextByRequest.set(request, requestAuthContext);
+
+    return requestAuthContext;
+}
+
+function extractRequestAuthContext_nonMemoized(params: {
     request: AnyRequest;
     trustProxy: boolean;
 }): RequestAuthContext | undefined {
