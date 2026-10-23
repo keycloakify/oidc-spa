@@ -94,7 +94,7 @@ export declare namespace Oidc {
         /**
          * Logs the user out and returns them to `returnToUrl`.
          *
-         * By default, the user is returned to the current URL.
+         * By default, the user is returned to the home of the app (The valid redirect URI).
          */
         logout: (params?: { returnToUrl?: string }) => Promise<never>;
         /**
