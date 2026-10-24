@@ -83,7 +83,8 @@ import { RouterLink } from '@angular/router';
             <h3>Protect pages and opt requests into authentication</h3>
             <p>
               Protected routes use <code>canActivate: [enforceLoginGuard]</code> to require sign-in
-              before loading. In
+              before loading. The admin route also checks <code>canSeeAdminNavigation</code> in its
+              guard, showing an alert and redirecting home when access is denied. In
               <a [href]="sourceUrl + '/src/app/services/todo.service.ts'"
                 ><code>todo.service.ts</code></a
               >, requests explicitly opt in to access token injection using

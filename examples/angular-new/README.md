@@ -54,6 +54,8 @@ To use the local oidc-spa source, run `yarn start-angular-new-example` from the 
 - `src/app/app.config.ts` registers `provideOidc()` and `createOidcInterceptor()`. The interceptor
   attaches an access token only when a request sets `REQUIRE_ACCESS_TOKEN`.
 - `src/app/app.routes.ts` protects the todo, admin and account pages with `enforceLoginGuard`.
+  The admin route also checks `canSeeAdminNavigation` in `canActivate`; non-admin users see an alert
+  and are redirected home before the page loads.
 - `src/app/services/todo.service.ts` uses `HttpClient` with
   `context: new HttpContext().set(REQUIRE_ACCESS_TOKEN, true)` on each protected request. The
   interceptor gets a current access token and attaches it; early initialization handles DPoP when

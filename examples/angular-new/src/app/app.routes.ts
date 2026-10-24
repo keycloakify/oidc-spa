@@ -1,5 +1,6 @@
-import type { Routes } from '@angular/router';
-import { enforceLoginGuard } from './oidc';
+import { inject } from '@angular/core';
+import { RedirectCommand, Router, type Routes } from '@angular/router';
+import { enforceLoginGuard, injectOidc } from './oidc';
 
 export const routes: Routes = [
   { path: '', loadComponent: () => import('./pages/home').then((m) => m.Home) },
@@ -10,7 +11,19 @@ export const routes: Routes = [
   },
   {
     path: 'todo-list-admin',
-    canActivate: [enforceLoginGuard],
+    canActivate: [
+      async (route, state) => {
+        const oidc = injectOidc();
+        const router = inject(Router);
+
+        await enforceLoginGuard(route, state);
+
+        if (oidc.isUserLoggedIn && oidc.user().canSeeAdminNavigation) return true;
+
+        alert('You need the admin role to view this page.');
+        return new RedirectCommand(router.parseUrl('/'));
+      },
+    ],
     loadComponent: () => import('./pages/todo-list-admin').then((m) => m.TodoListAdmin),
   },
   {
