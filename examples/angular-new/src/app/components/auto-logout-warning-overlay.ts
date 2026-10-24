@@ -1,5 +1,5 @@
 import { Component } from '@angular/core';
-import { injectOidc } from '../services/oidc.service';
+import { injectOidc } from '../oidc';
 
 @Component({
   selector: 'app-auto-logout-warning-overlay',

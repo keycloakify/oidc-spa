@@ -1,7 +1,7 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { Component, inject, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
-import { injectOidc } from '../services/oidc.service';
+import { injectOidc } from '../oidc';
 import { TodoService, type UserTodos } from '../services/todo.service';
 
 @Component({

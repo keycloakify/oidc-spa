@@ -1,5 +1,5 @@
 import type { Routes } from '@angular/router';
-import { enforceLoginGuard } from './services/oidc.service';
+import { enforceLoginGuard } from './oidc';
 
 export const routes: Routes = [
   { path: '', loadComponent: () => import('./pages/home').then((m) => m.Home) },

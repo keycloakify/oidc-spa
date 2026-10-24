@@ -1,6 +1,6 @@
 import { HttpClient, HttpContext } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
-import { REQUIRE_ACCESS_TOKEN } from './oidc.service';
+import { REQUIRE_ACCESS_TOKEN } from '../oidc';
 
 // These describe the HTTP responses. No backend types are imported into the app.
 export type TodoItem = { id: number; name: string };

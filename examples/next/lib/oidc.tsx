@@ -16,13 +16,6 @@ export type User_client = {
     canSeeAdminNavigation: boolean;
 };
 
-// App-specific user model exposed to the backend request handler.
-// Shape it around what you need to identify and authorize the user.
-export type User_server = {
-    id: string;
-    isAdmin: boolean;
-};
-
 export const { useOidc, getOidc, OidcInitializationGate, withLoginEnforced } = oidcSpa
     .withUser<User_client>(async ({ isMock, idTokenClaims, accessToken }) => {
         if (isMock) {

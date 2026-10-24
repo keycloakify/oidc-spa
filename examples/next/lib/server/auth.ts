@@ -1,7 +1,13 @@
 import "server-only";
 import { oidcSpa, extractRequestAuthContext, type RuntimeConfigs } from "oidc-spa/server";
 import { z } from "zod";
-import type { User_server } from "../oidc";
+
+// App-specific user model exposed to the backend request handler.
+// Shape it around what you need to identify and authorize the user.
+export type User_server = {
+    id: string;
+    isAdmin: boolean;
+};
 
 // You define what you expect to be the shape of the access token claims.
 type AccessTokenClaims = {
@@ -14,12 +20,7 @@ const AccessTokenClaims = z.toZod<AccessTokenClaims>()(
 );
 
 const { validateAndGetAccessTokenClaims } = oidcSpa
-    .withAccessTokenClaimsSchema(
-        z.object({
-            sub: z.string(),
-            roles: z.array(z.string()).optional()
-        })
-    )
+    .withAccessTokenClaimsSchema(AccessTokenClaims)
     .withRuntimeConfigs(async (): Promise<RuntimeConfigs<AccessTokenClaims>> => {
         switch (process.env.NEXT_PUBLIC_OIDC_PROVIDER) {
             case "mock":

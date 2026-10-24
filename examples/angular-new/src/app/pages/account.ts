@@ -1,6 +1,6 @@
 import { Component } from '@angular/core';
 import { createKeycloakUtils, isKeycloak } from 'oidc-spa/keycloak';
-import { injectOidc } from '../services/oidc.service';
+import { injectOidc } from '../oidc';
 
 @Component({
   selector: 'app-account',

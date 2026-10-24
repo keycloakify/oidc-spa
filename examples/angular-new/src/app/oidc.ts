@@ -4,7 +4,7 @@ import { decodeJwt } from 'oidc-spa/decode-jwt';
 import { z } from 'zod';
 
 // Shape the browser's user around what the UI needs to display.
-export type User = {
+export type User_client = {
   displayName: string;
   email: string | undefined;
   avatarImgUrl: string;
@@ -13,7 +13,7 @@ export type User = {
 
 export const { provideOidc, injectOidc, getOidc, createOidcInterceptor, enforceLoginGuard } =
   oidcSpa
-    .withUser<User>(({ isMock, idTokenClaims, accessToken }) => {
+    .withUser<User_client>(({ isMock, idTokenClaims, accessToken }) => {
       if (isMock) {
         return {
           displayName: 'John Doe',

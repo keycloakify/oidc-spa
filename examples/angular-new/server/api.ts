@@ -1,6 +1,6 @@
 import express, { type ErrorRequestHandler } from 'express';
 import { z } from 'zod';
-import { getUser, HttpError } from './auth';
+import { getUser, HttpError } from './oidc';
 import { getTodosStore, type TodoItem } from './data/todos';
 
 export function createApiRouter() {

@@ -4,7 +4,7 @@ import { z } from 'zod';
 
 // App level representation of a user for the API request handler.
 // Shape it to be able to identify the user and it's authorizations.
-export type User = { id: string; isAdmin: boolean };
+export type User_server = { id: string; isAdmin: boolean };
 
 // You define what you expect to be the shape of the access token claims.
 type AccessTokenClaims = {
@@ -74,7 +74,7 @@ export class HttpError extends Error {
   }
 }
 
-export async function getUser(req: Request): Promise<User> {
+export async function getUser(req: Request): Promise<User_server> {
   const context = extractRequestAuthContext({ request: req, trustProxy: true });
 
   if (context === undefined) throw new HttpError(401, 'Authentication required.');

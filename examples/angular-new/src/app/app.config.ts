@@ -4,7 +4,7 @@ import { provideRouter } from '@angular/router';
 import type { RuntimeConfigs } from 'oidc-spa/angular';
 import { firstValueFrom } from 'rxjs';
 import { routes } from './app.routes';
-import { createOidcInterceptor, provideOidc, REQUIRE_ACCESS_TOKEN } from './services/oidc.service';
+import { createOidcInterceptor, provideOidc, REQUIRE_ACCESS_TOKEN } from './oidc';
 
 export const appConfig: ApplicationConfig = {
   providers: [
