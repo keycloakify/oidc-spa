@@ -1,23 +1,15 @@
 import { Component } from '@angular/core';
-import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
-import { injectOidc } from './services/oidc.service';
-import { createKeycloakUtils } from 'oidc-spa/keycloak';
+import { RouterOutlet } from '@angular/router';
+import { AppHeader } from './components/app-header';
+import { AutoLogoutWarningOverlay } from './components/auto-logout-warning-overlay';
 
 @Component({
+  imports: [RouterOutlet, AppHeader, AutoLogoutWarningOverlay],
   selector: 'app-root',
-  imports: [RouterOutlet, RouterLink, RouterLinkActive],
-  templateUrl: './app.html',
+  template: `
+    <app-header />
+    <main><router-outlet /></main>
+    <app-auto-logout-warning-overlay />
+  `,
 })
-export class App {
-  oidc = injectOidc();
-  get keycloakUtils() {
-    return createKeycloakUtils({ issuerUri: this.oidc.issuerUri });
-  }
-
-  get accountUrl() {
-    return this.keycloakUtils.getAccountUrl({
-      clientId: this.oidc.clientId,
-      validRedirectUri: this.oidc.validRedirectUri,
-    });
-  }
-}
+export class App {}

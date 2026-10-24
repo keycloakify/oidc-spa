@@ -1,24 +1,38 @@
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpContext } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
-import type { Observable } from 'rxjs';
+import { REQUIRE_ACCESS_TOKEN } from '../oidc';
 
-export interface Todo {
-  userId: number;
-  id: number;
-  title: string;
-  completed: boolean;
-}
-
-const TODO_API_URL = 'https://jsonplaceholder.typicode.com/todos';
+// These describe the HTTP responses. No backend types are imported into the app.
+export type TodoItem = { id: number; name: string };
+export type UserTodos = { userId: string; todos: TodoItem[] };
 
 @Injectable({ providedIn: 'root' })
 export class TodoService {
   private readonly http = inject(HttpClient);
-  private readonly apiUrl = TODO_API_URL;
 
-  getTodos(): Observable<Todo[]> {
-    return this.http.get<Todo[]>(this.apiUrl, {
-      params: { _limit: 5 },
+  getTodos() {
+    return this.http.get<TodoItem[]>('/api/todos', {
+      context: new HttpContext().set(REQUIRE_ACCESS_TOKEN, true),
+    });
+  }
+
+  addTodo(name: string) {
+    return this.http.post<TodoItem>(
+      '/api/todos',
+      { name },
+      { context: new HttpContext().set(REQUIRE_ACCESS_TOKEN, true) }
+    );
+  }
+
+  getAllTodos() {
+    return this.http.get<UserTodos[]>('/api/todos/all', {
+      context: new HttpContext().set(REQUIRE_ACCESS_TOKEN, true),
+    });
+  }
+
+  deleteTodo(userId: string, todoId: number) {
+    return this.http.delete<void>(`/api/todos/${encodeURIComponent(userId)}/${todoId}`, {
+      context: new HttpContext().set(REQUIRE_ACCESS_TOKEN, true),
     });
   }
 }

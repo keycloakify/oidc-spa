@@ -26,6 +26,7 @@ yarn-error.log
 !.vscode/tasks.json
 !.vscode/launch.json
 !.vscode/extensions.json
+!.vscode/mcp.json
 .history/*
 
 # Miscellaneous
@@ -36,10 +37,15 @@ yarn-error.log
 /libpeerconnection.log
 testem.log
 /typings
+__screenshots__/
 
 # System files
 .DS_Store
 Thumbs.db
+
+# Runtime configuration and local todo storage
+/.env
+/todos_*.json
 
 # Each example supports npm, Yarn, and pnpm.
 /package-lock.json
