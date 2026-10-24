@@ -1,14 +1,14 @@
 import "server-only";
 import { initTRPC, TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { AuthError, getUser as getUserFromRequest } from "./auth";
+import { AuthError, getUser as getUser_generic } from "./oidc";
 import { getTodosStore, type TodoItem } from "./data/todos";
 
 const t = initTRPC.context<{ req: Request }>().create();
 
-async function getUser(params: { req: Request }) {
+async function getUser(req: Request) {
     try {
-        return await getUserFromRequest(params);
+        return await getUser_generic(req);
     } catch (error) {
         if (!(error instanceof AuthError)) throw error;
 
@@ -26,11 +26,11 @@ async function getUser(params: { req: Request }) {
 export const appRouter = t.router({
     todos: t.router({
         list: t.procedure.query(async ({ ctx: { req } }) => {
-            const user = await getUser({ req });
+            const user = await getUser(req);
             return getTodosStore().readTodos({ userId: user.id });
         }),
-        add: t.procedure.input(z.string().trim().min(1)).mutation(async ({ ctx, input }) => {
-            const user = await getUser(ctx);
+        add: t.procedure.input(z.string().trim().min(1)).mutation(async ({ ctx: { req }, input }) => {
+            const user = await getUser(req);
             const store = getTodosStore();
             const userId = user.id;
             const todos = await store.readTodos({ userId });
@@ -38,7 +38,7 @@ export const appRouter = t.router({
             await store.updateTodos({ userId, todos: [...todos, todo] });
         }),
         listAllUserTodos: t.procedure.query(async ({ ctx: { req } }) => {
-            const user = await getUser({ req });
+            const user = await getUser(req);
             if (!user.isAdmin) {
                 throw new TRPCError({ code: "FORBIDDEN" });
             }
@@ -47,7 +47,7 @@ export const appRouter = t.router({
         delete: t.procedure
             .input(z.object({ userId: z.string().min(1), todoId: z.number().int() }))
             .mutation(async ({ ctx: { req }, input }) => {
-                const user = await getUser({ req });
+                const user = await getUser(req);
                 if (!user.isAdmin) {
                     throw new TRPCError({ code: "FORBIDDEN" });
                 }

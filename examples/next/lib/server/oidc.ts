@@ -82,9 +82,7 @@ export class AuthError extends Error {
     }
 }
 
-export async function getUser(params: { req: Request }): Promise<User_server> {
-    const { req } = params;
-
+export async function getUser(req: Request): Promise<User_server> {
     const requestAuthContext = extractRequestAuthContext({ request: req, trustProxy: true });
 
     if (!requestAuthContext) {

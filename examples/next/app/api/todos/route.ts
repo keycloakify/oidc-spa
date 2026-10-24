@@ -1,12 +1,12 @@
 import { z } from "zod";
-import { AuthError, getUser } from "@/lib/server/auth";
+import { AuthError, getUser } from "@/lib/server/oidc";
 import { getTodosStore, type TodoItem } from "@/lib/server/data/todos";
 
 const headers = { "Cache-Control": "private, no-store" };
 
 export async function GET(req: Request) {
     try {
-        const user = await getUser({ req });
+        const user = await getUser(req);
         const todos = await getTodosStore().readTodos({ userId: user.id });
 
         return Response.json(todos, { headers });
@@ -17,7 +17,7 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
     try {
-        const user = await getUser({ req });
+        const user = await getUser(req);
         const result = z
             .object({ name: z.string().trim().min(1) })
             .safeParse(await req.json().catch(() => undefined));
