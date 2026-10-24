@@ -9,8 +9,13 @@ export const trpc = createTRPCClient<AppRouter>({
         httpBatchLink({
             url: `${process.env.__NEXT_ROUTER_BASEPATH}/api/trpc`,
             headers: async () => {
-                const oidc = await getOidc({ assert: "user logged in" });
-                return { Authorization: `Bearer ${await oidc.getAccessToken()}` };
+                const oidc = await getOidc();
+
+                return {
+                    Authorization: oidc.isUserLoggedIn
+                        ? `Bearer ${await oidc.getAccessToken()}`
+                        : undefined
+                };
             }
         })
     ]
