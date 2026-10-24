@@ -1,6 +1,6 @@
 import express, { type ErrorRequestHandler } from 'express';
 import { z } from 'zod';
-import { getUser, HttpError, runtimeConfigs_client } from './auth';
+import { getUser, HttpError } from './auth';
 import { getTodosStore, type TodoItem } from './data/todos';
 
 export function createApiRouter() {
@@ -11,8 +11,25 @@ export function createApiRouter() {
     next();
   });
 
-  api.get('/oidc-client-runtime-configs', (_req, res) => {
-    res.json(runtimeConfigs_client);
+  api.get('/oidc-client-env', (_req, res) => {
+    res.json({
+      OIDC_PROVIDER: process.env['OIDC_PROVIDER'],
+
+      KEYCLOAK_ISSUER_URI: process.env['KEYCLOAK_ISSUER_URI'],
+      KEYCLOAK_CLIENT_ID: process.env['KEYCLOAK_CLIENT_ID'],
+
+      KEYCLOAK2_ISSUER_URI: process.env['KEYCLOAK2_ISSUER_URI'],
+      KEYCLOAK2_CLIENT_ID: process.env['KEYCLOAK2_CLIENT_ID'],
+
+      AUTH0_ISSUER_URI: process.env['AUTH0_ISSUER_URI'],
+      AUTH0_CLIENT_ID: process.env['AUTH0_CLIENT_ID'],
+      AUTH0_API_IDENTIFIER: process.env['AUTH0_API_IDENTIFIER'],
+      AUTH0_SSO_SESSION_IDLE_SECONDS: process.env['AUTH0_SSO_SESSION_IDLE_SECONDS'],
+
+      ENTRA_ISSUER_URI: process.env['ENTRA_ISSUER_URI'],
+      ENTRA_CLIENT_ID: process.env['ENTRA_CLIENT_ID'],
+      ENTRA_API_SCOPE: process.env['ENTRA_API_SCOPE'],
+    });
   });
 
   api.use(express.json({ limit: '16kb' }));

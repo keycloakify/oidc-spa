@@ -1,7 +1,17 @@
 import "server-only";
-import { oidcSpa, extractRequestAuthContext } from "oidc-spa/server";
+import { oidcSpa, extractRequestAuthContext, type RuntimeConfigs } from "oidc-spa/server";
 import { z } from "zod";
 import type { User_server } from "../oidc";
+
+// You define what you expect to be the shape of the access token claims.
+type AccessTokenClaims = {
+    sub: string;
+    roles?: string[];
+};
+
+const AccessTokenClaims = z.toZod<AccessTokenClaims>()(
+    z.object({ sub: z.string(), roles: z.array(z.string()).optional() })
+);
 
 const { validateAndGetAccessTokenClaims } = oidcSpa
     .withAccessTokenClaimsSchema(
@@ -10,7 +20,7 @@ const { validateAndGetAccessTokenClaims } = oidcSpa
             roles: z.array(z.string()).optional()
         })
     )
-    .withRuntimeConfigs(async () => {
+    .withRuntimeConfigs(async (): Promise<RuntimeConfigs<AccessTokenClaims>> => {
         switch (process.env.NEXT_PUBLIC_OIDC_PROVIDER) {
             case "mock":
                 return {

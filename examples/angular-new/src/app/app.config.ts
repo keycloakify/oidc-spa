@@ -17,9 +17,54 @@ export const appConfig: ApplicationConfig = {
         }),
       ])
     ),
-    provideOidc(() => {
+    provideOidc(async (): Promise<RuntimeConfigs> => {
       const http = inject(HttpClient);
-      return firstValueFrom(http.get<RuntimeConfigs>('/api/oidc-client-runtime-configs'));
+      const env = await firstValueFrom(http.get<Record<string, string>>('/api/oidc-client-env'));
+
+      switch (env['OIDC_PROVIDER']) {
+        case 'mock':
+          return {
+            mode: 'mock',
+            isUserInitiallyLoggedIn: true,
+          };
+        case 'Keycloak':
+          return {
+            mode: 'real',
+            issuerUri: env['KEYCLOAK_ISSUER_URI'],
+            clientId: env['KEYCLOAK_CLIENT_ID'],
+            debugLogs: true,
+          };
+        case 'Keycloak2':
+          return {
+            mode: 'real',
+            issuerUri: env['KEYCLOAK2_ISSUER_URI'],
+            clientId: env['KEYCLOAK2_CLIENT_ID'],
+            debugLogs: true,
+          };
+        case 'Auth0':
+          return {
+            mode: 'real',
+            issuerUri: env['AUTH0_ISSUER_URI'],
+            clientId: env['AUTH0_CLIENT_ID'],
+            authorizationParams: {
+              audience: env['AUTH0_API_IDENTIFIER'],
+            },
+            idleSessionLifetimeInSeconds: parseInt(env['AUTH0_SSO_SESSION_IDLE_SECONDS']),
+            // DPoP is only available for paying Auth0 customer.
+            disableDPoP: true,
+            debugLogs: true,
+          };
+        case 'EntraID':
+          return {
+            mode: 'real',
+            issuerUri: env['ENTRA_ISSUER_URI'],
+            clientId: env['ENTRA_CLIENT_ID'],
+            scopes: ['profile', env['ENTRA_API_SCOPE']],
+            debugLogs: true,
+          };
+        default:
+          throw new Error('Unknown provider');
+      }
     }),
   ],
 };

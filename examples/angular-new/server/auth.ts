@@ -1,8 +1,6 @@
 import type { Request } from 'express';
-import { extractRequestAuthContext, oidcSpa } from 'oidc-spa/server';
+import { extractRequestAuthContext, oidcSpa, type RuntimeConfigs } from 'oidc-spa/server';
 import { z } from 'zod';
-import type { RuntimeConfigs as RuntimeConfigs_server } from 'oidc-spa/server';
-import type { RuntimeConfigs as RuntimeConfigs_client } from 'oidc-spa/angular';
 
 // App level representation of a user for the API request handler.
 // Shape it to be able to identify the user and it's authorizations.
@@ -20,7 +18,54 @@ const AccessTokenClaims = z.toZod<AccessTokenClaims>()(
 
 const { validateAndGetAccessTokenClaims } = oidcSpa
   .withAccessTokenClaimsSchema(AccessTokenClaims)
-  .withRuntimeConfigs(async () => runtimeConfigs.server)
+  .withRuntimeConfigs(async (): Promise<RuntimeConfigs<AccessTokenClaims>> => {
+    switch (process.env['OIDC_PROVIDER']) {
+      case 'mock':
+        return {
+          mode: 'mock',
+          accessTokenClaims_mock: { sub: 'mock-user-id', roles: ['admin'] },
+        };
+      case 'Keycloak':
+        return {
+          mode: 'real',
+          issuerUri: process.env['KEYCLOAK_ISSUER_URI']!,
+          accessTokenValidation: {
+            method: 'offline JWT validation',
+            expectedAudience: process.env['KEYCLOAK_EXPECTED_ACCESS_TOKEN_AUDIENCE']!,
+          },
+        };
+      case 'Keycloak2':
+        return {
+          mode: 'real',
+          issuerUri: process.env['KEYCLOAK2_ISSUER_URI']!,
+          accessTokenValidation: {
+            method: 'introspection endpoint',
+            clientId: process.env['KEYCLOAK2_API_CLIENT_ID']!,
+            clientSecret: process.env['KEYCLOAK2_API_CLIENT_SECRET']!,
+          },
+        };
+      case 'Auth0':
+        return {
+          mode: 'real',
+          issuerUri: process.env['AUTH0_ISSUER_URI']!,
+          accessTokenValidation: {
+            method: 'offline JWT validation',
+            expectedAudience: process.env['AUTH0_API_IDENTIFIER']!,
+          },
+        };
+      case 'EntraID':
+        return {
+          mode: 'real',
+          issuerUri: process.env['ENTRA_ISSUER_URI']!,
+          accessTokenValidation: {
+            method: 'offline JWT validation',
+            expectedAudience: process.env['ENTRA_API_CLIENT_ID']!,
+          },
+        };
+      default:
+        throw new Error('Unknown OIDC_PROVIDER. Choose a provider in .env.');
+    }
+  })
   .createUtils();
 
 export class HttpError extends Error {
@@ -47,97 +92,3 @@ export async function getUser(req: Request): Promise<User> {
     isAdmin: result.accessTokenClaims.roles?.includes('admin') ?? false,
   };
 }
-
-const runtimeConfigs = ((): {
-  client: RuntimeConfigs_client;
-  server: RuntimeConfigs_server<AccessTokenClaims>;
-} => {
-  switch (process.env['OIDC_PROVIDER']) {
-    case 'mock':
-      return {
-        client: { mode: 'mock', isUserInitiallyLoggedIn: true },
-        server: {
-          mode: 'mock',
-          accessTokenClaims_mock: { sub: 'mock-user-id', roles: ['admin'] },
-        },
-      };
-    case 'Keycloak':
-      return {
-        client: {
-          mode: 'real',
-          issuerUri: process.env['KEYCLOAK_ISSUER_URI']!,
-          clientId: process.env['KEYCLOAK_CLIENT_ID']!,
-          debugLogs: true,
-        },
-        server: {
-          mode: 'real',
-          issuerUri: process.env['KEYCLOAK_ISSUER_URI']!,
-          accessTokenValidation: {
-            method: 'offline JWT validation',
-            expectedAudience: process.env['KEYCLOAK_EXPECTED_ACCESS_TOKEN_AUDIENCE']!,
-          },
-        },
-      };
-    case 'Keycloak2':
-      return {
-        client: {
-          mode: 'real',
-          issuerUri: process.env['KEYCLOAK2_ISSUER_URI']!,
-          clientId: process.env['KEYCLOAK2_CLIENT_ID']!,
-          debugLogs: true,
-        },
-        server: {
-          mode: 'real',
-          issuerUri: process.env['KEYCLOAK2_ISSUER_URI']!,
-          accessTokenValidation: {
-            method: 'introspection endpoint',
-            clientId: process.env['KEYCLOAK2_API_CLIENT_ID']!,
-            clientSecret: process.env['KEYCLOAK2_API_CLIENT_SECRET']!,
-          },
-        },
-      };
-    case 'Auth0':
-      return {
-        client: {
-          mode: 'real',
-          issuerUri: process.env['AUTH0_ISSUER_URI']!,
-          clientId: process.env['AUTH0_CLIENT_ID']!,
-          authorizationParams: { audience: process.env['AUTH0_API_IDENTIFIER'] },
-          idleSessionLifetimeInSeconds: Number(process.env['AUTH0_SSO_SESSION_IDLE_SECONDS']),
-          // DPoP is only available for paying Auth0 customers.
-          disableDPoP: true,
-          debugLogs: true,
-        },
-        server: {
-          mode: 'real',
-          issuerUri: process.env['AUTH0_ISSUER_URI']!,
-          accessTokenValidation: {
-            method: 'offline JWT validation',
-            expectedAudience: process.env['AUTH0_API_IDENTIFIER']!,
-          },
-        },
-      };
-    case 'EntraID':
-      return {
-        client: {
-          mode: 'real',
-          issuerUri: process.env['ENTRA_ISSUER_URI']!,
-          clientId: process.env['ENTRA_CLIENT_ID']!,
-          scopes: ['profile', process.env['ENTRA_API_SCOPE']!],
-          debugLogs: true,
-        },
-        server: {
-          mode: 'real',
-          issuerUri: process.env['ENTRA_ISSUER_URI']!,
-          accessTokenValidation: {
-            method: 'offline JWT validation',
-            expectedAudience: process.env['ENTRA_API_CLIENT_ID']!,
-          },
-        },
-      };
-    default:
-      throw new Error('Unknown OIDC_PROVIDER. Choose a provider in .env.');
-  }
-})();
-
-export const runtimeConfigs_client = runtimeConfigs.client;
