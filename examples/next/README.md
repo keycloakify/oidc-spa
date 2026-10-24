@@ -9,6 +9,10 @@ restoration happen in the browser, and the entire UI waits for them before rende
 on the server has no access to that browser session; authenticated data is loaded through browser
 requests to the backend.
 
+Browser authentication and backend token validation are configured independently. The included backend
+uses `oidc-spa/server`, but the browser integration can also call an existing API with its own token
+validation implementation.
+
 ## Pages
 
 -   Home: `/` — a public integration walkthrough.
@@ -48,25 +52,31 @@ To use local oidc-spa source, run `yarn start-next-example` from the repository 
 -   `app/(protected)/layout.tsx` uses `withLoginEnforced` to require sign-in for the todo, admin,
     and account pages. The home page is public and uses the same root initialization gate.
 -   `lib/trpc.ts` sends access tokens in the Authorization header using `getOidc()`.
--   `lib/server/auth.ts` validates tokens with `oidc-spa/server`, then maps claims to `User_server`.
-    Both user models match the TanStack Start example. The optional `roles` array grants admin access
+-   `lib/server/oidc.ts` configures token validation separately with `oidc-spa/server`. Its
+    `AccessTokenClaims` schema describes the expected claims, which `getUser(req)` maps to its own
+    `User_server` model. Both user models match the TanStack Start example. The optional `roles` array grants admin access
     when it contains `admin`. Authentication failures throw a transport-neutral `AuthError` with an
     HTTP status; token validation failures preserve the status suggested by oidc-spa.
 -   `lib/server/trpc.ts` provides authenticated `todos.list` / `todos.add` procedures and admin-only
-    `todos.listAllUserTodos` / `todos.delete` procedures. Each handler calls `getUser(ctx)` directly;
+    `todos.listAllUserTodos` / `todos.delete` procedures. Each handler passes `ctx.req` to `getUser(req)`;
     oidc-spa shares validation within each request, including batches. Both admin procedures check
     `user.isAdmin` independently. Its local `getUser` wrapper translates shared authentication errors
     into `TRPCError`.
 -   `app/api/todos/route.ts` exports authenticated `GET` and `POST` handlers using the same `getUser`
-    helper and `lib/server/data` store. `app/(protected)/todo-list-api/page.tsx` calls them with `fetch`
-    and an Authorization header. Authentication failures return the corresponding HTTP status;
+    helper (`getUser(req)`) and `lib/server/data` store. `app/(protected)/todo-list-api/page.tsx` calls
+    them with `fetch` and an Authorization header. Authentication failures return the corresponding HTTP status;
     invalid todo input returns 400. Both todo pages share the same data.
 
 Browser login guards and admin navigation are UI concerns; the API validates and authorizes every
 request independently. `server-only` marks backend modules to prevent accidental client imports.
 
-Next.js embeds `NEXT_PUBLIC_*` variables during `next build`. Configure them before building;
-changing public provider settings in production requires a rebuild. Server-only variables, including
+`withRuntimeConfigs()` accepts a configuration object, a synchronous getter, or an asynchronous
+getter. Supply settings from whichever source suits your application. This example uses environment
+variables in `lib/oidc.tsx` for browser settings and `lib/server/oidc.ts` for server validation. The
+browser's `User_client` and backend's `User_server` are defined independently in those files.
+
+Next.js embeds this example's `NEXT_PUBLIC_*` variables during `next build`. Configure them before
+building; changing public provider settings in production requires a rebuild. Server-only variables, including
 introspection credentials, stay on the server. Provider selection is split between browser and backend
 configuration, while pages and tRPC procedures remain provider-independent.
 

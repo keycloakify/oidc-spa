@@ -4,6 +4,10 @@ An Angular port of `examples/tanstack-start` and `examples/next`, with the same 
 provider choices, dark styling and todo storage. Angular calls an ordinary Express REST API using
 `HttpClient`; frontend response types are declared independently of the backend.
 
+The Angular integration can be used with an existing, independently maintained API. The Express
+backend is included to make this demo runnable and illustrate token validation with `oidc-spa/server`.
+Your backend can use its own authentication implementation.
+
 The application renders entirely in the browser. OIDC initialization completes before Angular renders
 the application, using the adapter's default behavior. There is no SSR or `withNonBlockingRendering()`.
 
@@ -40,28 +44,53 @@ To use the local oidc-spa source, run `yarn start-angular-new-example` from the 
 
 ## Integration
 
-- `src/main.ts` calls `oidcEarlyInit()` before dynamically loading the Angular application, with
-  browser runtime freezing and DPoP enabled.
-- `src/app/services/oidc.service.ts` defines the browser's user with `withUser()`, exports the Angular
-  utilities and declares the `REQUIRE_ACCESS_TOKEN` context token.
-- `src/app/app.config.ts` registers `provideOidc()` and `createOidcInterceptor()`. Initialization loads
-  the public configuration from `/api/oidc-config` before rendering. The configuration request does
-  not set `REQUIRE_ACCESS_TOKEN`, so it can run before authentication is initialized.
+### Angular
+
+- `src/main.earlyInit.ts` calls `oidcEarlyInit()` with browser runtime freezing and DPoP enabled,
+  then dynamically imports `src/main.ts` to bootstrap Angular.
+- `src/app/oidc.ts` defines `User_client` with `withUser()`, exports the Angular utilities and
+  declares the `REQUIRE_ACCESS_TOKEN` context token. Components read the profile through the
+  `user()` signal returned by `injectOidc()`.
+- `src/app/app.config.ts` registers `provideOidc()` and `createOidcInterceptor()`. The interceptor
+  attaches an access token only when a request sets `REQUIRE_ACCESS_TOKEN`.
 - `src/app/app.routes.ts` protects the todo, admin and account pages with `enforceLoginGuard`.
 - `src/app/services/todo.service.ts` uses `HttpClient` with
   `context: new HttpContext().set(REQUIRE_ACCESS_TOKEN, true)` on each protected request. The
   interceptor gets a current access token and attaches it; early initialization handles DPoP when
   supported by the provider.
-- `server/config.ts` selects public client settings and private server validation settings from the
-  environment. Only its `client` section is returned by `/api/oidc-config`; introspection credentials
-  remain on the server.
-- `server/auth.ts` validates requests with `extractRequestAuthContext()` and
-  `validateAndGetAccessTokenClaims()` from `oidc-spa/server`. The backend user has `id` and `isAdmin`,
-  while the browser profile has a display name, email, avatar and admin navigation flag. An optional
-  `roles` array containing `admin` grants admin access, matching the other examples.
+
+`provideOidc()` accepts a configuration object, a synchronous getter, or an asynchronous getter.
+For example, the configuration can be supplied directly:
+
+```ts
+provideOidc({
+  mode: 'real',
+  issuerUri: 'https://auth.example.com',
+  clientId: 'my-app',
+});
+```
+
+Use whichever configuration source suits your application: constants, Angular environment files,
+or an existing configuration service. In this example, an async getter fetches public settings from
+`/api/oidc-client-env` and builds the OIDC configuration in Angular. That endpoint is a convenience
+for switching providers without rebuilding the frontend. Its response is an allowlist of public
+environment values, rather than an oidc-spa configuration object. The request does not set
+`REQUIRE_ACCESS_TOKEN`, so it can run before authentication is initialized.
+
+### Express companion
+
+- `server/oidc.ts` configures token validation independently through `.withRuntimeConfigs()`.
+  `extractRequestAuthContext()` and `validateAndGetAccessTokenClaims()` from `oidc-spa/server`
+  validate the request, then `getUser(req)` maps the claims to `User_server`: `id` and `isAdmin`.
+  An optional `roles` array containing `admin` grants admin access. Introspection credentials stay
+  on the server.
 - `server/api.ts` authenticates personal todo requests and independently authorizes both admin
   endpoints. Authentication failures preserve oidc-spa's suggested HTTP status. Browser guards and
   navigation flags do not grant API access.
+
+The browser and backend have independent user models and configuration. In an existing application,
+the API must validate and authorize requests using its own backend stack; using `oidc-spa/angular`
+does not require adopting `oidc-spa/server`.
 
 The API has four protected operations:
 

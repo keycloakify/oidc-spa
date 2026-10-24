@@ -15,6 +15,11 @@ export default function HomePage() {
                 whole UI waits for browser auth to initialize. Server-rendered pages do not have access
                 to the browser session; authenticated data comes from browser requests.
             </p>
+            <p>
+                Browser authentication and API token validation are configured independently. The
+                included backend uses <code>oidc-spa/server</code>; your existing API can use its own
+                validation implementation.
+            </p>
             <div className="example-links">
                 <Link href="/todo-list-trpc">
                     <strong>Todos with tRPC</strong>
@@ -58,19 +63,10 @@ export default function HomePage() {
                                 <code>lib/oidc.tsx</code>
                             </a>{" "}
                             uses <code>oidc-spa/react-nextjs</code>. <code>withUser()</code> maps token
-                            claims to the profile returned by <code>useOidc()</code>: a display name,
-                            email, avatar, and admin navigation flag. <code>createUtils()</code> exports
-                            the hooks, initialization gate, and login guard used by the UI.
-                        </p>
-                        <p>
-                            On the backend,{" "}
-                            <a href={`${sourceUrl}/lib/server/auth.ts`}>
-                                <code>lib/server/auth.ts</code>
-                            </a>{" "}
-                            uses <code>oidc-spa/server</code> to validate access tokens and map their
-                            claims to <code>User_server</code>: an <code>id</code> and{" "}
-                            <code>isAdmin</code>. Server-only modules keep token validation and API
-                            credentials out of the browser.
+                            claims to <code>User_client</code>, the profile returned by{" "}
+                            <code>useOidc()</code>: a display name, email, avatar, and admin navigation
+                            flag. <code>createUtils()</code> exports the hooks, initialization gate, and
+                            login guard used by the UI.
                         </p>
                     </li>
                     <li>
@@ -87,10 +83,18 @@ export default function HomePage() {
                             providers.
                         </p>
                         <p>
-                            The browser settings live in <code>withRuntimeConfigs()</code>; server
-                            validation is configured separately in <code>lib/server/auth.ts</code>.
-                            Next.js embeds <code>NEXT_PUBLIC_*</code> values at build time, so configure
-                            them before building and rebuild when those public settings change.
+                            <code>withRuntimeConfigs()</code> accepts a configuration object or a
+                            synchronous or asynchronous getter. The browser configuration lives in{" "}
+                            <code>lib/oidc.tsx</code>. This example reads environment variables; you can
+                            supply settings from your own configuration source.
+                        </p>
+                        <p>
+                            Server validation is configured separately in{" "}
+                            <a href={`${sourceUrl}/lib/server/oidc.ts`}>
+                                <code>lib/server/oidc.ts</code>
+                            </a>
+                            . Next.js embeds <code>NEXT_PUBLIC_*</code> values at build time, so
+                            configure them before building and rebuild when those public settings change.
                             Introspection credentials use server-only environment variables.
                         </p>
                         <p className="guide-note">
@@ -101,7 +105,7 @@ export default function HomePage() {
                         </p>
                     </li>
                     <li>
-                        <h3>Protect pages and tRPC procedures</h3>
+                        <h3>Protect pages and send authenticated tRPC requests</h3>
                         <p>
                             The{" "}
                             <a href={`${sourceUrl}/app/(protected)/layout.tsx`}>
@@ -120,11 +124,11 @@ export default function HomePage() {
                             <a href={`${sourceUrl}/lib/server/trpc.ts`}>
                                 <code>lib/server/trpc.ts</code>
                             </a>
-                            , each handler calls <code>getUser(ctx)</code> to authenticate the request:
+                            , each handler calls <code>getUser(req)</code> to authenticate the request:
                         </p>
                         <pre>
-                            <code>{`list: t.procedure.query(async ({ ctx }) => {
-  const user = await getUser(ctx);
+                            <code>{`list: t.procedure.query(async ({ ctx: { req } }) => {
+  const user = await getUser(req);
   return getTodosStore().readTodos({ userId: user.id });
 })`}</code>
                         </pre>
@@ -136,6 +140,16 @@ export default function HomePage() {
                     </li>
                     <li>
                         <h3>Use Next.js Route Handlers with fetch</h3>
+                        <p>
+                            The included backend defines its own user model in{" "}
+                            <a href={`${sourceUrl}/lib/server/oidc.ts`}>
+                                <code>lib/server/oidc.ts</code>
+                            </a>
+                            . It validates the access token claims and maps them to{" "}
+                            <code>User_server</code>: an <code>id</code> and <code>isAdmin</code>.
+                            Server-only modules keep token validation and API credentials out of the
+                            browser.
+                        </p>
                         <p>
                             The{" "}
                             <a href={`${sourceUrl}/app/(protected)/todo-list-api/page.tsx`}>
@@ -150,7 +164,7 @@ export default function HomePage() {
                             Both handlers authenticate through the same <code>getUser()</code> helper:
                         </p>
                         <pre>
-                            <code>{`const user = await getUser({ req });
+                            <code>{`const user = await getUser(req);
 const todos = await getTodosStore().readTodos({ userId: user.id });
 return Response.json(todos);`}</code>
                         </pre>
@@ -172,8 +186,8 @@ return Response.json(todos);`}</code>
                             authenticate the request and check the admin role:
                         </p>
                         <pre>
-                            <code>{`listAllUserTodos: t.procedure.query(async ({ ctx }) => {
-  const user = await getUser(ctx);
+                            <code>{`listAllUserTodos: t.procedure.query(async ({ ctx: { req } }) => {
+  const user = await getUser(req);
   if (!user.isAdmin) {
     throw new TRPCError({ code: "FORBIDDEN" });
   }

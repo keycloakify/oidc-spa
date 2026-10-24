@@ -8,8 +8,9 @@ import { RouterLink } from '@angular/router';
     <article class="home-guide">
       <h1>oidc-spa + Angular</h1>
       <p>
-        A minimal todo app showing OpenID Connect across the stack. Angular handles sign-in; an
-        Express API validates access tokens and identifies the user making each request.
+        A minimal Angular app showing OpenID Connect and authenticated HTTP requests. An Express API
+        is included to make the demo runnable. You can use the Angular integration with your
+        existing API and its own token validation.
       </p>
       <div class="example-links">
         <a routerLink="/todo-list">
@@ -31,9 +32,11 @@ import { RouterLink } from '@angular/router';
           <li>
             <h3>Initialize authentication before rendering</h3>
             <p>
-              <a [href]="sourceUrl + '/src/main.ts'"><code>src/main.ts</code></a> calls
-              <code>oidcEarlyInit()</code> before loading Angular, with DPoP enabled.
-              <code>provideOidc()</code> in
+              <a [href]="sourceUrl + '/src/main.earlyInit.ts'"
+                ><code>src/main.earlyInit.ts</code></a
+              >
+              calls <code>oidcEarlyInit()</code> with DPoP enabled, then dynamically imports
+              <code>src/main.ts</code> to bootstrap Angular. <code>provideOidc()</code> in
               <a [href]="sourceUrl + '/src/app/app.config.ts'"><code>app.config.ts</code></a>
               waits for authentication and the user profile before the app renders. This is a
               browser-only application, without server-side rendering.
@@ -42,29 +45,34 @@ import { RouterLink } from '@angular/router';
           <li>
             <h3>Define the user your app needs</h3>
             <p>
-              <a [href]="sourceUrl + '/src/app/services/oidc.service.ts'"
-                ><code>oidc.service.ts</code></a
-              >
-              uses <code>withUser()</code> to map token claims to a display name, email, avatar and
-              admin navigation flag. Components use <code>injectOidc()</code> to access
-              authentication state and the reactive <code>user()</code> signal. The header handles
-              login, registration and logout; the account page offers Keycloak account actions when
-              available.
+              <a [href]="sourceUrl + '/src/app/oidc.ts'"><code>src/app/oidc.ts</code></a>
+              uses <code>withUser()</code> to map token claims to <code>User_client</code>: a
+              display name, email, avatar and admin navigation flag. Components use
+              <code>injectOidc()</code> to access authentication state and the reactive
+              <code>user()</code> signal. The header handles login, registration and logout; the
+              account page offers Keycloak account actions when available.
             </p>
           </li>
           <li>
-            <h3>Choose a provider at runtime</h3>
+            <h3>Configure browser authentication</h3>
             <p>
-              Choose <code>OIDC_PROVIDER</code> in <code>.env</code>. This example supports
-              Keycloak, Auth0, Microsoft Entra ID and mock mode. <code>Keycloak2</code>
-              demonstrates token introspection. Provider settings live in
-              <a [href]="sourceUrl + '/server/config.ts'"><code>server/config.ts</code></a
-              >. Angular loads the public settings from <code>/api/oidc-config</code> during
-              initialization. Validation settings and introspection credentials stay on the server.
+              <code>provideOidc()</code> accepts a configuration object or a synchronous or
+              asynchronous getter. You can use constants, Angular environment files, or your own
+              configuration service. A direct configuration looks like this:
+            </p>
+            <pre><code [textContent]="configurationExample"></code></pre>
+            <p>
+              This example uses an async getter in
+              <a [href]="sourceUrl + '/src/app/app.config.ts'"><code>app.config.ts</code></a
+              >. It fetches public environment values from <code>/api/oidc-client-env</code> and
+              builds the browser configuration in Angular. This endpoint is a convenience for this
+              demo; your API does not need to provide one.
             </p>
             <p>
-              Restart Express and reload the page after changing providers. The routes and
-              components stay the same, and the Angular app does not need to be rebuilt.
+              Choose <code>OIDC_PROVIDER</code> in <code>.env</code>: Keycloak, Auth0, Microsoft
+              Entra ID, or mock mode. <code>Keycloak2</code> demonstrates introspection in the
+              included backend. Restart Express and reload the page after changing providers. The
+              routes and components stay the same, without rebuilding Angular.
             </p>
             <p class="guide-note">
               To explore without an identity provider, set <code>OIDC_PROVIDER=mock</code>. The
@@ -91,18 +99,22 @@ import { RouterLink } from '@angular/router';
           <li>
             <h3>Validate tokens and authorize operations on the server</h3>
             <p>
-              <a [href]="sourceUrl + '/server/auth.ts'"><code>server/auth.ts</code></a> uses
-              <code>extractRequestAuthContext()</code> and
+              The included Express backend configures token validation separately in
+              <a [href]="sourceUrl + '/server/oidc.ts'"><code>server/oidc.ts</code></a
+              >. It uses <code>extractRequestAuthContext()</code> and
               <code>validateAndGetAccessTokenClaims()</code> from <code>oidc-spa/server</code>. It
               validates bearer tokens or DPoP proofs, then maps the claims to the backend user:
-              <code>id</code> and <code>isAdmin</code>.
+              <code>User_server</code>, with <code>id</code> and <code>isAdmin</code>. Your backend
+              can keep its own validation implementation; using <code>oidc-spa/angular</code> does
+              not require <code>oidc-spa/server</code>.
             </p>
             <pre><code [textContent]="handlerExample"></code></pre>
             <p>
               Personal todos belong to the validated user's ID. Both admin endpoints call
-              <code>requireAdmin()</code> before listing everyone's todos or deleting an item. The
-              UI's <code>canSeeAdminNavigation</code> flag controls navigation; the API
-              independently enforces the <code>admin</code> role on every request.
+              <code>getUser(req)</code> and check <code>user.isAdmin</code> before listing
+              everyone's todos or deleting an item. The UI's <code>canSeeAdminNavigation</code> flag
+              controls navigation; the API independently enforces the <code>admin</code> role on
+              every request.
             </p>
           </li>
         </ol>
@@ -118,6 +130,11 @@ import { RouterLink } from '@angular/router';
 })
 export class Home {
   readonly sourceUrl = 'https://github.com/keycloakify/oidc-spa/blob/main/examples/angular-new';
+  readonly configurationExample = `provideOidc({
+  mode: 'real',
+  issuerUri: 'https://auth.example.com',
+  clientId: 'my-app',
+});`;
   readonly requestExample = `this.http.get<TodoItem[]>('/api/todos', {
   context: new HttpContext().set(REQUIRE_ACCESS_TOKEN, true),
 });`;
