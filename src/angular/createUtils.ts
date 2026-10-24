@@ -323,7 +323,7 @@ export function createUtils<User, AutoLogin extends boolean>(params: {
                 oidcCore.subscribeToAutoLogoutState(state => autoLogoutState.set(state))
                     .unsubscribeFromAutoLogoutState
             );
-            // Subscribe before refreshUser(): core publishes the first user through this callback.
+            // Subscribe before getUser(): core publishes the first user through this callback.
             // Token access is already available, including to HttpClient requests inside createUser.
             const unsubscribeFromUserChange = registerCleanup(
                 oidcCore.subscribeToUserChange(({ user }) => {
@@ -331,7 +331,7 @@ export function createUtils<User, AutoLogin extends boolean>(params: {
                 }).unsubscribeFromUserChange
             );
             try {
-                await oidcCore.refreshUser();
+                await oidcCore.getUser();
             } catch (error) {
                 unsubscribeFromUserChange();
                 if (!(error instanceof OidcInitializationError)) throw error;

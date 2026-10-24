@@ -231,7 +231,8 @@ export function createUtils<User, AutoLogin extends boolean>(params: {
                 });
 
                 try {
-                    await oidc.refreshUser();
+                    // Initialize from the current tokens; refreshUser() explicitly renews them.
+                    await oidc.getUser();
                 } catch (error) {
                     unsubscribeFromUserChange();
                     assert(error instanceof OidcInitializationError, "3440334");

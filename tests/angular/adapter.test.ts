@@ -166,7 +166,8 @@ for (const autoLogin of [false, true]) {
                 assert.equal(initialization.done, nonBlocking);
                 assert.equal(core.params?.warnUserSecondsBeforeAutoLogout, 12);
                 const request = http.expectOne("/api/user");
-                assert.equal(request.request.headers.get("Authorization"), "Bearer access-token-2");
+                assert.equal(core.renewals, 0, "initialization must use the tokens just issued");
+                assert.equal(request.request.headers.get("Authorization"), "Bearer access-token-1");
                 request.flush({ displayName: "Alice" });
                 await oidc.prInitialized;
                 await initialization.donePromise;

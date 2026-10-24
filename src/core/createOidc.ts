@@ -1560,7 +1560,7 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
                         "Unable to refresh tokens without a full app reload,",
                         "because no refresh token is available",
                         "and your app setup prevents silent sign-in via iframe.",
-                        "Your only option to refresh tokens is to call `window.location.reload()`"
+                        "Our only option to refresh tokens is to call `window.location.reload()`"
                     ].join(" ")
                 );
 
