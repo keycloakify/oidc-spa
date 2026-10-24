@@ -101,6 +101,7 @@ export const {
                 return {
                     mode: "real",
                     issuerUri: process.env["KEYCLOAK_ISSUER_URI"],
+                    debugLogs: true,
                     client: {
                         clientId: process.env["KEYCLOAK_CLIENT_ID"]
                     },
@@ -114,6 +115,7 @@ export const {
                 return {
                     mode: "real",
                     issuerUri: process.env["KEYCLOAK2_ISSUER_URI"],
+                    debugLogs: true,
                     client: {
                         clientId: process.env["KEYCLOAK2_CLIENT_ID"]
                     },
@@ -127,6 +129,7 @@ export const {
                 return {
                     mode: "real",
                     issuerUri: process.env["AUTH0_ISSUER_URI"],
+                    debugLogs: true,
                     client: {
                         clientId: process.env["AUTH0_CLIENT_ID"],
                         authorizationParams: {
@@ -147,6 +150,7 @@ export const {
                 return {
                     mode: "real",
                     issuerUri: process.env["ENTRA_ISSUER_URI"],
+                    debugLogs: true,
                     client: {
                         clientId: process.env["ENTRA_CLIENT_ID"],
                         scopes: ["profile", process.env["ENTRA_API_SCOPE"]]

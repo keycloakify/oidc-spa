@@ -71,13 +71,15 @@ export const { useOidc, getOidc, OidcInitializationGate, withLoginEnforced } = o
                 return {
                     mode: "real",
                     issuerUri: process.env.NEXT_PUBLIC_KEYCLOAK_ISSUER_URI!,
-                    clientId: process.env.NEXT_PUBLIC_KEYCLOAK_CLIENT_ID!
+                    clientId: process.env.NEXT_PUBLIC_KEYCLOAK_CLIENT_ID!,
+                    debugLogs: true
                 };
             case "Keycloak2":
                 return {
                     mode: "real",
                     issuerUri: process.env.NEXT_PUBLIC_KEYCLOAK2_ISSUER_URI!,
-                    clientId: process.env.NEXT_PUBLIC_KEYCLOAK2_CLIENT_ID!
+                    clientId: process.env.NEXT_PUBLIC_KEYCLOAK2_CLIENT_ID!,
+                    debugLogs: true
                 };
             case "Auth0":
                 return {
@@ -91,14 +93,16 @@ export const { useOidc, getOidc, OidcInitializationGate, withLoginEnforced } = o
                         process.env.NEXT_PUBLIC_AUTH0_SSO_SESSION_IDLE_SECONDS!
                     ),
                     // DPoP is only available for paying Auth0 customer.
-                    disableDPoP: true
+                    disableDPoP: true,
+                    debugLogs: true
                 };
             case "EntraID":
                 return {
                     mode: "real",
                     issuerUri: process.env.NEXT_PUBLIC_ENTRA_ISSUER_URI!,
                     clientId: process.env.NEXT_PUBLIC_ENTRA_CLIENT_ID!,
-                    scopes: ["profile", process.env.NEXT_PUBLIC_ENTRA_API_SCOPE!]
+                    scopes: ["profile", process.env.NEXT_PUBLIC_ENTRA_API_SCOPE!],
+                    debugLogs: true
                 };
             default:
                 throw new Error("Unknown provider");
