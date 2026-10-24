@@ -1,7 +1,6 @@
 import express, { type ErrorRequestHandler } from 'express';
 import { z } from 'zod';
-import { getUser, HttpError, requireAdmin } from './auth';
-import { getOidcRuntimeConfigs } from './config';
+import { getUser, HttpError, runtimeConfigs_client } from './auth';
 import { getTodosStore, type TodoItem } from './data/todos';
 
 export function createApiRouter() {
@@ -12,8 +11,8 @@ export function createApiRouter() {
     next();
   });
 
-  api.get('/oidc-config', (_req, res) => {
-    res.json(getOidcRuntimeConfigs().client);
+  api.get('/oidc-client-runtime-configs', (_req, res) => {
+    res.json(runtimeConfigs_client);
   });
 
   api.use(express.json({ limit: '16kb' }));
@@ -36,12 +35,18 @@ export function createApiRouter() {
   });
 
   api.get('/todos/all', async (req, res) => {
-    await requireAdmin(req);
+    const user = await getUser(req);
+
+    if (!user.isAdmin) throw new HttpError(403, 'You need the admin role to perform this action.');
+
     res.json(await getTodosStore().readAllTodos());
   });
 
   api.delete('/todos/:userId/:todoId', async (req, res) => {
-    await requireAdmin(req);
+    const user = await getUser(req);
+
+    if (!user.isAdmin) throw new HttpError(403, 'You need the admin role to perform this action.');
+
     const result = z
       .object({ userId: z.string().min(1), todoId: z.coerce.number().int() })
       .safeParse(req.params);

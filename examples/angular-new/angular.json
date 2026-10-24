@@ -43,7 +43,7 @@
         "build": {
           "builder": "@angular/build:application",
           "options": {
-            "browser": "src/main.ts",
+            "browser": "src/main.earlyInit.ts",
             "tsConfig": "tsconfig.app.json",
             "assets": [
               {

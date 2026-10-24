@@ -17,11 +17,9 @@ export const appConfig: ApplicationConfig = {
         }),
       ])
     ),
-    // By default provideOidc waits for initialization before rendering the app.
     provideOidc(() => {
       const http = inject(HttpClient);
-      // No REQUIRE_ACCESS_TOKEN: configuration must load before authentication starts.
-      return firstValueFrom(http.get<RuntimeConfigs>('/api/oidc-config'));
+      return firstValueFrom(http.get<RuntimeConfigs>('/api/oidc-client-runtime-configs'));
     }),
   ],
 };
