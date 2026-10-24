@@ -25,28 +25,18 @@ import { TodoService, type TodoItem } from '../services/todo.service';
         name="todo"
         placeholder="What needs to be done?"
         [(ngModel)]="newTodo"
-        [disabled]="isSubmitting()"
         required
       />
-      <button type="submit" [disabled]="isSubmitting() || newTodo.trim() === ''">
-        {{ isSubmitting() ? 'Adding...' : 'Add todo' }}
-      </button>
+      <button type="submit" [disabled]="newTodo.trim() === ''">Add todo</button>
     </form>
-    } @else if (isLoading()) {
-    <p>Loading todos...</p>
     } @else {
-    <button type="button" (click)="loadTodos()">Try again</button>
-    } @if (error()) {
-    <p role="alert">{{ error() }}</p>
+    <p>Loading todos...</p>
     }
   `,
 })
 export class TodoList {
   private readonly todoService = inject(TodoService);
   readonly todos = signal<TodoItem[] | undefined>(undefined);
-  readonly isLoading = signal(false);
-  readonly isSubmitting = signal(false);
-  readonly error = signal<string | undefined>(undefined);
   newTodo = '';
 
   constructor() {
@@ -54,29 +44,13 @@ export class TodoList {
   }
 
   async loadTodos() {
-    this.isLoading.set(true);
-    this.error.set(undefined);
-    try {
-      this.todos.set(await firstValueFrom(this.todoService.getTodos()));
-    } catch {
-      this.error.set('Could not load todos. Please try again.');
-    } finally {
-      this.isLoading.set(false);
-    }
+    this.todos.set(await firstValueFrom(this.todoService.getTodos()));
   }
 
   async addTodo() {
-    if (this.isSubmitting() || this.newTodo.trim() === '') return;
-    this.isSubmitting.set(true);
-    this.error.set(undefined);
-    try {
-      const todo = await firstValueFrom(this.todoService.addTodo(this.newTodo));
-      this.todos.update((todos) => [...(todos ?? []), todo]);
-      this.newTodo = '';
-    } catch {
-      this.error.set('Could not add todo. Please try again.');
-    } finally {
-      this.isSubmitting.set(false);
-    }
+    if (this.newTodo.trim() === '') return;
+    await firstValueFrom(this.todoService.addTodo(this.newTodo));
+    this.newTodo = '';
+    await this.loadTodos();
   }
 }

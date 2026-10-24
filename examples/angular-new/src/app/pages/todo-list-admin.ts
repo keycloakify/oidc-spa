@@ -19,7 +19,6 @@ import { TodoService, type UserTodos } from '../services/todo.service';
           <button
             type="button"
             class="button-danger"
-            [disabled]="isDeleting()"
             [attr.aria-label]="'Delete ' + todo.name + ' for ' + group.userId"
             (click)="deleteTodo(group.userId, todo.id)"
           >
@@ -33,55 +32,25 @@ import { TodoService, type UserTodos } from '../services/todo.service';
     </section>
     } @empty {
     <p class="empty-state">No user todos yet.</p>
-    } } @else if (isLoading()) {
+    } } @else {
     <p>Loading todos...</p>
-    } @else {
-    <button type="button" (click)="loadTodos()">Try again</button>
-    } @if (error()) {
-    <p role="alert">{{ error() }}</p>
     }
   `,
 })
 export class TodoListAdmin {
   private readonly todoService = inject(TodoService);
   readonly usersTodos = signal<UserTodos[] | undefined>(undefined);
-  readonly isLoading = signal(false);
-  readonly isDeleting = signal(false);
-  readonly error = signal<string | undefined>(undefined);
 
   constructor() {
     void this.loadTodos();
   }
 
   async loadTodos() {
-    this.isLoading.set(true);
-    this.error.set(undefined);
-    try {
-      this.usersTodos.set(await firstValueFrom(this.todoService.getAllTodos()));
-    } catch {
-      this.error.set('Could not load todos. Please try again.');
-    } finally {
-      this.isLoading.set(false);
-    }
+    this.usersTodos.set(await firstValueFrom(this.todoService.getAllTodos()));
   }
 
   async deleteTodo(userId: string, todoId: number) {
-    if (this.isDeleting()) return;
-    this.isDeleting.set(true);
-    this.error.set(undefined);
-    try {
-      await firstValueFrom(this.todoService.deleteTodo(userId, todoId));
-      this.usersTodos.update((groups) =>
-        groups?.map((group) =>
-          group.userId === userId
-            ? { ...group, todos: group.todos.filter((todo) => todo.id !== todoId) }
-            : group
-        )
-      );
-    } catch {
-      this.error.set('Could not delete todo. Please try again.');
-    } finally {
-      this.isDeleting.set(false);
-    }
+    await firstValueFrom(this.todoService.deleteTodo(userId, todoId));
+    await this.loadTodos();
   }
 }
