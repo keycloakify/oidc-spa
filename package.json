@@ -18,6 +18,7 @@
         "format:check": "yarn _format --list-different",
         "size": "bash ./scripts/compute-payload.sh",
         "start-angular-example": "bash ./scripts/start-example.sh angular start",
+        "start-angular-new-example": "bash ./scripts/start-example.sh angular-new dev",
         "start-angular-kitchensink-example": "bash ./scripts/start-example.sh angular-kitchensink start",
         "start-react-router-framework-example": "bash ./scripts/start-example.sh react-router-framework dev",
         "start-react-router-data-example": "bash ./scripts/start-example.sh react-router-data dev",
