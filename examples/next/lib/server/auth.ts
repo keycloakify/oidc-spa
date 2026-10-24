@@ -1,5 +1,4 @@
 import "server-only";
-import { TRPCError } from "@trpc/server";
 import { oidcSpa, extractRequestAuthContext } from "oidc-spa/server";
 import { z } from "zod";
 import type { User_server } from "../oidc";
@@ -65,25 +64,30 @@ const { validateAndGetAccessTokenClaims } = oidcSpa
     })
     .createUtils();
 
+export class AuthError extends Error {
+    constructor(readonly status: 400 | 401 | 500 | 503) {
+        super("Could not authenticate request.");
+        this.name = "AuthError";
+    }
+}
+
 export async function getUser(params: { req: Request }): Promise<User_server> {
     const { req } = params;
 
     const requestAuthContext = extractRequestAuthContext({ request: req, trustProxy: true });
 
     if (!requestAuthContext) {
-        throw new TRPCError({ code: "UNAUTHORIZED" });
+        throw new AuthError(401);
     }
     if (!requestAuthContext.isWellFormed) {
-        throw new TRPCError({ code: "BAD_REQUEST" });
+        throw new AuthError(400);
     }
 
     const result = await validateAndGetAccessTokenClaims(requestAuthContext.accessTokenAndMetadata);
 
     if (!result.isSuccess) {
         console.warn(result.debugErrorMessage);
-        throw new TRPCError({
-            code: "UNAUTHORIZED"
-        });
+        throw new AuthError(result.recommendedHttpErrorStatusCode);
     }
 
     const user: User_server = {

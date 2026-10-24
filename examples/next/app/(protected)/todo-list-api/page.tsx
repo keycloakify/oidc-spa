@@ -1,10 +1,21 @@
 "use client";
 
 import { useEffect, useState, type SubmitEvent } from "react";
-import { trpc } from "@/lib/trpc";
+import { getOidc } from "@/lib/oidc";
 import type { TodoItem } from "@/lib/server/data/todos";
 
-export default function TodoListPage() {
+async function getTodos(): Promise<TodoItem[]> {
+    const oidc = await getOidc({ assert: "user logged in" });
+    const response = await fetch(`${process.env.__NEXT_ROUTER_BASEPATH}/api/todos`, {
+        headers: { Authorization: `Bearer ${await oidc.getAccessToken()}` }
+    });
+
+    if (!response.ok) throw new Error("Could not load todos.");
+
+    return response.json();
+}
+
+export default function TodoListApiPage() {
     const [todos, setTodos] = useState<TodoItem[]>();
     const [newTodo, setNewTodo] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -13,7 +24,7 @@ export default function TodoListPage() {
 
     useEffect(() => {
         let active = true;
-        trpc.todos.list.query().then(
+        getTodos().then(
             todos => {
                 if (active) {
                     setTodos(todos);
@@ -35,9 +46,20 @@ export default function TodoListPage() {
         setIsSubmitting(true);
         setError(undefined);
         try {
-            await trpc.todos.add.mutate(newTodo);
+            const oidc = await getOidc({ assert: "user logged in" });
+            const response = await fetch(`${process.env.__NEXT_ROUTER_BASEPATH}/api/todos`, {
+                method: "POST",
+                headers: {
+                    Authorization: `Bearer ${await oidc.getAccessToken()}`,
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({ name: newTodo })
+            });
+
+            if (!response.ok) throw new Error("Could not add todo.");
+
             setNewTodo("");
-            setTodos(await trpc.todos.list.query());
+            setTodos(await getTodos());
         } catch (error) {
             setError(error instanceof Error ? error.message : "Could not add todo.");
         } finally {
@@ -47,8 +69,8 @@ export default function TodoListPage() {
 
     return (
         <>
-            <h1>Todo List</h1>
-            <p>Your personal todo list, backed by tRPC.</p>
+            <h1>Todo List (API)</h1>
+            <p>Your personal todo list, backed by a Next.js Route Handler.</p>
             {todos === undefined ? (
                 <>
                     {!error && <p>Loading todos...</p>}

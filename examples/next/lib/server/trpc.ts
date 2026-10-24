@@ -1,10 +1,27 @@
 import "server-only";
 import { initTRPC, TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { getUser } from "./auth";
+import { AuthError, getUser as getUserFromRequest } from "./auth";
 import { getTodosStore, type TodoItem } from "./data/todos";
 
 const t = initTRPC.context<{ req: Request }>().create();
+
+async function getUser(params: { req: Request }) {
+    try {
+        return await getUserFromRequest(params);
+    } catch (error) {
+        if (!(error instanceof AuthError)) throw error;
+
+        const code = {
+            400: "BAD_REQUEST",
+            401: "UNAUTHORIZED",
+            500: "INTERNAL_SERVER_ERROR",
+            503: "SERVICE_UNAVAILABLE"
+        } as const;
+
+        throw new TRPCError({ code: code[error.status], message: error.message, cause: error });
+    }
+}
 
 export const appRouter = t.router({
     todos: t.router({

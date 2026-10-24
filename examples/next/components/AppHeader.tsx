@@ -17,7 +17,8 @@ export function AppHeader() {
                 </Link>
                 <nav aria-label="Main navigation">
                     <AppNavLink href="/">Home</AppNavLink>
-                    <AppNavLink href="/todo-list">Todo list</AppNavLink>
+                    <AppNavLink href="/todo-list-trpc">Todos · tRPC</AppNavLink>
+                    <AppNavLink href="/todo-list-api">Todos · API</AppNavLink>
                     {isUserLoggedIn && user.canSeeAdminNavigation && (
                         <AppNavLink href="/todo-list-admin">Admin</AppNavLink>
                     )}

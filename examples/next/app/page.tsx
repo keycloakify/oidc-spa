@@ -8,27 +8,29 @@ export default function HomePage() {
             <h1>oidc-spa + Next.js</h1>
             <p>
                 A minimal todo app showing OpenID Connect across the stack. The browser handles sign-in;
-                the tRPC API validates access tokens and gives your procedures a typed user.
+                the backend validates access tokens and gives your handlers a typed user.
             </p>
             <p>
                 Next.js serves as a SPA framework here, with the frontend and backend in one project. The
                 whole UI waits for browser auth to initialize. Server-rendered pages do not have access
-                to the browser session; authenticated data comes from tRPC requests.
+                to the browser session; authenticated data comes from browser requests.
             </p>
             <div className="example-links">
-                <Link href="/todo-list">
-                    <strong>Try the todo list</strong>
+                <Link href="/todo-list-trpc">
+                    <strong>Todos with tRPC</strong>
                     <span>Load and add your personal todos with authenticated tRPC calls.</span>
                 </Link>
-                <Link href="/todo-list-admin">
-                    <strong>Explore admin access</strong>
-                    <span>View todos grouped by user and delete items. Requires the admin role.</span>
+                <Link href="/todo-list-api">
+                    <strong>Todos with fetch</strong>
+                    <span>Use ordinary HTTP requests with Next.js Route Handlers.</span>
                 </Link>
             </div>
             <p>
-                This example follows the TanStack Start example, using tRPC for backend requests. Open
-                your <Link href="/account">account page</Link> from the avatar to view your profile and
-                available account actions.
+                This example follows the TanStack Start example, comparing tRPC with Next.js Route
+                Handlers. Both implementations use the same auth helper and todo storage. The{" "}
+                <Link href="/todo-list-admin">admin page</Link> lists todos grouped by user and lets
+                admins delete items. Open your <Link href="/account">account page</Link> from the avatar
+                to view your profile and available account actions.
             </p>
             <section aria-labelledby="integration-heading">
                 <h2 id="integration-heading">How the integration is set up</h2>
@@ -81,7 +83,8 @@ export default function HomePage() {
                             to <code>.env.local</code> and choose <code>NEXT_PUBLIC_OIDC_PROVIDER</code>.
                             This example includes Keycloak, Auth0, Microsoft Entra ID, and mock mode.
                             <code> Keycloak2</code> demonstrates token introspection instead of offline
-                            JWT validation. The pages and tRPC procedures stay the same across providers.
+                            JWT validation. The pages and backend handlers stay the same across
+                            providers.
                         </p>
                         <p>
                             The browser settings live in <code>withRuntimeConfigs()</code>; server
@@ -129,6 +132,33 @@ export default function HomePage() {
                             The list and add procedures scope data to <code>user.id</code>. Todos use the
                             same simple storage model as the TanStack Start example: local JSON files by
                             default, or Upstash Redis when configured.
+                        </p>
+                    </li>
+                    <li>
+                        <h3>Use Next.js Route Handlers with fetch</h3>
+                        <p>
+                            The{" "}
+                            <a href={`${sourceUrl}/app/(protected)/todo-list-api/page.tsx`}>
+                                API todo page
+                            </a>{" "}
+                            calls <code>getOidc()</code> and attaches the access token to ordinary{" "}
+                            <code>fetch()</code> requests. The{" "}
+                            <a href={`${sourceUrl}/app/api/todos/route.ts`}>
+                                <code>/api/todos</code> Route Handler
+                            </a>{" "}
+                            exports <code>GET</code> to list your todos and <code>POST</code> to add one.
+                            Both handlers authenticate through the same <code>getUser()</code> helper:
+                        </p>
+                        <pre>
+                            <code>{`const user = await getUser({ req });
+const todos = await getTodosStore().readTodos({ userId: user.id });
+return Response.json(todos);`}</code>
+                        </pre>
+                        <p>
+                            The auth helper throws <code>AuthError</code> when authentication fails.
+                            Route Handlers turn it into an HTTP error response; the tRPC implementation
+                            translates it into a <code>TRPCError</code>. Both todo pages read and update
+                            the same data.
                         </p>
                     </li>
                     <li>
