@@ -7,7 +7,7 @@ import { manageOptimizedDeps } from "./manageOptimizedDeps";
 import { transformCreateFileRoute } from "./transformTanstackRouterCreateFileRoute";
 import { getProjectType, type ProjectType } from "./projectType";
 import { createHandleTanstackStartClientOutput } from "./handleTanstackStartClientOutput";
-import { createHandleTanstackStartBootstrapEnv } from "./handleTanstackStartBootstrapEnv";
+import { createHandleTanstackStartRuntimeConfigs } from "./handleTanstackStartRuntimeConfigs";
 
 export type OidcSpaVitePluginParams = {
     /** See: https://docs.oidc-spa.dev/v/v10/security-features/browser-runtime-freeze */
@@ -32,37 +32,6 @@ export type OidcSpaVitePluginParams = {
               enabled: true;
               mode: "auto" | "enforced";
           };
-    /**
-     * Determines how session restoration is handled.
-     * Session restoration allows users to stay logged in between visits
-     * without needing to explicitly sign in each time.
-     *
-     * Options:
-     *
-     * - **"auto" (default)**:
-     *   Automatically selects the best method.
-     *   If the app’s domain shares a common parent domain with the authorization endpoint,
-     *   an iframe is used for silent session restoration.
-     *   Otherwise, a full-page redirect is used.
-     *
-     * - **"full page redirect"**:
-     *   Forces full-page reloads for session restoration.
-     *   Use this if your application is served with a restrictive CSP
-     *   (e.g., `Content-Security-Policy: frame-ancestors "none"`)
-     *   or `X-Frame-Options: DENY`, and you cannot modify those headers.
-     *   This mode provides a slightly less seamless UX and will lead oidc-spa to
-     *   store tokens in `localStorage` if multiple OIDC clients are used
-     *   (e.g., your app communicates with several APIs).
-     *
-     * - **"iframe"**:
-     *   Forces iframe-based session restoration.
-     *   In development, if you go in your browser setting and allow your auth server’s domain
-     *   to set third-party cookies this value will let you test your app
-     *   with the local dev server as it will behave in production.
-     *
-     *  See: https://docs.oidc-spa.dev/v/v10/resources/third-party-cookies-and-session-restoration
-     */
-    sessionRestorationMethod?: "iframe" | "full page redirect" | "auto";
 };
 
 export function oidcSpa(params: OidcSpaVitePluginParams = {}) {
@@ -88,7 +57,7 @@ export function oidcSpa(params: OidcSpaVitePluginParams = {}) {
 
     let projectType: ProjectType | undefined = undefined;
     let isBuild = false;
-    let bootstrapEnvHandler: ReturnType<typeof createHandleTanstackStartBootstrapEnv> | undefined;
+    let runtimeConfigsHandler: ReturnType<typeof createHandleTanstackStartRuntimeConfigs> | undefined;
 
     const plugin: Plugin = {
         name: "oidc-spa",
@@ -113,7 +82,7 @@ export function oidcSpa(params: OidcSpaVitePluginParams = {}) {
             });
 
             if (projectType === "tanstack-start") {
-                bootstrapEnvHandler = createHandleTanstackStartBootstrapEnv({ resolvedConfig });
+                runtimeConfigsHandler = createHandleTanstackStartRuntimeConfigs({ resolvedConfig });
             }
 
             const clientEntrypointHandler = createHandleClientEntrypoint({
@@ -164,7 +133,7 @@ export function oidcSpa(params: OidcSpaVitePluginParams = {}) {
         },
         resolveId(id) {
             return (
-                bootstrapEnvHandler?.resolveId(id) ??
+                runtimeConfigsHandler?.resolveId(id) ??
                 resolveId_handleTanstackStartClientOutput?.(id) ??
                 null
             );
@@ -173,11 +142,11 @@ export function oidcSpa(params: OidcSpaVitePluginParams = {}) {
             buildStart_handleTanstackStartClientOutput?.call(this);
         },
         configureServer(server) {
-            bootstrapEnvHandler?.configureServer(server);
+            runtimeConfigsHandler?.configureServer(server);
         },
         async load(id) {
             {
-                const r = await bootstrapEnvHandler?.load(id, this);
+                const r = await runtimeConfigsHandler?.load(id, this);
                 if (r !== null && r !== undefined) return r;
             }
             {

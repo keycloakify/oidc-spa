@@ -1,126 +1,104 @@
 "use client";
 
-import { type ComponentType, type ReactNode, useEffect, useReducer } from "react";
-import { useRouter } from "next/navigation";
-import { oidcSpa } from "oidc-spa/react-spa";
+import { oidcSpa } from "oidc-spa/react-nextjs";
 import { z } from "zod";
+import { decodeJwt } from "oidc-spa/decode-jwt";
+import avatarFallbackSvg from "@/assets/userPictureFallback.svg";
 
-const decodedIdTokenSchema = z.object({
-    sub: z.string(),
-    name: z.string(),
-    picture: z.string().optional(),
-    email: z.string().email().optional(),
-    preferred_username: z.string().optional(),
-    realm_access: z.object({ roles: z.array(z.string()) }).optional()
-});
+const avatarFallbackSvgUrl: string = avatarFallbackSvg.src;
 
-const {
-    bootstrapOidc,
-    useOidc,
-    getOidc,
-    OidcInitializationGate: OidcInitializationGate_base
-} = oidcSpa
-    .withExpectedDecodedIdTokenShape({
-        decodedIdTokenSchema,
-        decodedIdToken_mock: {
-            sub: "mock-user",
-            name: "John Doe",
-            preferred_username: "john.doe",
-            realm_access: {
-                roles: ["realm-admin"]
-            }
+// App-specific user model exposed by `useOidc()`.
+// Shape it around the information the UI needs to render.
+export type User_client = {
+    displayName: string;
+    email: string | undefined;
+    avatarImgUrl: string;
+    canSeeAdminNavigation: boolean;
+};
+
+export const { useOidc, getOidc, OidcInitializationGate, withLoginEnforced } = oidcSpa
+    .withUser<User_client>(async ({ isMock, idTokenClaims, accessToken }) => {
+        if (isMock) {
+            const user_mock: User_client = {
+                displayName: "John Doe",
+                email: "jonh.doe@gmail.com",
+                avatarImgUrl: avatarFallbackSvgUrl,
+                canSeeAdminNavigation: true
+            };
+            return user_mock;
+        }
+
+        const { name, picture, email } = z
+            .object({
+                name: z.string(),
+                picture: z.string().optional(),
+                email: z.string().optional()
+            })
+            .parse(idTokenClaims);
+
+        const { roles } = z
+            .object({
+                roles: z.array(z.string()).optional()
+            })
+            .parse(decodeJwt(accessToken));
+
+        const user: User_client = {
+            displayName: name,
+            avatarImgUrl: picture || avatarFallbackSvgUrl,
+            email,
+            canSeeAdminNavigation: roles?.includes("admin") ?? false
+        };
+
+        return user;
+    })
+    // See: https://docs.oidc-spa.dev/features/auto-login#react-spa
+    //.withAutoLogin()
+    .withRuntimeConfigs(async () => {
+        switch (process.env.NEXT_PUBLIC_OIDC_PROVIDER) {
+            case "mock":
+                return {
+                    mode: "mock",
+                    isUserInitiallyLoggedIn: true
+                };
+            case "Keycloak":
+                return {
+                    mode: "real",
+                    issuerUri: process.env.NEXT_PUBLIC_KEYCLOAK_ISSUER_URI!,
+                    clientId: process.env.NEXT_PUBLIC_KEYCLOAK_CLIENT_ID!,
+                    debugLogs: true
+                };
+            case "Keycloak2":
+                return {
+                    mode: "real",
+                    issuerUri: process.env.NEXT_PUBLIC_KEYCLOAK2_ISSUER_URI!,
+                    clientId: process.env.NEXT_PUBLIC_KEYCLOAK2_CLIENT_ID!,
+                    debugLogs: true
+                };
+            case "Auth0":
+                return {
+                    mode: "real",
+                    issuerUri: process.env.NEXT_PUBLIC_AUTH0_ISSUER_URI!,
+                    clientId: process.env.NEXT_PUBLIC_AUTH0_CLIENT_ID!,
+                    authorizationParams: {
+                        audience: process.env.NEXT_PUBLIC_AUTH0_API_IDENTIFIER!
+                    },
+                    idleSessionLifetimeInSeconds: parseInt(
+                        process.env.NEXT_PUBLIC_AUTH0_SSO_SESSION_IDLE_SECONDS!
+                    ),
+                    // DPoP is only available for paying Auth0 customer.
+                    disableDPoP: true,
+                    debugLogs: true
+                };
+            case "EntraID":
+                return {
+                    mode: "real",
+                    issuerUri: process.env.NEXT_PUBLIC_ENTRA_ISSUER_URI!,
+                    clientId: process.env.NEXT_PUBLIC_ENTRA_CLIENT_ID!,
+                    scopes: ["profile", process.env.NEXT_PUBLIC_ENTRA_API_SCOPE!],
+                    debugLogs: true
+                };
+            default:
+                throw new Error("Unknown provider");
         }
     })
     .createUtils();
-
-export { useOidc, getOidc };
-
-bootstrapOidc(
-    process.env.NEXT_PUBLIC_OIDC_USE_MOCK === "true"
-        ? {
-              implementation: "mock",
-              isUserInitiallyLoggedIn: true
-          }
-        : {
-              implementation: "real",
-              issuerUri: process.env.NEXT_PUBLIC_OIDC_ISSUER_URI!,
-              clientId: process.env.NEXT_PUBLIC_OIDC_CLIENT_ID!,
-              debugLogs: process.env.NODE_ENV === "development"
-          }
-);
-
-function OidcInitializationGate_inner(props: { children: ReactNode }) {
-    const { children } = props;
-
-    const { backFromAuthServer } = useOidc();
-    const router = useRouter();
-
-    useEffect(() => {
-        if (backFromAuthServer !== undefined) {
-            router.replace(`${location.pathname}${location.search}${location.hash}`, { scroll: false });
-        }
-    }, []);
-
-    return children;
-}
-
-export function OidcInitializationGate(props: { fallback?: ReactNode; children: ReactNode }) {
-    const { children, fallback } = props;
-
-    return (
-        <OidcInitializationGate_base fallback={fallback}>
-            <OidcInitializationGate_inner>{children}</OidcInitializationGate_inner>
-        </OidcInitializationGate_base>
-    );
-}
-
-export function withLoginEnforced<Props extends Record<string, unknown>>(
-    component: ComponentType<Props>
-): (props: Props) => ReactNode {
-    const Component = component;
-
-    function ComponentWithLoginEnforced(props: Props) {
-        const { isUserLoggedIn, login } = useOidc();
-
-        const [hasRunEffect, notifyEffectRun] = useReducer(() => true, false);
-
-        useEffect(() => {
-            notifyEffectRun();
-
-            if (!isUserLoggedIn) {
-                login({
-                    doesCurrentHrefRequiresAuth: true
-                });
-            }
-        }, []);
-
-        if (!hasRunEffect) {
-            return null;
-        }
-
-        if (!isUserLoggedIn) {
-            return null;
-        }
-
-        return <Component {...props} />;
-    }
-
-    ComponentWithLoginEnforced.displayName = `${
-        Component.displayName ?? Component.name ?? "Component"
-    }WithLoginEnforced`;
-
-    return ComponentWithLoginEnforced;
-}
-
-export const fetchWithAuth: typeof fetch = async (input, init) => {
-    const oidc = await getOidc();
-
-    if (oidc.isUserLoggedIn) {
-        const accessToken = await oidc.getAccessToken();
-        const headers = new Headers(init?.headers);
-        headers.set("Authorization", `Bearer ${accessToken}`);
-        (init ??= {}).headers = headers;
-    }
-
-    return fetch(input, init);
-};

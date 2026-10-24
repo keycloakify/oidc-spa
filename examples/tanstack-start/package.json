@@ -1,55 +1,32 @@
 {
-    "name": "tanstack-start",
+    "name": "tanstack-start-next",
     "private": true,
+    "sideEffects": false,
     "type": "module",
-    "imports": {
-        "#/*": "./src/*"
-    },
     "scripts": {
-        "prepare": "[ ! -f .env ] && cp .env.sample .env || true",
-        "dev": "vite dev --port 3000",
-        "generate-routes": "tsr generate",
-        "build": "tsc && vite build",
+        "postinstall": "[ ! -f .env ] && cp .env.sample .env || true",
+        "dev": "vite dev",
+        "build": "vite build && tsc --noEmit",
         "preview": "vite preview",
-        "test": "vitest run"
+        "start": "node .output/server/index.mjs"
     },
     "dependencies": {
-        "@tailwindcss/vite": "^4.3.2",
-        "@tanstack/react-devtools": "latest",
-        "@tanstack/react-router": "latest",
-        "@tanstack/react-router-devtools": "latest",
-        "@tanstack/react-router-ssr-query": "latest",
-        "@tanstack/react-start": "latest",
-        "@tanstack/router-plugin": "^1.132.0",
-        "@upstash/redis": "^1.38.0",
-        "lucide-react": "^1.24.0",
-        "nitro": "npm:nitro-nightly@latest",
-        "oidc-spa": "^10.2.7",
-        "react": "^19.2.7",
-        "react-dom": "^19.2.7",
-        "tailwindcss": "^4.3.2",
-        "zod": "^4.4.3"
+        "oidc-spa": "11.0.0-rc.4",
+        "@tanstack/react-router": "1.170.46",
+        "@tanstack/react-start": "1.169.4",
+        "@upstash/redis": "1.38.4",
+        "react": "19.3.1",
+        "react-dom": "19.3.1",
+        "zod": "4.6.7"
     },
     "devDependencies": {
-        "@tailwindcss/typography": "^0.5.20",
-        "@tanstack/devtools-vite": "latest",
-        "@tanstack/router-cli": "^1.132.0",
-        "@testing-library/dom": "^10.4.1",
-        "@testing-library/react": "^16.3.2",
-        "@types/node": "^26.1.1",
-        "@types/react": "^19.2.17",
-        "@types/react-dom": "^19.2.3",
-        "@vitejs/plugin-react": "^6.0.3",
-        "jsdom": "^29.1.1",
-        "typescript": "^7.0.2",
-        "vite": "8.1.3",
-        "vitest": "^4.1.10",
-        "web-vitals": "^5.3.0"
-    },
-    "pnpm": {
-        "onlyBuiltDependencies": [
-            "esbuild",
-            "lightningcss"
-        ]
+        "@types/node": "22.20.5",
+        "@types/react": "19.3.0",
+        "@types/react-dom": "19.3.0",
+        "@vitejs/plugin-react": "6.1.2",
+        "nitro": "3.0.260903-beta",
+        "@typescript/native": "npm:typescript@7.0.2",
+        "typescript": "npm:@typescript/typescript6@6.0.2",
+        "vite": "8.3.5"
     }
 }

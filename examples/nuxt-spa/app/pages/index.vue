@@ -1,18 +1,18 @@
 <script setup lang="ts">
-const { isAuthenticated, idToken } = useAuth();
+const { isAuthenticated, user } = useAuth();
 
 const greeting = computed(() => {
     if (!isAuthenticated.value) {
         return "Browsing as a guest";
     }
 
-    return `Signed in as ${idToken.value?.name ?? "user"}`;
+    return `Signed in as ${user.value?.displayName ?? "user"}`;
 });
 
 const cards = [
     {
         title: "Sign in",
-        body: "Header actions reflect your auth state and show the decoded ID token picture claim."
+        body: "Header actions reflect your auth state and show your application user’s avatar."
     },
     {
         title: "Visit /protected",
@@ -60,8 +60,8 @@ const cards = [
             </template>
 
             <p class="text-sm text-toned">
-                Use the header actions to authenticate, then open protected routes to explore token data,
-                Keycloak account actions, and authenticated API calls.
+                Use the header actions to authenticate, then open protected routes to explore your user
+                profile, Keycloak account actions, and authenticated API calls.
             </p>
 
             <template #footer>
