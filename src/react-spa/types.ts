@@ -165,7 +165,7 @@ export namespace LoaderContext {
 
     export type ReactRouterLike = {
         request: {
-            href: string;
+            url: string;
         };
     };
 }

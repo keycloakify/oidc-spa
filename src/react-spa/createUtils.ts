@@ -725,7 +725,7 @@ export function createUtils<User, AutoLogin extends boolean>(params: {
                         rootUrl_fullyQualified: oidc.validRedirectUri
                     });
                 case "React Router":
-                    return loaderContext_discriminated.loaderContext.request.href;
+                    return loaderContext_discriminated.loaderContext.request.url;
                 default:
                     assert<Equals<typeof loaderContext_discriminated, never>>(false, "3393220");
             }
