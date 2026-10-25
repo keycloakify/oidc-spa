@@ -9,7 +9,10 @@ import "./app.css";
 export function meta() {
     return [
         { title: "oidc-spa + React Router" },
-        { name: "description", content: "A minimal React Router SPA with oidc-spa, Express, and tRPC." }
+        {
+            name: "description",
+            content: "A minimal React Router app with oidc-spa and native server loaders and actions."
+        }
     ];
 }
 

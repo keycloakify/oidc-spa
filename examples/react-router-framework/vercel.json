@@ -4,7 +4,8 @@
     "buildCommand": "yarn build",
     "outputDirectory": "build/client",
     "rewrites": [
-        { "source": "/api/:path*", "destination": "/api" },
+        { "source": "/:path*.data", "destination": "/api" },
+        { "source": "/__manifest", "destination": "/api" },
         { "source": "/:path*", "destination": "/index.html" }
     ]
 }

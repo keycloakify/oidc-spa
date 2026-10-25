@@ -8,28 +8,27 @@ export default function HomePage() {
             <h1>oidc-spa + React Router</h1>
             <p>
                 A minimal todo app showing OpenID Connect across the stack. The browser handles sign-in;
-                the Express backend validates access tokens and gives handlers a typed user.
+                React Router server loaders and actions validate access tokens and work with a typed
+                user.
             </p>
             <p>
-                React Router runs in framework mode with <code>ssr: false</code>. The whole UI waits for
-                authentication to initialize. Protected pages load their data in browser-side loaders,
-                and mutations use client actions with automatic data revalidation.
+                Framework mode with <code>ssr: "unstable_api-only"</code> keeps the UI in the browser and
+                hosts backend code in the same project. The application waits for authentication to
+                initialize, and protected pages require login before loading their data.
             </p>
             <div className="example-links">
-                <Link to="/todo-list-trpc">
-                    <strong>Todos with tRPC</strong>
-                    <span>Load and add your personal todos with authenticated, typed tRPC calls.</span>
+                <Link to="/todo-list">
+                    <strong>Todo List</strong>
+                    <span>Load and add your personal todos with native loaders and actions.</span>
                 </Link>
-                <Link to="/todo-list-api">
-                    <strong>Todos with fetch</strong>
-                    <span>Use ordinary HTTP requests with Express route handlers.</span>
+                <Link to="/todo-list-admin">
+                    <strong>Todo List Admin</strong>
+                    <span>See todos grouped by user and delete items with the admin role.</span>
                 </Link>
             </div>
             <p>
-                Both implementations use the same authentication helper and todo storage. The{" "}
-                <Link to="/todo-list-admin">admin page</Link> groups todos by user and lets admins delete
-                items. Open your <Link to="/account">account page</Link> from the avatar to view your
-                profile and available account actions.
+                Open your <Link to="/account">account page</Link> from the avatar to view your profile
+                and available account actions.
             </p>
             <section aria-labelledby="integration-heading">
                 <h2 id="integration-heading">How the integration is set up</h2>
@@ -43,8 +42,8 @@ export default function HomePage() {
                             registers the oidc-spa Vite plugin with browser runtime protection and DPoP.
                             The plugin installs early initialization before application code runs. In{" "}
                             <code>app/root.tsx</code>, one <code>OidcInitializationGate</code> wraps the
-                            header, pages, and session warning. <code>HydrateFallback</code> returns
-                            <code> null</code>, keeping the UI hidden until authentication is ready.
+                            header, pages, and session warning. <code>HydrateFallback</code> returns{" "}
+                            <code>null</code>.
                         </p>
                     </li>
                     <li>
@@ -67,19 +66,18 @@ export default function HomePage() {
                             instead of offline JWT validation.
                         </p>
                         <p>
-                            Browser authentication in <code>app/oidc.ts</code> and API validation in{" "}
-                            <a href={`${sourceUrl}/server/oidc.ts`}>
-                                <code>server/oidc.ts</code>
+                            Browser authentication in <code>app/oidc.ts</code> and token validation in{" "}
+                            <a href={`${sourceUrl}/app/oidc.server.ts`}>
+                                <code>app/oidc.server.ts</code>
                             </a>{" "}
-                            are configured independently. <code>withRuntimeConfigs()</code> accepts a
-                            configuration object or a synchronous or asynchronous getter; environment
-                            variables are simply this example's configuration source.
+                            are configured independently. Configuration getters can be synchronous or
+                            asynchronous; environment variables are simply this example's configuration
+                            source.
                         </p>
                         <p>
                             Vite embeds <code>VITE_*</code> settings in the browser build. Restart
                             development or rebuild after changing them. Introspection secrets and KV
-                            credentials have no public prefix and stay on the server. Your existing API
-                            can use its own token validation implementation.
+                            credentials have no public prefix and stay on the server.
                         </p>
                         <p className="guide-note">
                             To explore without an identity provider, set{" "}
@@ -88,66 +86,65 @@ export default function HomePage() {
                         </p>
                     </li>
                     <li>
-                        <h3>Protect routes with client loaders</h3>
+                        <h3>Protect navigation and authenticate server requests</h3>
                         <p>
-                            Todo, admin, and account routes call <code>enforceLogin(args)</code> from
-                            their <code>clientLoader</code>. Loaders run before page components render.
-                            The tRPC todo route then loads its data:
+                            Protected routes call <code>enforceLogin(args)</code> from their client
+                            loaders before delegating to the server:
                         </p>
                         <pre>
                             <code>{`export async function clientLoader(args: Route.ClientLoaderArgs) {
   await enforceLogin(args);
-  return { todos: await trpc.todos.list.query() };
+  return args.serverLoader();
 }`}</code>
                         </pre>
                         <p>
-                            <code>app/trpc.ts</code> obtains an access token through{" "}
-                            <code>getOidc()</code> and attaches it to requests. Each backend procedure
-                            calls <code>getUser(req)</code> to authenticate independently:
+                            <a href={`${sourceUrl}/app/entry.client.tsx`}>
+                                <code>app/entry.client.tsx</code>
+                            </a>{" "}
+                            attaches the current access token to React Router's data requests using{" "}
+                            <code>HydratedRouter unstable_fetch</code>. Each server loader independently
+                            authenticates the request:
                         </p>
                         <pre>
-                            <code>{`list: t.procedure.query(async ({ ctx: { req } }) => {
-  const user = await getUser(req);
-  return getTodosStore().readTodos({ userId: user.id });
-})`}</code>
+                            <code>{`export async function loader({ request }: Route.LoaderArgs) {
+  const user = await getUser(request);
+  const todos = await getTodosStore().readTodos({ userId: user.id });
+  return { todos };
+}`}</code>
                         </pre>
                     </li>
                     <li>
-                        <h3>Use Express with ordinary fetch requests</h3>
+                        <h3>Submit forms to native server actions</h3>
                         <p>
-                            The API todo route attaches the access token to <code>fetch()</code>
-                            requests. In{" "}
-                            <a href={`${sourceUrl}/server/api.ts`}>
-                                <code>server/api.ts</code>
-                            </a>
-                            , Express handles <code>GET /api/todos</code> and{" "}
-                            <code>POST /api/todos</code>. These handlers share the same auth helper and
-                            data store as tRPC:
+                            The todo form uses React Router's <code>Form</code>. Its client action
+                            requires login, then calls <code>args.serverAction()</code>. The server
+                            action validates the access token, reads the form, and saves the todo for the
+                            authenticated user. React Router revalidates loader data afterward.
                         </p>
-                        <pre>
-                            <code>{`api.get("/todos", async (req, res) => {
-  const user = await getUser(req);
-  res.json(await getTodosStore().readTodos({ userId: user.id }));
-});`}</code>
-                        </pre>
                         <p>
-                            Both pages submit through a <code>clientAction</code>. React Router reruns
-                            the loader after a successful mutation to refresh the list. Authentication
-                            errors become HTTP errors in Express and tRPC errors in the procedures.
-                        </p>
-                    </li>
-                    <li>
-                        <h3>Enforce authorization on the server</h3>
-                        <p>
-                            The admin loader checks <code>canSeeAdminNavigation</code> and displays an
-                            access-denied page for non-admins. The list-all and delete procedures
-                            independently check <code>user.isAdmin</code>. Personal todo operations scope
-                            data to the authenticated <code>user.id</code>.
+                            Admin server loaders and actions also check <code>user.isAdmin</code>.
+                            Personal operations scope data to <code>user.id</code>; hiding navigation
+                            links is only a UI convenience.
                         </p>
                         <p>
                             Todos use the same storage implementation as the Next.js example: JSON files
-                            locally, or Upstash Redis when configured. On Vercel, configure Upstash so
-                            the API has persistent storage.
+                            locally, or Upstash Redis when configured. On Vercel, configure Upstash for
+                            persistent storage.
+                        </p>
+                    </li>
+                    <li>
+                        <h3>Already have a backend? Use SPA mode</h3>
+                        <p>
+                            Set <code>ssr: false</code>, remove the server code and custom client entry,
+                            and keep the initialization gate and client guards. In client loaders and
+                            actions, call your API with an access token instead of using{" "}
+                            <code>args.serverLoader()</code> or <code>args.serverAction()</code>. The
+                            comments in{" "}
+                            <a href={`${sourceUrl}/react-router.config.ts`}>
+                                <code>react-router.config.ts</code>
+                            </a>{" "}
+                            and the README describe the changes. This integration supports API-only and
+                            SPA mode; authentication initializes in the browser.
                         </p>
                     </li>
                 </ol>

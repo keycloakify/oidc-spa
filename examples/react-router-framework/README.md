@@ -1,7 +1,8 @@
 # oidc-spa + React Router framework mode
 
-A minimal React Router SPA with the same pages, authentication, and dark styling
-as the Next.js example. Bootstrapped with `create-react-router@8.5.0`.
+A minimal full-stack todo app using oidc-spa and React Router's native server
+loaders and actions. The UI renders in the browser; React Router hosts the backend
+with `ssr: "unstable_api-only"`. Bootstrapped with `create-react-router@8.5.0`.
 
 ## Run locally
 
@@ -12,51 +13,91 @@ yarn
 yarn dev
 ```
 
-Open **http://app.localhost:3000**. Vite proxies `/api` to the Express backend on
-`127.0.0.1:3001`; both processes start and stop together.
+Open **http://app.localhost:3000**. One React Router development server handles
+both the application and its server loaders/actions.
+
+The small `api-only-dev-shell` Vite plugin works around React Router 8.5 running
+document loaders during development. It serves the root shell for document
+requests, matching production, so protected data is fetched with a token after
+browser initialization.
 
 Postinstall copies `.env.sample` to `.env` only when `.env` does not exist. Choose
-`VITE_OIDC_PROVIDER` in `.env`. The sample includes Keycloak, Keycloak with token
-introspection, Auth0, Microsoft Entra ID, and mock mode. For a local demonstration
-without an identity provider, use `VITE_OIDC_PROVIDER=mock`.
+`VITE_OIDC_PROVIDER`: Keycloak, Keycloak with token introspection, Auth0, Microsoft
+Entra ID, or mock mode. For a demonstration without an identity provider, use
+`VITE_OIDC_PROVIDER=mock`.
 
 Restart development after changing environment variables. Public `VITE_*` values
 are embedded in the frontend at build time; rebuild to change them in production.
-Introspection secrets and KV credentials have no public prefix.
+Introspection secrets and KV credentials have no public prefix. The backend reads
+its configuration from `process.env`; local development and `yarn start` load `.env`.
 
 ## Pages and integration
 
 -   `/`: an introduction and integration guide.
--   `/todo-list-trpc`: list and add personal todos with tRPC.
--   `/todo-list-api`: the same functionality using fetch and Express route handlers.
+-   `/todo-list`: list and add personal todos.
 -   `/todo-list-admin`: list all users' todos and delete items as an admin.
 -   `/account`: profile information and Keycloak account actions when available.
 
-`react-router.config.ts` sets `ssr: false`. The root `HydrateFallback` returns
+`react-router.config.ts` selects API-only mode. The root `HydrateFallback` returns
 `null`, and `OidcInitializationGate` wraps the whole application. The oidc-spa Vite
 plugin installs early initialization, browser runtime protection, and automatic
 DPoP support.
 
 `app/oidc.ts` uses `oidc-spa/react-spa`, maps claims to the application's user model,
 and configures the browser's OIDC client. Protected routes use `clientLoader` and
-`enforceLogin(args)`. The pinned rc.7 release has a `request.href` mismatch; a
-small compatibility wrapper in `app/oidc.ts` adapts React Router's `request.url`
-until the SDK fix is published. Todo mutations use `clientAction` and React Router forms;
-React Router reloads the route data after a successful action.
+`enforceLogin(args)`, then call `args.serverLoader()`. Mutations use `clientAction`,
+`enforceLogin(args)`, and `args.serverAction()`. React Router forms submit the action
+and automatically revalidate loader data afterward. No `clientLoader.hydrate` flag
+is needed for this setup without prerendering.
 
-The Express backend in `server/app.ts` serves REST endpoints and tRPC procedures.
-`server/oidc.ts` independently configures access-token validation and exposes
-`getUser(req)`. Handlers authenticate each request; admin procedures also enforce
-the admin role. Client-side guards only control navigation and rendering.
+The pinned rc.7 SDK release has a `request.href` mismatch; a small compatibility
+wrapper in `app/oidc.ts` adapts React Router's `request.url` until the SDK fix is
+published.
 
-The included backend uses `oidc-spa/server`; an independent backend can validate
-tokens with its own implementation. Configuration getters can be synchronous or
-asynchronous; environment variables are one possible source of configuration.
+`app/entry.client.tsx` uses `HydratedRouter`'s `unstable_fetch` to attach the current
+access token to same-origin loader/action requests. It waits for OIDC initialization
+itself because initial router requests can start before the initialization gate
+renders. Route discovery requests do not need a token. Do not enable native link
+data prefetching (`prefetch` or `PrefetchPageLinks`) for protected routes: these
+browser-issued requests bypass the custom fetch.
 
-`server/data` is copied unchanged from `examples/next/lib/server/data`. Local
-storage uses `todos_*.json` files, while `KV_REST_API_URL` and `KV_REST_API_TOKEN`
-enable Upstash Redis. The backend build resolves the copied Next.js `server-only`
-guard using its `react-server` export condition. This does not enable SSR.
+`app/oidc.server.ts` independently configures access-token validation and exposes
+`getUser(request)`. Every server loader/action authenticates the request; admin
+handlers also enforce the admin role. Client guards control navigation, while
+server checks protect the data. Authentication failures become HTTP error responses.
+React Router strips server loaders/actions and `.server` modules from the browser
+build.
+
+`app/.server/data/todos` reuses the Next.js todo storage implementation, replacing
+its `server-only` import with React Router's `.server` directory boundary. Storage
+uses local `todos_*.json` files, or Upstash Redis when `KV_REST_API_URL` and
+`KV_REST_API_TOKEN` are set.
+
+API-only mode and custom fetch are currently experimental React Router APIs. Their
+behavior is pinned by the exact dependency versions in this example.
+
+## Use your own backend instead
+
+This oidc-spa integration supports `ssr: "unstable_api-only"` and `ssr: false`.
+It does not provide server-rendered authentication with `ssr: true`.
+
+To turn the example into a static SPA:
+
+1. Set `ssr: false` in `react-router.config.ts`.
+2. Delete `app/entry.client.tsx`, `app/oidc.server.ts`, `app/.server/`, and `api/`.
+3. Remove server `loader`/`action` exports and their server-only imports from routes.
+   Runtime server loaders and actions are unavailable in SPA mode.
+4. Keep `enforceLogin(args)` in client loaders/actions, but replace
+   `args.serverLoader()` and `args.serverAction()` with requests to your own API.
+   Get an access token with `getOidc()` and `oidc.getAccessToken()`, and attach it as
+   `Authorization: Bearer …` to requests to your trusted API.
+5. Remove the `api-only-dev-shell` plugin from `vite.config.ts`.
+6. Deploy `build/client` to static hosting with a fallback to `index.html`. Remove
+   the `.data` and `/__manifest` function rewrites from `vercel.json`. The `start`
+   script and `@react-router/serve` are no longer needed.
+
+The initialization gate, early initialization, and client route guards remain.
+Your backend can validate tokens using oidc-spa/server or its own implementation.
 
 ## Build and run
 
@@ -66,19 +107,20 @@ yarn build
 yarn start
 ```
 
-The frontend is emitted to `build/client`; the API is built to
-`build/server/app.mjs`. The production Express server serves both the API and the
-static SPA, including deep links.
+`react-router-serve` serves `build/client` and the native server build, including
+SPA deep links, `.data` requests, and route discovery. There is no separate API
+process or custom application server.
 
 ## Deploy on Vercel
 
 1. Set the project root directory to `examples/react-router-framework`.
 2. Configure the chosen provider's environment variables before building. Register
    the deployment's origin and redirect URL with the provider.
-3. Set `KV_REST_API_URL` and `KV_REST_API_TOKEN` for persistent todo storage.
+3. Set `KV_REST_API_URL` and `KV_REST_API_TOKEN` for persistent todo storage;
    Vercel's filesystem cannot be used for these writes.
-4. Deploy using the included `vercel.json`. It builds the React Router SPA as a
-   Vite frontend and routes `/api/*` to the Express Vercel Function in
-   `api/index.js`. Other application paths fall back to `index.html`.
+4. Deploy with the included `vercel.json`. Static files and SPA deep links come
+   from `build/client`. `.data` and `/__manifest` requests go to `api/index.js`,
+   which forwards them to the native React Router request handler.
 
-Frontend and API are deployed together. No SSR runtime or Docker setup is needed.
+The small Vercel adapter is deployment plumbing only. Application backend code
+lives in the route loaders/actions; no Express or tRPC setup is needed.

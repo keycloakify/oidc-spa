@@ -15,8 +15,7 @@ export function AppHeader() {
                     <NavLink to="/" end>
                         Home
                     </NavLink>
-                    <NavLink to="/todo-list-trpc">Todos · tRPC</NavLink>
-                    <NavLink to="/todo-list-api">Todos · API</NavLink>
+                    <NavLink to="/todo-list">Todo List</NavLink>
                     {isUserLoggedIn && user.canSeeAdminNavigation && (
                         <NavLink to="/todo-list-admin">Admin</NavLink>
                     )}

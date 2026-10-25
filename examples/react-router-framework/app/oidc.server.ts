@@ -1,4 +1,3 @@
-import type { Request } from "express";
 import { oidcSpa, extractRequestAuthContext, type RuntimeConfigs } from "oidc-spa/server";
 import { z } from "zod";
 
@@ -74,28 +73,23 @@ const { validateAndGetAccessTokenClaims } = oidcSpa
     })
     .createUtils();
 
-export class AuthError extends Error {
-    constructor(readonly status: 400 | 401 | 500 | 503) {
-        super("Could not authenticate request.");
-        this.name = "AuthError";
-    }
-}
-
-export async function getUser(req: Request): Promise<User_server> {
-    const requestAuthContext = extractRequestAuthContext({ request: req, trustProxy: true });
+export async function getUser(request: Request): Promise<User_server> {
+    const requestAuthContext = extractRequestAuthContext({ request, trustProxy: true });
 
     if (!requestAuthContext) {
-        throw new AuthError(401);
+        throw new Response("Authentication required.", { status: 401 });
     }
     if (!requestAuthContext.isWellFormed) {
-        throw new AuthError(400);
+        throw new Response("Malformed authentication headers.", { status: 400 });
     }
 
     const result = await validateAndGetAccessTokenClaims(requestAuthContext.accessTokenAndMetadata);
 
     if (!result.isSuccess) {
         console.warn(result.debugErrorMessage);
-        throw new AuthError(result.recommendedHttpErrorStatusCode);
+        throw new Response("Could not authenticate request.", {
+            status: result.recommendedHttpErrorStatusCode
+        });
     }
 
     const user: User_server = {

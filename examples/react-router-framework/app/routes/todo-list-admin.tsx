@@ -1,28 +1,59 @@
 import { Form, isRouteErrorResponse, useNavigation } from "react-router";
 import type { Route } from "./+types/todo-list-admin";
-import { enforceLogin, getOidc } from "~/oidc";
-import { trpc } from "~/trpc";
+import { enforceLogin } from "~/oidc";
+import { z } from "zod";
+import { getUser } from "~/oidc.server";
+import { getTodosStore } from "~/.server/data/todos";
+
+export function headers() {
+    return { "Cache-Control": "no-store" };
+}
+
+export async function loader({ request }: Route.LoaderArgs) {
+    const user = await getUser(request);
+    if (!user.isAdmin) {
+        throw new Response("You need the admin role to view this page.", { status: 403 });
+    }
+    return { usersTodos: await getTodosStore().readAllTodos() };
+}
+
+export async function action({ request }: Route.ActionArgs) {
+    const user = await getUser(request);
+    if (!user.isAdmin) {
+        throw new Response("You need the admin role to delete todos.", { status: 403 });
+    }
+
+    const formData = await request.formData();
+    const input = z
+        .object({
+            userId: z.string().min(1),
+            todoId: z.coerce.number().int()
+        })
+        .safeParse(Object.fromEntries(formData));
+    if (!input.success) {
+        throw new Response("Invalid todo.", { status: 400 });
+    }
+
+    const store = getTodosStore();
+    const userTodos = (await store.readAllTodos()).find(({ userId }) => userId === input.data.userId);
+    if (userTodos === undefined) {
+        throw new Response("User not found.", { status: 404 });
+    }
+    await store.updateTodos({
+        userId: input.data.userId,
+        todos: userTodos.todos.filter(todo => todo.id !== input.data.todoId)
+    });
+    return null;
+}
 
 export async function clientLoader(args: Route.ClientLoaderArgs) {
     await enforceLogin(args);
-    const oidc = await getOidc({ assert: "user logged in" });
-    const user = await oidc.getUser();
-    if (!user.canSeeAdminNavigation) {
-        throw new Response("You need the admin role to view this page.", { status: 403 });
-    }
-
-    return { usersTodos: await trpc.todos.listAllUserTodos.query() };
+    return args.serverLoader();
 }
 
 export async function clientAction(args: Route.ClientActionArgs) {
     await enforceLogin(args);
-    const formData = await args.request.formData();
-    // Authorization is enforced independently in the tRPC procedure.
-    await trpc.todos.delete.mutate({
-        userId: String(formData.get("userId")),
-        todoId: Number(formData.get("todoId"))
-    });
-    return null;
+    return args.serverAction();
 }
 
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {

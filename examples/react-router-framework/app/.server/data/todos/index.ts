@@ -1,4 +1,3 @@
-import "server-only";
 import { createNodeFsTodoStore } from "./todos_nodeFs";
 import { createKvStoreTodoStore } from "./todos_kvStore";
 import type { TodosStore, TodoItem } from "./port";

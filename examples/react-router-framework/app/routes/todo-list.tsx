@@ -1,22 +1,49 @@
 import { useEffect, useRef } from "react";
 import { Form, useNavigation } from "react-router";
-import type { Route } from "./+types/todo-list-trpc";
+import type { Route } from "./+types/todo-list";
 import { enforceLogin } from "~/oidc";
-import { trpc } from "~/trpc";
+import { getUser } from "~/oidc.server";
+import { getTodosStore } from "~/.server/data/todos";
+
+export function headers() {
+    return { "Cache-Control": "no-store" };
+}
+
+export async function loader({ request }: Route.LoaderArgs) {
+    const user = await getUser(request);
+    const todos = await getTodosStore().readTodos({ userId: user.id });
+    return { todos };
+}
+
+export async function action({ request }: Route.ActionArgs) {
+    const user = await getUser(request);
+    const formData = await request.formData();
+    const name = formData.get("todo");
+
+    if (typeof name !== "string" || name.trim() === "") {
+        throw new Response("A todo name is required.", { status: 400 });
+    }
+
+    const store = getTodosStore();
+    const todos = await store.readTodos({ userId: user.id });
+    await store.updateTodos({
+        userId: user.id,
+        todos: [...todos, { id: Date.now(), name: name.trim() }]
+    });
+    return { success: true };
+}
 
 export async function clientLoader(args: Route.ClientLoaderArgs) {
     await enforceLogin(args);
-    return { todos: await trpc.todos.list.query() };
+    return args.serverLoader();
 }
 
 export async function clientAction(args: Route.ClientActionArgs) {
     await enforceLogin(args);
-    const formData = await args.request.formData();
-    await trpc.todos.add.mutate(String(formData.get("todo")));
-    return { success: true };
+    return args.serverAction();
 }
 
-export default function TodoListTrpcPage({ loaderData: { todos }, actionData }: Route.ComponentProps) {
+export default function TodoListPage({ loaderData: { todos }, actionData }: Route.ComponentProps) {
     const formRef = useRef<HTMLFormElement>(null);
     const isSubmitting = useNavigation().state !== "idle";
 
@@ -26,8 +53,8 @@ export default function TodoListTrpcPage({ loaderData: { todos }, actionData }: 
 
     return (
         <>
-            <h1>Todo List (tRPC)</h1>
-            <p>Your personal todo list, backed by tRPC.</p>
+            <h1>Todo List</h1>
+            <p>Your personal todo list, using React Router loaders and actions.</p>
             {todos.length === 0 ? (
                 <p className="empty-state">No todos yet.</p>
             ) : (
