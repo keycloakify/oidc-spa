@@ -3,29 +3,36 @@
     "private": true,
     "type": "module",
     "scripts": {
-        "prepare": "node scripts/setup-env.mjs",
-        "build": "react-router build",
-        "dev": "react-router dev",
+        "dev": "concurrently --kill-others \"react-router dev\" \"node --env-file=.env --conditions=react-server --import tsx --watch server/dev.ts\"",
+        "build": "react-router build && node scripts/build-server.mjs",
+        "start": "node --env-file-if-exists=.env server/start.mjs",
         "typecheck": "react-router typegen && tsc",
-        "preview": "vite preview --outDir build/client"
+        "postinstall": "node scripts/setup-env.mjs"
     },
     "dependencies": {
-        "@react-router/node": "8.3.1",
+        "@react-router/node": "8.5.0",
+        "@trpc/client": "11.18.0",
+        "@trpc/server": "11.18.0",
+        "@upstash/redis": "1.39.0",
+        "express": "5.3.0",
         "isbot": "5.2.2",
-        "oidc-spa": "latest",
+        "oidc-spa": "11.0.0-rc.7",
         "react": "19.2.8",
         "react-dom": "19.2.8",
-        "react-router": "8.3.1",
-        "zod": "4.5.4"
+        "react-router": "8.5.0",
+        "server-only": "0.0.1",
+        "zod": "4.6.7"
     },
     "devDependencies": {
-        "@react-router/dev": "8.3.1",
-        "@tailwindcss/vite": "4.3.3",
-        "@types/node": "26.4.1",
+        "@react-router/dev": "8.5.0",
+        "@types/express": "5.0.6",
+        "@types/node": "24.10.0",
         "@types/react": "19.2.18",
         "@types/react-dom": "19.2.7",
-        "tailwindcss": "4.3.3",
-        "typescript": "7.0.2",
+        "concurrently": "10.0.6",
+        "esbuild": "0.28.2",
+        "tsx": "4.23.15",
+        "typescript": "5.9.3",
         "vite": "8.2.2"
     },
     "engines": {

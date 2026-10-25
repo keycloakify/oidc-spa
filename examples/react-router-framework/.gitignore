@@ -1,9 +1,12 @@
 .DS_Store
+.env
+.env.local
+.env.*.local
 /node_modules/
-
-# React Router
 /.react-router/
 /build/
-
-.env
-/.env.local
+/.vercel/
+/yarn.lock
+/package-lock.json
+/pnpm-lock.yaml
+/todos_*.json
