@@ -2,8 +2,8 @@ import { enforceLogin, getOidc, useOidc } from "~/oidc";
 import type { Route } from "./+types/admin-only";
 import { isKeycloak, createKeycloakUtils } from "oidc-spa/keycloak";
 
-export async function clientLoader(params: Route.ClientLoaderArgs) {
-    await enforceLogin(params);
+export async function clientLoader(args: Route.ClientLoaderArgs) {
+    await enforceLogin(args);
 
     const oidc = await getOidc({ assert: "user logged in" });
 

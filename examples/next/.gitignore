@@ -38,7 +38,7 @@ yarn-error.log*
 next-env.d.ts
 
 # Keep the example configuration available when copying this project.
-!.env.local.sample
+!.env.sample
 
 # Users can choose npm, Yarn, or pnpm.
 /package-lock.json
