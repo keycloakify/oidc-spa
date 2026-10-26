@@ -2,7 +2,7 @@ import type { Plugin } from "vite";
 import { assert, type Equals } from "../tools/tsafe/assert";
 import type { ApiName } from "../core/earlyInit_browserRuntimeFreeze";
 import { createHandleClientEntrypoint } from "./handleClientEntrypoint";
-import { createHandleServerEntrypoint } from "./tanstack-start/handleServerEntrypoint";
+import { createHandleTanStackStartServerEntrypoint } from "./tanstack-start/createHandleTanStackStartServerEntrypoint";
 import { manageOptimizedDeps } from "./manageOptimizedDeps";
 import { transformCreateFileRoute } from "./tanstack-start/transformTanstackRouterCreateFileRoute";
 import { getProjectType, type ProjectType } from "./projectType";
@@ -52,8 +52,8 @@ export function oidcSpa(params: OidcSpaVitePluginParams = {}) {
         | ReturnType<typeof createHandleTanstackStartClientOutput>["generateBundle"]
         | undefined = undefined;
     let tanstackStartApplicationEntryBuildMarker: string | undefined = undefined;
-    let load_handleServerEntrypoint:
-        | ReturnType<typeof createHandleServerEntrypoint>["load_handleServerEntrypoint"]
+    let load_handleTanStackStartServerEntrypoint:
+        | ReturnType<typeof createHandleTanStackStartServerEntrypoint>["load_handleServerEntrypoint"]
         | undefined = undefined;
 
     let projectType: ProjectType | undefined = undefined;
@@ -133,25 +133,28 @@ export function oidcSpa(params: OidcSpaVitePluginParams = {}) {
                 });
             }
 
-            if (projectType === "tanstack-start" && isBuild) {
-                const tanstackStartClientOutputHandler = createHandleTanstackStartClientOutput({
-                    resolvedConfig,
-                    getClientEntrypointSource: clientEntrypointHandler.getClientEntrypointSource
-                });
+            if (projectType === "tanstack-start") {
+                if (isBuild) {
+                    const tanstackStartClientOutputHandler = createHandleTanstackStartClientOutput({
+                        resolvedConfig,
+                        getClientEntrypointSource: clientEntrypointHandler.getClientEntrypointSource
+                    });
 
-                resolveId_handleTanstackStartClientOutput = tanstackStartClientOutputHandler.resolveId;
-                load_handleTanstackStartClientOutput = tanstackStartClientOutputHandler.load;
-                buildStart_handleTanstackStartClientOutput = tanstackStartClientOutputHandler.buildStart;
-                generateBundle_handleTanstackStartClientOutput =
-                    tanstackStartClientOutputHandler.generateBundle;
-                tanstackStartApplicationEntryBuildMarker =
-                    tanstackStartClientOutputHandler.applicationEntryBuildMarker;
+                    resolveId_handleTanstackStartClientOutput =
+                        tanstackStartClientOutputHandler.resolveId;
+                    load_handleTanstackStartClientOutput = tanstackStartClientOutputHandler.load;
+                    buildStart_handleTanstackStartClientOutput =
+                        tanstackStartClientOutputHandler.buildStart;
+                    generateBundle_handleTanstackStartClientOutput =
+                        tanstackStartClientOutputHandler.generateBundle;
+                    tanstackStartApplicationEntryBuildMarker =
+                        tanstackStartClientOutputHandler.applicationEntryBuildMarker;
+                }
+
+                load_handleTanStackStartServerEntrypoint = createHandleTanStackStartServerEntrypoint({
+                    resolvedConfig
+                }).load_handleServerEntrypoint;
             }
-
-            load_handleServerEntrypoint = createHandleServerEntrypoint({
-                resolvedConfig,
-                projectType
-            }).load_handleServerEntrypoint;
         },
         transform(code, id) {
             assert(projectType !== undefined);
@@ -194,6 +197,7 @@ export function oidcSpa(params: OidcSpaVitePluginParams = {}) {
             reactRouterHandler?.configureServer(server);
         },
         async load(id) {
+            assert(projectType !== undefined);
             if (isReactRouterChildCompiler) return null;
             {
                 const r = await reactRouterHandler?.load(id);
@@ -235,10 +239,10 @@ export function oidcSpa(params: OidcSpaVitePluginParams = {}) {
                 }
             }
 
-            {
-                assert(load_handleServerEntrypoint !== undefined);
+            if (projectType === "tanstack-start") {
+                assert(load_handleTanStackStartServerEntrypoint !== undefined);
 
-                const r = await load_handleServerEntrypoint({
+                const r = await load_handleTanStackStartServerEntrypoint({
                     id,
                     pluginContext: this
                 });

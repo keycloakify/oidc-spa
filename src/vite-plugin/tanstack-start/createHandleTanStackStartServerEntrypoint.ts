@@ -2,9 +2,6 @@ import type { ResolvedConfig } from "vite";
 import type { PluginContext } from "rollup";
 import { promises as fs } from "node:fs";
 import * as path from "node:path";
-import { assert } from "../../tools/tsafe/assert";
-import type { Equals } from "../../tools/tsafe/Equals";
-import type { ProjectType } from "../projectType";
 import {
     resolveCandidate,
     resolvePackageFile,
@@ -21,16 +18,37 @@ type EntryResolution = {
 
 const ORIGINAL_QUERY_PARAM = "oidc-spa-original";
 
-export function createHandleServerEntrypoint(params: {
-    resolvedConfig: ResolvedConfig;
-    projectType: ProjectType;
-}) {
-    const { resolvedConfig, projectType } = params;
+export function createHandleTanStackStartServerEntrypoint(params: { resolvedConfig: ResolvedConfig }) {
+    const { resolvedConfig } = params;
 
-    const entryResolution = resolveEntryForProject({
-        config: resolvedConfig,
-        projectType
-    });
+    const entryResolution = (() => {
+        const { root } = resolvedConfig;
+
+        const candidate = resolveCandidate({
+            root,
+            subDirectories: ["src"],
+            filenames: ["server.ts", "server.js", "server.tsx", "server.jsx"]
+        });
+
+        const entryPath =
+            candidate ??
+            resolvePackageFile("@tanstack/react-start", [
+                "dist",
+                "plugin",
+                "default-entry",
+                "server.ts"
+            ]);
+
+        const normalized = normalizeAbsolute(entryPath);
+
+        const resolution: EntryResolution = {
+            absolutePath: entryPath,
+            normalizedPath: normalized,
+            watchFiles: [entryPath]
+        };
+
+        return resolution;
+    })();
 
     async function load_handleServerEntrypoint(params: {
         id: string;
@@ -74,51 +92,6 @@ export function createHandleServerEntrypoint(params: {
     }
 
     return { load_handleServerEntrypoint };
-}
-
-function resolveEntryForProject({
-    config,
-    projectType
-}: {
-    config: ResolvedConfig;
-    projectType: ProjectType;
-}): EntryResolution | undefined {
-    const root = config.root;
-
-    switch (projectType) {
-        case "tanstack-start": {
-            const candidate = resolveCandidate({
-                root,
-                subDirectories: ["src"],
-                filenames: ["server.ts", "server.js", "server.tsx", "server.jsx"]
-            });
-
-            const entryPath =
-                candidate ??
-                resolvePackageFile("@tanstack/react-start", [
-                    "dist",
-                    "plugin",
-                    "default-entry",
-                    "server.ts"
-                ]);
-
-            const normalized = normalizeAbsolute(entryPath);
-
-            const resolution: EntryResolution = {
-                absolutePath: entryPath,
-                normalizedPath: normalized,
-                watchFiles: [entryPath]
-            };
-
-            return resolution;
-        }
-        case "react-router-framework":
-        case "nuxt":
-        case "other":
-            return undefined;
-        default:
-            assert<Equals<typeof projectType, never>>(false);
-    }
 }
 
 function loadOriginalModule(
