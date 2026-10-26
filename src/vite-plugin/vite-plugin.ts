@@ -8,6 +8,7 @@ import { transformCreateFileRoute } from "./transformTanstackRouterCreateFileRou
 import { getProjectType, type ProjectType } from "./projectType";
 import { createHandleTanstackStartClientOutput } from "./handleTanstackStartClientOutput";
 import { createHandleTanstackStartRuntimeConfigs } from "./handleTanstackStartRuntimeConfigs";
+import { createHandleReactRouter } from "./handleReactRouter";
 
 export type OidcSpaVitePluginParams = {
     /** See: https://docs.oidc-spa.dev/v/v10/security-features/browser-runtime-freeze */
@@ -58,11 +59,25 @@ export function oidcSpa(params: OidcSpaVitePluginParams = {}) {
     let projectType: ProjectType | undefined = undefined;
     let isBuild = false;
     let runtimeConfigsHandler: ReturnType<typeof createHandleTanstackStartRuntimeConfigs> | undefined;
+    let reactRouterHandler: ReturnType<typeof createHandleReactRouter> | undefined;
+    let isReactRouterChildCompiler = false;
 
     const plugin: Plugin = {
         name: "oidc-spa",
         enforce: "pre",
         config(userConfig) {
+            if (
+                (userConfig as { configFile?: string | false }).configFile === false &&
+                userConfig.plugins
+                    ?.flat()
+                    .some(
+                        plugin =>
+                            plugin instanceof Object &&
+                            "name" in plugin &&
+                            plugin.name === "react-router:virtual-modules"
+                    )
+            )
+                return;
             const projectType = getProjectType({
                 pluginNames:
                     userConfig.plugins
@@ -80,6 +95,21 @@ export function oidcSpa(params: OidcSpaVitePluginParams = {}) {
             projectType = getProjectType({
                 pluginNames: resolvedConfig.plugins.map(({ name }) => name)
             });
+            // RR creates a second compiler containing only its auxiliary plugins.
+            // It analyzes exports; it must not install another document/bootstrap pipeline.
+            isReactRouterChildCompiler =
+                !resolvedConfig.configFile &&
+                projectType === "other" &&
+                resolvedConfig.plugins.some(plugin => plugin.name === "react-router:virtual-modules");
+            if (isReactRouterChildCompiler) return;
+            if (
+                projectType === "react-router-framework" &&
+                resolvedConfig.plugins.some(plugin => plugin.name === "react-router/rsc")
+            ) {
+                throw new Error(
+                    "oidc-spa: React Router RSC Framework mode is not supported. Use conventional Framework mode with ssr: false or API-only mode."
+                );
+            }
 
             if (projectType === "tanstack-start") {
                 runtimeConfigsHandler = createHandleTanstackStartRuntimeConfigs({ resolvedConfig });
@@ -92,6 +122,13 @@ export function oidcSpa(params: OidcSpaVitePluginParams = {}) {
             });
 
             load_handleClientEntrypoint = clientEntrypointHandler.load_handleClientEntrypoint;
+
+            if (projectType === "react-router-framework") {
+                reactRouterHandler = createHandleReactRouter({
+                    resolvedConfig,
+                    getClientEntrypointSource: clientEntrypointHandler.getClientEntrypointSource
+                });
+            }
 
             if (projectType === "tanstack-start" && isBuild) {
                 const tanstackStartClientOutputHandler = createHandleTanstackStartClientOutput({
@@ -114,9 +151,13 @@ export function oidcSpa(params: OidcSpaVitePluginParams = {}) {
             }).load_handleServerEntrypoint;
         },
         transform(code, id) {
+            if (isReactRouterChildCompiler) return null;
             let transformed: TransformResult | null = null;
 
             assert(projectType !== undefined);
+
+            const reactRouterTransform = reactRouterHandler?.transform(code, id);
+            if (reactRouterTransform) return reactRouterTransform;
 
             tanstack_start_specific_transformations: {
                 if (projectType !== "tanstack-start") {
@@ -134,17 +175,25 @@ export function oidcSpa(params: OidcSpaVitePluginParams = {}) {
         resolveId(id) {
             return (
                 runtimeConfigsHandler?.resolveId(id) ??
+                reactRouterHandler?.resolveId(id) ??
                 resolveId_handleTanstackStartClientOutput?.(id) ??
                 null
             );
         },
         buildStart() {
             buildStart_handleTanstackStartClientOutput?.call(this);
+            reactRouterHandler?.buildStart.call(this);
         },
         configureServer(server) {
             runtimeConfigsHandler?.configureServer(server);
+            reactRouterHandler?.configureServer(server);
         },
         async load(id) {
+            if (isReactRouterChildCompiler) return null;
+            {
+                const r = await reactRouterHandler?.load(id);
+                if (r !== null && r !== undefined) return r;
+            }
             {
                 const r = await runtimeConfigsHandler?.load(id, this);
                 if (r !== null && r !== undefined) return r;
@@ -161,10 +210,11 @@ export function oidcSpa(params: OidcSpaVitePluginParams = {}) {
                 assert(load_handleClientEntrypoint !== undefined);
 
                 const doUseOriginalEntrypoint =
-                    projectType === "tanstack-start" &&
-                    isBuild &&
-                    ((this as typeof this & { environment?: { name?: string } }).environment?.name ??
-                        "client") === "client";
+                    projectType === "react-router-framework" ||
+                    (projectType === "tanstack-start" &&
+                        isBuild &&
+                        ((this as typeof this & { environment?: { name?: string } }).environment?.name ??
+                            "client") === "client");
 
                 const r = await load_handleClientEntrypoint({
                     id,
@@ -198,6 +248,7 @@ export function oidcSpa(params: OidcSpaVitePluginParams = {}) {
             order: "pre",
             async handler(options, bundle) {
                 await generateBundle_handleTanstackStartClientOutput?.call(this, options, bundle);
+                reactRouterHandler?.generateBundle.call(this, options, bundle);
             }
         }
     };

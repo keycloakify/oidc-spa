@@ -7,10 +7,7 @@ export function getProjectType(params: { pluginNames: string[] }) {
         return "tanstack-start";
     }
 
-    if (
-        pluginNames.has("react-router") ||
-        Array.from(pluginNames).some(pluginName => pluginName.startsWith("react-router:"))
-    ) {
+    if (pluginNames.has("react-router") || pluginNames.has("react-router/rsc")) {
         return "react-router-framework";
     }
 

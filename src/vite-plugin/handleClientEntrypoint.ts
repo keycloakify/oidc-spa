@@ -193,6 +193,11 @@ function resolveEntryForProject({
         }
 
         case "react-router-framework": {
+            const frameworkEntry = (
+                config as ResolvedConfig & {
+                    __reactRouterPluginContext?: { entryClientFilePath?: string };
+                }
+            ).__reactRouterPluginContext?.entryClientFilePath;
             const candidate = resolveCandidate({
                 root,
                 subDirectories: ["app"],
@@ -200,6 +205,7 @@ function resolveEntryForProject({
             });
 
             const entryPath =
+                frameworkEntry ??
                 candidate ??
                 resolvePackageFile("@react-router/dev", [
                     "dist",

@@ -36,7 +36,10 @@ export function manageOptimizedDeps(params: {
                     "oidc-spa/entrypoint",
                     "oidc-spa/keycloak",
                     "oidc-spa/core",
-                    "oidc-spa/decode-jwt"
+                    "oidc-spa/decode-jwt",
+                    "oidc-spa/DPoP",
+                    "oidc-spa/browser-runtime-freeze",
+                    "oidc-spa/token-substitution"
                 ];
 
                 for (const moduleName of moduleNames_include) {

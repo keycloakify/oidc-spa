@@ -9,7 +9,7 @@ export default {
     //   export async function action({ request }: Route.ActionArgs) will no longer work.
     // - Keep enforceLogin(args) in clientLoader/clientAction, but replace
     //   args.serverLoader()/args.serverAction() with authenticated fetch calls to your API.
-    // - Remove api-only-dev-shell from vite.config.ts and the Vercel function rewrites.
+    // - Remove the Vercel function rewrites.
     //   Deploy build/client as a static SPA.
     // ssr: true is not supported by this integration: authentication initializes in the browser.
     ssr: "unstable_api-only"

@@ -16,10 +16,10 @@ yarn dev
 Open **http://app.localhost:3000**. One React Router development server handles
 both the application and its server loaders/actions.
 
-The small `api-only-dev-shell` Vite plugin works around React Router 8.5 running
-document loaders during development. It serves the root shell for document
-requests, matching production, so protected data is fetched with a token after
-browser initialization.
+The oidc-spa Vite plugin serves the API-only development shell without running
+server loaders or middleware. The browser then requests authenticated loader data,
+matching the production loading flow. No custom development plugin or
+`optimizeDeps.include` configuration is needed.
 
 Postinstall copies `.env.sample` to `.env` only when `.env` does not exist. Choose
 `VITE_OIDC_PROVIDER`: Keycloak, Keycloak with token introspection, Auth0, Microsoft
@@ -41,7 +41,17 @@ its configuration from `process.env`; local development and `yarn start` load `.
 `react-router.config.ts` selects API-only mode. The root `HydrateFallback` returns
 `null`, and `OidcInitializationGate` wraps the whole application. The oidc-spa Vite
 plugin installs early initialization, browser runtime protection, and automatic
-DPoP support.
+DPoP support. It defers the document's executable scripts, including React Router's
+root imports and development runtime, until early initialization permits loading
+the app. In the callback iframe, those scripts and application module preloads
+remain inactive when `shouldLoadApp` is false.
+
+The integration supports conventional Framework mode with `ssr: false` or
+`ssr: "unstable_api-only"`. API-only compatibility is tested with React Router
+8.5.0; experimental framework changes may require plugin updates. Unrecognized
+bootstrap output fails explicitly. Executable HTML attributes and active embedded
+documents in the document shell should instead live inside the initialized app;
+the plugin rejects shells that could execute code before its bootstrap.
 
 `app/oidc.ts` uses `oidc-spa/react-spa`, maps claims to the application's user model,
 and configures the browser's OIDC client. Protected routes use `clientLoader` and
@@ -91,8 +101,7 @@ To turn the example into a static SPA:
    `args.serverLoader()` and `args.serverAction()` with requests to your own API.
    Get an access token with `getOidc()` and `oidc.getAccessToken()`, and attach it as
    `Authorization: Bearer …` to requests to your trusted API.
-5. Remove the `api-only-dev-shell` plugin from `vite.config.ts`.
-6. Deploy `build/client` to static hosting with a fallback to `index.html`. Remove
+5. Deploy `build/client` to static hosting with a fallback to `index.html`. Remove
    the `.data` and `/__manifest` function rewrites from `vercel.json`. The `start`
    script and `@react-router/serve` are no longer needed.
 

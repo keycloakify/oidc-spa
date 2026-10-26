@@ -12,12 +12,7 @@ export type User_client = {
     canSeeAdminNavigation: boolean;
 };
 
-export const {
-    useOidc,
-    getOidc,
-    OidcInitializationGate,
-    enforceLogin: enforceLogin_impl
-} = oidcSpa
+export const { useOidc, getOidc, OidcInitializationGate, enforceLogin } = oidcSpa
     .withUser<User_client>(async ({ isMock, idTokenClaims, accessToken }) => {
         if (isMock) {
             const user_mock: User_client = {
@@ -103,10 +98,3 @@ export const {
         }
     })
     .createUtils();
-
-// Compatibility with rc.7, whose React Router guard reads request.href.
-// Export the SDK's enforceLogin directly once its request.url fix is released.
-export function enforceLogin(args: { request: Request }) {
-    const request = { url: args.request.url, href: args.request.url };
-    return enforceLogin_impl({ request });
-}
