@@ -1,5 +1,5 @@
-import type { Plugin, TransformResult } from "vite";
-import { assert } from "../tools/tsafe/assert";
+import type { Plugin } from "vite";
+import { assert, type Equals } from "../tools/tsafe/assert";
 import type { ApiName } from "../core/earlyInit_browserRuntimeFreeze";
 import { createHandleClientEntrypoint } from "./handleClientEntrypoint";
 import { createHandleServerEntrypoint } from "./handleServerEntrypoint";
@@ -151,26 +151,25 @@ export function oidcSpa(params: OidcSpaVitePluginParams = {}) {
             }).load_handleServerEntrypoint;
         },
         transform(code, id) {
-            if (isReactRouterChildCompiler) return null;
-            let transformed: TransformResult | null = null;
-
             assert(projectType !== undefined);
 
-            const reactRouterTransform = reactRouterHandler?.transform(code, id);
-            if (reactRouterTransform) return reactRouterTransform;
-
-            tanstack_start_specific_transformations: {
-                if (projectType !== "tanstack-start") {
-                    break tanstack_start_specific_transformations;
-                }
-
-                transformed = transformCreateFileRoute({
-                    code,
-                    id
-                });
+            switch (projectType) {
+                case "react-router-framework":
+                    assert(reactRouterHandler !== undefined);
+                    return reactRouterHandler.transform(code, id);
+                case "tanstack-start":
+                    return transformCreateFileRoute({
+                        code,
+                        id
+                    });
+                case "nuxt":
+                case "other":
+                    break;
+                default:
+                    assert<Equals<typeof projectType, never>>(false);
             }
 
-            return transformed;
+            return null;
         },
         resolveId(id) {
             return (
