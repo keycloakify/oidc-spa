@@ -10,6 +10,7 @@
         "prepare": "patch-package",
         "build": "tsx scripts/build.ts",
         "test:angular": "tsc --project tests/angular/tsconfig.json && tsx scripts/test-angular.ts",
+        "test:vite-plugin-handlers": "node --test scripts/tests/vite-plugin-handlers.test.mjs",
         "test:react-router-bootstrap": "node --test scripts/tests/react-router-bootstrap.test.mjs scripts/tests/react-router-bootstrap.integration.mjs",
         "test:react-nextjs": "tsc --project tests/react-nextjs/tsconfig.json",
         "test:tanstack-start-runtime-configs": "tsx scripts/tests/tanstack-start-runtime-configs.test.ts && tsc --project tests/tanstack-start-runtime-configs/tsconfig.json",
