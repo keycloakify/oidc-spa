@@ -66,29 +66,39 @@ export function oidcSpa(params: OidcSpaVitePluginParams = {}) {
         name: "oidc-spa",
         enforce: "pre",
         config(userConfig) {
-            if (
-                (userConfig as { configFile?: string | false }).configFile === false &&
-                userConfig.plugins
-                    ?.flat()
-                    .some(
-                        plugin =>
-                            plugin instanceof Object &&
-                            "name" in plugin &&
-                            plugin.name === "react-router:virtual-modules"
-                    )
-            )
-                return;
-            const projectType = getProjectType({
-                pluginNames:
-                    userConfig.plugins
-                        ?.flat()
+            handle_manageOptizedDps: {
+                const pluginNames = (() => {
+                    if (userConfig.plugins === undefined) {
+                        return [];
+                    }
+
+                    const pluginNames = userConfig.plugins
+                        .flat()
                         .filter(plugin => plugin instanceof Object)
                         .filter(plugin => "name" in plugin)
-                        .map(plugin => plugin.name) ?? []
-            });
+                        .map(plugin => plugin.name);
 
-            userConfig = manageOptimizedDeps({ userConfig, projectType });
-            return userConfig;
+                    return pluginNames;
+                })();
+
+                if (
+                    (userConfig as { configFile?: string | false }).configFile === false &&
+                    pluginNames.includes("react-router:virtual-modules")
+                ) {
+                    break handle_manageOptizedDps;
+                }
+
+                const projectType_bestEffort = getProjectType({
+                    pluginNames
+                });
+
+                const userConfig_modified = manageOptimizedDeps({
+                    userConfig,
+                    projectType: projectType_bestEffort
+                });
+
+                return userConfig_modified;
+            }
         },
         configResolved(resolvedConfig) {
             isBuild = resolvedConfig.command === "build";
