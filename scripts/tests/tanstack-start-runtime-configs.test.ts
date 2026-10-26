@@ -5,7 +5,7 @@ import * as path from "node:path";
 import { tmpdir } from "node:os";
 import { EventEmitter } from "node:events";
 import { build, createServer, type ResolvedConfig } from "vite";
-import { createHandleTanstackStartRuntimeConfigs } from "../../src/vite-plugin/handleTanstackStartRuntimeConfigs";
+import { createHandleTanstackStartRuntimeConfigs } from "../../src/vite-plugin/tanstack-start/handleTanstackStartRuntimeConfigs";
 import { oidcSpa as oidcSpaVitePlugin } from "../../src/vite-plugin/vite-plugin";
 
 test("TanStack Start runtime config environment manifest", async t => {

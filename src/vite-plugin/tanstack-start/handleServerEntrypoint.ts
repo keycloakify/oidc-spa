@@ -2,16 +2,16 @@ import type { ResolvedConfig } from "vite";
 import type { PluginContext } from "rollup";
 import { promises as fs } from "node:fs";
 import * as path from "node:path";
-import { assert } from "../tools/tsafe/assert";
-import type { Equals } from "../tools/tsafe/Equals";
-import type { ProjectType } from "./projectType";
+import { assert } from "../../tools/tsafe/assert";
+import type { Equals } from "../../tools/tsafe/Equals";
+import type { ProjectType } from "../projectType";
 import {
     resolveCandidate,
     resolvePackageFile,
     normalizeAbsolute,
     splitId,
     normalizeRequestPath
-} from "./utils";
+} from "../utils";
 
 type EntryResolution = {
     absolutePath: string;

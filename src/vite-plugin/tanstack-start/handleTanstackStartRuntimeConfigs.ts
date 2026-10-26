@@ -2,7 +2,7 @@ import { promises as fs } from "node:fs";
 import * as path from "node:path";
 import type { PluginContext } from "rollup";
 import type { ResolvedConfig, ViteDevServer } from "vite";
-import { babelParser, babelTraverse, type NodePath } from "../vendor/build-runtime/babel";
+import { babelParser, babelTraverse, type NodePath } from "../../vendor/build-runtime/babel";
 
 /**
  * Keep this runtime policy in sync with RuntimeConfigs. The companion type

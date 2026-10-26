@@ -1,6 +1,6 @@
 import type { RuntimeConfigs } from "../../src/tanstack-start/react/types";
 import type { OidcSpa } from "../../src/tanstack-start/react/oidcSpa";
-import { tanstackStartRuntimeConfigsEnvPolicy } from "../../src/vite-plugin/handleTanstackStartRuntimeConfigs";
+import { tanstackStartRuntimeConfigsEnvPolicy } from "../../src/vite-plugin/tanstack-start/handleTanstackStartRuntimeConfigs";
 import { assert, type Equals } from "../../src/tools/tsafe/assert";
 
 type KeysOfUnion<T> = T extends T ? keyof T : never;

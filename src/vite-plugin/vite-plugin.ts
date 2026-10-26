@@ -2,13 +2,13 @@ import type { Plugin } from "vite";
 import { assert, type Equals } from "../tools/tsafe/assert";
 import type { ApiName } from "../core/earlyInit_browserRuntimeFreeze";
 import { createHandleClientEntrypoint } from "./handleClientEntrypoint";
-import { createHandleServerEntrypoint } from "./handleServerEntrypoint";
+import { createHandleServerEntrypoint } from "./tanstack-start/handleServerEntrypoint";
 import { manageOptimizedDeps } from "./manageOptimizedDeps";
-import { transformCreateFileRoute } from "./transformTanstackRouterCreateFileRoute";
+import { transformCreateFileRoute } from "./tanstack-start/transformTanstackRouterCreateFileRoute";
 import { getProjectType, type ProjectType } from "./projectType";
-import { createHandleTanstackStartClientOutput } from "./handleTanstackStartClientOutput";
-import { createHandleTanstackStartRuntimeConfigs } from "./handleTanstackStartRuntimeConfigs";
-import { createHandleReactRouter } from "./handleReactRouter";
+import { createHandleTanstackStartClientOutput } from "./tanstack-start/handleTanstackStartClientOutput";
+import { createHandleTanstackStartRuntimeConfigs } from "./tanstack-start/handleTanstackStartRuntimeConfigs";
+import { createHandleReactRouter } from "./react-router-framework/handleReactRouter";
 
 export type OidcSpaVitePluginParams = {
     /** See: https://docs.oidc-spa.dev/v/v10/security-features/browser-runtime-freeze */

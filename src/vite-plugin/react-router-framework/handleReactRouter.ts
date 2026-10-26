@@ -4,7 +4,7 @@ import { existsSync, statSync } from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Readable } from "node:stream";
-import { babelParser, babelTraverse, babelTypes, babelGenerate } from "../vendor/build-runtime/babel";
+import { babelParser, babelTraverse, babelTypes, babelGenerate } from "../../vendor/build-runtime/babel";
 import { resumeReactRouterDocument } from "./reactRouterDocument";
 
 const BOOTSTRAP_ID = "virtual:oidc-spa/react-router-bootstrap";

@@ -1,5 +1,5 @@
-import { MagicString } from "../vendor/build-runtime/magic-string";
-import { babelParser, babelTraverse, babelTypes as t } from "../vendor/build-runtime/babel";
+import { MagicString } from "../../vendor/build-runtime/magic-string";
+import { babelParser, babelTraverse, babelTypes as t } from "../../vendor/build-runtime/babel";
 
 const DISABLE_SSR_SPECIFIER = "__disableSsrIfLoginEnforced";
 const DISABLE_SSR_SOURCE = "oidc-spa/react-tanstack-start";

@@ -3,7 +3,7 @@ import { test } from "node:test";
 import {
     protectReactRouterDocument,
     protectReactRouterResponse
-} from "../../dist/esm/vite-plugin/reactRouterDocument.mjs";
+} from "../../dist/esm/vite-plugin/react-router-framework/reactRouterDocument.mjs";
 import { parse } from "../../dist/esm/vendor/build-runtime/parse5.mjs";
 import { getProjectType } from "../../dist/esm/vite-plugin/projectType.mjs";
 

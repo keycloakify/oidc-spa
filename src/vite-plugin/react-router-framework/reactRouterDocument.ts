@@ -1,4 +1,4 @@
-import { parse, type DefaultTreeAdapterMap } from "../vendor/build-runtime/parse5";
+import { parse, type DefaultTreeAdapterMap } from "../../vendor/build-runtime/parse5";
 
 type Node = DefaultTreeAdapterMap["node"];
 type Element = DefaultTreeAdapterMap["element"];
