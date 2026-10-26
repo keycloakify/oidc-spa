@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { Form, useNavigation } from "react-router";
 import type { Route } from "./+types/todo-list";
 import { enforceLogin } from "~/oidc";
-import { getUser } from "~/oidc.server";
+import { getUser } from "~/.server/oidc";
 import { getTodosStore } from "~/.server/data/todos";
 
 export function headers() {
