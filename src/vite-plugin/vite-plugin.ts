@@ -58,9 +58,9 @@ export function oidcSpa(params: OidcSpaVitePluginParams = {}) {
 
     let projectType: ProjectType | undefined = undefined;
     let isBuild = false;
+    let isReactRouterChildCompiler = false;
     let runtimeConfigsHandler: ReturnType<typeof createHandleTanstackStartRuntimeConfigs> | undefined;
     let reactRouterHandler: ReturnType<typeof createHandleReactRouter> | undefined;
-    let isReactRouterChildCompiler = false;
 
     const plugin: Plugin = {
         name: "oidc-spa",
@@ -98,18 +98,11 @@ export function oidcSpa(params: OidcSpaVitePluginParams = {}) {
             // RR creates a second compiler containing only its auxiliary plugins.
             // It analyzes exports; it must not install another document/bootstrap pipeline.
             isReactRouterChildCompiler =
-                !resolvedConfig.configFile &&
-                projectType === "other" &&
-                resolvedConfig.plugins.some(plugin => plugin.name === "react-router:virtual-modules");
-            if (isReactRouterChildCompiler) return;
-            if (
                 projectType === "react-router-framework" &&
-                resolvedConfig.plugins.some(plugin => plugin.name === "react-router/rsc")
-            ) {
-                throw new Error(
-                    "oidc-spa: React Router RSC Framework mode is not supported. Use conventional Framework mode with ssr: false or API-only mode."
-                );
-            }
+                !resolvedConfig.configFile &&
+                resolvedConfig.plugins.some(plugin => plugin.name === "react-router:virtual-modules");
+
+            if (isReactRouterChildCompiler) return;
 
             if (projectType === "tanstack-start") {
                 runtimeConfigsHandler = createHandleTanstackStartRuntimeConfigs({ resolvedConfig });
@@ -155,6 +148,9 @@ export function oidcSpa(params: OidcSpaVitePluginParams = {}) {
 
             switch (projectType) {
                 case "react-router-framework":
+                    if (isReactRouterChildCompiler) {
+                        break;
+                    }
                     assert(reactRouterHandler !== undefined);
                     return reactRouterHandler.transform(code, id);
                 case "tanstack-start":

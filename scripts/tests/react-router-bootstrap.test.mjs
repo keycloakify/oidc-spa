@@ -84,8 +84,16 @@ test("React Router detection does not select vanilla Vite or TanStack Start", ()
     assert.equal(getProjectType({ pluginNames: ["react-router:unrelated"] }), "other");
     assert.equal(getProjectType({ pluginNames: ["react-router"] }), "react-router-framework");
     assert.equal(
+        getProjectType({ pluginNames: ["react-router:virtual-modules"] }),
+        "react-router-framework"
+    );
+    assert.equal(
         getProjectType({ pluginNames: ["tanstack-react-start:config", "react-router"] }),
         "tanstack-start"
+    );
+    assert.throws(
+        () => getProjectType({ pluginNames: ["react-router/rsc"] }),
+        /React Router RSC Framework mode is not supported/
     );
 });
 

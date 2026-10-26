@@ -7,7 +7,13 @@ export function getProjectType(params: { pluginNames: string[] }) {
         return "tanstack-start";
     }
 
-    if (pluginNames.has("react-router") || pluginNames.has("react-router/rsc")) {
+    if (pluginNames.has("react-router/rsc")) {
+        throw new Error(
+            "oidc-spa: React Router RSC Framework mode is not supported. Use conventional Framework mode with ssr: false or API-only mode."
+        );
+    }
+
+    if (pluginNames.has("react-router") || pluginNames.has("react-router:virtual-modules")) {
         return "react-router-framework";
     }
 
