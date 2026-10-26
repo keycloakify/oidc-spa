@@ -1,11 +1,9 @@
+/// <reference types="vite/client" />
 import { HeadContent, Scripts, createRootRoute } from "@tanstack/react-router";
-import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
-import { TanStackDevtools } from "@tanstack/react-devtools";
-
-import Header from "#/components/Header";
-import { AutoLogoutWarningOverlay } from "#/components/AutoLogoutWarningOverlay";
-
-import appCss from "../styles.css?url";
+import type { ReactNode } from "react";
+import { AppHeader } from "~/components/AppHeader";
+import { AutoLogoutWarningOverlay } from "~/components/AutoLogoutWarningOverlay";
+import stylesheetUrl from "~/styles.css?url";
 
 export const Route = createRootRoute({
     head: () => ({
@@ -18,50 +16,24 @@ export const Route = createRootRoute({
                 content: "width=device-width, initial-scale=1"
             },
             {
-                title: "TanStack Start Starter"
+                title: "TanStack Start Example"
             }
         ],
-        links: [
-            {
-                rel: "stylesheet",
-                href: appCss
-            }
-        ]
+        links: [{ rel: "stylesheet", href: stylesheetUrl }]
     }),
     shellComponent: RootDocument
 });
 
-function RootDocument({ children }: { children: React.ReactNode }) {
+function RootDocument({ children }: { children: ReactNode }) {
     return (
         <html lang="en">
             <head>
                 <HeadContent />
             </head>
-            <body
-                className="min-h-screen text-white"
-                style={{
-                    backgroundColor: "#0f172a",
-                    backgroundImage: "linear-gradient(180deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)"
-                }}
-            >
-                <div className="min-h-screen flex flex-col">
-                    <Header />
-                    <main className="flex flex-1 flex-col">
-                        <div className="flex flex-1 flex-col">{children}</div>
-                    </main>
-                </div>
+            <body>
+                <AppHeader />
+                <main>{children}</main>
                 <AutoLogoutWarningOverlay />
-                <TanStackDevtools
-                    config={{
-                        position: "bottom-right"
-                    }}
-                    plugins={[
-                        {
-                            name: "Tanstack Router",
-                            render: <TanStackRouterDevtoolsPanel />
-                        }
-                    ]}
-                />
                 <Scripts />
             </body>
         </html>

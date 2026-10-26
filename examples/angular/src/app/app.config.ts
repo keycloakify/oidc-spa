@@ -1,32 +1,70 @@
-import {
-  ApplicationConfig,
-  provideBrowserGlobalErrorListeners,
-  provideZonelessChangeDetection,
-} from '@angular/core';
-import { provideHttpClient, withInterceptors } from '@angular/common/http';
+import { ApplicationConfig, inject, provideBrowserGlobalErrorListeners } from '@angular/core';
+import { HttpClient, provideHttpClient, withInterceptors } from '@angular/common/http';
 import { provideRouter } from '@angular/router';
+import type { RuntimeConfigs } from 'oidc-spa/angular';
+import { firstValueFrom } from 'rxjs';
 import { routes } from './app.routes';
-import { Oidc } from './services/oidc.service';
+import { createOidcInterceptor, provideOidc, REQUIRE_ACCESS_TOKEN } from './oidc';
 
 export const appConfig: ApplicationConfig = {
   providers: [
     provideBrowserGlobalErrorListeners(),
-    provideZonelessChangeDetection(),
+    provideRouter(routes),
     provideHttpClient(
       withInterceptors([
-        Oidc.createBearerInterceptor({
-          shouldInjectAccessToken: (req) =>
-            // NOTE: This is the legacy and familiar pattern but we do not recommend it.
-            // Prefer using per request context token: https://github.com/keycloakify/oidc-spa/blob/c0f13614c59d38e111bf0af6f6b36c71b74018f1/examples/angular-kitchensink/src/app/app.config.ts#L30-L42
-            /^(https:\/\/jsonplaceholder\.typicode\.com)(\/.*)?$/i.test(req.url),
+        createOidcInterceptor({
+          shouldInjectAccessToken: (req) => req.context.get(REQUIRE_ACCESS_TOKEN),
         }),
       ])
     ),
-    provideRouter(routes),
-    Oidc.provide({
-      issuerUri: 'https://phasetwo.oidc-spa.dev/realms/demo-realm',
-      clientId: 'example-app',
-      debugLogs: true,
+    provideOidc(async (): Promise<RuntimeConfigs> => {
+      const http = inject(HttpClient);
+      const env = await firstValueFrom(http.get<Record<string, string>>('/api/oidc-client-env'));
+
+      switch (env['OIDC_PROVIDER']) {
+        case 'mock':
+          return {
+            mode: 'mock',
+            isUserInitiallyLoggedIn: true,
+          };
+        case 'Keycloak':
+          return {
+            mode: 'real',
+            issuerUri: env['KEYCLOAK_ISSUER_URI'],
+            clientId: env['KEYCLOAK_CLIENT_ID'],
+            debugLogs: true,
+          };
+        case 'Keycloak2':
+          return {
+            mode: 'real',
+            issuerUri: env['KEYCLOAK2_ISSUER_URI'],
+            clientId: env['KEYCLOAK2_CLIENT_ID'],
+            debugLogs: true,
+          };
+        case 'Auth0':
+          return {
+            mode: 'real',
+            issuerUri: env['AUTH0_ISSUER_URI'],
+            clientId: env['AUTH0_CLIENT_ID'],
+            authorizationParams: {
+              audience: env['AUTH0_API_IDENTIFIER'],
+            },
+            idleSessionLifetimeInSeconds: parseInt(env['AUTH0_SSO_SESSION_IDLE_SECONDS']),
+            // DPoP is only available for paying Auth0 customer.
+            disableDPoP: true,
+            debugLogs: true,
+          };
+        case 'EntraID':
+          return {
+            mode: 'real',
+            issuerUri: env['ENTRA_ISSUER_URI'],
+            clientId: env['ENTRA_CLIENT_ID'],
+            scopes: ['profile', env['ENTRA_API_SCOPE']],
+            debugLogs: true,
+          };
+        default:
+          throw new Error('Unknown provider');
+      }
     }),
   ],
 };

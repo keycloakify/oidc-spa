@@ -1,54 +1,39 @@
-# TanStack Start + oidc-spa
+# TanStack Start Example
 
-This example is based on the current TanStack Start React scaffold and adds
-`oidc-spa` integration for client-owned authentication, protected routes,
-server functions, and API routes.
+A minimal TanStack Start v1 example with five pages:
 
-## Getting Started
+-   Home: `/`
+-   Todo List (Server Function): `/todo-list-server-function`
+-   Todo List (API): `/todo-list-api`
+-   Todo List Admin: `/todo-list-admin`
+-   Account: `/account`
 
-```bash
-npm install
-npm run dev
+Both todo pages load and add per-user todos using the same store. One uses server functions protected
+by `oidcFnMiddleware`; the other calls the `/api/todos` GET/POST endpoint protected by
+`oidcRequestMiddleware`. Both pages are linked from the home page and navigation.
+Todo List Admin lets admins view todos grouped by user ID and delete individual items.
+Account displays the user's profile and provides account management actions when using Keycloak.
+
+## Development
+
+From this directory:
+
+```sh
+yarn install
+yarn dev
 ```
 
-The `prepare` script creates `.env` from `.env.sample` when no local `.env`
-exists.
+Open <http://localhost:3000>.
 
-## Building For Production
+To run against the local oidc-spa source, run this from the repository root:
 
-```bash
-npm run build
-npm run preview
+```sh
+yarn start-tanstack-start-next-example
 ```
 
-## Route Generation
+## Production
 
-TanStack Router route types are generated with:
-
-```bash
-npm run generate-routes
+```sh
+yarn build
+yarn start
 ```
-
-The generated file is `src/routeTree.gen.ts`.
-
-## Deployment
-
-This example uses Nitro through the official `nitro/vite` plugin, matching the
-current TanStack Start scaffold and Vercel's TanStack Start deployment guide. No
-`@tanstack/nitro-v2-vite-plugin` adapter is needed.
-
-## OIDC Configuration
-
-By default, the example uses the hosted Keycloak demo configured in
-`.env.sample`.
-
-Set `OIDC_USE_MOCK=true` to run without a real identity provider.
-
-The OIDC integration lives in:
-
--   `src/oidc.ts`
--   `src/routes/account.tsx`
--   `src/routes/demo/start.server-funcs.tsx`
--   `src/routes/demo/start.api-request.tsx`
--   `src/routes/demo/start.admin-only.tsx`
--   `src/routes/demo/api/*.ts`

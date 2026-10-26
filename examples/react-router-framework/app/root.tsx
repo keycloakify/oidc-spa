@@ -1,11 +1,22 @@
+import type { ReactNode } from "react";
 import { isRouteErrorResponse, Links, Meta, Outlet, Scripts, ScrollRestoration } from "react-router";
 import type { Route } from "./+types/root";
-import { AutoLogoutWarningOverlay } from "./components/AutoLogoutWarningOverlay";
-import { Header } from "./components/Header";
 import { OidcInitializationGate } from "~/oidc";
-import "./tailwind.css";
+import { AppHeader } from "./components/AppHeader";
+import { AutoLogoutWarningOverlay } from "./components/AutoLogoutWarningOverlay";
+import "./app.css";
 
-export function Layout({ children }: { children: React.ReactNode }) {
+export function meta() {
+    return [
+        { title: "oidc-spa + React Router" },
+        {
+            name: "description",
+            content: "A minimal React Router app with oidc-spa and native server loaders and actions."
+        }
+    ];
+}
+
+export function Layout({ children }: { children: ReactNode }) {
     return (
         <html lang="en">
             <head>
@@ -14,7 +25,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 <Meta />
                 <Links />
             </head>
-            <body className="bg-slate-950 text-slate-100 antialiased">
+            <body>
                 {children}
                 <ScrollRestoration />
                 <Scripts />
@@ -23,18 +34,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
     );
 }
 
-/**
- * `<App />` is injected as `{children}` in `<Layout />` `once oidc is initialized.
- */
 export default function App() {
     return (
         <OidcInitializationGate>
-            <div className="min-h-screen">
-                <Header />
-                <main className="mx-auto flex w-full max-w-4xl flex-col gap-10 px-6 pb-16 pt-28">
-                    <Outlet />
-                </main>
-            </div>
+            <AppHeader />
+            <main>
+                <Outlet />
+            </main>
             <AutoLogoutWarningOverlay />
         </OidcInitializationGate>
     );
@@ -45,30 +51,19 @@ export function HydrateFallback() {
 }
 
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
-    let message = "Oops!";
-    let details = "An unexpected error occurred.";
-    let stack: string | undefined;
-
-    if (isRouteErrorResponse(error)) {
-        message = error.status === 404 ? "404" : "Error";
-        details =
-            error.status === 404
-                ? "The requested page could not be found."
-                : error.statusText || details;
-    } else if (import.meta.env.DEV && error && error instanceof Error) {
-        details = error.message;
-        stack = error.stack;
-    }
+    const message = isRouteErrorResponse(error)
+        ? error.status === 404
+            ? "Page not found."
+            : error.statusText || "Request failed."
+        : error instanceof Error
+        ? error.message
+        : "An unexpected error occurred.";
 
     return (
-        <main className="mx-auto flex min-h-screen w-full max-w-3xl flex-col items-center justify-center gap-3 px-6 text-center">
-            <h1 className="text-4xl font-semibold tracking-tight text-white">{message}</h1>
-            <p className="text-base text-slate-300">{details}</p>
-            {stack && (
-                <pre className="w-full overflow-x-auto rounded-lg bg-slate-900/90 p-4 text-left text-sm text-slate-100">
-                    <code>{stack}</code>
-                </pre>
-            )}
+        <main>
+            <h1>Something went wrong</h1>
+            <p role="alert">{message}</p>
+            <a href="/">Back to home</a>
         </main>
     );
 }

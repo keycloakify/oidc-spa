@@ -1,83 +1,100 @@
 import { oidcSpa } from "oidc-spa/react-spa";
 import { z } from "zod";
+import { decodeJwt } from "oidc-spa/decode-jwt";
+import avatarFallbackSvgUrl from "./assets/userPictureFallback.svg";
 
-export const {
-    bootstrapOidc,
-    useOidc,
-    getOidc,
-    enforceLogin,
-    // Wrap your all application within this component in src/main.tsx
-    // Non blocking rendering is possible, see: https://docs.oidc-spa.dev/v/v10/features/non-blocking-rendering#react-spas
-    OidcInitializationGate
-} = oidcSpa
-    .withExpectedDecodedIdTokenShape({
-        // Describe the expected shape of the ID Token.
-        // Think of `decodedIdToken` as your “user” object.
-        // If you’re unsure what fields are available, open the console:
-        // oidc-spa will log the decoded token for you.
-        decodedIdTokenSchema: z.object({
-            sub: z.string(),
-            name: z.string(),
-            picture: z.string().optional(),
-            email: z.string().email().optional(),
-            preferred_username: z.string().optional(),
-            realm_access: z.object({ roles: z.array(z.string()) }).optional()
-        }),
-        // The mock user returned when the mock implementation is enabled.
-        decodedIdToken_mock: {
-            sub: "mock-user",
-            name: "John Doe",
-            preferred_username: "john.doe",
-            realm_access: {
-                roles: ["realm-admin"]
-            }
+// App-specific user model exposed by `useOidc()`.
+// Shape it around the information the UI needs to render.
+export type User_client = {
+    displayName: string;
+    email: string | undefined;
+    avatarImgUrl: string;
+    canSeeAdminNavigation: boolean;
+};
+
+export const { useOidc, getOidc, OidcInitializationGate, enforceLogin } = oidcSpa
+    .withUser<User_client>(async ({ isMock, idTokenClaims, accessToken }) => {
+        if (isMock) {
+            const user_mock: User_client = {
+                displayName: "John Doe",
+                email: "jonh.doe@gmail.com",
+                avatarImgUrl: avatarFallbackSvgUrl,
+                canSeeAdminNavigation: true
+            };
+            return user_mock;
+        }
+
+        const { name, picture, email } = z
+            .object({
+                name: z.string(),
+                picture: z.string().optional(),
+                email: z.string().optional()
+            })
+            .parse(idTokenClaims);
+
+        const { roles } = z
+            .object({
+                roles: z.array(z.string()).optional()
+            })
+            .parse(decodeJwt(accessToken));
+
+        const user: User_client = {
+            displayName: name,
+            avatarImgUrl: picture || avatarFallbackSvgUrl,
+            email,
+            canSeeAdminNavigation: roles?.includes("admin") ?? false
+        };
+
+        return user;
+    })
+    // See: https://docs.oidc-spa.dev/features/auto-login#react-spa
+    //.withAutoLogin()
+    .withRuntimeConfigs(async () => {
+        switch (import.meta.env.VITE_OIDC_PROVIDER) {
+            case "mock":
+                return {
+                    mode: "mock",
+                    isUserInitiallyLoggedIn: true
+                };
+            case "Keycloak":
+                return {
+                    mode: "real",
+                    issuerUri: import.meta.env.VITE_KEYCLOAK_ISSUER_URI!,
+                    clientId: import.meta.env.VITE_KEYCLOAK_CLIENT_ID!,
+                    debugLogs: true
+                };
+            case "Keycloak2":
+                return {
+                    mode: "real",
+                    issuerUri: import.meta.env.VITE_KEYCLOAK2_ISSUER_URI!,
+                    clientId: import.meta.env.VITE_KEYCLOAK2_CLIENT_ID!,
+                    debugLogs: true
+                };
+            case "Auth0":
+                return {
+                    mode: "real",
+                    issuerUri: import.meta.env.VITE_AUTH0_ISSUER_URI!,
+                    clientId: import.meta.env.VITE_AUTH0_CLIENT_ID!,
+                    authorizationParams: {
+                        audience: import.meta.env.VITE_AUTH0_API_IDENTIFIER!
+                    },
+                    idleSessionLifetimeInSeconds: parseInt(
+                        import.meta.env.VITE_AUTH0_SSO_SESSION_IDLE_SECONDS!
+                    ),
+                    // DPoP is only available for paying Auth0 customer.
+                    disableDPoP: true,
+                    debugLogs: true
+                };
+            case "EntraID":
+                return {
+                    mode: "real",
+                    issuerUri: import.meta.env.VITE_ENTRA_ISSUER_URI!,
+                    clientId: import.meta.env.VITE_ENTRA_CLIENT_ID!,
+                    scopes: ["profile", import.meta.env.VITE_ENTRA_API_SCOPE!],
+                    debugLogs: true
+                };
+            default:
+                throw new Error("Unknown provider");
         }
     })
-    // See: https://docs.oidc-spa.dev/v/v10/features/auto-login#react-spa
-    //.withAutoLogin()
     .createUtils();
-
-/**
- * This can be called immediately of after you've fetched some remote params.
- * If you call this more than once the subsequent calls will be ignored.
- */
-bootstrapOidc(
-    import.meta.env.VITE_OIDC_USE_MOCK === "true"
-        ? {
-              // Mock mode: no requests to an auth server are made.
-              implementation: "mock",
-              isUserInitiallyLoggedIn: true
-              // You can also override mock user data here.
-          }
-        : {
-              implementation: "real",
-              // Configure your OIDC provider in `.env.local`
-              issuerUri: import.meta.env.VITE_OIDC_ISSUER_URI,
-              clientId: import.meta.env.VITE_OIDC_CLIENT_ID,
-              // Enable for detailed initialization and token lifecycle logs.
-              debugLogs: true
-          }
-);
-
-/**
- * A convenience wrapper around `fetch()` that automatically
- * attaches the access token as an Authorization header when the user is logged in.
- *
- * Usage:
- *   const response = await fetchWithAuth("/api/data");
- *
- * If you need to talk to more than one resource server read this:
- * https://docs.oidc-spa.dev/v/v10/talking-to-multiple-apis-with-different-access-tokens
- */
-export const fetchWithAuth: typeof fetch = async (input, init) => {
-    const oidc = await getOidc();
-
-    if (oidc.isUserLoggedIn) {
-        const accessToken = await oidc.getAccessToken();
-        const headers = new Headers(init?.headers);
-        headers.set("Authorization", `Bearer ${accessToken}`);
-        (init ??= {}).headers = headers;
-    }
-
-    return fetch(input, init);
-};

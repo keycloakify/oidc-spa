@@ -1,54 +1,99 @@
-# Next.js Example (`oidc-spa`)
+# Next.js example
 
-This example shows how to make `oidc-spa` work in a Next.js App Router application.
+A minimal Next.js App Router port of `examples/tanstack-start`, with the same user models,
+provider choices, dark styling, and todo storage. The todo list has two implementations: tRPC and
+Next.js Route Handlers with ordinary `fetch`.
 
-It is intentionally practical rather than generic: the point is to show the minimum wiring needed when using `oidc-spa` in Next, even though `oidc-spa` is not designed around Next.js primitives.
+Next.js acts as a SPA framework with a backend in the same project. Authentication and session
+restoration happen in the browser, and the entire UI waits for them before rendering. Page rendering
+on the server has no access to that browser session; authenticated data is loaded through browser
+requests to the backend.
 
-## Key Setup Insights
+Browser authentication and backend token validation are configured independently. The included backend
+uses `oidc-spa/server`, but the browser integration can also call an existing API with its own token
+validation implementation.
 
-`oidc-spa` must be initialized early on the client. In this example, `instrumentation-client.ts` calls:
+## Pages
 
-```ts
-import { oidcEarlyInit } from "oidc-spa/entrypoint";
+-   Home: `/` — a public integration walkthrough.
+-   Todo List (tRPC): `/todo-list-trpc` — view and add your own todos with tRPC.
+-   Todo List (API): `/todo-list-api` — the same todos using `fetch` and Next.js Route Handlers.
+-   Todo List Admin: `/todo-list-admin` — view todos grouped by user ID and delete items as an admin.
+-   Account: `/account` — profile and Keycloak account actions, accessible from the avatar.
 
-oidcEarlyInit({
-    BASE_URL: "/"
-});
-```
+## Development
 
-The utils exposed by `oidc-spa` cannot be used directly in Next.js as-is. In particular, `OidcInitializationGate` and `withLoginEnforced` need manual Next-specific adapters. That adaptation lives in `lib/oidc.tsx`.
+Use Node.js 24 LTS (minimum 20.19).
 
-## Required Next.js Wiring
-
-The whole app should be wrapped in `<OidcInitializationGate />`. In this example that happens in `app/layout.tsx`.
-
-Pages or layouts that require an authenticated user should use the `withLoginEnforced` HOC. In this example that is how the protected sections are guarded.
-
-Anything that touches `oidc-spa` must run on the client, which means those modules need `"use client";`.
-
-## Important Limitation
-
-Next.js cannot know at render time who the user is when authentication is handled through `oidc-spa` in the browser. In practice, this pushes the app toward SPA behavior and gives up most of the usual SSR auth-at-render-time advantages of Next.js.
-
-## Routes
-
--   `/` public landing page with login/logout controls
--   `/protected` guarded page using the custom Next-compatible `withLoginEnforced`
--   `/admin-only` guarded page with a simple role check
-
-## Quick Start
-
-From the repository root:
-
-```bash
-yarn start-next-example
-```
-
-Or from `examples/next`:
-
-```bash
+```sh
 yarn install
 yarn dev
 ```
 
-Copy `.env.local.sample` to `.env.local` if needed and set your provider values, or enable mock mode.
+Open <http://app.localhost:3000>. npm and pnpm work too.
+Installation creates `.env.local` from `.env.local.sample` if it does not exist.
+If upgrading an older copy of this example, update your existing `.env.local` to match the new sample.
+
+Choose `NEXT_PUBLIC_OIDC_PROVIDER` and configure the matching variables. The options are `Keycloak`,
+`Keycloak2` (introspection), `Auth0`, `EntraID`, and `mock`. Set
+`NEXT_PUBLIC_OIDC_PROVIDER=mock` to start as a signed-in mock admin without an identity provider.
+Restart the dev server after changing these settings.
+
+To use local oidc-spa source, run `yarn start-next-example` from the repository root.
+
+## Integration
+
+-   `instrumentation-client.ts` calls `oidcEarlyInit()` before the app becomes interactive, with DPoP
+    enabled.
+-   `lib/oidc.tsx` uses `oidc-spa/react-nextjs` to define `User_client` with `withUser()`, configure
+    providers with `withRuntimeConfigs()`, and export typed hooks and App Router login helpers.
+-   `app/layout.tsx` wraps the entire UI in one `OidcInitializationGate`: the header, all pages,
+    and the session warning. It renders no application content until browser auth is ready.
+-   `app/(protected)/layout.tsx` uses `withLoginEnforced` to require sign-in for the todo, admin,
+    and account pages. The home page is public and uses the same root initialization gate.
+-   `lib/trpc.ts` sends access tokens in the Authorization header using `getOidc()`.
+-   `lib/server/oidc.ts` configures token validation separately with `oidc-spa/server`. Its
+    `AccessTokenClaims` schema describes the expected claims, which `getUser(req)` maps to its own
+    `User_server` model. Both user models match the TanStack Start example. The optional `roles` array grants admin access
+    when it contains `admin`. Authentication failures throw a transport-neutral `AuthError` with an
+    HTTP status; token validation failures preserve the status suggested by oidc-spa.
+-   `lib/server/trpc.ts` provides authenticated `todos.list` / `todos.add` procedures and admin-only
+    `todos.listAllUserTodos` / `todos.delete` procedures. Each handler passes `ctx.req` to `getUser(req)`;
+    oidc-spa shares validation within each request, including batches. Both admin procedures check
+    `user.isAdmin` independently. Its local `getUser` wrapper translates shared authentication errors
+    into `TRPCError`.
+-   `app/api/todos/route.ts` exports authenticated `GET` and `POST` handlers using the same `getUser`
+    helper (`getUser(req)`) and `lib/server/data` store. `app/(protected)/todo-list-api/page.tsx` calls
+    them with `fetch` and an Authorization header. Authentication failures return the corresponding HTTP status;
+    invalid todo input returns 400. Both todo pages share the same data.
+
+Browser login guards and admin navigation are UI concerns; the API validates and authorizes every
+request independently. `server-only` marks backend modules to prevent accidental client imports.
+
+`withRuntimeConfigs()` accepts a configuration object, a synchronous getter, or an asynchronous
+getter. Supply settings from whichever source suits your application. This example uses environment
+variables in `lib/oidc.tsx` for browser settings and `lib/server/oidc.ts` for server validation. The
+browser's `User_client` and backend's `User_server` are defined independently in those files.
+
+Next.js embeds this example's `NEXT_PUBLIC_*` variables during `next build`. Configure them before
+building; changing public provider settings in production requires a rebuild. Server-only variables, including
+introspection credentials, stay on the server. Provider selection is split between browser and backend
+configuration, while pages and tRPC procedures remain provider-independent.
+
+Storage is the same as in the TanStack Start example: ignored `todos_*.json` files locally, or Upstash
+Redis when both `KV_REST_API_URL` and `KV_REST_API_TOKEN` are configured. Use Redis on deployments without
+persistent writable storage. Todo items have a numeric `id` and a `name`; only admins can delete items.
+
+See the [oidc-spa documentation](https://docs.oidc-spa.dev/) for more details.
+
+## Checks and production
+
+```sh
+yarn typecheck
+yarn lint
+yarn build
+yarn start
+```
+
+Direct dependencies, including the oidc-spa v11 release candidate, are pinned.
+No lockfile or package manager is imposed.
