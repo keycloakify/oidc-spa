@@ -214,24 +214,11 @@ export function createLoginOrStartAuthorization(params: {
             }
         })();
 
-        const rootRelativeReturnToUrl_consentRequiredCase = (() => {
-            switch (params.action) {
-                case "login":
-                    return deepLinkToRootRelativeUrl({
-                        fullyQualifiedDeepLinkUrl: lastPublicUrl ?? homeUrl
-                    });
-                case "start authorization":
-                    return rootRelativeReturnToUrl;
-            }
-        })();
-
         setStateDataCookieIfEnabled({
             homeUrl,
             stateUrlParamValue_instance,
             stateDataCookie: {
-                action: "login",
-                rootRelativeReturnToUrl,
-                rootRelativeReturnToUrl_consentRequiredCase
+                rootRelativeReturnToUrl
             }
         });
 
@@ -241,7 +228,6 @@ export function createLoginOrStartAuthorization(params: {
             authorizationParams: {},
             configId,
             action: "login",
-            rootRelativeReturnToUrl_consentRequiredCase,
             returnToUrl_external
         };
 

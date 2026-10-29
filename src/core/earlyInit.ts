@@ -364,12 +364,7 @@ function handleOidcCallback(): {
             }
 
             redirectAuthResponse = authResponse;
-            const rootRelativeReturnToUrl = (() => {
-                if (stateData.action === "login" && authResponse.error === "consent_required") {
-                    return stateData.rootRelativeReturnToUrl_consentRequiredCase;
-                }
-                return stateData.rootRelativeReturnToUrl;
-            })();
+            const { rootRelativeReturnToUrl } = stateData;
 
             setGetRootRelativeOriginalLocationHref_earlyInit({
                 rootRelativeOriginalLocationHref: rootRelativeReturnToUrl

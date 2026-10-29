@@ -904,8 +904,8 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
     const { completeLoginOrRefreshProcess } = await startLoginOrRefreshProcess();
 
     const resultOfLoginProcess = await (async (): Promise<
-        | undefined // User is currently not logged in
-        | Error // Initialization error
+        | undefined
+        | Error
         | {
               oidcClientTsUser: OidcClientTsUser;
               authorizationResult: Oidc.LoggedIn["authorizationResult"]; // Undefined is silent signin
@@ -919,6 +919,10 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
                 issuerUri
             });
         }
+
+        let errorAuthResponse_fromForegroundRedirect:
+            | { error: string; error_description: string | undefined }
+            | undefined = undefined;
 
         handle_redirect_auth_response: {
             let stateDataAndAuthResponse:
@@ -1018,18 +1022,15 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
                                 });
                             }
 
-                            {
-                                const authResponse_error = authResponse.error;
-
-                                if (authResponse_error !== undefined) {
-                                    log?.(
-                                        [
-                                            `The auth server responded with: ${authResponse_error},`,
-                                            `trying to restore session as if we didn't had a auth response.`
-                                        ].join(" ")
-                                    );
-                                    break handle_redirect_auth_response;
-                                }
+                            if (authResponse.error !== undefined) {
+                                errorAuthResponse_fromForegroundRedirect = {
+                                    error: authResponse.error,
+                                    error_description: authResponse.error_description || undefined
+                                };
+                                log?.(
+                                    `The auth server responded with: ${errorAuthResponse_fromForegroundRedirect.error}`
+                                );
+                                break handle_redirect_auth_response;
                             }
 
                             return error;
@@ -1171,7 +1172,6 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
                 }
             }
 
-            let authResponse_error: string | undefined = undefined;
             let oidcClientTsUser: OidcClientTsUser | undefined = undefined;
 
             actual_silent_signin: {
@@ -1215,16 +1215,16 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
 
                 assert<Equals<typeof result_loginSilent.outcome, "got auth response from iframe">>;
 
-                const { authResponse } = result_loginSilent;
+                const { authResponse: authResponse_iframe } = result_loginSilent;
 
                 log?.(
                     `Silent signin auth response ${JSON.stringify(
                         {
-                            ...authResponse,
-                            ...(authResponse.code === undefined
+                            ...authResponse_iframe,
+                            ...(authResponse_iframe.code === undefined
                                 ? undefined
                                 : {
-                                      code: authResponse.code.slice(0, 20) + "..."
+                                      code: authResponse_iframe.code.slice(0, 20) + "..."
                                   })
                         },
                         null,
@@ -1232,13 +1232,11 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
                     )}`
                 );
 
-                clearStateDataCookie({ stateUrlParamValue: authResponse.state });
-
-                authResponse_error = authResponse.error;
+                clearStateDataCookie({ stateUrlParamValue: authResponse_iframe.state });
 
                 try {
                     oidcClientTsUser = await oidcClientTsUserManager.signinRedirectCallback(
-                        authResponseToUrl(authResponse)
+                        authResponseToUrl(authResponse_iframe)
                     );
                 } catch (error) {
                     assert(error instanceof Error, "433344");
@@ -1261,82 +1259,114 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
                         });
                     }
 
-                    if (authResponse_error === undefined) {
+                    if (authResponse_iframe.error === undefined) {
                         return error;
                     }
                 }
             }
 
-            if (oidcClientTsUser === undefined) {
-                if (
-                    autoLogin ||
-                    (persistedAuthState === "logged in" &&
-                        (authResponse_error === undefined ||
-                            // An iframe may not see the AS session cookie. A foreground
-                            // redirect can still restore that session with prompt=none.
-                            authResponse_error === "login_required" ||
-                            authResponse_error === "interaction_required"))
-                ) {
-                    log?.("Performing session restoration (or autoLogin) with foreground redirect");
-
-                    completeLoginOrRefreshProcess();
-
-                    if (autoLogin && persistedAuthState !== "logged in") {
-                        evtInitializationOutcomeUserNotLoggedIn.post();
+            foreground_redirect: {
+                const { doPerformeForgroundRedirect, interaction } = (():
+                    | {
+                          doPerformeForgroundRedirect: false;
+                          interaction?: never;
+                      }
+                    | {
+                          doPerformeForgroundRedirect: true;
+                          interaction:
+                              | "ensure interaction"
+                              | "directly redirect if active session show login otherwise"
+                              | "ensure no interaction";
+                      } => {
+                    if (oidcClientTsUser !== undefined) {
+                        return {
+                            doPerformeForgroundRedirect: false
+                        };
                     }
 
-                    ensureNonBlankPaint();
+                    if (
+                        errorAuthResponse_fromForegroundRedirect !== undefined &&
+                        errorAuthResponse_fromForegroundRedirect.error ===
+                            "unmet_authentication_requirements"
+                    ) {
+                        return {
+                            doPerformeForgroundRedirect: true,
+                            interaction: "ensure interaction"
+                        };
+                    }
 
-                    await waitForAllOtherOngoingLoginOrRefreshProcessesToComplete({
-                        prUnlock:
-                            getPrSafelyRestoredFromBfCacheAfterLoginBackNavigationOrInitializationError()
-                    });
-
-                    await loginOrStartAuthorization({
-                        action: "login",
-                        doForceReloadOnBfCache: true,
-                        returnToUrl: (() => {
-                            if (autoLogin && autoLogin_returnToUrl !== undefined) {
-                                return autoLogin_returnToUrl;
-                            }
-
-                            return toFullyQualifiedUrl({
-                                urlish: getRootRelativeOriginalLocationHref_earlyInit(),
-                                doAssertNoQueryParams: false,
-                                rootUrl_fullyQualified: window.location.origin
-                            });
-                        })(),
-                        doNavigateBackToLastPublicUrlIfTheTheUserNavigateBack: true,
-                        transformAuthorizationUrl_paramOfLoginOrStartAuthorization: undefined,
-                        authorizationParams_paramOfLoginOrStartAuthorization: undefined,
-                        interaction: (() => {
-                            if (persistedAuthState === "explicitly logged out") {
-                                return "ensure interaction";
-                            }
-
-                            if (autoLogin) {
-                                return "directly redirect if active session show login otherwise";
-                            }
-
-                            return "ensure no interaction";
-                        })(),
-                        preRedirectHook: () => {
-                            persistAuthState({ configId, state: undefined });
+                    if (autoLogin) {
+                        if (errorAuthResponse_fromForegroundRedirect !== undefined) {
+                            return {
+                                doPerformeForgroundRedirect: false
+                            };
                         }
-                    });
+
+                        return {
+                            doPerformeForgroundRedirect: true,
+                            interaction:
+                                persistedAuthState === "explicitly logged out"
+                                    ? "ensure interaction"
+                                    : "directly redirect if active session show login otherwise"
+                        };
+                    }
+
+                    if (persistedAuthState === "logged in") {
+                        return {
+                            doPerformeForgroundRedirect: true,
+                            interaction: "ensure no interaction"
+                        };
+                    }
+
+                    return {
+                        doPerformeForgroundRedirect: false
+                    };
+                })();
+
+                if (!doPerformeForgroundRedirect) {
+                    break foreground_redirect;
                 }
 
-                if (authResponse_error !== undefined) {
-                    log?.(
-                        [
-                            `The auth server responded with: ${authResponse_error} `,
-                            "login_required" === authResponse_error
-                                ? `(login_required just means that there's no active session for the user)`
-                                : ""
-                        ].join("")
-                    );
+                log?.("Performing session restoration (or autoLogin) with foreground redirect");
+
+                completeLoginOrRefreshProcess();
+
+                if (autoLogin && persistedAuthState !== "logged in") {
+                    evtInitializationOutcomeUserNotLoggedIn.post();
                 }
 
+                ensureNonBlankPaint();
+
+                await waitForAllOtherOngoingLoginOrRefreshProcessesToComplete({
+                    prUnlock:
+                        getPrSafelyRestoredFromBfCacheAfterLoginBackNavigationOrInitializationError()
+                });
+
+                await loginOrStartAuthorization({
+                    action: "login",
+                    doForceReloadOnBfCache: true,
+                    returnToUrl: (() => {
+                        if (autoLogin && autoLogin_returnToUrl !== undefined) {
+                            return autoLogin_returnToUrl;
+                        }
+
+                        return toFullyQualifiedUrl({
+                            urlish: getRootRelativeOriginalLocationHref_earlyInit(),
+                            doAssertNoQueryParams: false,
+                            rootUrl_fullyQualified: window.location.origin
+                        });
+                    })(),
+                    doNavigateBackToLastPublicUrlIfTheTheUserNavigateBack: true,
+                    transformAuthorizationUrl_paramOfLoginOrStartAuthorization: undefined,
+                    authorizationParams_paramOfLoginOrStartAuthorization: undefined,
+                    interaction,
+                    preRedirectHook: () => {
+                        persistAuthState({ configId, state: undefined });
+                    }
+                });
+            }
+
+            if (oidcClientTsUser === undefined) {
                 break silent_login_if_possible_and_auto_login;
             }
 
@@ -1349,7 +1379,12 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
             };
         }
 
-        // NOTE: The user is not logged in.
+        if (errorAuthResponse_fromForegroundRedirect !== undefined) {
+            return new OidcInitializationError({
+                authResponse: errorAuthResponse_fromForegroundRedirect
+            });
+        }
+
         return undefined;
     })();
 
@@ -1377,8 +1412,12 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
         }
 
         const oidc_notLoggedIn: Oidc.NotLoggedIn = (() => {
-            if (resultOfLoginProcess instanceof Error) {
-                log?.("User not logged in and there was an initialization error");
+            log?.("User not logged in");
+
+            const initializationError = (() => {
+                if (!(resultOfLoginProcess instanceof Error)) {
+                    return undefined;
+                }
 
                 const error = resultOfLoginProcess;
 
@@ -1390,79 +1429,61 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
                               messageOrCause: error
                           });
 
+                (autoLogin ? log : console.error)?.(initializationError);
+
                 if (autoLogin) {
                     throw initializationError;
                 }
 
-                console.error(
-                    [
-                        `oidc-spa Initialization Error: `,
-                        `isAuthServerLikelyDown: ${initializationError.isAuthServerLikelyDown}`,
-                        ``,
-                        initializationError.message
-                    ].join("\n")
-                );
+                return initializationError;
+            })();
 
-                const oidc_notLoggedIn_errored: Oidc.NotLoggedIn = createErroredOidcNotLoggedIn({
-                    oidc_common,
-                    initializationError
-                });
+            return id<Oidc.NotLoggedIn>({
+                ...oidc_common,
+                isUserLoggedIn: false,
+                login: async ({
+                    doesCurrentHrefEnforceLogin,
+                    returnToUrl = window.location.href,
+                    authorizationParams,
+                    transformAuthorizationUrl
+                }) => {
+                    await waitForAllOtherOngoingLoginOrRefreshProcessesToComplete({
+                        prUnlock:
+                            getPrSafelyRestoredFromBfCacheAfterLoginBackNavigationOrInitializationError()
+                    });
 
-                return oidc_notLoggedIn_errored;
-            }
+                    if (!canUseIframe) {
+                        log?.(
+                            [
+                                "IMPORTANT DEBUG INFO:",
+                                "\nWe are about to redirect to your Identity Provider (IdP).",
+                                "\nIf you see an 'Invalid Redirect URI' error on the IdP page, make sure you've added:",
+                                `\n${homeUrlAndRedirectUri}`,
+                                "\nto the list of valid redirect URIs in your IdP configuration.",
+                                "\nIf you see a 'Client not found' error make sure you've created the flowing OIDC client:",
+                                `\n${clientId}`
+                            ].join(" ")
+                        );
+                    }
 
-            if (resultOfLoginProcess === undefined) {
-                log?.("User not logged in");
-
-                return id<Oidc.NotLoggedIn>({
-                    ...oidc_common,
-                    isUserLoggedIn: false,
-                    login: async ({
-                        doesCurrentHrefEnforceLogin,
-                        returnToUrl = window.location.href,
-                        authorizationParams,
-                        transformAuthorizationUrl
-                    }) => {
-                        await waitForAllOtherOngoingLoginOrRefreshProcessesToComplete({
-                            prUnlock:
-                                getPrSafelyRestoredFromBfCacheAfterLoginBackNavigationOrInitializationError()
-                        });
-
-                        if (!canUseIframe) {
-                            log?.(
-                                [
-                                    "IMPORTANT DEBUG INFO:",
-                                    "\nWe are about to redirect to your Identity Provider (IdP).",
-                                    "\nIf you see an 'Invalid Redirect URI' error on the IdP page, make sure you've added:",
-                                    `\n${homeUrlAndRedirectUri}`,
-                                    "\nto the list of valid redirect URIs in your IdP configuration.",
-                                    "\nIf you see a 'Client not found' error make sure you've created the flowing OIDC client:",
-                                    `\n${clientId}`
-                                ].join(" ")
-                            );
-                        }
-
-                        return loginOrStartAuthorization({
-                            action: "login",
-                            doNavigateBackToLastPublicUrlIfTheTheUserNavigateBack:
-                                doesCurrentHrefEnforceLogin,
-                            doForceReloadOnBfCache: false,
-                            returnToUrl,
-                            authorizationParams_paramOfLoginOrStartAuthorization: authorizationParams,
-                            transformAuthorizationUrl_paramOfLoginOrStartAuthorization:
-                                transformAuthorizationUrl,
-                            interaction:
-                                getPersistedAuthState({ configId }) === "explicitly logged out"
-                                    ? "ensure interaction"
-                                    : "directly redirect if active session show login otherwise",
-                            preRedirectHook: undefined
-                        });
-                    },
-                    initializationError: undefined
-                });
-            }
-
-            assert<Equals<typeof resultOfLoginProcess, never>>(false);
+                    return loginOrStartAuthorization({
+                        action: "login",
+                        doNavigateBackToLastPublicUrlIfTheTheUserNavigateBack:
+                            doesCurrentHrefEnforceLogin,
+                        doForceReloadOnBfCache: false,
+                        returnToUrl,
+                        authorizationParams_paramOfLoginOrStartAuthorization: authorizationParams,
+                        transformAuthorizationUrl_paramOfLoginOrStartAuthorization:
+                            transformAuthorizationUrl,
+                        interaction:
+                            getPersistedAuthState({ configId }) === "explicitly logged out"
+                                ? "ensure interaction"
+                                : "directly redirect if active session show login otherwise",
+                        preRedirectHook: undefined
+                    });
+                },
+                initializationError
+            });
         })();
 
         {
@@ -2041,7 +2062,6 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
                 homeUrl: homeUrlAndRedirectUri,
                 stateUrlParamValue_instance,
                 stateDataCookie: {
-                    action: "logout",
                     rootRelativeReturnToUrl
                 }
             });

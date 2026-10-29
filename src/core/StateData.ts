@@ -23,7 +23,6 @@ export namespace StateData {
 
         export type Login = Common_Redirect & {
             action: "login";
-            rootRelativeReturnToUrl_consentRequiredCase: string;
             authorizationParams: Record<string, string | string[]>;
         };
 

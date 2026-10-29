@@ -31,17 +31,7 @@ export function __withOidcSpaServerEntry<T extends { fetch: RequestHandler<Regis
                     break render_deepLink_instead_of_home_on_authResponse;
                 }
 
-                const { stateDataCookie } = entry;
-
-                const rootRelativeReturnToUrl = (() => {
-                    if (
-                        stateDataCookie.action === "login" &&
-                        url.searchParams.get("error") === "consent_required"
-                    ) {
-                        return stateDataCookie.rootRelativeReturnToUrl_consentRequiredCase;
-                    }
-                    return stateDataCookie.rootRelativeReturnToUrl;
-                })();
+                const { rootRelativeReturnToUrl } = entry.stateDataCookie;
 
                 url.pathname = "/";
                 url.search = "";
