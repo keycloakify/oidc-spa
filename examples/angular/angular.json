@@ -6,7 +6,7 @@
   },
   "newProjectRoot": "projects",
   "projects": {
-    "angular-new": {
+    "angular-oidc-spa": {
       "projectType": "application",
       "schematics": {
         "@schematics/angular:component": {
@@ -84,10 +84,10 @@
           },
           "configurations": {
             "production": {
-              "buildTarget": "angular-new:build:production"
+              "buildTarget": "angular-oidc-spa:build:production"
             },
             "development": {
-              "buildTarget": "angular-new:build:development"
+              "buildTarget": "angular-oidc-spa:build:development"
             }
           },
           "defaultConfiguration": "development"

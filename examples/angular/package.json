@@ -1,11 +1,11 @@
 {
-  "name": "angular-new",
+  "name": "angular-oidc-spa",
   "version": "0.0.0",
   "scripts": {
     "ng": "ng",
     "dev": "concurrently --kill-others \"ng serve --host app.localhost --port 3000\" \"tsx watch server/index.ts --api-only\"",
-    "start": "node dist/angular-new/server/index.mjs",
-    "build": "ng build && tsc --project tsconfig.server.json && esbuild server/index.ts --bundle --platform=node --format=esm --packages=external --outfile=dist/angular-new/server/index.mjs",
+    "start": "node dist/angular-oidc-spa/server/index.mjs",
+    "build": "ng build && tsc --project tsconfig.server.json && esbuild server/index.ts --bundle --platform=node --format=esm --packages=external --outfile=dist/angular-oidc-spa/server/index.mjs",
     "typecheck": "ngc --noEmit --project tsconfig.app.json && tsc --project tsconfig.server.json",
     "format:check": "prettier --check src server/*.ts *.json *.cjs README.md",
     "postinstall": "node -e \"const fs = require('node:fs'); if (!fs.existsSync('.env')) fs.copyFileSync('.env.sample', '.env');\""

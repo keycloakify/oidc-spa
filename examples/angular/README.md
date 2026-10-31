@@ -130,7 +130,7 @@ yarn build
 yarn start
 ```
 
-The build produces static Angular files and a Node server in `dist/angular-new`. Express serves both
+The build produces static Angular files and a Node server in `dist/angular-oidc-spa`. Express serves both
 the API and the static SPA, including deep-link fallback, on port 3000. `PORT` overrides the production
 port; `API_PORT` overrides the development API port (3001). No Angular server renderer is involved.
 
