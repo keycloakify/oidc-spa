@@ -1,6 +1,5 @@
 import { Form, isRouteErrorResponse, useNavigation } from "react-router";
 import type { Route } from "./+types/todo-list-admin";
-import { enforceLogin } from "~/oidc";
 import { z } from "zod";
 import { getUser } from "~/.server/oidc";
 import { getTodosStore } from "~/.server/data/todos";
@@ -44,16 +43,6 @@ export async function action({ request }: Route.ActionArgs) {
         todos: userTodos.todos.filter(todo => todo.id !== input.data.todoId)
     });
     return null;
-}
-
-export async function clientLoader(args: Route.ClientLoaderArgs) {
-    await enforceLogin(args);
-    return args.serverLoader();
-}
-
-export async function clientAction(args: Route.ClientActionArgs) {
-    await enforceLogin(args);
-    return args.serverAction();
 }
 
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {

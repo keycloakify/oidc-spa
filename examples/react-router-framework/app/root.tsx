@@ -3,7 +3,6 @@ import { isRouteErrorResponse, Links, Meta, Outlet, Scripts, ScrollRestoration }
 import type { Route } from "./+types/root";
 import { OidcInitializationGate } from "~/oidc";
 import { AppHeader } from "./components/AppHeader";
-import { AutoLogoutWarningOverlay } from "./components/AutoLogoutWarningOverlay";
 import "./app.css";
 
 export function meta() {
@@ -41,7 +40,6 @@ export default function App() {
             <main>
                 <Outlet />
             </main>
-            <AutoLogoutWarningOverlay />
         </OidcInitializationGate>
     );
 }

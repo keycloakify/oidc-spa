@@ -37,6 +37,7 @@ its configuration from `process.env`; local development and `yarn start` load `.
 -   `/todo-list`: list and add personal todos.
 -   `/todo-list-admin`: list all users' todos and delete items as an admin.
 -   `/account`: profile information and Keycloak account actions when available.
+-   `/inactivity-logout`: a public page with a link to resume after session expiry.
 
 `react-router.config.ts` selects API-only mode. The root `HydrateFallback` returns
 `null`, and `OidcInitializationGate` wraps the whole application. The oidc-spa Vite
@@ -54,15 +55,20 @@ documents in the document shell should instead live inside the initialized app;
 the plugin rejects shells that could execute code before its bootstrap.
 
 `app/oidc.ts` uses `oidc-spa/react-spa`, maps claims to the application's user model,
-and configures the browser's OIDC client. Protected routes use `clientLoader` and
-`enforceLogin(args)`, then call `args.serverLoader()`. Mutations use `clientAction`,
-`enforceLogin(args)`, and `args.serverAction()`. React Router forms submit the action
-and automatically revalidate loader data afterward. No `clientLoader.hydrate` flag
-is needed for this setup without prerendering.
+and configures the browser's OIDC client. `app/routes.ts` groups protected pages
+under the pathless `app/routes/protected/layout.tsx` layout, without changing their
+URLs. Its `clientMiddleware` calls `enforceLogin(args)` before child loaders and
+actions run. A parent loader would not provide this ordering: loaders run in
+parallel. The todo pages' client loaders/actions simply delegate to
+`args.serverLoader()` and `args.serverAction()`. React Router forms submit the
+action and automatically revalidate loader data afterward. No `clientLoader.hydrate`
+flag is needed for this setup without prerendering.
 
-The pinned rc.7 SDK release has a `request.href` mismatch; a small compatibility
-wrapper in `app/oidc.ts` adapts React Router's `request.url` until the SDK fix is
-published.
+The header stays in the root, while `AutoLogoutWarningOverlay` mounts only inside
+the protected layout. The home and inactivity logout pages remain public.
+`autoLogout_returnToUrl` in `app/oidc.ts` sends an expired session to
+`/inactivity-logout?return_url=…`, preserving the current URL, including its query
+and hash. The resume link returns there; the protected layout handles login again.
 
 `app/entry.client.tsx` uses `HydratedRouter`'s `unstable_fetch` to attach the current
 access token to same-origin loader/action requests. It waits for OIDC initialization
@@ -71,7 +77,7 @@ renders. Route discovery requests do not need a token. Do not enable native link
 data prefetching (`prefetch` or `PrefetchPageLinks`) for protected routes: these
 browser-issued requests bypass the custom fetch.
 
-`app/oidc.server.ts` independently configures access-token validation and exposes
+`app/.server/oidc.ts` independently configures access-token validation and exposes
 `getUser(request)`. Every server loader/action authenticates the request; admin
 handlers also enforce the admin role. Client guards control navigation, while
 server checks protect the data. Authentication failures become HTTP error responses.
@@ -94,10 +100,10 @@ It does not provide server-rendered authentication with `ssr: true`.
 To turn the example into a static SPA:
 
 1. Set `ssr: false` in `react-router.config.ts`.
-2. Delete `app/entry.client.tsx`, `app/oidc.server.ts`, `app/.server/`, and `api/`.
+2. Delete `app/entry.client.tsx`, `app/.server/`, and `api/`.
 3. Remove server `loader`/`action` exports and their server-only imports from routes.
    Runtime server loaders and actions are unavailable in SPA mode.
-4. Keep `enforceLogin(args)` in client loaders/actions, but replace
+4. Keep the protected layout's `clientMiddleware`, but replace
    `args.serverLoader()` and `args.serverAction()` with requests to your own API.
    Get an access token with `getOidc()` and `oidc.getAccessToken()`, and attach it as
    `Authorization: Bearer …` to requests to your trusted API.

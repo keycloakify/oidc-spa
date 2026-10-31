@@ -1,6 +1,7 @@
 import { oidcSpa } from "oidc-spa/react-spa";
 import { z } from "zod";
 import { decodeJwt } from "oidc-spa/decode-jwt";
+import { href } from "react-router";
 import avatarFallbackSvgUrl from "./assets/userPictureFallback.svg";
 
 // App-specific user model exposed by `useOidc()`.
@@ -50,6 +51,9 @@ export const { useOidc, getOidc, OidcInitializationGate, enforceLogin } = oidcSp
     // See: https://docs.oidc-spa.dev/features/auto-login#react-spa
     //.withAutoLogin()
     .withRuntimeConfigs(async () => {
+        const autoLogout_returnToUrl = () =>
+            `${href("/inactivity-logout")}?${new URLSearchParams({ return_url: window.location.href })}`;
+
         switch (import.meta.env.VITE_OIDC_PROVIDER) {
             case "mock":
                 return {
@@ -61,6 +65,7 @@ export const { useOidc, getOidc, OidcInitializationGate, enforceLogin } = oidcSp
                     mode: "real",
                     issuerUri: import.meta.env.VITE_KEYCLOAK_ISSUER_URI!,
                     clientId: import.meta.env.VITE_KEYCLOAK_CLIENT_ID!,
+                    autoLogout_returnToUrl,
                     debugLogs: true
                 };
             case "Keycloak2":
@@ -68,6 +73,7 @@ export const { useOidc, getOidc, OidcInitializationGate, enforceLogin } = oidcSp
                     mode: "real",
                     issuerUri: import.meta.env.VITE_KEYCLOAK2_ISSUER_URI!,
                     clientId: import.meta.env.VITE_KEYCLOAK2_CLIENT_ID!,
+                    autoLogout_returnToUrl,
                     debugLogs: true
                 };
             case "Auth0":
@@ -75,6 +81,7 @@ export const { useOidc, getOidc, OidcInitializationGate, enforceLogin } = oidcSp
                     mode: "real",
                     issuerUri: import.meta.env.VITE_AUTH0_ISSUER_URI!,
                     clientId: import.meta.env.VITE_AUTH0_CLIENT_ID!,
+                    autoLogout_returnToUrl,
                     authorizationParams: {
                         audience: import.meta.env.VITE_AUTH0_API_IDENTIFIER!
                     },
@@ -90,6 +97,7 @@ export const { useOidc, getOidc, OidcInitializationGate, enforceLogin } = oidcSp
                     mode: "real",
                     issuerUri: import.meta.env.VITE_ENTRA_ISSUER_URI!,
                     clientId: import.meta.env.VITE_ENTRA_CLIENT_ID!,
+                    autoLogout_returnToUrl,
                     scopes: ["profile", import.meta.env.VITE_ENTRA_API_SCOPE!],
                     debugLogs: true
                 };

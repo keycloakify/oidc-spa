@@ -1,8 +1,6 @@
 import { createKeycloakUtils, isKeycloak } from "oidc-spa/keycloak";
 import { useOidc } from "~/oidc";
 
-export { enforceLogin as clientLoader } from "~/oidc";
-
 export default function AccountPage() {
     const { user, issuerUri, clientId, validRedirectUri, startAuthorization, authorizationResult } =
         useOidc({ assert: "user logged in" });

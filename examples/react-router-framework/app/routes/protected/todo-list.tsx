@@ -1,7 +1,6 @@
 import { useEffect, useRef } from "react";
 import { Form, useNavigation } from "react-router";
 import type { Route } from "./+types/todo-list";
-import { enforceLogin } from "~/oidc";
 import { getUser } from "~/.server/oidc";
 import { getTodosStore } from "~/.server/data/todos";
 
@@ -31,16 +30,6 @@ export async function action({ request }: Route.ActionArgs) {
         todos: [...todos, { id: Date.now(), name: name.trim() }]
     });
     return { success: true };
-}
-
-export async function clientLoader(args: Route.ClientLoaderArgs) {
-    await enforceLogin(args);
-    return args.serverLoader();
-}
-
-export async function clientAction(args: Route.ClientActionArgs) {
-    await enforceLogin(args);
-    return args.serverAction();
 }
 
 export default function TodoListPage({ loaderData: { todos }, actionData }: Route.ComponentProps) {

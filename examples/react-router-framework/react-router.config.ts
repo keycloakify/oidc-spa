@@ -4,10 +4,10 @@ export default {
     // This oidc-spa integration supports "unstable_api-only" or false.
     // API-only keeps native server loaders/actions while rendering the UI in the browser.
     // To use ssr: false with your own backend instead:
-    // - Delete app/entry.client.tsx, app/oidc.server.ts, app/.server/, and api/.
+    // - Delete app/entry.client.tsx, app/.server/, and api/.
     // - Remove server loader/action exports and their server-only imports from routes.
     //   export async function action({ request }: Route.ActionArgs) will no longer work.
-    // - Keep enforceLogin(args) in clientLoader/clientAction, but replace
+    // - Keep the protected layout's clientMiddleware, but replace
     //   args.serverLoader()/args.serverAction() with authenticated fetch calls to your API.
     // - Remove the Vercel function rewrites.
     //   Deploy build/client as a static SPA.

@@ -42,8 +42,7 @@ export default function HomePage() {
                             registers the oidc-spa Vite plugin with browser runtime protection and DPoP.
                             The plugin installs early initialization before application code runs. In{" "}
                             <code>app/root.tsx</code>, one <code>OidcInitializationGate</code> wraps the
-                            header, pages, and session warning. <code>HydrateFallback</code> returns{" "}
-                            <code>null</code>.
+                            header and pages. <code>HydrateFallback</code> returns <code>null</code>.
                         </p>
                     </li>
                     <li>
@@ -67,8 +66,8 @@ export default function HomePage() {
                         </p>
                         <p>
                             Browser authentication in <code>app/oidc.ts</code> and token validation in{" "}
-                            <a href={`${sourceUrl}/app/oidc.server.ts`}>
-                                <code>app/oidc.server.ts</code>
+                            <a href={`${sourceUrl}/app/.server/oidc.ts`}>
+                                <code>app/.server/oidc.ts</code>
                             </a>{" "}
                             are configured independently. Configuration getters can be synchronous or
                             asynchronous; environment variables are simply this example's configuration
@@ -88,14 +87,19 @@ export default function HomePage() {
                     <li>
                         <h3>Protect navigation and authenticate server requests</h3>
                         <p>
-                            Protected routes call <code>enforceLogin(args)</code> from their client
-                            loaders before delegating to the server:
+                            <a href={`${sourceUrl}/app/routes.ts`}>
+                                <code>app/routes.ts</code>
+                            </a>{" "}
+                            groups protected pages under a pathless layout. Its client middleware calls{" "}
+                            <code>enforceLogin(args)</code> before child loaders and actions run:
                         </p>
                         <pre>
-                            <code>{`export async function clientLoader(args: Route.ClientLoaderArgs) {
-  await enforceLogin(args);
-  return args.serverLoader();
-}`}</code>
+                            <code>{`export const clientMiddleware: Route.ClientMiddlewareFunction[] = [
+  async (args, next) => {
+    await enforceLogin(args);
+    await next();
+  }
+];`}</code>
                         </pre>
                         <p>
                             <a href={`${sourceUrl}/app/entry.client.tsx`}>
@@ -116,8 +120,8 @@ export default function HomePage() {
                     <li>
                         <h3>Submit forms to native server actions</h3>
                         <p>
-                            The todo form uses React Router's <code>Form</code>. Its client action
-                            requires login, then calls <code>args.serverAction()</code>. The server
+                            The todo form uses React Router's <code>Form</code>. Its client action calls{" "}
+                            <code>args.serverAction()</code> after the shared login check. The server
                             action validates the access token, reads the form, and saves the todo for the
                             authenticated user. React Router revalidates loader data afterward.
                         </p>
@@ -130,6 +134,16 @@ export default function HomePage() {
                             Todos use the same storage implementation as the Next.js example: JSON files
                             locally, or Upstash Redis when configured. On Vercel, configure Upstash for
                             persistent storage.
+                        </p>
+                    </li>
+                    <li>
+                        <h3>Resume after inactivity logout</h3>
+                        <p>
+                            The protected layout also mounts <code>AutoLogoutWarningOverlay</code>. When
+                            the session expires, <code>autoLogout_returnToUrl</code> sends the user to
+                            the public <code>/inactivity-logout</code> page, preserving the current URL
+                            in <code>return_url</code>. Its resume link returns to that URL, where the
+                            protected layout requires login again. The home page remains public too.
                         </p>
                     </li>
                     <li>
