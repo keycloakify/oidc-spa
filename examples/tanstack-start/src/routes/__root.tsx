@@ -2,7 +2,6 @@
 import { HeadContent, Scripts, createRootRoute } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { AppHeader } from "~/components/AppHeader";
-import { AutoLogoutWarningOverlay } from "~/components/AutoLogoutWarningOverlay";
 import stylesheetUrl from "~/styles.css?url";
 
 export const Route = createRootRoute({
@@ -33,7 +32,6 @@ function RootDocument({ children }: { children: ReactNode }) {
             <body>
                 <AppHeader />
                 <main>{children}</main>
-                <AutoLogoutWarningOverlay />
                 <Scripts />
             </body>
         </html>

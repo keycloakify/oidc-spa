@@ -2,7 +2,7 @@ import { useState, type SubmitEvent } from "react";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { enforceLogin, oidcFnMiddleware } from "~/oidc";
+import { oidcFnMiddleware } from "~/oidc";
 import { getTodosStore, type TodoItem } from "~/data/todos";
 
 const getTodos = createServerFn({ method: "GET" })
@@ -24,8 +24,7 @@ const addTodo = createServerFn({ method: "POST" })
         await todosStore.updateTodos({ userId, todos: [...todos, todo] });
     });
 
-export const Route = createFileRoute("/todo-list-server-function")({
-    beforeLoad: enforceLogin,
+export const Route = createFileRoute("/_authenticated/todo-list-server-function")({
     loader: () => getTodos(),
     component: TodoList,
     pendingComponent: () => <p>Loading todos...</p>

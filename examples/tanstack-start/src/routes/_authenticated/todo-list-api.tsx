@@ -1,10 +1,9 @@
 import { useState, type SubmitEvent } from "react";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
-import { enforceLogin, getOidc } from "~/oidc";
+import { getOidc } from "~/oidc";
 import type { TodoItem } from "~/data/todos";
 
-export const Route = createFileRoute("/todo-list-api")({
-    beforeLoad: enforceLogin,
+export const Route = createFileRoute("/_authenticated/todo-list-api")({
     loader: async () => {
         const oidc = await getOidc({ assert: "user logged in" });
         const response = await fetch("/api/todos", {

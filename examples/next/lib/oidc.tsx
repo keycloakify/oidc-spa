@@ -54,6 +54,11 @@ export const { useOidc, getOidc, OidcInitializationGate, withLoginEnforced } = o
     // See: https://docs.oidc-spa.dev/features/auto-login#react-spa
     //.withAutoLogin()
     .withRuntimeConfigs(async () => {
+        const autoLogout_returnToUrl = () =>
+            `${process.env.__NEXT_ROUTER_BASEPATH}/inactivity-logout?${new URLSearchParams({
+                return_url: window.location.href
+            })}`;
+
         switch (process.env.NEXT_PUBLIC_OIDC_PROVIDER) {
             case "mock":
                 return {
@@ -65,6 +70,7 @@ export const { useOidc, getOidc, OidcInitializationGate, withLoginEnforced } = o
                     mode: "real",
                     issuerUri: process.env.NEXT_PUBLIC_KEYCLOAK_ISSUER_URI!,
                     clientId: process.env.NEXT_PUBLIC_KEYCLOAK_CLIENT_ID!,
+                    autoLogout_returnToUrl,
                     debugLogs: true
                 };
             case "Keycloak2":
@@ -72,6 +78,7 @@ export const { useOidc, getOidc, OidcInitializationGate, withLoginEnforced } = o
                     mode: "real",
                     issuerUri: process.env.NEXT_PUBLIC_KEYCLOAK2_ISSUER_URI!,
                     clientId: process.env.NEXT_PUBLIC_KEYCLOAK2_CLIENT_ID!,
+                    autoLogout_returnToUrl,
                     debugLogs: true
                 };
             case "Auth0":
@@ -85,6 +92,7 @@ export const { useOidc, getOidc, OidcInitializationGate, withLoginEnforced } = o
                     idleSessionLifetimeInSeconds: parseInt(
                         process.env.NEXT_PUBLIC_AUTH0_SSO_SESSION_IDLE_SECONDS!
                     ),
+                    autoLogout_returnToUrl,
                     // DPoP is only available for paying Auth0 customer.
                     disableDPoP: true,
                     debugLogs: true
@@ -95,6 +103,7 @@ export const { useOidc, getOidc, OidcInitializationGate, withLoginEnforced } = o
                     issuerUri: process.env.NEXT_PUBLIC_ENTRA_ISSUER_URI!,
                     clientId: process.env.NEXT_PUBLIC_ENTRA_CLIENT_ID!,
                     scopes: ["profile", process.env.NEXT_PUBLIC_ENTRA_API_SCOPE!],
+                    autoLogout_returnToUrl,
                     debugLogs: true
                 };
             default:

@@ -1,6 +1,7 @@
 import { oidcSpa } from "oidc-spa/react-tanstack-start";
 import { z } from "zod";
 import { decodeJwt } from "oidc-spa/decode-jwt";
+import { getRouterInstance } from "@tanstack/react-start";
 import avatarFallbackSvgUrl from "./assets/userPictureFallback.svg";
 
 // App-specific user model exposed by `useOidc()`.
@@ -22,9 +23,8 @@ export type User_server = {
 export const {
     useOidc,
     getOidc,
-    // NOTE: Each time you enforceLogin on a route the oidc-spa vite plugin
-    // will automatically switch this route to `ssr: false`.
-    // This ensures that everything that can be SSR'd is and the rest is delayed to the client.
+    // NOTE: The oidc-spa Vite plugin switches routes using enforceLogin to `ssr: false`.
+    // Their children inherit this, while the root shell and AppHeader remain SSR'd.
     enforceLogin,
     oidcFnMiddleware,
     oidcRequestMiddleware
@@ -89,6 +89,14 @@ export const {
     // See: https://docs.oidc-spa.dev/features/auto-login#tanstack-start
     //.withAutoLogin()
     .withRuntimeConfigs(async ({ process }) => {
+        const router = await getRouterInstance();
+        const autoLogout_returnToUrl = () =>
+            router.buildLocation({
+                to: "/inactivity-logout",
+                search: { return_url: window.location.href }
+            }).href;
+        const warnUserSecondsBeforeAutoLogout = 60 * 4 + 30;
+
         switch (process.env["OIDC_PROVIDER"]) {
             case "mock":
                 return {
@@ -103,7 +111,9 @@ export const {
                     issuerUri: process.env["KEYCLOAK_ISSUER_URI"],
                     debugLogs: true,
                     client: {
-                        clientId: process.env["KEYCLOAK_CLIENT_ID"]
+                        clientId: process.env["KEYCLOAK_CLIENT_ID"],
+                        autoLogout_returnToUrl,
+                        warnUserSecondsBeforeAutoLogout
                     },
                     server: {
                         accessTokenValidationMethod: "offline JWT validation",
@@ -117,7 +127,9 @@ export const {
                     issuerUri: process.env["KEYCLOAK2_ISSUER_URI"],
                     debugLogs: true,
                     client: {
-                        clientId: process.env["KEYCLOAK2_CLIENT_ID"]
+                        clientId: process.env["KEYCLOAK2_CLIENT_ID"],
+                        autoLogout_returnToUrl,
+                        warnUserSecondsBeforeAutoLogout
                     },
                     server: {
                         accessTokenValidationMethod: "introspection endpoint",
@@ -138,6 +150,8 @@ export const {
                         idleSessionLifetimeInSeconds: parseInt(
                             process.env["AUTH0_SSO_SESSION_IDLE_SECONDS"]
                         ),
+                        autoLogout_returnToUrl,
+                        warnUserSecondsBeforeAutoLogout,
                         // DPoP is only available for paying Auth0 customer.
                         disableDPoP: true
                     },
@@ -153,7 +167,9 @@ export const {
                     debugLogs: true,
                     client: {
                         clientId: process.env["ENTRA_CLIENT_ID"],
-                        scopes: ["profile", process.env["ENTRA_API_SCOPE"]]
+                        scopes: ["profile", process.env["ENTRA_API_SCOPE"]],
+                        autoLogout_returnToUrl,
+                        warnUserSecondsBeforeAutoLogout
                     },
                     server: {
                         accessTokenValidationMethod: "offline JWT validation",

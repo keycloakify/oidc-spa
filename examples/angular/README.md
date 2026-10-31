@@ -33,7 +33,7 @@ Restart the server and reload the page after changing providers. Settings are lo
 including in production; changing providers does not require rebuilding Angular. The OIDC client must
 allow <http://app.localhost:3000> as an application origin and redirect destination.
 
-To use the local oidc-spa source, run `yarn start-angular-new-example` from the repository root.
+To use the local oidc-spa source, run `yarn start-angular-example` from the repository root.
 
 ## Pages
 
@@ -41,6 +41,7 @@ To use the local oidc-spa source, run `yarn start-angular-new-example` from the 
 - Todo List: `/todo-list` — view and add your own todos.
 - Todo List Admin: `/todo-list-admin` — view todos grouped by user ID and delete items as an admin.
 - Account: `/account` — profile and Keycloak account actions, accessible from the avatar.
+- Inactivity logout: `/inactivity-logout` — a public message with a link to resume the previous page.
 
 ## Integration
 
@@ -53,9 +54,17 @@ To use the local oidc-spa source, run `yarn start-angular-new-example` from the 
   `user()` signal returned by `injectOidc()`.
 - `src/app/app.config.ts` registers `provideOidc()` and `createOidcInterceptor()`. The interceptor
   attaches an access token only when a request sets `REQUIRE_ACCESS_TOKEN`.
-- `src/app/app.routes.ts` protects the todo, admin and account pages with `enforceLoginGuard`.
+- `src/app/app.routes.ts` groups the todo, admin and account pages under a parent with
+  `canActivateChild: [enforceLoginGuard]`. Their routes live in
+  `src/app/pages/protected/protected.routes.ts` and inherit this guard without changing their URLs.
   The admin route also checks `canSeeAdminNavigation` in `canActivate`; non-admin users see an alert
   and are redirected home before the page loads.
+- `src/app/pages/protected/protected-layout.ts` mounts the protected pages and
+  `AutoLogoutWarningOverlay`. The header remains in the root app component. Home, not-found and
+  inactivity logout pages are outside the protected branch.
+- `autoLogout_returnToUrl` in `src/app/app.config.ts` sends users to `/inactivity-logout` after
+  automatic logout, saving the previous URL in `return_url`. The resume link returns to that URL;
+  the shared guard starts sign-in when needed.
 - `src/app/services/todo.service.ts` uses `HttpClient` with
   `context: new HttpContext().set(REQUIRE_ACCESS_TOKEN, true)` on each protected request. The
   interceptor gets a current access token and attaches it; early initialization handles DPoP when

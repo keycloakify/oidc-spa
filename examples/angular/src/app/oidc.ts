@@ -13,7 +13,7 @@ export type User_client = {
 
 export const { provideOidc, injectOidc, getOidc, createOidcInterceptor, enforceLoginGuard } =
   oidcSpa
-    .withUser<User_client>(({ isMock, idTokenClaims, accessToken }) => {
+    .withUser<User_client>(async ({ isMock, idTokenClaims, accessToken }) => {
       if (isMock) {
         return {
           displayName: 'John Doe',
@@ -22,6 +22,11 @@ export const { provideOidc, injectOidc, getOidc, createOidcInterceptor, enforceL
           canSeeAdminNavigation: true,
         };
       }
+
+      // This callback runs in Angular's injection context. You can load the user
+      // from a protected backend API using an HttpClient-based service, for example:
+      //   const apiService = inject(ApiService);
+      //   return firstValueFrom(apiService.getUser());
 
       const { name, email, picture } = z
         .object({ name: z.string(), email: z.string().optional(), picture: z.string().optional() })

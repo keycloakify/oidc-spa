@@ -1,7 +1,7 @@
 import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
-import { TodoService, type TodoItem } from '../services/todo.service';
+import { TodoService, type TodoItem } from '../../services/todo.service';
 
 @Component({
   selector: 'app-todo-list',

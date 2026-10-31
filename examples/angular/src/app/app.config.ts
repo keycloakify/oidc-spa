@@ -1,6 +1,6 @@
 import { ApplicationConfig, inject, provideBrowserGlobalErrorListeners } from '@angular/core';
 import { HttpClient, provideHttpClient, withInterceptors } from '@angular/common/http';
-import { provideRouter } from '@angular/router';
+import { provideRouter, Router } from '@angular/router';
 import type { RuntimeConfigs } from 'oidc-spa/angular';
 import { firstValueFrom } from 'rxjs';
 import { routes } from './app.routes';
@@ -19,6 +19,13 @@ export const appConfig: ApplicationConfig = {
     ),
     provideOidc(async (): Promise<RuntimeConfigs> => {
       const http = inject(HttpClient);
+      const router = inject(Router);
+      const autoLogout_returnToUrl = () =>
+        router.serializeUrl(
+          router.createUrlTree(['/inactivity-logout'], {
+            queryParams: { return_url: window.location.href },
+          })
+        );
       const env = await firstValueFrom(http.get<Record<string, string>>('/api/oidc-client-env'));
 
       switch (env['OIDC_PROVIDER']) {
@@ -32,6 +39,7 @@ export const appConfig: ApplicationConfig = {
             mode: 'real',
             issuerUri: env['KEYCLOAK_ISSUER_URI'],
             clientId: env['KEYCLOAK_CLIENT_ID'],
+            autoLogout_returnToUrl,
             debugLogs: true,
           };
         case 'Keycloak2':
@@ -39,6 +47,7 @@ export const appConfig: ApplicationConfig = {
             mode: 'real',
             issuerUri: env['KEYCLOAK2_ISSUER_URI'],
             clientId: env['KEYCLOAK2_CLIENT_ID'],
+            autoLogout_returnToUrl,
             debugLogs: true,
           };
         case 'Auth0':
@@ -50,6 +59,7 @@ export const appConfig: ApplicationConfig = {
               audience: env['AUTH0_API_IDENTIFIER'],
             },
             idleSessionLifetimeInSeconds: parseInt(env['AUTH0_SSO_SESSION_IDLE_SECONDS']),
+            autoLogout_returnToUrl,
             // DPoP is only available for paying Auth0 customer.
             disableDPoP: true,
             debugLogs: true,
@@ -60,6 +70,7 @@ export const appConfig: ApplicationConfig = {
             issuerUri: env['ENTRA_ISSUER_URI'],
             clientId: env['ENTRA_CLIENT_ID'],
             scopes: ['profile', env['ENTRA_API_SCOPE']],
+            autoLogout_returnToUrl,
             debugLogs: true,
           };
         default:

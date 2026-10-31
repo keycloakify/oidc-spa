@@ -82,9 +82,18 @@ import { RouterLink } from '@angular/router';
           <li>
             <h3>Protect pages and opt requests into authentication</h3>
             <p>
-              Protected routes use <code>canActivate: [enforceLoginGuard]</code> to require sign-in
-              before loading. The admin route also checks <code>canSeeAdminNavigation</code> in its
-              guard, showing an alert and redirecting home when access is denied. In
+              <a [href]="sourceUrl + '/src/app/app.routes.ts'"><code>app.routes.ts</code></a>
+              groups the account and todo pages under one parent with
+              <code>canActivateChild: [enforceLoginGuard]</code>. Their definitions live in
+              <a [href]="sourceUrl + '/src/app/pages/protected/protected.routes.ts'"
+                ><code>protected.routes.ts</code></a
+              >. Add protected pages there to inherit the guard; their URLs do not include
+              <code>protected</code>. The admin route also checks
+              <code>canSeeAdminNavigation</code>, showing an alert and redirecting home when access
+              is denied.
+            </p>
+            <p>
+              In
               <a [href]="sourceUrl + '/src/app/services/todo.service.ts'"
                 ><code>todo.service.ts</code></a
               >, requests explicitly opt in to access token injection using
@@ -118,11 +127,28 @@ import { RouterLink } from '@angular/router';
               every request.
             </p>
           </li>
+          <li>
+            <h3>Resume after inactivity logout</h3>
+            <p>
+              The protected layout mounts <code>AutoLogoutWarningOverlay</code> to display the
+              countdown before automatic logout. In <code>app.config.ts</code>,
+              <code>autoLogout_returnToUrl</code> uses Angular Router to build a URL for the public
+              <a [href]="sourceUrl + '/src/app/pages/inactivity-logout.ts'"
+                >inactivity logout page</a
+              >, saving the previous URL in <code>return_url</code>.
+            </p>
+            <p>
+              This page stays visible while logged out. Its “Resume to where I was” link returns to
+              the saved URL; the shared guard starts sign-in when that destination requires
+              authentication. The header stays in the root app component, so it is also available on
+              public pages.
+            </p>
+          </li>
         </ol>
       </section>
       <footer class="guide-links">
         <a href="https://docs.oidc-spa.dev/">oidc-spa documentation ↗</a>
-        <a href="https://github.com/keycloakify/oidc-spa/tree/main/examples/angular-new"
+        <a href="https://github.com/keycloakify/oidc-spa/tree/main/examples/angular"
           >Browse the example source ↗</a
         >
       </footer>
@@ -130,7 +156,7 @@ import { RouterLink } from '@angular/router';
   `,
 })
 export class Home {
-  readonly sourceUrl = 'https://github.com/keycloakify/oidc-spa/blob/main/examples/angular-new';
+  readonly sourceUrl = 'https://github.com/keycloakify/oidc-spa/blob/main/examples/angular';
   readonly configurationExample = `provideOidc({
   mode: 'real',
   issuerUri: 'https://auth.example.com',

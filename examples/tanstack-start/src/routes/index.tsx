@@ -4,7 +4,7 @@ export const Route = createFileRoute("/")({
     component: Home
 });
 
-const sourceUrl = "https://github.com/keycloakify/oidc-spa/blob/main/examples/tanstack-start-next";
+const sourceUrl = "https://github.com/keycloakify/oidc-spa/blob/main/examples/tanstack-start";
 
 function Home() {
     return (
@@ -45,8 +45,9 @@ function Home() {
                             </a>{" "}
                             includes <code>oidcSpa()</code> from <code>oidc-spa/vite-plugin</code>. The
                             plugin wires up browser initialization, the server entry, and runtime
-                            configuration. It also switches routes using <code>enforceLogin</code> to
-                            client rendering, while public pages like this one can be server-rendered.
+                            configuration. The authenticated layout and its children use client
+                            rendering, while the root shell, header, and public pages can be
+                            server-rendered.
                         </p>
                     </li>
                     <li>
@@ -66,8 +67,10 @@ function Home() {
                             middleware used throughout the app. The{" "}
                             <a href={`${sourceUrl}/src/components/AppHeader.tsx`}>header</a> uses these
                             helpers for login, logout, and the avatar; the{" "}
-                            <a href={`${sourceUrl}/src/routes/account.tsx`}>account page</a> displays the
-                            profile and offers Keycloak account actions when available.
+                            <a href={`${sourceUrl}/src/routes/_authenticated/account.tsx`}>
+                                account page
+                            </a>{" "}
+                            displays the profile and offers Keycloak account actions when available.
                         </p>
                     </li>
                     <li>
@@ -99,10 +102,26 @@ function Home() {
                     <li>
                         <h3>Protect pages and backend requests</h3>
                         <p>
-                            Protected pages declare <code>beforeLoad: enforceLogin</code> to send
-                            visitors through sign-in before loading. Their backend requests are protected
-                            separately. In the{" "}
-                            <a href={`${sourceUrl}/src/routes/todo-list-server-function.tsx`}>
+                            The{" "}
+                            <a href={`${sourceUrl}/src/routes/_authenticated/route.tsx`}>
+                                <code>_authenticated</code> layout
+                            </a>{" "}
+                            declares <code>beforeLoad: enforceLogin</code> once for all account and todo
+                            pages. Add protected pages to this directory to inherit the guard without
+                            repeating it on each page. The underscore makes the layout pathless, so their
+                            URLs do not include <code>_authenticated</code>.
+                        </p>
+                        <p>
+                            The home and inactivity logout pages remain outside this layout and are
+                            public. The header stays in the root shell for server rendering and handles
+                            both logged-in and logged-out visitors. Protected components can use{" "}
+                            <code>useOidc({`{ assert: "user logged in" }`})</code> to access the user.
+                        </p>
+                        <p>
+                            Backend requests are protected separately. In the{" "}
+                            <a
+                                href={`${sourceUrl}/src/routes/_authenticated/todo-list-server-function.tsx`}
+                            >
                                 server function version
                             </a>
                             , <code>oidcFnMiddleware</code> attaches the access token in the browser and
@@ -118,7 +137,9 @@ function Home() {
                         <p>
                             The <a href={`${sourceUrl}/src/routes/api/todos.ts`}>API route version</a>{" "}
                             uses <code>oidcRequestMiddleware</code> on <code>/api/todos</code>. Its{" "}
-                            <a href={`${sourceUrl}/src/routes/todo-list-api.tsx`}>client page</a>{" "}
+                            <a href={`${sourceUrl}/src/routes/_authenticated/todo-list-api.tsx`}>
+                                client page
+                            </a>{" "}
                             retrieves an access token with <code>getOidc()</code> and sends it in the{" "}
                             <code>Authorization: Bearer …</code> header. Both approaches expose the
                             backend user as <code>context.oidc.user</code>.
@@ -127,7 +148,10 @@ function Home() {
                     <li>
                         <h3>Authorize admin operations on the server</h3>
                         <p>
-                            The <a href={`${sourceUrl}/src/routes/todo-list-admin.tsx`}>admin page</a>{" "}
+                            The{" "}
+                            <a href={`${sourceUrl}/src/routes/_authenticated/todo-list-admin.tsx`}>
+                                admin page
+                            </a>{" "}
                             lists todos grouped by user ID and lets admins delete items. Both server
                             functions require the same authorization check:
                         </p>
@@ -143,12 +167,34 @@ function Home() {
                             either operation.
                         </p>
                     </li>
+                    <li>
+                        <h3>Handle inactivity logout</h3>
+                        <p>
+                            The authenticated layout mounts{" "}
+                            <a href={`${sourceUrl}/src/components/AutoLogoutWarningOverlay.tsx`}>
+                                <code>AutoLogoutWarningOverlay</code>
+                            </a>{" "}
+                            to display the countdown before automatic logout. In <code>src/oidc.ts</code>
+                            , <code>client.autoLogout_returnToUrl</code> uses the router to build a URL
+                            for the public <code>/inactivity-logout</code> page, saving the previous URL
+                            in its typed <code>return_url</code> search parameter.
+                        </p>
+                        <p>
+                            The{" "}
+                            <a href={`${sourceUrl}/src/routes/inactivity-logout.tsx`}>
+                                inactivity logout page
+                            </a>{" "}
+                            stays visible while the user is logged out. Its “Resume to where I was” link
+                            simply returns to the saved URL. If that page requires authentication, the
+                            shared login guard starts sign-in before loading it.
+                        </p>
+                    </li>
                 </ol>
             </section>
 
             <footer className="guide-links">
                 <a href="https://docs.oidc-spa.dev/">oidc-spa documentation ↗</a>
-                <a href="https://github.com/keycloakify/oidc-spa/tree/main/examples/tanstack-start-next">
+                <a href="https://github.com/keycloakify/oidc-spa/tree/main/examples/tanstack-start">
                     Browse the example source ↗
                 </a>
             </footer>

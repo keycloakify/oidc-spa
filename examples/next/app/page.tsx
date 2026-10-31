@@ -113,7 +113,8 @@ export default function HomePage() {
                             </a>{" "}
                             uses <code>withLoginEnforced</code> to require sign-in for the todo, admin,
                             and account pages. The root initialization gate covers all routes, including
-                            the public home page. Backend requests are protected independently.
+                            the public home and inactivity logout pages. Backend requests are protected
+                            independently.
                         </p>
                         <p>
                             <a href={`${sourceUrl}/lib/trpc.ts`}>
@@ -201,6 +202,23 @@ return Response.json(todos);`}</code>
                             <a href={`${sourceUrl}/app/(protected)/account/page.tsx`}>account page</a>{" "}
                             displays the mapped profile and offers Keycloak account actions when
                             available.
+                        </p>
+                    </li>
+                    <li>
+                        <h3>Resume after inactivity logout</h3>
+                        <p>
+                            <code>AutoLogoutWarningOverlay</code> displays the countdown before automatic
+                            logout. The <code>autoLogout_returnToUrl</code> setting in{" "}
+                            <code>lib/oidc.tsx</code> sends the user to the public{" "}
+                            <a href={`${sourceUrl}/app/inactivity-logout/page.tsx`}>
+                                inactivity logout page
+                            </a>
+                            , saving the previous URL in the <code>return_url</code> search parameter.
+                        </p>
+                        <p>
+                            Its “Resume to where I was” link returns to the saved URL. The protected
+                            layout starts sign-in if needed, so this page does not need its own login
+                            logic.
                         </p>
                     </li>
                 </ol>

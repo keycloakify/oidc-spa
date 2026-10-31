@@ -1,6 +1,6 @@
 import { Component, inject, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
-import { TodoService, type UserTodos } from '../services/todo.service';
+import { TodoService, type UserTodos } from '../../services/todo.service';
 
 @Component({
   selector: 'app-todo-list-admin',

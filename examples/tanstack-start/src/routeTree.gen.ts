@@ -10,10 +10,12 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as AccountRouteImport } from './routes/account'
-import { Route as TodoListAdminRouteImport } from './routes/todo-list-admin'
-import { Route as TodoListApiRouteImport } from './routes/todo-list-api'
-import { Route as TodoListServerFunctionRouteImport } from './routes/todo-list-server-function'
+import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
+import { Route as InactivityLogoutRouteImport } from './routes/inactivity-logout'
+import { Route as AuthenticatedAccountRouteImport } from './routes/_authenticated/account'
+import { Route as AuthenticatedTodoListAdminRouteImport } from './routes/_authenticated/todo-list-admin'
+import { Route as AuthenticatedTodoListApiRouteImport } from './routes/_authenticated/todo-list-api'
+import { Route as AuthenticatedTodoListServerFunctionRouteImport } from './routes/_authenticated/todo-list-server-function'
 import { Route as ApiTodosRouteImport } from './routes/api/todos'
 
 const IndexRoute = IndexRouteImport.update({
@@ -21,26 +23,38 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AccountRoute = AccountRouteImport.update({
+const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
+  id: '/_authenticated',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InactivityLogoutRoute = InactivityLogoutRouteImport.update({
+  id: '/inactivity-logout',
+  path: '/inactivity-logout',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedAccountRoute = AuthenticatedAccountRouteImport.update({
   id: '/account',
   path: '/account',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const TodoListAdminRoute = TodoListAdminRouteImport.update({
-  id: '/todo-list-admin',
-  path: '/todo-list-admin',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const TodoListApiRoute = TodoListApiRouteImport.update({
-  id: '/todo-list-api',
-  path: '/todo-list-api',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const TodoListServerFunctionRoute = TodoListServerFunctionRouteImport.update({
-  id: '/todo-list-server-function',
-  path: '/todo-list-server-function',
-  getParentRoute: () => rootRouteImport,
-} as any)
+const AuthenticatedTodoListAdminRoute =
+  AuthenticatedTodoListAdminRouteImport.update({
+    id: '/todo-list-admin',
+    path: '/todo-list-admin',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedTodoListApiRoute =
+  AuthenticatedTodoListApiRouteImport.update({
+    id: '/todo-list-api',
+    path: '/todo-list-api',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedTodoListServerFunctionRoute =
+  AuthenticatedTodoListServerFunctionRouteImport.update({
+    id: '/todo-list-server-function',
+    path: '/todo-list-server-function',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const ApiTodosRoute = ApiTodosRouteImport.update({
   id: '/api/todos',
   path: '/api/todos',
@@ -49,33 +63,38 @@ const ApiTodosRoute = ApiTodosRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/account': typeof AccountRoute
-  '/todo-list-admin': typeof TodoListAdminRoute
-  '/todo-list-api': typeof TodoListApiRoute
-  '/todo-list-server-function': typeof TodoListServerFunctionRoute
+  '/inactivity-logout': typeof InactivityLogoutRoute
+  '/account': typeof AuthenticatedAccountRoute
+  '/todo-list-admin': typeof AuthenticatedTodoListAdminRoute
+  '/todo-list-api': typeof AuthenticatedTodoListApiRoute
+  '/todo-list-server-function': typeof AuthenticatedTodoListServerFunctionRoute
   '/api/todos': typeof ApiTodosRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/account': typeof AccountRoute
-  '/todo-list-admin': typeof TodoListAdminRoute
-  '/todo-list-api': typeof TodoListApiRoute
-  '/todo-list-server-function': typeof TodoListServerFunctionRoute
+  '/inactivity-logout': typeof InactivityLogoutRoute
+  '/account': typeof AuthenticatedAccountRoute
+  '/todo-list-admin': typeof AuthenticatedTodoListAdminRoute
+  '/todo-list-api': typeof AuthenticatedTodoListApiRoute
+  '/todo-list-server-function': typeof AuthenticatedTodoListServerFunctionRoute
   '/api/todos': typeof ApiTodosRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/account': typeof AccountRoute
-  '/todo-list-admin': typeof TodoListAdminRoute
-  '/todo-list-api': typeof TodoListApiRoute
-  '/todo-list-server-function': typeof TodoListServerFunctionRoute
+  '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
+  '/inactivity-logout': typeof InactivityLogoutRoute
+  '/_authenticated/account': typeof AuthenticatedAccountRoute
+  '/_authenticated/todo-list-admin': typeof AuthenticatedTodoListAdminRoute
+  '/_authenticated/todo-list-api': typeof AuthenticatedTodoListApiRoute
+  '/_authenticated/todo-list-server-function': typeof AuthenticatedTodoListServerFunctionRoute
   '/api/todos': typeof ApiTodosRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/inactivity-logout'
     | '/account'
     | '/todo-list-admin'
     | '/todo-list-api'
@@ -84,6 +103,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/inactivity-logout'
     | '/account'
     | '/todo-list-admin'
     | '/todo-list-api'
@@ -92,19 +112,19 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
-    | '/account'
-    | '/todo-list-admin'
-    | '/todo-list-api'
-    | '/todo-list-server-function'
+    | '/_authenticated'
+    | '/inactivity-logout'
+    | '/_authenticated/account'
+    | '/_authenticated/todo-list-admin'
+    | '/_authenticated/todo-list-api'
+    | '/_authenticated/todo-list-server-function'
     | '/api/todos'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  AccountRoute: typeof AccountRoute
-  TodoListAdminRoute: typeof TodoListAdminRoute
-  TodoListApiRoute: typeof TodoListApiRoute
-  TodoListServerFunctionRoute: typeof TodoListServerFunctionRoute
+  AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
+  InactivityLogoutRoute: typeof InactivityLogoutRoute
   ApiTodosRoute: typeof ApiTodosRoute
 }
 
@@ -117,33 +137,47 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/account': {
-      id: '/account'
+    '/_authenticated': {
+      id: '/_authenticated'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AuthenticatedRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/inactivity-logout': {
+      id: '/inactivity-logout'
+      path: '/inactivity-logout'
+      fullPath: '/inactivity-logout'
+      preLoaderRoute: typeof InactivityLogoutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/account': {
+      id: '/_authenticated/account'
       path: '/account'
       fullPath: '/account'
-      preLoaderRoute: typeof AccountRouteImport
-      parentRoute: typeof rootRouteImport
+      preLoaderRoute: typeof AuthenticatedAccountRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/todo-list-admin': {
-      id: '/todo-list-admin'
+    '/_authenticated/todo-list-admin': {
+      id: '/_authenticated/todo-list-admin'
       path: '/todo-list-admin'
       fullPath: '/todo-list-admin'
-      preLoaderRoute: typeof TodoListAdminRouteImport
-      parentRoute: typeof rootRouteImport
+      preLoaderRoute: typeof AuthenticatedTodoListAdminRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/todo-list-api': {
-      id: '/todo-list-api'
+    '/_authenticated/todo-list-api': {
+      id: '/_authenticated/todo-list-api'
       path: '/todo-list-api'
       fullPath: '/todo-list-api'
-      preLoaderRoute: typeof TodoListApiRouteImport
-      parentRoute: typeof rootRouteImport
+      preLoaderRoute: typeof AuthenticatedTodoListApiRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/todo-list-server-function': {
-      id: '/todo-list-server-function'
+    '/_authenticated/todo-list-server-function': {
+      id: '/_authenticated/todo-list-server-function'
       path: '/todo-list-server-function'
       fullPath: '/todo-list-server-function'
-      preLoaderRoute: typeof TodoListServerFunctionRouteImport
-      parentRoute: typeof rootRouteImport
+      preLoaderRoute: typeof AuthenticatedTodoListServerFunctionRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
     '/api/todos': {
       id: '/api/todos'
@@ -155,12 +189,28 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface AuthenticatedRouteRouteChildren {
+  AuthenticatedAccountRoute: typeof AuthenticatedAccountRoute
+  AuthenticatedTodoListAdminRoute: typeof AuthenticatedTodoListAdminRoute
+  AuthenticatedTodoListApiRoute: typeof AuthenticatedTodoListApiRoute
+  AuthenticatedTodoListServerFunctionRoute: typeof AuthenticatedTodoListServerFunctionRoute
+}
+
+const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedAccountRoute: AuthenticatedAccountRoute,
+  AuthenticatedTodoListAdminRoute: AuthenticatedTodoListAdminRoute,
+  AuthenticatedTodoListApiRoute: AuthenticatedTodoListApiRoute,
+  AuthenticatedTodoListServerFunctionRoute:
+    AuthenticatedTodoListServerFunctionRoute,
+}
+
+const AuthenticatedRouteRouteWithChildren =
+  AuthenticatedRouteRoute._addFileChildren(AuthenticatedRouteRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  AccountRoute: AccountRoute,
-  TodoListAdminRoute: TodoListAdminRoute,
-  TodoListApiRoute: TodoListApiRoute,
-  TodoListServerFunctionRoute: TodoListServerFunctionRoute,
+  AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
+  InactivityLogoutRoute: InactivityLogoutRoute,
   ApiTodosRoute: ApiTodosRoute,
 }
 export const routeTree = rootRouteImport

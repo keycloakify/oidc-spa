@@ -20,6 +20,7 @@ validation implementation.
 -   Todo List (API): `/todo-list-api` — the same todos using `fetch` and Next.js Route Handlers.
 -   Todo List Admin: `/todo-list-admin` — view todos grouped by user ID and delete items as an admin.
 -   Account: `/account` — profile and Keycloak account actions, accessible from the avatar.
+-   Inactivity logout: `/inactivity-logout` — a public message with a link to resume the previous page.
 
 ## Development
 
@@ -50,7 +51,10 @@ To use local oidc-spa source, run `yarn start-next-example` from the repository 
 -   `app/layout.tsx` wraps the entire UI in one `OidcInitializationGate`: the header, all pages,
     and the session warning. It renders no application content until browser auth is ready.
 -   `app/(protected)/layout.tsx` uses `withLoginEnforced` to require sign-in for the todo, admin,
-    and account pages. The home page is public and uses the same root initialization gate.
+    and account pages. The home and inactivity logout pages are public and use the same root initialization gate.
+-   `autoLogout_returnToUrl` in `lib/oidc.tsx` sends users to `/inactivity-logout` after automatic
+    logout, saving their previous URL in `return_url`. The resume link returns to that URL;
+    the protected layout starts sign-in when needed.
 -   `lib/trpc.ts` sends access tokens in the Authorization header using `getOidc()`.
 -   `lib/server/oidc.ts` configures token validation separately with `oidc-spa/server`. Its
     `AccessTokenClaims` schema describes the expected claims, which `getUser(req)` maps to its own

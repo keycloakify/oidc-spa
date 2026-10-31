@@ -39,11 +39,18 @@ import { injectOidc } from '../oidc';
           </a>
           <button type="button" (click)="oidc.logout({})">Logout</button>
           } @else {
-          <button type="button" class="button-primary" (click)="login()">Login</button>
+          <button type="button" class="button-primary" (click)="oidc.login({})">Login</button>
           @if (keycloakUtils) {
-          <button type="button" (click)="login(true)">Register</button>
-          } @if (oidc.initializationError) {
-          <p role="alert">Authentication is unavailable. Please reload to try again.</p>
+          <button
+            type="button"
+            (click)="
+                  oidc.login({
+                    transformAuthorizationUrl: keycloakUtils.transformAuthorizationUrl_register,
+                  })
+                "
+          >
+            Register
+          </button>
           } }
         </div>
       </div>
@@ -55,13 +62,4 @@ export class AppHeader {
   readonly keycloakUtils = isKeycloak({ issuerUri: this.oidc.issuerUri })
     ? createKeycloakUtils({ issuerUri: this.oidc.issuerUri })
     : undefined;
-
-  login(register = false) {
-    if (this.oidc.isUserLoggedIn) return;
-    return this.oidc.login({
-      transformAuthorizationUrl: register
-        ? this.keycloakUtils?.transformAuthorizationUrl_register
-        : undefined,
-    });
-  }
 }

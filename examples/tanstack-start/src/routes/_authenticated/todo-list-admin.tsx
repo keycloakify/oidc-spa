@@ -2,7 +2,7 @@ import { useState } from "react";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { enforceLogin, getOidc, oidcFnMiddleware } from "~/oidc";
+import { getOidc, oidcFnMiddleware } from "~/oidc";
 import { getTodosStore } from "~/data/todos";
 
 const getAllTodos = createServerFn({ method: "GET" })
@@ -36,8 +36,7 @@ const deleteTodo = createServerFn({ method: "POST" })
         });
     });
 
-export const Route = createFileRoute("/todo-list-admin")({
-    beforeLoad: enforceLogin,
+export const Route = createFileRoute("/_authenticated/todo-list-admin")({
     loader: async () => {
         const oidc = await getOidc({ assert: "user logged in" });
         const user = await oidc.getUser();

@@ -20,5 +20,5 @@ import { injectOidc } from '../oidc';
   `,
 })
 export class AutoLogoutWarningOverlay {
-  readonly oidc = injectOidc();
+  readonly oidc = injectOidc({ assert: 'user logged in' });
 }
