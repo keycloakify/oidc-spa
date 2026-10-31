@@ -10,10 +10,6 @@ export const Route = createFileRoute("/_authenticated/todo-list-api")({
             headers: { Authorization: `Bearer ${await oidc.getAccessToken()}` }
         });
 
-        if (!response.ok) {
-            throw new Error("Could not load todos.");
-        }
-
         const todos: TodoItem[] = await response.json();
         return todos;
     },
@@ -26,7 +22,6 @@ function TodoList() {
     const todos = Route.useLoaderData();
     const [newTodo, setNewTodo] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [error, setError] = useState<string>();
 
     async function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
         event.preventDefault();
@@ -36,31 +31,21 @@ function TodoList() {
         }
 
         setIsSubmitting(true);
-        setError(undefined);
 
         const oidc = await getOidc({ assert: "user logged in" });
 
-        try {
-            const response = await fetch("/api/todos", {
-                method: "POST",
-                headers: {
-                    Authorization: `Bearer ${await oidc.getAccessToken()}`,
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({ name: newTodo })
-            });
+        await fetch("/api/todos", {
+            method: "POST",
+            headers: {
+                Authorization: `Bearer ${await oidc.getAccessToken()}`,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ name: newTodo })
+        });
 
-            if (!response.ok) {
-                throw new Error("Could not add todo.");
-            }
-
-            setNewTodo("");
-            await router.invalidate();
-        } catch (error) {
-            setError(error instanceof Error ? error.message : "Could not add todo.");
-        } finally {
-            setIsSubmitting(false);
-        }
+        setNewTodo("");
+        await router.invalidate();
+        setIsSubmitting(false);
     }
 
     return (
@@ -91,7 +76,6 @@ function TodoList() {
                     {isSubmitting ? "Adding..." : "Add todo"}
                 </button>
             </form>
-            {error && <p role="alert">{error}</p>}
         </>
     );
 }

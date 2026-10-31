@@ -52,7 +52,7 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
     const message = isRouteErrorResponse(error)
         ? error.status === 404
             ? "Page not found."
-            : error.statusText || "Request failed."
+            : (typeof error.data === "string" && error.data) || error.statusText || "Request failed."
         : error instanceof Error
         ? error.message
         : "An unexpected error occurred.";

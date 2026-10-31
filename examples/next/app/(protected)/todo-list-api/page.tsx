@@ -10,8 +10,6 @@ async function getTodos(): Promise<TodoItem[]> {
         headers: { Authorization: `Bearer ${await oidc.getAccessToken()}` }
     });
 
-    if (!response.ok) throw new Error("Could not load todos.");
-
     return response.json();
 }
 
@@ -19,52 +17,34 @@ export default function TodoListApiPage() {
     const [todos, setTodos] = useState<TodoItem[]>();
     const [newTodo, setNewTodo] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [error, setError] = useState<string>();
-    const [reload, setReload] = useState(0);
 
     useEffect(() => {
         let active = true;
-        getTodos().then(
-            todos => {
-                if (active) {
-                    setTodos(todos);
-                    setError(undefined);
-                }
-            },
-            error => {
-                if (active) setError(error instanceof Error ? error.message : "Could not load todos.");
-            }
-        );
+        getTodos().then(todos => {
+            if (active) setTodos(todos);
+        });
         return () => {
             active = false;
         };
-    }, [reload]);
+    }, []);
 
     async function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
         event.preventDefault();
         if (isSubmitting || newTodo.trim() === "") return;
         setIsSubmitting(true);
-        setError(undefined);
-        try {
-            const oidc = await getOidc({ assert: "user logged in" });
-            const response = await fetch(`${process.env.__NEXT_ROUTER_BASEPATH}/api/todos`, {
-                method: "POST",
-                headers: {
-                    Authorization: `Bearer ${await oidc.getAccessToken()}`,
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({ name: newTodo })
-            });
+        const oidc = await getOidc({ assert: "user logged in" });
+        await fetch(`${process.env.__NEXT_ROUTER_BASEPATH}/api/todos`, {
+            method: "POST",
+            headers: {
+                Authorization: `Bearer ${await oidc.getAccessToken()}`,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ name: newTodo })
+        });
 
-            if (!response.ok) throw new Error("Could not add todo.");
-
-            setNewTodo("");
-            setTodos(await getTodos());
-        } catch (error) {
-            setError(error instanceof Error ? error.message : "Could not add todo.");
-        } finally {
-            setIsSubmitting(false);
-        }
+        setNewTodo("");
+        setTodos(await getTodos());
+        setIsSubmitting(false);
     }
 
     return (
@@ -72,14 +52,7 @@ export default function TodoListApiPage() {
             <h1>Todo List (API)</h1>
             <p>Your personal todo list, backed by a Next.js Route Handler.</p>
             {todos === undefined ? (
-                <>
-                    {!error && <p>Loading todos...</p>}
-                    {error && (
-                        <button type="button" onClick={() => setReload(value => value + 1)}>
-                            Try again
-                        </button>
-                    )}
-                </>
+                <p>Loading todos...</p>
             ) : (
                 <>
                     {todos.length === 0 ? (
@@ -108,7 +81,6 @@ export default function TodoListApiPage() {
                     </form>
                 </>
             )}
-            {error && <p role="alert">{error}</p>}
         </>
     );
 }

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { getOidc, oidcFnMiddleware } from "~/oidc";
+import { oidcFnMiddleware } from "~/oidc";
 import { getTodosStore } from "~/data/todos";
 
 const getAllTodos = createServerFn({ method: "GET" })
@@ -37,41 +37,30 @@ const deleteTodo = createServerFn({ method: "POST" })
     });
 
 export const Route = createFileRoute("/_authenticated/todo-list-admin")({
-    loader: async () => {
-        const oidc = await getOidc({ assert: "user logged in" });
-        const user = await oidc.getUser();
-
-        // This check is for the UI. The server functions enforce authorization independently.
-        if (!user.canSeeAdminNavigation) {
-            throw new Error("unauthorized");
-        }
-
-        return getAllTodos();
-    },
+    loader: () => getAllTodos(),
     component: TodoListAdmin,
     pendingComponent: () => <p>Loading todos...</p>,
     errorComponent: ({ error }) => {
-        if (
-            !(error instanceof Error) ||
-            (error.message !== "unauthorized" && !error.message.includes('error="insufficient_scope"'))
-        ) {
+        if (!(error instanceof Error) || !error.message.includes('error="insufficient_scope"')) {
             throw error;
         }
-
-        return (
-            <>
-                <h1>Access denied</h1>
-                <p>You need the admin role to view this page.</p>
-            </>
-        );
+        return <AccessDenied />;
     }
 });
+
+function AccessDenied() {
+    return (
+        <>
+            <h1>Access denied</h1>
+            <p>You need the admin role to view this page.</p>
+        </>
+    );
+}
 
 function TodoListAdmin() {
     const router = useRouter();
     const usersTodos = Route.useLoaderData();
     const [isDeleting, setIsDeleting] = useState(false);
-    const [error, setError] = useState<string>();
 
     async function handleDelete(userId: string, todoId: number) {
         if (isDeleting) {
@@ -79,16 +68,9 @@ function TodoListAdmin() {
         }
 
         setIsDeleting(true);
-        setError(undefined);
-
-        try {
-            await deleteTodo({ data: { userId, todoId } });
-            await router.invalidate();
-        } catch (error) {
-            setError(error instanceof Error ? error.message : "Could not delete todo.");
-        } finally {
-            setIsDeleting(false);
-        }
+        await deleteTodo({ data: { userId, todoId } });
+        await router.invalidate();
+        setIsDeleting(false);
     }
 
     return (
@@ -123,7 +105,6 @@ function TodoListAdmin() {
                     )}
                 </section>
             ))}
-            {error && <p role="alert">{error}</p>}
         </>
     );
 }

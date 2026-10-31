@@ -35,7 +35,6 @@ function TodoList() {
     const todos = Route.useLoaderData();
     const [newTodo, setNewTodo] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [error, setError] = useState<string>();
 
     async function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
         event.preventDefault();
@@ -45,17 +44,10 @@ function TodoList() {
         }
 
         setIsSubmitting(true);
-        setError(undefined);
-
-        try {
-            await addTodo({ data: newTodo });
-            setNewTodo("");
-            await router.invalidate();
-        } catch (error) {
-            setError(error instanceof Error ? error.message : "Could not add todo.");
-        } finally {
-            setIsSubmitting(false);
-        }
+        await addTodo({ data: newTodo });
+        setNewTodo("");
+        await router.invalidate();
+        setIsSubmitting(false);
     }
 
     return (
@@ -86,7 +78,6 @@ function TodoList() {
                     {isSubmitting ? "Adding..." : "Add todo"}
                 </button>
             </form>
-            {error && <p role="alert">{error}</p>}
         </>
     );
 }

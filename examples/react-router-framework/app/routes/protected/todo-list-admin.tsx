@@ -1,4 +1,4 @@
-import { Form, isRouteErrorResponse, useNavigation } from "react-router";
+import { Form, useNavigation } from "react-router";
 import type { Route } from "./+types/todo-list-admin";
 import { z } from "zod";
 import { getUser } from "~/.server/oidc";
@@ -43,17 +43,6 @@ export async function action({ request }: Route.ActionArgs) {
         todos: userTodos.todos.filter(todo => todo.id !== input.data.todoId)
     });
     return null;
-}
-
-export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
-    if (!isRouteErrorResponse(error) || error.status !== 403) throw error;
-
-    return (
-        <>
-            <h1>Access denied</h1>
-            <p>You need the admin role to view this page.</p>
-        </>
-    );
 }
 
 export default function TodoListAdminPage({ loaderData: { usersTodos } }: Route.ComponentProps) {

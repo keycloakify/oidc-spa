@@ -8,41 +8,25 @@ export default function TodoListTrpcPage() {
     const [todos, setTodos] = useState<TodoItem[]>();
     const [newTodo, setNewTodo] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [error, setError] = useState<string>();
-    const [reload, setReload] = useState(0);
 
     useEffect(() => {
         let active = true;
-        trpc.todos.list.query().then(
-            todos => {
-                if (active) {
-                    setTodos(todos);
-                    setError(undefined);
-                }
-            },
-            error => {
-                if (active) setError(error instanceof Error ? error.message : "Could not load todos.");
-            }
-        );
+        trpc.todos.list.query().then(todos => {
+            if (active) setTodos(todos);
+        });
         return () => {
             active = false;
         };
-    }, [reload]);
+    }, []);
 
     async function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
         event.preventDefault();
         if (isSubmitting || newTodo.trim() === "") return;
         setIsSubmitting(true);
-        setError(undefined);
-        try {
-            await trpc.todos.add.mutate(newTodo);
-            setNewTodo("");
-            setTodos(await trpc.todos.list.query());
-        } catch (error) {
-            setError(error instanceof Error ? error.message : "Could not add todo.");
-        } finally {
-            setIsSubmitting(false);
-        }
+        await trpc.todos.add.mutate(newTodo);
+        setNewTodo("");
+        setTodos(await trpc.todos.list.query());
+        setIsSubmitting(false);
     }
 
     return (
@@ -50,14 +34,7 @@ export default function TodoListTrpcPage() {
             <h1>Todo List (tRPC)</h1>
             <p>Your personal todo list, backed by tRPC.</p>
             {todos === undefined ? (
-                <>
-                    {!error && <p>Loading todos...</p>}
-                    {error && (
-                        <button type="button" onClick={() => setReload(value => value + 1)}>
-                            Try again
-                        </button>
-                    )}
-                </>
+                <p>Loading todos...</p>
             ) : (
                 <>
                     {todos.length === 0 ? (
@@ -86,7 +63,6 @@ export default function TodoListTrpcPage() {
                     </form>
                 </>
             )}
-            {error && <p role="alert">{error}</p>}
         </>
     );
 }
