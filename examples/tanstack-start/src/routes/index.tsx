@@ -140,9 +140,9 @@ function Home() {
                             <a href={`${sourceUrl}/src/routes/_authenticated/todo-list-api.tsx`}>
                                 client page
                             </a>{" "}
-                            retrieves an access token with <code>getOidc()</code> and sends it in the{" "}
-                            <code>Authorization: Bearer …</code> header. Both approaches expose the
-                            backend user as <code>context.oidc.user</code>.
+                            uses <code>fetchWithAuth()</code> from <code>src/oidc.ts</code> to attach the
+                            access token. Both approaches expose the backend user as{" "}
+                            <code>context.oidc.user</code>.
                         </p>
                     </li>
                     <li>

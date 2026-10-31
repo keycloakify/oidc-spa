@@ -1,14 +1,11 @@
 "use client";
 
 import { useEffect, useState, type SubmitEvent } from "react";
-import { getOidc } from "@/lib/oidc";
+import { fetchWithAuth } from "@/lib/oidc";
 import type { TodoItem } from "@/lib/server/data/todos";
 
 async function getTodos(): Promise<TodoItem[]> {
-    const oidc = await getOidc({ assert: "user logged in" });
-    const response = await fetch(`${process.env.__NEXT_ROUTER_BASEPATH}/api/todos`, {
-        headers: { Authorization: `Bearer ${await oidc.getAccessToken()}` }
-    });
+    const response = await fetchWithAuth(`${process.env.__NEXT_ROUTER_BASEPATH}/api/todos`);
 
     return response.json();
 }
@@ -32,13 +29,9 @@ export default function TodoListApiPage() {
         event.preventDefault();
         if (isSubmitting || newTodo.trim() === "") return;
         setIsSubmitting(true);
-        const oidc = await getOidc({ assert: "user logged in" });
-        await fetch(`${process.env.__NEXT_ROUTER_BASEPATH}/api/todos`, {
+        await fetchWithAuth(`${process.env.__NEXT_ROUTER_BASEPATH}/api/todos`, {
             method: "POST",
-            headers: {
-                Authorization: `Bearer ${await oidc.getAccessToken()}`,
-                "Content-Type": "application/json"
-            },
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ name: newTodo })
         });
 

@@ -1,14 +1,11 @@
 import { useState, type SubmitEvent } from "react";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
-import { getOidc } from "~/oidc";
+import { fetchWithAuth } from "~/oidc";
 import type { TodoItem } from "~/data/todos";
 
 export const Route = createFileRoute("/_authenticated/todo-list-api")({
     loader: async () => {
-        const oidc = await getOidc({ assert: "user logged in" });
-        const response = await fetch("/api/todos", {
-            headers: { Authorization: `Bearer ${await oidc.getAccessToken()}` }
-        });
+        const response = await fetchWithAuth("/api/todos");
 
         const todos: TodoItem[] = await response.json();
         return todos;
@@ -32,14 +29,9 @@ function TodoList() {
 
         setIsSubmitting(true);
 
-        const oidc = await getOidc({ assert: "user logged in" });
-
-        await fetch("/api/todos", {
+        await fetchWithAuth("/api/todos", {
             method: "POST",
-            headers: {
-                Authorization: `Bearer ${await oidc.getAccessToken()}`,
-                "Content-Type": "application/json"
-            },
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ name: newTodo })
         });
 

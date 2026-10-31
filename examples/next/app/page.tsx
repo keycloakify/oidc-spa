@@ -156,8 +156,8 @@ export default function HomePage() {
                             <a href={`${sourceUrl}/app/(protected)/todo-list-api/page.tsx`}>
                                 API todo page
                             </a>{" "}
-                            calls <code>getOidc()</code> and attaches the access token to ordinary{" "}
-                            <code>fetch()</code> requests. The{" "}
+                            uses <code>fetchWithAuth()</code> from <code>lib/oidc.tsx</code> to attach
+                            the access token to ordinary fetch requests. The{" "}
                             <a href={`${sourceUrl}/app/api/todos/route.ts`}>
                                 <code>/api/todos</code> Route Handler
                             </a>{" "}
