@@ -24,8 +24,8 @@ Open <http://app.localhost:3000>. npm and pnpm work too. The development command
 port 3000 and Express on port 3001. Angular proxies `/api/**` to Express, so browser requests use the
 same origin. Keep port 3000 free when running this example.
 
-Installation creates `.env` from `.env.sample` if it does not exist. Choose `OIDC_PROVIDER` and configure
-the matching variables: `Keycloak`, `Keycloak2` (introspection), `Auth0`, `EntraID`, or `mock`.
+In the tracked `.env` file, choose `OIDC_PROVIDER` and configure the matching variables:
+`Keycloak`, `Keycloak2` (introspection), `Auth0`, `EntraID`, or `mock`.
 `OIDC_PROVIDER=mock` starts with a signed-in mock admin without an identity provider. Mock mode is only
 for development.
 

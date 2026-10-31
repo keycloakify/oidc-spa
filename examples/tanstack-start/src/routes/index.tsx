@@ -83,15 +83,15 @@ function Home() {
                             <code>issuerUri</code>.
                         </p>
                         <p>
-                            Copy{" "}
-                            <a href={`${sourceUrl}/.env.sample`}>
-                                <code>.env.sample</code>
+                            Edit{" "}
+                            <a href={`${sourceUrl}/.env`}>
+                                <code>.env</code>
                             </a>{" "}
-                            to <code>.env</code>, choose <code>OIDC_PROVIDER</code>, and fill in the
-                            matching settings. This example includes Keycloak, Auth0, Microsoft Entra ID,
-                            and a mock mode. <code>Keycloak2</code> demonstrates introspection. Provider
-                            settings are read at runtime, so you can switch between the configured
-                            providers without changing the routes or rebuilding the app.
+                            to choose <code>OIDC_PROVIDER</code> and fill in the matching settings. This
+                            example includes Keycloak, Auth0, Microsoft Entra ID, and a mock mode.{" "}
+                            <code>Keycloak2</code> demonstrates introspection. Provider settings are read
+                            at runtime, so you can switch between the configured providers without
+                            changing the routes or rebuilding the app.
                         </p>
                         <p className="guide-note">
                             To explore locally without an identity provider, set{" "}

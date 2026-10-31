@@ -43,8 +43,7 @@ __screenshots__/
 .DS_Store
 Thumbs.db
 
-# Runtime configuration and local todo storage
-/.env
+# Local todo storage
 /todos_*.json
 
 # Each example supports npm, Yarn, and pnpm.

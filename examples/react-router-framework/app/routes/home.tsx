@@ -59,10 +59,9 @@ export default function HomePage() {
                     <li>
                         <h3>Choose a provider through configuration</h3>
                         <p>
-                            Installation copies <code>.env.sample</code> to <code>.env</code> if it does
-                            not exist. Choose <code>VITE_OIDC_PROVIDER</code>: Keycloak, Auth0, Microsoft
-                            Entra ID, or mock mode. <code>Keycloak2</code> demonstrates introspection
-                            instead of offline JWT validation.
+                            In <code>.env</code>, choose <code>VITE_OIDC_PROVIDER</code>: Keycloak,
+                            Auth0, Microsoft Entra ID, or mock mode. <code>Keycloak2</code> demonstrates
+                            introspection instead of offline JWT validation.
                         </p>
                         <p>
                             Browser authentication in <code>app/oidc.ts</code> and token validation in{" "}

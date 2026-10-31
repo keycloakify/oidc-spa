@@ -7,7 +7,6 @@
         "build": "next build",
         "start": "next start",
         "lint": "eslint",
-        "prepare": "node scripts/setup-env.mjs",
         "typecheck": "next typegen && tsc --noEmit"
     },
     "dependencies": {

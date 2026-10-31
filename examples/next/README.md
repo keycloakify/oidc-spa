@@ -32,11 +32,8 @@ yarn dev
 ```
 
 Open <http://app.localhost:3000>. npm and pnpm work too.
-Installation creates `.env.local` from `.env.local.sample` if it does not exist.
-If upgrading an older copy of this example, update your existing `.env.local` to match the new sample.
-
-Choose `NEXT_PUBLIC_OIDC_PROVIDER` and configure the matching variables. The options are `Keycloak`,
-`Keycloak2` (introspection), `Auth0`, `EntraID`, and `mock`. Set
+In the tracked `.env` file, choose `NEXT_PUBLIC_OIDC_PROVIDER` and configure the matching variables.
+The options are `Keycloak`, `Keycloak2` (introspection), `Auth0`, `EntraID`, and `mock`. Set
 `NEXT_PUBLIC_OIDC_PROVIDER=mock` to start as a signed-in mock admin without an identity provider.
 Restart the dev server after changing these settings.
 

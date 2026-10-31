@@ -34,6 +34,9 @@ yarn dev
 
 Open <http://app.localhost:3000>.
 
+In the tracked `.env` file, choose `OIDC_PROVIDER` and configure the matching variables.
+Set `OIDC_PROVIDER=mock` to try the example without an identity provider.
+
 To run against the local oidc-spa source, run this from the repository root:
 
 ```sh

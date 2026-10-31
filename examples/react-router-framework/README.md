@@ -21,8 +21,8 @@ server loaders or middleware. The browser then requests authenticated loader dat
 matching the production loading flow. No custom development plugin or
 `optimizeDeps.include` configuration is needed.
 
-Postinstall copies `.env.sample` to `.env` only when `.env` does not exist. Choose
-`VITE_OIDC_PROVIDER`: Keycloak, Keycloak with token introspection, Auth0, Microsoft
+In the tracked `.env` file, choose `VITE_OIDC_PROVIDER`:
+Keycloak, Keycloak with token introspection, Auth0, Microsoft
 Entra ID, or mock mode. For a demonstration without an identity provider, use
 `VITE_OIDC_PROVIDER=mock`.
 

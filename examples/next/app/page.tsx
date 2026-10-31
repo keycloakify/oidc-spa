@@ -72,12 +72,12 @@ export default function HomePage() {
                     <li>
                         <h3>Choose a provider through configuration</h3>
                         <p>
-                            Copy{" "}
-                            <a href={`${sourceUrl}/.env.local.sample`}>
-                                <code>.env.local.sample</code>
+                            Edit{" "}
+                            <a href={`${sourceUrl}/.env`}>
+                                <code>.env</code>
                             </a>{" "}
-                            to <code>.env.local</code> and choose <code>NEXT_PUBLIC_OIDC_PROVIDER</code>.
-                            This example includes Keycloak, Auth0, Microsoft Entra ID, and mock mode.
+                            and choose <code>NEXT_PUBLIC_OIDC_PROVIDER</code>. This example includes
+                            Keycloak, Auth0, Microsoft Entra ID, and mock mode.
                             <code> Keycloak2</code> demonstrates token introspection instead of offline
                             JWT validation. The pages and backend handlers stay the same across
                             providers.

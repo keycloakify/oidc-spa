@@ -4,7 +4,6 @@
     "sideEffects": false,
     "type": "module",
     "scripts": {
-        "postinstall": "[ ! -f .env ] && cp .env.sample .env || true",
         "dev": "vite dev",
         "build": "vite build && tsc --noEmit",
         "preview": "vite preview",
