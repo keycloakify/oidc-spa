@@ -8,7 +8,13 @@ export default defineConfig({
         host: "app.localhost",
         port: 3000,
         strictPort: true,
-        proxy: { "/api": "http://127.0.0.1:3001" }
+        proxy: {
+            "/api": {
+                target: "http://127.0.0.1:3001",
+                // Preserve the browser-facing host for DPoP proof validation.
+                changeOrigin: false
+            }
+        }
     },
     plugins: [
         tanstackRouter({ target: "react", autoCodeSplitting: true }),

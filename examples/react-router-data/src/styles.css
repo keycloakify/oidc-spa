@@ -1,0 +1,392 @@
+:root {
+    color-scheme: dark;
+    --background: #0c0a09;
+    --surface: #191716;
+    --border: #302b29;
+    --muted: #a8a29e;
+    --accent: #d580e5;
+    --danger: #fca5a5;
+    font-family: system-ui, sans-serif;
+    color: #fafaf9;
+    background: var(--background);
+}
+
+* {
+    box-sizing: border-box;
+}
+body {
+    margin: 0;
+}
+a {
+    color: var(--accent);
+    text-underline-offset: 4px;
+}
+h1 {
+    margin: 0 0 0.75rem;
+    font-size: 2rem;
+    font-weight: 600;
+    letter-spacing: -0.04em;
+}
+h2 {
+    font-size: 1rem;
+    font-weight: 600;
+}
+p {
+    color: var(--muted);
+    line-height: 1.7;
+}
+button,
+input {
+    min-height: 2.5rem;
+    padding: 0.5rem 0.875rem;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    font: inherit;
+}
+button {
+    background: var(--surface);
+    color: inherit;
+    cursor: pointer;
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+button:hover:not(:disabled) {
+    background: #292524;
+}
+button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+button[type="submit"],
+.button-primary {
+    border-color: #8621a0;
+    background: #8621a0;
+    color: white;
+}
+button[type="submit"]:hover:not(:disabled),
+.button-primary:hover:not(:disabled) {
+    background: #9c2db7;
+}
+.button-danger {
+    color: var(--danger);
+}
+input {
+    min-width: 0;
+    width: 100%;
+    background: var(--background);
+    color: inherit;
+}
+input::placeholder {
+    color: #78716c;
+}
+label {
+    font-size: 0.875rem;
+    color: var(--muted);
+}
+:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 4px;
+}
+
+/* Shared layout keeps presentation out of the auth examples. */
+.app-header {
+    border-bottom: 1px solid var(--border);
+}
+.header-inner {
+    display: flex;
+    align-items: center;
+    gap: 2rem;
+    max-width: 1120px;
+    min-height: 5rem;
+    margin: auto;
+    padding: 1rem 1.5rem;
+}
+.brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.625rem;
+    flex-shrink: 0;
+    color: inherit;
+    font-weight: 650;
+    text-decoration: none;
+}
+.brand::before {
+    content: "";
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 50%;
+    background: var(--accent);
+}
+.app-header nav {
+    display: flex;
+    align-items: center;
+    flex: 1;
+    gap: 0.25rem;
+    min-width: 0;
+}
+.app-header nav a {
+    padding: 0.5rem 0.625rem;
+    border-radius: 6px;
+    color: var(--muted);
+    font-size: 0.8125rem;
+    text-decoration: none;
+    white-space: nowrap;
+}
+.app-header nav a:hover,
+.app-header nav a[aria-current="page"] {
+    color: #fafaf9;
+    background: var(--surface);
+}
+.actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.625rem;
+}
+.avatar {
+    display: block;
+    border-radius: 50%;
+}
+.avatar img {
+    display: block;
+    border: 1px solid var(--border);
+    border-radius: inherit;
+    object-fit: cover;
+}
+main {
+    width: min(100% - 3rem, 48rem);
+    margin: 4.5rem auto;
+}
+
+.example-links {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+    margin-top: 2rem;
+}
+.example-links a {
+    position: relative;
+    padding: 1.5rem;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface);
+    color: inherit;
+    text-decoration: none;
+}
+.example-links a:hover {
+    border-color: var(--accent);
+}
+.example-links a::after {
+    content: "↗";
+    position: absolute;
+    top: 1.25rem;
+    right: 1.25rem;
+    color: var(--accent);
+}
+.example-links strong {
+    display: block;
+    padding-right: 1rem;
+    font-weight: 550;
+}
+.example-links span {
+    display: block;
+    margin-top: 0.75rem;
+    color: var(--muted);
+    font-size: 0.875rem;
+    line-height: 1.6;
+}
+
+/* The home page doubles as a short integration guide. */
+.home-guide code {
+    color: var(--accent);
+    font-size: 0.875em;
+    overflow-wrap: anywhere;
+}
+.home-guide section > h2 {
+    margin: 3rem 0 2rem;
+    font-size: 1.25rem;
+    letter-spacing: -0.02em;
+}
+.home-guide ol {
+    padding-left: 2rem;
+    list-style-type: decimal-leading-zero;
+}
+.home-guide li {
+    padding-left: 0.75rem;
+    margin-bottom: 2rem;
+}
+.home-guide li::marker {
+    color: var(--accent);
+    font-size: 0.875rem;
+}
+.home-guide li + li {
+    padding-top: 2rem;
+    border-top: 1px solid var(--border);
+}
+.home-guide h3 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+}
+.home-guide pre {
+    padding: 1rem;
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    background: var(--surface);
+    font-size: 0.8125rem;
+    line-height: 1.7;
+}
+.home-guide pre code {
+    color: inherit;
+    font-size: inherit;
+}
+.guide-note {
+    padding-left: 1rem;
+    border-left: 2px solid var(--accent);
+}
+.guide-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem 2rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border);
+    font-size: 0.875rem;
+}
+
+.todo-list {
+    margin: 2rem 0;
+    padding: 0;
+    list-style: none;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface);
+}
+.todo-list li {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.875rem 1rem;
+    overflow-wrap: anywhere;
+}
+.todo-list li + li {
+    border-top: 1px solid var(--border);
+}
+.todo-list button {
+    flex-shrink: 0;
+}
+.todo-form {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.625rem;
+    margin-top: 2rem;
+}
+.todo-form label {
+    grid-column: 1 / -1;
+}
+.empty-state {
+    margin: 2rem 0;
+    padding: 2rem;
+    border: 1px dashed var(--border);
+    border-radius: 10px;
+    text-align: center;
+}
+.todo-group {
+    margin-top: 2.5rem;
+}
+.todo-group h2 {
+    overflow-wrap: anywhere;
+}
+.todo-group code {
+    color: var(--muted);
+    font-size: 0.8125rem;
+    font-weight: 400;
+}
+.todo-group .todo-list {
+    margin-top: 1rem;
+}
+
+dl {
+    display: grid;
+    grid-template-columns: 6rem minmax(0, 1fr);
+    gap: 1rem;
+    margin: 2rem 0;
+    padding: 1.5rem;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface);
+}
+dt {
+    color: var(--muted);
+}
+dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+p[role="alert"] {
+    color: var(--danger);
+}
+.session-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: grid;
+    place-items: center;
+    padding: 1.5rem;
+    background: rgb(0 0 0 / 70%);
+    backdrop-filter: blur(6px);
+}
+.session-overlay > div {
+    width: min(100%, 24rem);
+    padding: 2rem;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface);
+}
+.session-overlay h2 {
+    margin-top: 0;
+    font-size: 1.25rem;
+}
+.session-overlay p {
+    margin-bottom: 0;
+}
+
+@media (max-width: 860px) {
+    .header-inner {
+        flex-wrap: wrap;
+        gap: 0.75rem;
+    }
+    .brand {
+        margin-right: auto;
+    }
+    .app-header nav {
+        order: 1;
+        flex-basis: 100%;
+        flex-wrap: wrap;
+        padding: 0.25rem 0;
+    }
+}
+
+@media (max-width: 520px) {
+    .header-inner {
+        padding-inline: 1rem;
+    }
+    main {
+        width: calc(100% - 2rem);
+        margin-top: 2.5rem;
+    }
+    h1 {
+        font-size: 1.75rem;
+    }
+    .example-links {
+        grid-template-columns: 1fr;
+    }
+    dl {
+        grid-template-columns: 1fr;
+        gap: 0.5rem;
+    }
+    dd + dt {
+        margin-top: 0.5rem;
+    }
+}
