@@ -222,12 +222,16 @@ export function createLoginOrStartAuthorization(params: {
             }
         });
 
+        const isNonInteractive =
+            params.action === "login" && params.interaction === "ensure no interaction";
+
         const stateData: StateData.Redirect = {
             context: "redirect",
             rootRelativeReturnToUrl,
             authorizationParams: {},
             configId,
             action: "login",
+            isNonInteractive,
             returnToUrl_external
         };
 
@@ -278,8 +282,7 @@ export function createLoginOrStartAuthorization(params: {
                             params.transformAuthorizationUrl_paramOfLoginOrStartAuthorization,
                         transformAuthorizationUrl_paramOfCreateOidc,
                         getAuthorizationParams_paramsOfCreateOidc,
-                        isNonInteractive:
-                            params.action === "login" && params.interaction === "ensure no interaction",
+                        isNonInteractive,
                         setStateDataAuthorizationParams: ({ authorizationParams }) => {
                             stateData.authorizationParams = authorizationParams;
                         }

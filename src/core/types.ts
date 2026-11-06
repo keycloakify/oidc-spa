@@ -256,7 +256,7 @@ export declare namespace Oidc {
     };
 }
 
-export type ParamsOfCreateOidc<User, AutoLogin extends boolean> = {
+export type ParamsOfCreateOidc<User> = {
     createUser?: CreateUser<User>;
 
     /**
@@ -417,24 +417,10 @@ export type ParamsOfCreateOidc<User, AutoLogin extends boolean> = {
      * To enable DPoP see: https://docs.oidc-spa.dev/v/v10/security-features/dpop
      */
     disableDPoP?: true;
-
-    autoLogin?: AutoLogin;
-
-    /**
-     * Where the user should be returned after a successful automatic login.
-     *
-     * This option takes effect only when `autoLogin` is true. Otherwise, pass `returnToUrl`
-     * directly to `login()`.
-     *
-     * This is useful, for example, when using multiple OIDC clients for different resource
-     * servers without iframe support.
-     */
-    autoLogin_returnToUrl?: string;
 };
 
-export type ParamsOfCreateMockOidc<User, AutoLogin extends boolean> = {
+export type ParamsOfCreateMockOidc<User> = {
     createUser_mock?: CreateUser<User>;
-    autoLogin?: AutoLogin;
     /** Default: true */
     isUserInitiallyLoggedIn?: boolean;
     issuerUri_mock?: string;
@@ -443,7 +429,6 @@ export type ParamsOfCreateMockOidc<User, AutoLogin extends boolean> = {
     idToken_mock?: string;
     accessToken_mock?: string;
     refreshToken_mock?: string;
-    autoLogin_returnToUrl?: string;
 };
 
 export type OidcTokens = OidcTokens.WithRefreshToken | OidcTokens.WithoutRefreshToken;
