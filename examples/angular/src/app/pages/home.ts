@@ -93,6 +93,12 @@ import { RouterLink } from '@angular/router';
               is denied.
             </p>
             <p>
+              When authentication cannot be initialized, the guard throws an
+              <code>OidcInitializationError</code>. The router's
+              <code>withNavigationErrorHandler()</code> in <code>app.config.ts</code> displays an
+              alert with the error message and redirects home.
+            </p>
+            <p>
               In
               <a [href]="sourceUrl + '/src/app/services/todo.service.ts'"
                 ><code>todo.service.ts</code></a

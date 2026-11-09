@@ -55,7 +55,6 @@ export function createLoginSilent(params: {
         | undefined;
 
     tokenParams: Record<string, string | string[] | undefined> | undefined;
-    autoLogin: boolean;
     log: typeof console.log | undefined;
 }) {
     const {
@@ -66,7 +65,6 @@ export function createLoginSilent(params: {
         transformAuthorizationUrl_paramOfCreateOidc,
         getAuthorizationParams_paramsOfCreateOidc,
         tokenParams,
-        autoLogin,
         log
     } = params;
 
@@ -90,7 +88,7 @@ export function createLoginSilent(params: {
             const downlinkAndRtt = getDownlinkAndRtt();
 
             // Base delay is the minimum delay we should wait in any case
-            const BASE_DELAY_MS = isDev ? 9_000 : autoLogin ? 25_000 : 7_000;
+            const BASE_DELAY_MS = isDev ? 9_000 : 7_000;
 
             if (downlinkAndRtt === undefined) {
                 return BASE_DELAY_MS;

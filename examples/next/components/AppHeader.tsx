@@ -34,6 +34,8 @@ export function AppHeader() {
 function AuthButtons() {
     const oidc = useOidc();
 
+    if (oidc.initializationError !== undefined) return null;
+
     return oidc.isUserLoggedIn ? <AuthButtonsLoggedIn /> : <AuthButtonsNotLoggedIn />;
 }
 

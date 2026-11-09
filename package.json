@@ -15,7 +15,7 @@
         "test:react-router-bootstrap": "node --test scripts/tests/react-router-bootstrap.test.mjs scripts/tests/react-router-bootstrap.integration.mjs",
         "test:react-nextjs": "tsc --project tests/react-nextjs/tsconfig.json",
         "test:tanstack-start-runtime-configs": "tsx scripts/tests/tanstack-start-runtime-configs.test.ts && tsc --project tests/tanstack-start-runtime-configs/tsconfig.json",
-        "test:tanstack-start-auth": "node --test scripts/tests/tanstack-start-auth.integration.mjs",
+        "test:tanstack-start-auth": "node --test scripts/tests/tanstack-start-client.test.mjs scripts/tests/tanstack-start-auth.integration.mjs",
         "_format": "prettier '**/*.{ts,tsx,json,md}'",
         "format": "yarn _format --write",
         "format:check": "yarn _format --list-different",

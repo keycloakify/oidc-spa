@@ -3,16 +3,9 @@ import { createUtils } from "./createUtils";
 import { assert } from "../tools/tsafe/assert";
 import type { OptionallyAsyncGetterOrDirectValue } from "../tools/GetterOrDirectValue";
 
-export type OidcSpa<
-    User,
-    AutoLogin extends boolean,
-    Excluded extends "withAutoLogin" | "withUser" | "withRuntimeConfigs" = never
-> = Omit<
+export type OidcSpa<User, Excluded extends "withUser" | "withRuntimeConfigs" = never> = Omit<
     {
-        withAutoLogin: () => OidcSpa<User, true, Excluded | "withAutoLogin">;
-        withUser: <User>(
-            createUser: CreateClientUser<User>
-        ) => OidcSpa<User, AutoLogin, Excluded | "withUser">;
+        withUser: <User>(createUser: CreateClientUser<User>) => OidcSpa<User, Excluded | "withUser">;
     },
     Excluded
 > &
@@ -23,32 +16,24 @@ export type OidcSpa<
                       void,
                       RuntimeConfigs
                   >
-              ) => OidcSpa<User, AutoLogin, Excluded | "withRuntimeConfigs">;
+              ) => OidcSpa<User, Excluded | "withRuntimeConfigs">;
           }
         : {}) &
     ("withRuntimeConfigs" extends Excluded
         ? {
-              createUtils: () => OidcSpaUtils<User, AutoLogin>;
+              createUtils: () => OidcSpaUtils<User>;
           }
         : {});
 
-function createOidcSpa<User, AutoLogin extends boolean>(params: {
-    autoLogin: AutoLogin;
+function createOidcSpa<User>(params: {
     createUser: CreateClientUser<User> | undefined;
     getRuntimeConfigsOrRuntimeConfigs:
         | OptionallyAsyncGetterOrDirectValue<void, RuntimeConfigs>
         | undefined;
-}): OidcSpa<User, AutoLogin> {
+}): OidcSpa<User> {
     return {
-        withAutoLogin: () =>
-            createOidcSpa({
-                autoLogin: true,
-                createUser: params.createUser,
-                getRuntimeConfigsOrRuntimeConfigs: params.getRuntimeConfigsOrRuntimeConfigs
-            }),
         withUser: createUser =>
             createOidcSpa({
-                autoLogin: params.autoLogin,
                 createUser,
                 getRuntimeConfigsOrRuntimeConfigs: params.getRuntimeConfigsOrRuntimeConfigs
             }) as any,
@@ -64,7 +49,6 @@ function createOidcSpa<User, AutoLogin extends boolean>(params: {
             assert(params.createUser !== undefined);
             assert(params.getRuntimeConfigsOrRuntimeConfigs !== undefined);
             return createUtils({
-                autoLogin: params.autoLogin,
                 createUser: params.createUser,
                 getRuntimeConfigsOrRuntimeConfigs: params.getRuntimeConfigsOrRuntimeConfigs
             });
@@ -72,8 +56,7 @@ function createOidcSpa<User, AutoLogin extends boolean>(params: {
     };
 }
 
-export const oidcSpa = createOidcSpa<unknown, false>({
-    autoLogin: false,
+export const oidcSpa = createOidcSpa<unknown>({
     createUser: undefined,
     getRuntimeConfigsOrRuntimeConfigs: undefined
 });

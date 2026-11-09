@@ -1,7 +1,12 @@
 import { ApplicationConfig, inject, provideBrowserGlobalErrorListeners } from '@angular/core';
 import { HttpClient, provideHttpClient, withInterceptors } from '@angular/common/http';
-import { provideRouter, Router } from '@angular/router';
-import type { RuntimeConfigs } from 'oidc-spa/angular';
+import {
+  provideRouter,
+  RedirectCommand,
+  Router,
+  withNavigationErrorHandler,
+} from '@angular/router';
+import { OidcInitializationError, type RuntimeConfigs } from 'oidc-spa/angular';
 import { firstValueFrom } from 'rxjs';
 import { routes } from './app.routes';
 import { createOidcInterceptor, provideOidc, REQUIRE_ACCESS_TOKEN } from './oidc';
@@ -9,7 +14,18 @@ import { createOidcInterceptor, provideOidc, REQUIRE_ACCESS_TOKEN } from './oidc
 export const appConfig: ApplicationConfig = {
   providers: [
     provideBrowserGlobalErrorListeners(),
-    provideRouter(routes),
+    provideRouter(
+      routes,
+      // enforceLoginGuard throws on protected navigation if OIDC initialization failed.
+      // Public pages remain accessible, so show the error and redirect to the home page.
+      withNavigationErrorHandler(({ error }) => {
+        if (error instanceof OidcInitializationError) {
+          alert(error.message);
+          return new RedirectCommand(inject(Router).parseUrl('/'));
+        }
+        return undefined;
+      })
+    ),
     provideHttpClient(
       withInterceptors([
         createOidcInterceptor({

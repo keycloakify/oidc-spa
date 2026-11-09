@@ -42,7 +42,6 @@ export const { provideOidc, injectOidc, getOidc, createOidcInterceptor, enforceL
         canSeeAdminNavigation: roles?.includes('admin') ?? false,
       };
     })
-    // .withAutoLogin()
     .createUtils();
 
 // Requests explicitly opt in to authentication; public requests carry no access token.

@@ -82,8 +82,7 @@ const globalContext = {
     dExports_earlyInit: new Deferred<Exports_earlyInit>(),
     dExports_tokenSubstitution: new Deferred<Exports_tokenSubstitution>(),
     dExports_DPoP: new Deferred<Exports_DPoP>(),
-    mutex: new Mutex(),
-    createErroredOidcNotLoggedIn_cache: new WeakMap<OidcInitializationError, Oidc.NotLoggedIn>()
+    mutex: new Mutex()
 };
 
 export type Exports_earlyInit = Exports_earlyInit.ShouldNotLoadApp | Exports_earlyInit.ShouldLoadApp;
@@ -157,9 +156,9 @@ export function registerExports_DPoP(exports: Exports_DPoP): void {
     globalContext.dExports_DPoP.resolve(exports);
 }
 /** @see: https://docs.oidc-spa.dev/v/v10/usage */
-export async function createOidc<User = undefined, AutoLogin extends boolean = false>(
-    params: ParamsOfCreateOidc<User, AutoLogin>
-): Promise<AutoLogin extends true ? Oidc.LoggedIn<User> : Oidc<User>> {
+export async function createOidc<User = undefined>(
+    params: ParamsOfCreateOidc<User>
+): Promise<Oidc<User>> {
     const releaseMutex = await globalContext.mutex.acquire();
 
     try {
@@ -265,7 +264,7 @@ export async function createOidc<User = undefined, AutoLogin extends boolean = f
             | undefined => {
             const propertyName = "authorizationParams";
 
-            assert<typeof propertyName extends keyof ParamsOfCreateOidc<unknown, true> ? true : false>;
+            assert<typeof propertyName extends keyof ParamsOfCreateOidc<unknown> ? true : false>;
 
             const pd = Object.getOwnPropertyDescriptor(params, propertyName);
 
@@ -392,58 +391,6 @@ export async function createOidc<User = undefined, AutoLogin extends boolean = f
                 ].join(" ")
             );
 
-            if (params.autoLogin) {
-                let oidc: Oidc<any>;
-
-                try {
-                    oidc = await prOidc;
-                } catch (error) {
-                    // @ts-expect-error: We know what we're doing
-                    return prOidc;
-                }
-
-                if (!oidc.isUserLoggedIn) {
-                    if (oidc.initializationError !== undefined) {
-                        window.location.reload();
-                        await new Promise<never>(() => {});
-                    }
-
-                    await oidc.login({
-                        doesCurrentHrefEnforceLogin: true,
-                        returnToUrl: params.autoLogin_returnToUrl
-                    });
-                    assert(false, "3333933");
-                }
-            } else {
-                let initializationError: OidcInitializationError | undefined;
-
-                try {
-                    await prOidc;
-                    initializationError = undefined;
-                } catch (error) {
-                    if (!(error instanceof OidcInitializationError)) {
-                        throw error;
-                    }
-
-                    initializationError = error;
-                }
-
-                if (initializationError !== undefined) {
-                    const oidc = createErroredOidcNotLoggedIn({
-                        oidc_common: {
-                            clientId,
-                            issuerUri,
-                            validRedirectUri: homeUrlAndRedirectUri
-                        },
-                        initializationError
-                    });
-
-                    // @ts-expect-error: We know what we're doing
-                    return oidc;
-                }
-            }
-
-            // @ts-expect-error: We know what we're doing
             return prOidc;
         }
 
@@ -462,35 +409,38 @@ export async function createOidc<User = undefined, AutoLogin extends boolean = f
             )}`
         );
 
-        let oidc: Oidc<User>;
+        createOidc_nonMemoized<User>({
+            params_forwarded: rest,
+            params_preProcesses: {
+                issuerUri,
+                clientId,
+                configId,
+                getAuthorizationParams,
+                tokenParams,
+                oidcProviderMetadata,
+                exports_earlyInit,
+                homeUrlAndRedirectUri,
+                response_mode,
+                scopes,
+                isFirstInstance: prOidcByConfigId.size === 1,
+                log
+            }
+        }).then(
+            oidc => {
+                dOidc.resolve(oidc);
+            },
+            error => {
+                //TODO: Make sure that the following invariant is enforced:
+                // The consumer should be able to subscribe to this rejection
+                // before we call this.
+                // We want to avoid unavoidable unhandled rejection.
+                // Like with createOidc({...}).catch(error => {}), the catch should
+                // has been executed before the following line.
+                dOidc.reject(error);
+            }
+        );
 
-        try {
-            oidc = await createOidc_nonMemoized<User, AutoLogin>({
-                params_forwarded: rest,
-                params_preProcesses: {
-                    issuerUri,
-                    clientId,
-                    configId,
-                    getAuthorizationParams,
-                    tokenParams,
-                    oidcProviderMetadata,
-                    exports_earlyInit,
-                    homeUrlAndRedirectUri,
-                    response_mode,
-                    scopes,
-                    log
-                }
-            });
-        } catch (error) {
-            dOidc.reject(error);
-            // @ts-expect-error
-            return dOidc.pr;
-        }
-
-        dOidc.resolve(oidc);
-
-        // @ts-expect-error
-        return oidc;
+        return dOidc.pr;
     } finally {
         releaseMutex();
     }
@@ -498,9 +448,9 @@ export async function createOidc<User = undefined, AutoLogin extends boolean = f
 
 const A_HUNDRED_YEARS_IN_SECONDS = 3600 * 24 * 365 * 100;
 
-export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(params: {
+export async function createOidc_nonMemoized<User>(params: {
     params_forwarded: Omit<
-        ParamsOfCreateOidc<User, AutoLogin>,
+        ParamsOfCreateOidc<User>,
         | "issuerUri"
         | "clientId"
         | "debugLogs"
@@ -522,19 +472,18 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
         homeUrlAndRedirectUri: string;
         response_mode: "fragment" | "query";
         scopes: string[];
+        isFirstInstance: boolean;
         log: typeof console.log | undefined;
     };
-}): Promise<AutoLogin extends true ? Oidc.LoggedIn<User> : Oidc<User>> {
+}): Promise<Oidc<User>> {
     const { params_forwarded, params_preProcesses } = params;
     const {
         sessionRestorationMethod = "auto",
         disableDPoP: disableDPoP_params = false,
         transformAuthorizationUrl,
-        autoLogin = false,
         createUser,
         idleSessionLifetimeInSeconds,
         autoLogout_returnToUrl,
-        autoLogin_returnToUrl,
         warnUserSecondsBeforeAutoLogout = 30
     } = params_forwarded;
 
@@ -549,6 +498,7 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
         homeUrlAndRedirectUri,
         response_mode,
         scopes,
+        isFirstInstance,
         log
     } = params_preProcesses;
 
@@ -892,7 +842,6 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
         transformAuthorizationUrl_paramOfCreateOidc: transformAuthorizationUrl,
         getAuthorizationParams_paramsOfCreateOidc: getAuthorizationParams,
         tokenParams,
-        autoLogin,
         log
     });
 
@@ -1023,13 +972,13 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
                             }
 
                             if (authResponse.error !== undefined) {
-                                errorAuthResponse_fromForegroundRedirect = {
-                                    error: authResponse.error,
-                                    error_description: authResponse.error_description || undefined
-                                };
-                                log?.(
-                                    `The auth server responded with: ${errorAuthResponse_fromForegroundRedirect.error}`
-                                );
+                                log?.(`The auth server responded with: ${authResponse.error}`);
+                                if (!stateData.isNonInteractive) {
+                                    errorAuthResponse_fromForegroundRedirect = {
+                                        error: authResponse.error,
+                                        error_description: authResponse.error_description || undefined
+                                    };
+                                }
                                 break handle_redirect_auth_response;
                             }
 
@@ -1142,46 +1091,28 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
         silent_login_if_possible_and_auto_login: {
             const persistedAuthState = getPersistedAuthState({ configId });
 
-            if (persistedAuthState === "explicitly logged out" && !autoLogin) {
+            if (persistedAuthState === "explicitly logged out") {
                 log?.("Skipping session restoration completely, the user is explicitly logged out.");
                 break silent_login_if_possible_and_auto_login;
             }
 
             {
-                const { isOnline, prOnline } = getIsOnline();
+                const { isOnline } = getIsOnline();
 
                 if (!isOnline) {
-                    if (autoLogin) {
-                        log?.(
-                            [
-                                "The browser is currently offline",
-                                "Since autoLogin is enabled we wait until it comes back online",
-                                "to continue with authentication"
-                            ].join(" ")
-                        );
-                        await prOnline;
-                    } else {
-                        log?.(
-                            [
-                                "The browser is not currently online so we proceed with initialization",
-                                "assuming the user isn't authenticated"
-                            ].join(" ")
-                        );
-                        break silent_login_if_possible_and_auto_login;
-                    }
+                    log?.(
+                        [
+                            "The browser is not currently online so we proceed with initialization",
+                            "assuming the user isn't authenticated"
+                        ].join(" ")
+                    );
+                    break silent_login_if_possible_and_auto_login;
                 }
             }
 
             let oidcClientTsUser: OidcClientTsUser | undefined = undefined;
 
             actual_silent_signin: {
-                if (persistedAuthState === "explicitly logged out") {
-                    log?.(
-                        "Skipping session restoration via iframe (silent signin), the user is explicitly logged out."
-                    );
-                    break actual_silent_signin;
-                }
-
                 if (!canUseIframe) {
                     log?.("Skipping session restoration via iframe (can't use iframe)");
                     break actual_silent_signin;
@@ -1266,74 +1197,27 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
             }
 
             foreground_redirect: {
-                const { doPerformeForgroundRedirect, interaction } = (():
-                    | {
-                          doPerformeForgroundRedirect: false;
-                          interaction?: never;
-                      }
-                    | {
-                          doPerformeForgroundRedirect: true;
-                          interaction:
-                              | "ensure interaction"
-                              | "directly redirect if active session show login otherwise"
-                              | "ensure no interaction";
-                      } => {
-                    if (oidcClientTsUser !== undefined) {
-                        return {
-                            doPerformeForgroundRedirect: false
-                        };
-                    }
+                if (oidcClientTsUser !== undefined) {
+                    break foreground_redirect;
+                }
 
-                    if (
-                        errorAuthResponse_fromForegroundRedirect !== undefined &&
-                        errorAuthResponse_fromForegroundRedirect.error ===
-                            "unmet_authentication_requirements"
-                    ) {
-                        return {
-                            doPerformeForgroundRedirect: true,
-                            interaction: "ensure interaction"
-                        };
-                    }
+                if (persistedAuthState !== "logged in") {
+                    break foreground_redirect;
+                }
 
-                    if (autoLogin) {
-                        if (errorAuthResponse_fromForegroundRedirect !== undefined) {
-                            return {
-                                doPerformeForgroundRedirect: false
-                            };
-                        }
-
-                        return {
-                            doPerformeForgroundRedirect: true,
-                            interaction:
-                                persistedAuthState === "explicitly logged out"
-                                    ? "ensure interaction"
-                                    : "directly redirect if active session show login otherwise"
-                        };
-                    }
-
-                    if (persistedAuthState === "logged in") {
-                        return {
-                            doPerformeForgroundRedirect: true,
-                            interaction: "ensure no interaction"
-                        };
-                    }
-
-                    return {
-                        doPerformeForgroundRedirect: false
-                    };
-                })();
-
-                if (!doPerformeForgroundRedirect) {
+                if (!isFirstInstance) {
+                    // NOTE: There is usually one "main" instance that represent the user login state
+                    // and there can be some other instances instanciated later to get tokens to talk
+                    // to other API.
+                    // Anyway, if it's not the first instance, returning after a forground authorization
+                    // to the href that has been captured during early init can very much be seen as an
+                    // undesirable behavior. It's best to not restore the session.
                     break foreground_redirect;
                 }
 
                 log?.("Performing session restoration (or autoLogin) with foreground redirect");
 
                 completeLoginOrRefreshProcess();
-
-                if (autoLogin && persistedAuthState !== "logged in") {
-                    evtInitializationOutcomeUserNotLoggedIn.post();
-                }
 
                 ensureNonBlankPaint();
 
@@ -1345,21 +1229,15 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
                 await loginOrStartAuthorization({
                     action: "login",
                     doForceReloadOnBfCache: true,
-                    returnToUrl: (() => {
-                        if (autoLogin && autoLogin_returnToUrl !== undefined) {
-                            return autoLogin_returnToUrl;
-                        }
-
-                        return toFullyQualifiedUrl({
-                            urlish: getRootRelativeOriginalLocationHref_earlyInit(),
-                            doAssertNoQueryParams: false,
-                            rootUrl_fullyQualified: window.location.origin
-                        });
-                    })(),
+                    returnToUrl: toFullyQualifiedUrl({
+                        urlish: getRootRelativeOriginalLocationHref_earlyInit(),
+                        doAssertNoQueryParams: false,
+                        rootUrl_fullyQualified: window.location.origin
+                    }),
                     doNavigateBackToLastPublicUrlIfTheTheUserNavigateBack: true,
                     transformAuthorizationUrl_paramOfLoginOrStartAuthorization: undefined,
                     authorizationParams_paramOfLoginOrStartAuthorization: undefined,
-                    interaction,
+                    interaction: "ensure no interaction",
                     preRedirectHook: () => {
                         persistAuthState({ configId, state: undefined });
                     }
@@ -1429,11 +1307,7 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
                               messageOrCause: error
                           });
 
-                (autoLogin ? log : console.error)?.(initializationError);
-
-                if (autoLogin) {
-                    throw initializationError;
-                }
+                console.error(initializationError);
 
                 return initializationError;
             })();
@@ -1502,7 +1376,6 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
             });
         }
 
-        // @ts-expect-error: We know what we're doing
         return oidc_notLoggedIn;
     }
 
@@ -1525,6 +1398,8 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
 
     let prOngoingTokenRenewal: Promise<void> | undefined = undefined;
 
+    let returnToUrl_ifForgroundRedirectRequiredForRenewTokens: string | undefined = undefined;
+
     const { renewTokens } = (() => {
         // NOTE: Cannot throw (or if it does it's our fault)
         async function renewTokens_nonMutexed() {
@@ -1538,7 +1413,9 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
                 try {
                     await loginOrStartAuthorization({
                         action: "login",
-                        returnToUrl: window.location.href,
+                        returnToUrl:
+                            returnToUrl_ifForgroundRedirectRequiredForRenewTokens ??
+                            window.location.href,
                         doForceReloadOnBfCache: true,
                         authorizationParams_paramOfLoginOrStartAuthorization: undefined,
                         transformAuthorizationUrl_paramOfLoginOrStartAuthorization: undefined,
@@ -1883,13 +1760,31 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
                 assert(false);
             }
 
-            if (params_getTokens !== undefined) {
+            recursion: {
+                const doEnterRecurstion = (() => {
+                    if (params_getTokens === undefined) {
+                        return false;
+                    }
+
+                    const { returnToUrl, ...rest } = params_getTokens;
+
+                    if (Object.keys(rest).length === 0) {
+                        return false;
+                    }
+
+                    return true;
+                })();
+
+                if (!doEnterRecurstion) {
+                    break recursion;
+                }
+
+                assert(params_getTokens !== undefined, "322933");
+
                 const oidc = await createOidc({
                     issuerUri,
                     clientId,
                     __oidcProviderMetadata: oidcProviderMetadata,
-                    autoLogin: true,
-                    autoLogin_returnToUrl: params_getTokens.returnToUrl ?? window.location.href,
                     autoLogout_returnToUrl,
                     debugLogs: log !== undefined,
                     disableDPoP: (() => {
@@ -1937,15 +1832,40 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
                     }
                 });
 
-                return oidc.getTokens();
+                const returnToUrl = params_getTokens.returnToUrl ?? window.location.href;
+
+                if (!oidc.isUserLoggedIn) {
+                    throw_error: {
+                        if (oidc.initializationError === undefined) {
+                            break throw_error;
+                        }
+
+                        if (
+                            oidc.initializationError.authResponse !== undefined &&
+                            oidc.initializationError.authResponse.error ===
+                                "unmet_authentication_requirements"
+                        ) {
+                            break throw_error;
+                        }
+
+                        throw oidc.initializationError;
+                    }
+
+                    await oidc.login({
+                        doesCurrentHrefEnforceLogin: true,
+                        returnToUrl
+                    });
+                    assert(false, "3022392");
+                }
+
+                return oidc.getTokens({ returnToUrl });
             }
 
             if (prOngoingTokenRenewal === undefined) {
                 // NOTE: Give a chance to renewOnLocalTimeShift to do it's job
                 await new Promise<void>(resolve => setTimeout(resolve, 0));
-            }
-
-            if (prOngoingTokenRenewal !== undefined) {
+            } else {
+                returnToUrl_ifForgroundRedirectRequiredForRenewTokens = params_getTokens?.returnToUrl;
                 await prOngoingTokenRenewal;
             }
 
@@ -1970,6 +1890,8 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
 
                 await oidc_loggedIn.renewTokens();
             }
+
+            returnToUrl_ifForgroundRedirectRequiredForRenewTokens = undefined;
 
             return currentTokens;
         },
@@ -2074,7 +1996,8 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
                         rootRelativeReturnToUrl,
                         returnToUrl_external,
                         action: "logout",
-                        sessionId
+                        sessionId,
+                        isNonInteractive: true
                     }),
                     redirectMethod: "assign"
                 });
@@ -2559,37 +2482,4 @@ export async function createOidc_nonMemoized<User, AutoLogin extends boolean>(pa
     }
 
     return oidc_loggedIn;
-}
-
-function createErroredOidcNotLoggedIn(params: {
-    oidc_common: Oidc.Common;
-    initializationError: OidcInitializationError;
-}) {
-    const { oidc_common, initializationError } = params;
-
-    const { createErroredOidcNotLoggedIn_cache: cache } = globalContext;
-
-    use_cache: {
-        const entry = cache.get(initializationError);
-
-        if (entry === undefined) {
-            break use_cache;
-        }
-
-        return entry;
-    }
-
-    const oidc = id<Oidc.NotLoggedIn>({
-        ...oidc_common,
-        isUserLoggedIn: false,
-        login: async () => {
-            alert("Authentication is currently unavailable. Please try again later.");
-            return new Promise<never>(() => {});
-        },
-        initializationError
-    });
-
-    cache.set(initializationError, oidc);
-
-    return oidc;
 }

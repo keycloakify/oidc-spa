@@ -19,6 +19,7 @@ export namespace StateData {
             context: "redirect";
             rootRelativeReturnToUrl: string;
             returnToUrl_external: string | undefined;
+            isNonInteractive: boolean;
         };
 
         export type Login = Common_Redirect & {

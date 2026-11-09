@@ -5,7 +5,7 @@ import { oidcSpa as oidcSpa_react } from "../react-spa";
 import type { OidcSpa } from "../react-spa/oidcSpa";
 import { adaptOidcSpaUtils } from "./adaptOidcSpaUtils";
 
-type CompleteBuilder = typeof oidcSpa_react & OidcSpa<unknown, false, "withUser" | "withRuntimeConfigs">;
+type CompleteBuilder = typeof oidcSpa_react & OidcSpa<unknown, "withUser" | "withRuntimeConfigs">;
 
 function adaptBuilder<Builder>(builder: Builder): Builder {
     // React hides already-used methods in its types but keeps them at runtime.
@@ -14,7 +14,6 @@ function adaptBuilder<Builder>(builder: Builder): Builder {
 
     return {
         ...builder,
-        withAutoLogin: () => adaptBuilder(builder_base.withAutoLogin()),
         withUser: (...args: Parameters<CompleteBuilder["withUser"]>) =>
             adaptBuilder(builder_base.withUser(...args)),
         withRuntimeConfigs: (...args: Parameters<CompleteBuilder["withRuntimeConfigs"]>) =>

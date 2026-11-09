@@ -7,10 +7,9 @@ import type {
     CreateServerUser,
     AccessTokenClaims,
     Oidc_react,
-    Oidc_client,
+    Oidc,
     TanStackRouterLoaderContextLike
 } from "./types";
-import type { Oidc as Oidc_core } from "../../core";
 import { OidcInitializationError } from "../../core/OidcInitializationError";
 import { Deferred } from "../../tools/Deferred";
 import { isBrowser } from "../../tools/isBrowser";
@@ -31,15 +30,14 @@ import { publicEnvNames, toRedactEnvNames } from "virtual:oidc-spa/tanstack-star
 import { ValidateAndGetAccessTokenClaims } from "../../server";
 import * as runExclusive from "../../tools/run-exclusive";
 
-export function createUtils<User_client, User_server, AutoLogin extends boolean>(params: {
-    autoLogin: AutoLogin;
+export function createUtils<User_client, User_server>(params: {
     createClientUser: CreateClientUser<User_client>;
     createServerUser: CreateServerUser<User_server> | undefined;
     getRuntimeConfigsOrRuntimeConfigs: OptionallyAsyncGetterOrDirectValue<
         { process: { env: Record<string, string> } },
         RuntimeConfigs<User_server>
     >;
-}): OidcSpaUtils<User_client, User_server, AutoLogin> {
+}): OidcSpaUtils<User_client, User_server> {
     const getRuntimeConfigs = (() => {
         const { getRuntimeConfigsOrRuntimeConfigs } = params;
 
@@ -55,7 +53,7 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
     })();
 
     const { useOidc, getOidc, enforceLogin } = (() => {
-        const { autoLogin, createClientUser } = params;
+        const { createClientUser } = params;
 
         const dClientCtx = new Deferred<
             | {
@@ -65,12 +63,12 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
             | {
                   doWeHaveTheOidcObject: true;
                   isUserLoggedIn: false;
-                  oidc: Oidc_core.NotLoggedIn;
+                  oidc: Oidc.NotLoggedIn;
               }
             | {
                   doWeHaveTheOidcObject: true;
                   isUserLoggedIn: true;
-                  oidc: Oidc_core.LoggedIn<User_client>;
+                  oidc: Oidc.LoggedIn<User_client>;
                   dUser: Deferred<
                       | {
                             hasCreateUserThrown: true;
@@ -98,35 +96,35 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
                         }
                     }
 
-                    const env_server_proxy = new Proxy(
-                        publicEnvNames.size === 0 && toRedactEnvNames.size === 0
-                            ? {}
-                            : await fetchServerEnvVariableValues(),
-                        {
-                            get: (target, envName) => {
-                                assert(typeof envName === "string");
-
-                                if (!(envName in target)) {
-                                    throw new OidcSpaServerEnvRetrievalError({ envName });
-                                }
-
-                                return target[envName] ?? undefined;
-                            },
-                            has: (target, envName) => {
-                                assert(typeof envName === "string");
-
-                                if (!(envName in target)) {
-                                    throw new OidcSpaServerEnvRetrievalError({ envName });
-                                }
-
-                                return target[envName] !== null;
-                            }
-                        }
-                    ) as Record<string, string>;
-
                     let runtimeConfigs: RuntimeConfigs<User_server>;
 
                     try {
+                        const env_server_proxy = new Proxy(
+                            publicEnvNames.size === 0 && toRedactEnvNames.size === 0
+                                ? {}
+                                : await fetchServerEnvVariableValues(),
+                            {
+                                get: (target, envName) => {
+                                    assert(typeof envName === "string");
+
+                                    if (!(envName in target)) {
+                                        throw new OidcSpaServerEnvRetrievalError({ envName });
+                                    }
+
+                                    return target[envName] ?? undefined;
+                                },
+                                has: (target, envName) => {
+                                    assert(typeof envName === "string");
+
+                                    if (!(envName in target)) {
+                                        throw new OidcSpaServerEnvRetrievalError({ envName });
+                                    }
+
+                                    return target[envName] !== null;
+                                }
+                            }
+                        ) as Record<string, string>;
+
                         runtimeConfigs = await getRuntimeConfigs({ process: { env: env_server_proxy } });
                     } catch (error) {
                         dClientCtx.resolve({
@@ -134,7 +132,7 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
                             initializationError: new OidcInitializationError({
                                 isAuthServerLikelyDown: false,
                                 messageOrCause: new Error(
-                                    "Error thrown while evaluating the runtime configs getter on the client",
+                                    "Error while loading runtime configs on the client",
                                     // @ts-expect-error
                                     { cause: error }
                                 )
@@ -160,8 +158,6 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
                                         isMock: true,
                                         ...params
                                     }),
-                                // NOTE: The `as false` is lying here, it's just to preserve some level of type-safety.
-                                autoLogin: autoLogin as false,
                                 isUserInitiallyLoggedIn:
                                     runtimeConfigs.client?.isUserInitiallyLoggedIn ?? true,
 
@@ -196,11 +192,10 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
 
                             const { createOidc } = await import("../../core");
 
-                            let oidc: Oidc_core<User_client>;
+                            let oidc: Oidc<User_client>;
 
                             try {
-                                oidc = await createOidc<User_client, AutoLogin>({
-                                    autoLogin,
+                                oidc = await createOidc<User_client>({
                                     issuerUri: runtimeConfigs.issuerUri,
                                     clientId: runtimeConfigs.client.clientId,
                                     idleSessionLifetimeInSeconds:
@@ -340,7 +335,7 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
             const useIsomorphicLayoutEffect = isBrowser ? useLayoutEffect : useEffect;
 
             function useOidc(params?: {
-                assert?: "user logged in" | "user not logged in" | "ready";
+                assert?: "user logged in" | "user not logged in";
             }): Oidc_react<User_client> {
                 useIsomorphicLayoutEffect(() => {
                     triggerClientInitializationIfNotAlreadyDone();
@@ -359,13 +354,13 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
                           isPending: false;
                           doWeHaveTheOidcObject: true;
                           isUserLoggedIn: false;
-                          oidc: Oidc_core.NotLoggedIn;
+                          oidc: Oidc.NotLoggedIn;
                       }
                     | {
                           isPending: false;
                           doWeHaveTheOidcObject: true;
                           isUserLoggedIn: true;
-                          oidc: Oidc_core.LoggedIn<User_client>;
+                          oidc: Oidc.LoggedIn<User_client>;
                           evtUser: StatefulReadonlyEvt<User_client>;
                       };
 
@@ -404,36 +399,28 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
                     }
 
                     if (wrap_user.hasCreateUserThrown) {
-                        if (autoLogin) {
-                            return {
-                                isPending: false as const,
-                                doWeHaveTheOidcObject: false as const,
+                        return {
+                            isPending: false as const,
+                            doWeHaveTheOidcObject: true as const,
+                            isUserLoggedIn: false as const,
+                            oidc: id<Oidc.NotLoggedIn>({
+                                isUserLoggedIn: false,
+                                issuerUri: ctx.oidc.issuerUri,
+                                clientId: ctx.oidc.clientId,
+                                validRedirectUri: ctx.oidc.validRedirectUri,
+                                login: () => {
+                                    console.warn(
+                                        [
+                                            "oidc-spa: Calling login while user already logged in but the user",
+                                            "object couldn't be constructed, reloading the page"
+                                        ].join(" ")
+                                    );
+                                    window.location.reload();
+                                    return new Promise<never>(() => {});
+                                },
                                 initializationError: wrap_user.initializationError
-                            };
-                        } else {
-                            return {
-                                isPending: false as const,
-                                doWeHaveTheOidcObject: true as const,
-                                isUserLoggedIn: false as const,
-                                oidc: id<Oidc_core.NotLoggedIn>({
-                                    isUserLoggedIn: false,
-                                    issuerUri: ctx.oidc.issuerUri,
-                                    clientId: ctx.oidc.clientId,
-                                    validRedirectUri: ctx.oidc.validRedirectUri,
-                                    login: () => {
-                                        console.warn(
-                                            [
-                                                "oidc-spa: Calling login while user already logged in but the user",
-                                                "object couldn't be constructed, reloading the page"
-                                            ].join(" ")
-                                        );
-                                        window.location.reload();
-                                        return new Promise<never>(() => {});
-                                    },
-                                    initializationError: wrap_user.initializationError
-                                })
-                            };
-                        }
+                            })
+                        };
                     }
 
                     return {
@@ -450,7 +437,11 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
                         break check_assertion;
                     }
 
-                    if (state.isPending || !state.doWeHaveTheOidcObject) {
+                    if (!state.isPending && !state.doWeHaveTheOidcObject) {
+                        throw state.initializationError;
+                    }
+
+                    if (state.isPending) {
                         throw new Error(
                             [
                                 "oidc-spa: There is a logic error in the application.",
@@ -466,10 +457,6 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
                         );
                     }
 
-                    if (assert_params === "ready") {
-                        break check_assertion;
-                    }
-
                     const getMessage = (v: string) =>
                         [
                             "oidc-spa: There is a logic error in the application.",
@@ -480,6 +467,9 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
                     switch (assert_params) {
                         case "user logged in":
                             if (!state.isUserLoggedIn) {
+                                if (state.oidc.initializationError !== undefined) {
+                                    throw state.oidc.initializationError;
+                                }
                                 throw new Error(getMessage("to be logged in but currently they arn't"));
                             }
                             break;
@@ -655,7 +645,7 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
                 const [getLogin] = useState(() => {
                     let login: Oidc_react.NotLoggedIn["login"] | undefined;
 
-                    return (oidc: Oidc_core.NotLoggedIn) =>
+                    return (oidc: Oidc.NotLoggedIn) =>
                         (login ??= params =>
                             oidc.login({ doesCurrentHrefEnforceLogin: false, ...params }));
                 });
@@ -723,11 +713,11 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
         let returnToUrl_temporaryOverride: string | undefined = undefined;
 
         const { getOidc } = (() => {
-            let oidc_cached: Oidc_client<User_client> | undefined = undefined;
+            let oidc_cached: Oidc<User_client> | undefined = undefined;
 
             async function getOidc(params?: {
                 assert?: "user logged in" | "user not logged in" | "init completed";
-            }): Promise<Oidc_client<User_client>> {
+            }): Promise<Oidc<User_client>> {
                 if (!isBrowser) {
                     throw new Error(
                         [
@@ -740,15 +730,39 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
 
                 triggerClientInitializationIfNotAlreadyDone();
 
-                const wrap = await dClientCtx.pr;
+                const ctx = await dClientCtx.pr;
 
-                if (!wrap.doWeHaveTheOidcObject) {
-                    return new Promise<never>(() => {});
-                }
+                const oidc = (() => {
+                    if (ctx.doWeHaveTheOidcObject) {
+                        return ctx.oidc;
+                    }
 
-                const { oidc } = wrap;
+                    const getAccessErrorMessage = (propertyName: string) =>
+                        `oidc-spa: Cannot read oidc.${propertyName} because OIDC initialization failed before a client was available. Check oidc.initializationError before accessing provider configuration.`;
+
+                    return id<Oidc.NotLoggedIn>({
+                        isUserLoggedIn: false,
+                        get clientId(): string {
+                            throw new Error(getAccessErrorMessage("clientId"));
+                        },
+                        get issuerUri(): string {
+                            throw new Error(getAccessErrorMessage("issuerUri"));
+                        },
+                        get validRedirectUri(): string {
+                            throw new Error(getAccessErrorMessage("validRedirectUri"));
+                        },
+                        login: async () => {
+                            alert("Authentication is currently unavailable. Please try again later.");
+                            return new Promise<never>(() => {});
+                        },
+                        initializationError: ctx.initializationError
+                    });
+                })();
 
                 if (params?.assert === "user logged in" && !oidc.isUserLoggedIn) {
+                    if (oidc.initializationError !== undefined) {
+                        throw oidc.initializationError;
+                    }
                     throw new Error(
                         [
                             "oidc-spa: Called getOidc({ assert: 'user logged in' })",
@@ -771,7 +785,7 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
 
                 oidc_cached = (() => {
                     if (oidc.isUserLoggedIn) {
-                        const oidc_proxy = id<Oidc_client.LoggedIn<User_client>>({
+                        const oidc_proxy = id<Oidc.LoggedIn<User_client>>({
                             ...oidc,
                             getTokens: params => {
                                 if (params === undefined) {
@@ -813,15 +827,6 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
 
             const oidc = await getOidc();
 
-            const returnToUrl = toFullyQualifiedUrl({
-                urlish: loaderContext.location.href,
-                doAssertNoQueryParams: false,
-                rootUrl_fullyQualified: oidc.validRedirectUri
-            });
-
-            const isUrlAlreadyReplaced =
-                window.location.href.replace(/\/$/, "") === returnToUrl.replace(/\/$/, "");
-
             if (!oidc.isUserLoggedIn) {
                 if (loaderContext.cause === "preload") {
                     throw new Error(
@@ -833,6 +838,21 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
                     );
                 }
 
+                if (oidc.initializationError !== undefined) {
+                    throw oidc.initializationError;
+                }
+            }
+
+            const returnToUrl = toFullyQualifiedUrl({
+                urlish: loaderContext.location.href,
+                doAssertNoQueryParams: false,
+                rootUrl_fullyQualified: oidc.validRedirectUri
+            });
+
+            const isUrlAlreadyReplaced =
+                window.location.href.replace(/\/$/, "") === returnToUrl.replace(/\/$/, "");
+
+            if (!oidc.isUserLoggedIn) {
                 await oidc.login({
                     returnToUrl,
                     doesCurrentHrefEnforceLogin: isUrlAlreadyReplaced
@@ -864,6 +884,14 @@ export function createUtils<User_client, User_server, AutoLogin extends boolean>
                     onNavigated();
                     return history_replaceState.call(history, ...args);
                 };
+            }
+
+            const ctx = await dClientCtx.pr;
+            if (ctx.doWeHaveTheOidcObject && ctx.isUserLoggedIn) {
+                const user = await ctx.dUser.pr;
+                if (user.hasCreateUserThrown) {
+                    throw user.initializationError;
+                }
             }
         }
 

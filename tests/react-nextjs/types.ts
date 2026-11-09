@@ -3,6 +3,8 @@ import {
     oidcSpa,
     type OidcSpaUtils,
     type CreateClientUser,
+    type OidcInitializationError,
+    type Oidc,
     type Oidc_react,
     type RuntimeConfigs
 } from "../../src/react-nextjs";
@@ -12,8 +14,7 @@ import { assert, type Equals } from "../../src/tools/tsafe/assert";
 type User = { displayName: string };
 
 assert<Equals<typeof oidcSpa, typeof oidcSpa_react>>;
-assert<Equals<OidcSpaUtils<User, false>, OidcSpaUtils_react<User, false>>>;
-assert<Equals<OidcSpaUtils<User, true>, OidcSpaUtils_react<User, true>>>;
+assert<Equals<OidcSpaUtils<User>, OidcSpaUtils_react<User>>>;
 
 // Never invoked: exercise inference, overloads and builder ordering as a consumer.
 export async function checkTypes() {
@@ -31,7 +32,7 @@ export async function checkTypes() {
     builder.createUtils();
     const configured = builder.withRuntimeConfigs({ mode: "mock", isUserInitiallyLoggedIn: false });
     const utils = configured.createUtils();
-    assert<Equals<typeof utils, OidcSpaUtils<User, false>>>;
+    assert<Equals<typeof utils, OidcSpaUtils<User>>>;
     assert<Equals<ReturnType<typeof utils.useOidc>, Oidc_react.NotLoggedIn>>;
     const loggedIn = utils.useOidc({ assert: "user logged in" });
     assert<Equals<typeof loggedIn.user, User>>;
@@ -39,13 +40,20 @@ export async function checkTypes() {
     assert<Equals<typeof loggedOut, Oidc_react.NotLoggedIn>>;
     loggedOut.login({ doesCurrentHrefEnforceLogin: true });
     const oidc = await utils.getOidc();
+    assert<Equals<typeof oidc, Oidc<User>>>;
     if (oidc.isUserLoggedIn) {
         const user = await oidc.getUser();
         assert<Equals<typeof user, User>>;
     }
 
     utils.enforceLogin({ location: { href: "/private" }, cause: "enter" });
-    const Guarded = utils.withLoginEnforced((props: { greeting: string }) => props.greeting);
+    const Guarded = utils.withLoginEnforced({
+        component: (props: { greeting: string }) => props.greeting,
+        errorComponent: ({ oidcInitializationError }) => {
+            assert<Equals<typeof oidcInitializationError, OidcInitializationError>>;
+            return oidcInitializationError.message;
+        }
+    });
     assert<Equals<ComponentProps<typeof Guarded>, { greeting: string }>>;
     // @ts-expect-error guarded components retain their required props
     Guarded({});
@@ -67,24 +75,10 @@ export async function checkTypes() {
         .createUtils();
     assert<Equals<typeof inferred, typeof utils>>;
 
-    const autoLogin = configured.withAutoLogin().createUtils();
-    const reordered = oidcSpa
-        .withAutoLogin()
-        .withUser(createUser)
-        .withRuntimeConfigs({ mode: "mock" })
-        .createUtils();
-    const beforeConfigs = builder.withAutoLogin().withRuntimeConfigs({ mode: "mock" }).createUtils();
-    assert<Equals<typeof autoLogin, OidcSpaUtils<User, true>>>;
-    assert<Equals<typeof reordered, typeof autoLogin>>;
-    assert<Equals<typeof beforeConfigs, typeof autoLogin>>;
-    assert<Equals<ReturnType<typeof autoLogin.useOidc>, Oidc_react.LoggedIn<User>>>;
-    autoLogin.OidcInitializationErrorGate({ children: null, errorComponent: () => null });
-    // @ts-expect-error auto-login has no manual login enforcement
-    autoLogin.withLoginEnforced;
-    // @ts-expect-error auto-login has no manual login enforcement
-    autoLogin.enforceLogin;
-    // @ts-expect-error withAutoLogin can only be called once
-    configured.withAutoLogin().withAutoLogin();
-    // @ts-expect-error withUser stays excluded after withAutoLogin
-    configured.withAutoLogin().withUser(createUser);
+    // @ts-expect-error auto-login mode has been removed
+    configured.withAutoLogin();
+    // @ts-expect-error initialization errors are handled by page protection
+    utils.OidcInitializationErrorGate;
+    // @ts-expect-error page protection takes an options object
+    utils.withLoginEnforced((props: { greeting: string }) => props.greeting);
 }

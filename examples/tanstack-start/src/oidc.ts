@@ -29,6 +29,7 @@ export const {
     oidcFnMiddleware,
     oidcRequestMiddleware
 } = oidcSpa
+    // Runs only on the client
     .withClientUser<User_client>(async ({ isMock, idTokenClaims, accessToken }) => {
         if (isMock) {
             const user_mock: User_client = {
@@ -63,6 +64,7 @@ export const {
 
         return user;
     })
+    // Runs only on the server
     .withServerUser<User_server>(async ({ isMock, accessTokenClaims }) => {
         if (isMock) {
             const user_mock: User_server = {

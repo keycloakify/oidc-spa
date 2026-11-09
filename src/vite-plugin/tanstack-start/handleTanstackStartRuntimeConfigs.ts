@@ -295,8 +295,7 @@ export function createHandleTanstackStartRuntimeConfigs(params: { resolvedConfig
             if (!callee.isMemberExpression() || origin(callee.get("object"), id, seen) !== "builder")
                 return undefined;
             const method = propertyName(callee);
-            if (["withAutoLogin", "withClientUser", "withServerUser"].includes(method ?? ""))
-                return "builder";
+            if (["withClientUser", "withServerUser"].includes(method ?? "")) return "builder";
             return undefined;
         };
 

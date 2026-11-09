@@ -14,9 +14,9 @@ const URL_SEARCH_PARAM_NAME = "isUserLoggedIn";
 
 export const ACCESS_TOKEN_MOCK_DEFAULT = "mocked-access-token";
 
-export async function createMockOidc<User = never, AutoLogin extends boolean = false>(
-    params: ParamsOfCreateMockOidc<User, AutoLogin>
-): Promise<AutoLogin extends true ? Oidc.LoggedIn<User> : Oidc<User>> {
+export async function createMockOidc<User = never>(
+    params: ParamsOfCreateMockOidc<User>
+): Promise<Oidc<User>> {
     const {
         createUser_mock,
         isUserInitiallyLoggedIn = true,
@@ -25,9 +25,7 @@ export async function createMockOidc<User = never, AutoLogin extends boolean = f
         idTokenClaims_mock,
         idToken_mock,
         accessToken_mock,
-        refreshToken_mock,
-        autoLogin = false,
-        autoLogin_returnToUrl
+        refreshToken_mock
     } = params;
 
     {
@@ -125,14 +123,6 @@ export async function createMockOidc<User = never, AutoLogin extends boolean = f
             login: ({ returnToUrl }) => loginOrStartAuthorization({ returnToUrl }),
             initializationError: undefined
         });
-        if (autoLogin) {
-            await oidc.login({
-                returnToUrl: autoLogin_returnToUrl,
-                doesCurrentHrefEnforceLogin: true
-            });
-            // Never here
-        }
-        // @ts-expect-error: We know what we are doing
         return oidc;
     }
 
