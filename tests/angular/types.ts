@@ -12,7 +12,7 @@ import {
     type GetOidc,
     type RuntimeConfigs,
     type Oidc_angular,
-    type Oidc_client,
+    type Oidc,
     type OidcTokens,
     type IdTokenClaims,
     OidcInitializationError
@@ -73,6 +73,7 @@ export async function checkTypes() {
     loggedIn.goToAuthServer();
     const loggedOut = injectOidc({ assert: "user not logged in" });
     assert<Equals<typeof loggedOut, Oidc_angular.NotLoggedIn>>();
+    assert<Equals<typeof loggedOut.initializationError, OidcInitializationError | undefined>>();
     loggedOut.login({});
     loggedOut.login({ returnToUrl: "/", doesCurrentHrefEnforceLogin: true });
     // @ts-expect-error old login parameters were removed
@@ -81,7 +82,7 @@ export async function checkTypes() {
     loggedOut.user();
 
     const imperative = await getOidc();
-    assert<Equals<typeof imperative, Oidc_client<User>>>();
+    assert<Equals<typeof imperative, Oidc<User>>>();
     const imperativeLoggedIn = await getOidc({ assert: "user logged in" });
     assert<Equals<Awaited<ReturnType<typeof imperativeLoggedIn.getUser>>, User>>();
     assert<Equals<Awaited<ReturnType<typeof imperativeLoggedIn.refreshUser>>, void>>();
@@ -97,28 +98,13 @@ export async function checkTypes() {
     imperativeLoggedIn.subscribeToTokenRotation;
     // @ts-expect-error claims are exposed through getTokens()
     imperativeLoggedIn.getDecodedIdToken();
-    assert<Equals<Awaited<ReturnType<GetOidc.WithAutoLogin<User>>>, Oidc_client.LoggedIn<User>>>();
-
-    const autoLogin = base.withAutoLogin().createUtils();
-    assert<Equals<ReturnType<typeof autoLogin.injectOidc>, Oidc_angular.LoggedIn<User>>>();
-    assert<
-        Equals<
-            ReturnType<typeof autoLogin.injectOidcInitializationError>,
-            Signal<OidcInitializationError | undefined>
-        >
-    >();
-    // @ts-expect-error auto-login has no login guard
-    autoLogin.enforceLoginGuard;
-    // @ts-expect-error error helper is only needed with auto-login
+    const utils = base.createUtils();
+    utils.enforceLoginGuard({} as Parameters<typeof utils.enforceLoginGuard>[0]);
+    // @ts-expect-error initialization errors are available on injectOidc()
     base.createUtils().injectOidcInitializationError;
-    const reordered = oidcSpa
-        .withNonBlockingRendering()
-        .withAutoLogin()
-        .withUser(createUser)
-        .createUtils();
-    assert<
-        Equals<ReturnType<typeof reordered.injectOidc>, ReturnType<InjectOidc.WithAutoLogin<User>>>
-    >();
+    const reordered = oidcSpa.withNonBlockingRendering().withUser(createUser).createUtils();
+    assert<Equals<typeof reordered.injectOidc, InjectOidc<User>>>();
+    assert<Equals<typeof reordered.getOidc, GetOidc<User>>>();
 
     provideOidc({ mode: "mock" });
     provideOidc({
@@ -144,8 +130,8 @@ export async function checkTypes() {
     base.withUser(createUser);
     // @ts-expect-error non-blocking rendering can only be selected once
     base.withNonBlockingRendering().withNonBlockingRendering();
-    // @ts-expect-error withAutoLogin can only be called once
-    base.withAutoLogin().withAutoLogin();
+    // @ts-expect-error auto-login mode has been removed
+    base.withAutoLogin();
     // @ts-expect-error user mocking is handled inside the factory
     provideOidc({ mode: "mock", user_mock: { displayName: "Alice" } });
 }

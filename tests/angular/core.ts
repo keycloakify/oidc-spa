@@ -35,7 +35,7 @@ export function createCoreController() {
         calls: 0,
         renewals: 0,
         userSubscriptions: 0,
-        params: undefined as ParamsOfCreateOidc<any, boolean> | undefined,
+        params: undefined as ParamsOfCreateOidc<any> | undefined,
         tokenRequests: [] as (Oidc.ParamsOfGetToken | undefined)[],
         loginParams: undefined as Parameters<Oidc.NotLoggedIn["login"]>[0] | undefined,
         logoutParams: undefined as Parameters<Oidc.LoggedIn["logout"]>[0],
@@ -58,14 +58,12 @@ export function createCoreController() {
             tokenListeners.forEach(next => next(tokens));
             evtTokensChange.post();
         },
-        async createOidc(params: ParamsOfCreateOidc<any, boolean>): Promise<Oidc<any>> {
+        async createOidc(params: ParamsOfCreateOidc<any>): Promise<Oidc<any>> {
             controller.calls++;
             controller.params = params;
             await ready.pr;
             const initializationError =
-                controller.error instanceof OidcInitializationError && !params.autoLogin
-                    ? controller.error
-                    : undefined;
+                controller.error instanceof OidcInitializationError ? controller.error : undefined;
             if (controller.error && !initializationError) throw controller.error;
             const common = {
                 issuerUri: params.issuerUri,

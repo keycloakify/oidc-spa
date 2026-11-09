@@ -7,24 +7,20 @@ import type {
     IdTokenClaims,
     OidcProviderMetadata,
     OidcUserInfo,
-    Oidc as Oidc_client,
+    Oidc,
     OidcTokens
 } from "../core";
 import type { MaybeAsync } from "../tools/MaybeAsync";
 import type { OptionallyAsyncGetterOrDirectValue } from "../tools/GetterOrDirectValue";
 import { assert, type Equals } from "../tools/tsafe/assert";
 
-export type { IdTokenClaims, OidcProviderMetadata, OidcUserInfo, OidcTokens, Oidc_client };
+export type { IdTokenClaims, OidcProviderMetadata, OidcUserInfo, OidcTokens, Oidc };
 
 export type InjectOidc<User> = {
     (params?: { assert?: undefined }): Oidc_angular<User>;
     (params: { assert: "user logged in" }): Oidc_angular.LoggedIn<User>;
     (params: { assert: "user not logged in" }): Oidc_angular.NotLoggedIn;
 };
-
-export namespace InjectOidc {
-    export type WithAutoLogin<User> = () => Oidc_angular.LoggedIn<User>;
-}
 
 export type Oidc_angular<User> =
     | (Oidc_angular.NotLoggedIn & {
@@ -68,13 +64,13 @@ export namespace Oidc_angular {
         validRedirectUri: string;
         /** Remains pending during SSR. Gate auth UI with @defer (when oidc.prInitialized | async). */
         prInitialized: Promise<true>;
-        logout: Oidc_client.LoggedIn["logout"];
-        renewTokens: Oidc_client.LoggedIn["renewTokens"];
-        startAuthorization: Oidc_client.LoggedIn["startAuthorization"];
-        authorizationResult: Oidc_client.LoggedIn["authorizationResult"];
+        logout: Oidc.LoggedIn["logout"];
+        renewTokens: Oidc.LoggedIn["renewTokens"];
+        startAuthorization: Oidc.LoggedIn["startAuthorization"];
+        authorizationResult: Oidc.LoggedIn["authorizationResult"];
         isNewBrowserSession: boolean;
         autoLogoutState: Signal<
-            Parameters<Parameters<Oidc_client.LoggedIn["subscribeToAutoLogoutState"]>[0]>[0]
+            Parameters<Parameters<Oidc.LoggedIn["subscribeToAutoLogoutState"]>[0]>[0]
         >;
         user: Signal<User>;
         refreshUser: () => Promise<void>;
@@ -82,16 +78,10 @@ export namespace Oidc_angular {
 }
 
 export type GetOidc<User> = {
-    (params?: { assert?: undefined }): Promise<Oidc_client<User>>;
-    (params: { assert: "user logged in" }): Promise<Oidc_client.LoggedIn<User>>;
-    (params: { assert: "user not logged in" }): Promise<Oidc_client.NotLoggedIn>;
+    (params?: { assert?: undefined }): Promise<Oidc<User>>;
+    (params: { assert: "user logged in" }): Promise<Oidc.LoggedIn<User>>;
+    (params: { assert: "user not logged in" }): Promise<Oidc.NotLoggedIn>;
 };
-
-export namespace GetOidc {
-    export type WithAutoLogin<User> = (params?: {
-        assert: "user logged in";
-    }) => Promise<Oidc_client.LoggedIn<User>>;
-}
 
 export type RuntimeConfigs = RuntimeConfigs.Real | RuntimeConfigs.Mock;
 
@@ -114,19 +104,11 @@ export namespace RuntimeConfigs {
         tokenParams?: Record<string, string | string[] | undefined>;
         sessionRestorationMethod?: "iframe" | "foreground redirect" | "auto";
         __oidcProviderMetadata?: OidcProviderMetadata;
-        autoLogout_returnToUrl?: ParamsOfCreateOidc<unknown, boolean>["autoLogout_returnToUrl"];
+        autoLogout_returnToUrl?: ParamsOfCreateOidc<unknown>["autoLogout_returnToUrl"];
         disableDPoP?: true;
     };
 
-    assert<
-        Equals<
-            Omit<Real, "mode">,
-            Omit<
-                ParamsOfCreateOidc<unknown, boolean>,
-                "createUser" | "autoLogin" | "autoLogin_returnToUrl"
-            >
-        >
-    >;
+    assert<Equals<Omit<Real, "mode">, Omit<ParamsOfCreateOidc<unknown>, "createUser">>>;
 
     export type Mock = {
         mode: "mock";
@@ -140,13 +122,13 @@ export namespace RuntimeConfigs {
     };
 }
 
-export type OidcSpaUtils<User, AutoLogin> = {
+export type OidcSpaUtils<User> = {
     provideOidc: (
         getRuntimeConfigsOrRuntimeConfigs: OptionallyAsyncGetterOrDirectValue<void, RuntimeConfigs>
     ) => EnvironmentProviders;
     /** Can be injected during SSR; auth state must only be read after prInitialized resolves. */
-    injectOidc: AutoLogin extends true ? InjectOidc.WithAutoLogin<User> : InjectOidc<User>;
-    getOidc: AutoLogin extends true ? GetOidc.WithAutoLogin<User> : GetOidc<User>;
+    injectOidc: InjectOidc<User>;
+    getOidc: GetOidc<User>;
     createOidcInterceptor: (params: {
         /**
          * May inject services. Return false before reading auth state for requests that load
@@ -155,21 +137,12 @@ export type OidcSpaUtils<User, AutoLogin> = {
          */
         shouldInjectAccessToken: (req: HttpRequest<unknown>) => boolean;
     }) => HttpInterceptorFn;
-} & (AutoLogin extends true
-    ? {
-          /**
-           * Angular's equivalent of OidcInitializationErrorGate. Read the signal inside
-           * @defer (when oidc.prInitialized | async), before rendering authenticated UI.
-           */
-          injectOidcInitializationError: () => Signal<OidcInitializationError | undefined>;
-      }
-    : {
-          /** Protected routes must use RenderMode.Client in app.routes.server.ts. */
-          enforceLoginGuard: (
-              route: Parameters<CanActivateFn>[0],
-              state?: Parameters<CanActivateFn>[1]
-          ) => Promise<true>;
-      });
+    /** Protected routes must use RenderMode.Client in app.routes.server.ts. */
+    enforceLoginGuard: (
+        route: Parameters<CanActivateFn>[0],
+        state?: Parameters<CanActivateFn>[1]
+    ) => Promise<true>;
+};
 
 export type CreateClientUser<User> = (params: {
     isMock: boolean;

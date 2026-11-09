@@ -54,6 +54,9 @@ To use the local oidc-spa source, run `yarn start-angular-example` from the repo
   `user()` signal returned by `injectOidc()`.
 - `src/app/app.config.ts` registers `provideOidc()` and `createOidcInterceptor()`. The interceptor
   attaches an access token only when a request sets `REQUIRE_ACCESS_TOKEN`.
+- `enforceLoginGuard` throws the original `OidcInitializationError` when authentication cannot be
+  initialized. `withNavigationErrorHandler()` in `src/app/app.config.ts` displays an alert with
+  the error message and redirects home. Other navigation errors retain Angular's normal handling.
 - `src/app/app.routes.ts` groups the todo, admin and account pages under a parent with
   `canActivateChild: [enforceLoginGuard]`. Their routes live in
   `src/app/pages/protected/protected.routes.ts` and inherit this guard without changing their URLs.

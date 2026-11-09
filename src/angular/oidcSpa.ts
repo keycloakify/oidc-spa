@@ -2,33 +2,24 @@ import type { OidcSpaUtils, CreateClientUser } from "./types";
 import { createUtils } from "./createUtils";
 import { assert } from "../tools/tsafe/assert";
 
-export type OidcSpa<
-    User,
-    AutoLogin extends boolean,
-    Excluded extends "withAutoLogin" | "withUser" | "withNonBlockingRendering" = never
-> = Omit<
+export type OidcSpa<User, Excluded extends "withUser" | "withNonBlockingRendering" = never> = Omit<
     {
-        withAutoLogin: () => OidcSpa<User, true, Excluded | "withAutoLogin">;
-        withUser: <User>(
-            createUser: CreateClientUser<User>
-        ) => OidcSpa<User, AutoLogin, Excluded | "withUser">;
-        withNonBlockingRendering: () => OidcSpa<User, AutoLogin, Excluded | "withNonBlockingRendering">;
+        withUser: <User>(createUser: CreateClientUser<User>) => OidcSpa<User, Excluded | "withUser">;
+        withNonBlockingRendering: () => OidcSpa<User, Excluded | "withNonBlockingRendering">;
     },
     Excluded
 > &
     ("withUser" extends Excluded
         ? {
-              createUtils: () => OidcSpaUtils<User, AutoLogin>;
+              createUtils: () => OidcSpaUtils<User>;
           }
         : {});
 
-function createOidcSpa<User, AutoLogin extends boolean>(params: {
-    autoLogin: AutoLogin;
+function createOidcSpa<User>(params: {
     providerAwaitsInitialization: boolean;
     createUser: CreateClientUser<User> | undefined;
-}): OidcSpa<User, AutoLogin> {
+}): OidcSpa<User> {
     return {
-        withAutoLogin: () => createOidcSpa({ ...params, autoLogin: true }),
         withUser: createUser => createOidcSpa({ ...params, createUser }) as any,
         withNonBlockingRendering: () =>
             createOidcSpa({ ...params, providerAwaitsInitialization: false }),
@@ -40,8 +31,7 @@ function createOidcSpa<User, AutoLogin extends boolean>(params: {
     };
 }
 
-export const oidcSpa = createOidcSpa<unknown, false>({
-    autoLogin: false,
+export const oidcSpa = createOidcSpa<unknown>({
     providerAwaitsInitialization: true,
     createUser: undefined
 });
