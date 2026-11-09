@@ -12,10 +12,9 @@ import type {
     RuntimeConfigs,
     CreateClientUser,
     Oidc_react,
-    Oidc_client,
+    Oidc,
     LoaderContext
 } from "./types";
-import type { Oidc as Oidc_core } from "../core";
 import { OidcInitializationError } from "../core/OidcInitializationError";
 import { Deferred } from "../tools/Deferred";
 import { isBrowser } from "../tools/isBrowser";
@@ -53,12 +52,12 @@ export function createUtils<User>(params: {
         | {
               doWeHaveTheOidcObject: true;
               isUserLoggedIn: false;
-              oidc: Oidc_core.NotLoggedIn;
+              oidc: Oidc.NotLoggedIn;
           }
         | {
               doWeHaveTheOidcObject: true;
               isUserLoggedIn: true;
-              oidc: Oidc_core.LoggedIn<User>;
+              oidc: Oidc.LoggedIn<User>;
               dUser: Deferred<
                   | {
                         hasCreateUserThrown: true;
@@ -144,7 +143,7 @@ export function createUtils<User>(params: {
                     {
                         const { createOidc } = await import("../core");
 
-                        let oidc: Oidc_core<User>;
+                        let oidc: Oidc<User>;
 
                         try {
                             oidc = await createOidc<User>({
@@ -312,11 +311,11 @@ export function createUtils<User>(params: {
             type State =
                 | {
                       isUserLoggedIn: false;
-                      oidc: Oidc_core.NotLoggedIn;
+                      oidc: Oidc.NotLoggedIn;
                   }
                 | {
                       isUserLoggedIn: true;
-                      oidc: Oidc_core.LoggedIn<User>;
+                      oidc: Oidc.LoggedIn<User>;
                       evtUser: StatefulReadonlyEvt<User>;
                   };
 
@@ -333,7 +332,7 @@ export function createUtils<User>(params: {
 
                     return {
                         isUserLoggedIn: false,
-                        oidc: id<Oidc_core.NotLoggedIn>({
+                        oidc: id<Oidc.NotLoggedIn>({
                             isUserLoggedIn: false,
                             get clientId(): string {
                                 throw new Error(getAccessErrorMessage("clientId"));
@@ -371,7 +370,7 @@ export function createUtils<User>(params: {
                 if (wrap_user.hasCreateUserThrown) {
                     return {
                         isUserLoggedIn: false as const,
-                        oidc: id<Oidc_core.NotLoggedIn>({
+                        oidc: id<Oidc.NotLoggedIn>({
                             isUserLoggedIn: false,
                             issuerUri: ctx.oidc.issuerUri,
                             clientId: ctx.oidc.clientId,
@@ -528,7 +527,7 @@ export function createUtils<User>(params: {
             const [getLogin] = useState(() => {
                 let login: Oidc_react.NotLoggedIn["login"] | undefined;
 
-                return (oidc: Oidc_core.NotLoggedIn) =>
+                return (oidc: Oidc.NotLoggedIn) =>
                     (login ??= ({ doesCurrentHrefEnforceLogin = false, ...rest }) =>
                         oidc.login({
                             ...rest,
@@ -582,11 +581,11 @@ export function createUtils<User>(params: {
     let returnToUrl_temporaryOverride: string | undefined = undefined;
 
     const { getOidc } = (() => {
-        let oidc_cached: Oidc_client<User> | undefined = undefined;
+        let oidc_cached: Oidc<User> | undefined = undefined;
 
         async function getOidc(params?: {
             assert?: "user logged in" | "user not logged in" | "init completed";
-        }): Promise<Oidc_client<User>> {
+        }): Promise<Oidc<User>> {
             if (!isBrowser) {
                 throw new Error(
                     [
@@ -599,13 +598,33 @@ export function createUtils<User>(params: {
 
             triggerClientInitializationIfNotAlreadyDone();
 
-            const wrap = await dClientCtx.pr;
+            const ctx = await dClientCtx.pr;
 
-            if (!wrap.doWeHaveTheOidcObject) {
-                return new Promise<never>(() => {});
-            }
+            const oidc = (() => {
+                if (!ctx.doWeHaveTheOidcObject) {
+                    const getAccessErrorMessage = (propertyName: string) =>
+                        `oidc-spa: Cannot read oidc.${propertyName} because OIDC initialization failed before a client was available. Check oidc.initializationError before accessing provider configuration.`;
 
-            const { oidc } = wrap;
+                    return id<Oidc.NotLoggedIn>({
+                        isUserLoggedIn: false,
+                        get clientId(): string {
+                            throw new Error(getAccessErrorMessage("clientId"));
+                        },
+                        get issuerUri(): string {
+                            throw new Error(getAccessErrorMessage("issuerUri"));
+                        },
+                        get validRedirectUri(): string {
+                            throw new Error(getAccessErrorMessage("validRedirectUri"));
+                        },
+                        login: async () => {
+                            alert("Authentication is currently unavailable. Please try again later.");
+                            return new Promise<never>(() => {});
+                        },
+                        initializationError: ctx.initializationError
+                    });
+                }
+                return ctx.oidc;
+            })();
 
             if (params?.assert === "user logged in" && !oidc.isUserLoggedIn) {
                 throw new Error(
@@ -630,7 +649,7 @@ export function createUtils<User>(params: {
 
             oidc_cached = (() => {
                 if (oidc.isUserLoggedIn) {
-                    const oidc_proxy = id<Oidc_client.LoggedIn<User>>({
+                    const oidc_proxy = id<Oidc.LoggedIn<User>>({
                         ...oidc,
                         getTokens: params => {
                             if (params === undefined) {
@@ -683,6 +702,25 @@ export function createUtils<User>(params: {
 
         const oidc = await getOidc();
 
+        if (!oidc.isUserLoggedIn) {
+            if (
+                loaderContext_discriminated.routingLibrary === "TanStack Router" &&
+                loaderContext_discriminated.loaderContext.cause === "preload"
+            ) {
+                throw new Error(
+                    [
+                        "oidc-spa: User is not yet logged in.",
+                        "This is not an error, this is an expected case.",
+                        "It's only TanStack Router using exception as control flow."
+                    ].join(" ")
+                );
+            }
+
+            if (oidc.initializationError !== undefined) {
+                throw oidc.initializationError;
+            }
+        }
+
         const returnToUrl = (() => {
             switch (loaderContext_discriminated.routingLibrary) {
                 case "TanStack Router":
@@ -702,19 +740,6 @@ export function createUtils<User>(params: {
             window.location.href.replace(/\/$/, "") === returnToUrl.replace(/\/$/, "");
 
         if (!oidc.isUserLoggedIn) {
-            if (
-                loaderContext_discriminated.routingLibrary === "TanStack Router" &&
-                loaderContext_discriminated.loaderContext.cause === "preload"
-            ) {
-                throw new Error(
-                    [
-                        "oidc-spa: User is not yet logged in.",
-                        "This is not an error, this is an expected case.",
-                        "It's only TanStack Router using exception as control flow."
-                    ].join(" ")
-                );
-            }
-
             await oidc.login({
                 returnToUrl,
                 doesCurrentHrefEnforceLogin: isUrlAlreadyReplaced
@@ -749,15 +774,40 @@ export function createUtils<User>(params: {
         }
     }
 
-    function withLoginEnforced<Props extends Record<string, unknown>>(
-        component: ComponentType<Props>
-    ): (props: Props) => ReactNode {
-        const Component = component;
+    function withLoginEnforced<Props extends Record<string, unknown>>(params: {
+        component: ComponentType<Props>;
+        errorComponent?: ComponentType<{ oidcInitializationError: OidcInitializationError }>;
+    }): (props: Props) => ReactNode {
+        const { component: Component, errorComponent: ErrorComponent } = params;
 
         function ComponentWithLoginEnforced(props: Props) {
-            const { isUserLoggedIn, login } = useOidc();
+            const { isUserLoggedIn, login, initializationError } = useOidc();
 
             if (!isUserLoggedIn) {
+                if (initializationError !== undefined) {
+                    if (ErrorComponent === undefined) {
+                        return createElement(
+                            "div",
+                            { role: "alert" },
+                            createElement("p", null, "Authentication initialization failed."),
+                            createElement(
+                                "pre",
+                                { style: { whiteSpace: "pre-wrap" } },
+                                initializationError.message
+                            ),
+                            createElement(
+                                "button",
+                                { type: "button", onClick: () => window.location.reload() },
+                                "Reload page"
+                            )
+                        );
+                    }
+
+                    return createElement(ErrorComponent, {
+                        oidcInitializationError: initializationError
+                    });
+                }
+
                 throw login({ doesCurrentHrefEnforceLogin: true });
             }
 

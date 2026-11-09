@@ -5,13 +5,13 @@ import type {
     IdTokenClaims,
     OidcProviderMetadata,
     OidcUserInfo,
-    Oidc as Oidc_client,
+    Oidc,
     OidcTokens
 } from "../core";
 import type { MaybeAsync } from "../tools/MaybeAsync";
 import { assert, type Equals } from "../tools/tsafe/assert";
 
-export type { IdTokenClaims, OidcProviderMetadata, OidcUserInfo, OidcTokens, Oidc_client };
+export type { IdTokenClaims, OidcProviderMetadata, OidcUserInfo, OidcTokens, Oidc };
 
 export type UseOidc<User> = {
     (params?: { assert?: undefined }): Oidc_react<User>;
@@ -57,23 +57,21 @@ export namespace Oidc_react {
         issuerUri: string;
         clientId: string;
         validRedirectUri: string;
-        logout: Oidc_client.LoggedIn["logout"];
-        renewTokens: Oidc_client.LoggedIn["renewTokens"];
-        startAuthorization: Oidc_client.LoggedIn["startAuthorization"];
-        authorizationResult: Oidc_client.LoggedIn["authorizationResult"];
+        logout: Oidc.LoggedIn["logout"];
+        renewTokens: Oidc.LoggedIn["renewTokens"];
+        startAuthorization: Oidc.LoggedIn["startAuthorization"];
+        authorizationResult: Oidc.LoggedIn["authorizationResult"];
         isNewBrowserSession: boolean;
-        autoLogoutState: Parameters<
-            Parameters<Oidc_client.LoggedIn["subscribeToAutoLogoutState"]>[0]
-        >[0];
+        autoLogoutState: Parameters<Parameters<Oidc.LoggedIn["subscribeToAutoLogoutState"]>[0]>[0];
         user: User;
         refreshUser: () => Promise<void>;
     };
 }
 
 export type GetOidc<User> = {
-    (params?: { assert?: undefined }): Promise<Oidc_client<User>>;
-    (params: { assert: "user logged in" }): Promise<Oidc_client.LoggedIn<User>>;
-    (params: { assert: "user not logged in" }): Promise<Oidc_client.NotLoggedIn>;
+    (params?: { assert?: undefined }): Promise<Oidc<User>>;
+    (params: { assert: "user logged in" }): Promise<Oidc.LoggedIn<User>>;
+    (params: { assert: "user not logged in" }): Promise<Oidc.NotLoggedIn>;
 };
 
 export type RuntimeConfigs = RuntimeConfigs.Real | RuntimeConfigs.Mock;
@@ -120,9 +118,10 @@ export type OidcSpaUtils<User> = {
     getOidc: GetOidc<User>;
     OidcInitializationGate: (props: { fallback?: ReactNode; children: ReactNode }) => ReactNode;
     enforceLogin: (loaderContext: LoaderContext) => Promise<void | never>;
-    withLoginEnforced: <Props extends Record<string, unknown>>(
-        component: ComponentType<Props>
-    ) => (props: Props) => ReactNode;
+    withLoginEnforced: <Props extends Record<string, unknown>>(params: {
+        component: ComponentType<Props>;
+        errorComponent?: ComponentType<{ oidcInitializationError: OidcInitializationError }>;
+    }) => (props: Props) => ReactNode;
 };
 
 export type LoaderContext = LoaderContext.TanStackRouterLike | LoaderContext.ReactRouterLike;
