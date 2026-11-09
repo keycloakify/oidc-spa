@@ -51,8 +51,6 @@ export const { useOidc, getOidc, OidcInitializationGate, withLoginEnforced } = o
 
         return user;
     })
-    // See: https://docs.oidc-spa.dev/features/auto-login#react-spa
-    //.withAutoLogin()
     .withRuntimeConfigs(async () => {
         const autoLogout_returnToUrl = () =>
             `${process.env.__NEXT_ROUTER_BASEPATH}/inactivity-logout?${new URLSearchParams({

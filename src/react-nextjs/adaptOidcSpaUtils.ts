@@ -1,13 +1,9 @@
 import { createElement, useEffect, useReducer, type ReactNode, type ComponentProps } from "react";
 import { useRouter } from "next/navigation";
-import type { OidcSpaUtils, Oidc_react, Oidc_client } from "../react-spa";
+import type { OidcSpaUtils } from "../react-spa";
 
-export function adaptOidcSpaUtils<User, AutoLogin>(
-    utils: OidcSpaUtils<User, AutoLogin>
-): OidcSpaUtils<User, AutoLogin> {
-    const { OidcInitializationGate: OidcInitializationGate_base } = utils;
-    const useOidc: () => Oidc_react<User> = utils.useOidc;
-    const getOidc: () => Promise<Oidc_client<User>> = utils.getOidc;
+export function adaptOidcSpaUtils<User>(utils: OidcSpaUtils<User>): OidcSpaUtils<User> {
+    const { OidcInitializationGate: OidcInitializationGate_base, getOidc } = utils;
 
     function OidcInitializationGate_inner(props: { children: ReactNode }) {
         const router = useRouter();
@@ -15,8 +11,6 @@ export function adaptOidcSpaUtils<User, AutoLogin>(
         useEffect(() => {
             let isActive = true;
 
-            // getOidc lets initialization errors reach OidcInitializationErrorGate.
-            // Calling useOidc here would throw before that gate could render.
             getOidc().then(oidc => {
                 if (!isActive) {
                     return;
@@ -47,21 +41,18 @@ export function adaptOidcSpaUtils<User, AutoLogin>(
             })
         });
 
-    const withLoginEnforced: OidcSpaUtils<User, false>["withLoginEnforced"] = Component => {
+    const withLoginEnforced: OidcSpaUtils<User>["withLoginEnforced"] = params => {
+        const Component = utils.withLoginEnforced(params);
+
         function ComponentWithLoginEnforced(props: ComponentProps<typeof Component>) {
-            const { isUserLoggedIn, login } = useOidc();
             const [hasRunEffect, notifyEffectRun] = useReducer(() => true, false);
 
             useEffect(() => {
                 notifyEffectRun();
-
-                if (!isUserLoggedIn) {
-                    login({ doesCurrentHrefEnforceLogin: true });
-                }
             }, []);
 
             // App Router navigation must commit before login reads the current URL.
-            if (!hasRunEffect || !isUserLoggedIn) {
+            if (!hasRunEffect) {
                 return null;
             }
 
@@ -69,7 +60,7 @@ export function adaptOidcSpaUtils<User, AutoLogin>(
         }
 
         ComponentWithLoginEnforced.displayName = `${
-            Component.displayName ?? Component.name ?? "Component"
+            params.component.displayName ?? params.component.name ?? "Component"
         }WithLoginEnforced`;
 
         return ComponentWithLoginEnforced;
