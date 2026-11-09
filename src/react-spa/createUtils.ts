@@ -25,11 +25,10 @@ import { id } from "../tools/tsafe/id";
 import type { OptionallyAsyncGetterOrDirectValue } from "../tools/GetterOrDirectValue";
 import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";
 
-export function createUtils<User, AutoLogin extends boolean>(params: {
-    autoLogin: AutoLogin;
+export function createUtils<User>(params: {
     createUser: CreateClientUser<User>;
     getRuntimeConfigsOrRuntimeConfigs: OptionallyAsyncGetterOrDirectValue<void, RuntimeConfigs>;
-}): OidcSpaUtils<User, AutoLogin> {
+}): OidcSpaUtils<User> {
     const getRuntimeConfigs = (() => {
         const { getRuntimeConfigsOrRuntimeConfigs } = params;
 
@@ -44,7 +43,7 @@ export function createUtils<User, AutoLogin extends boolean>(params: {
         }
     })();
 
-    const { autoLogin, createUser } = params;
+    const { createUser } = params;
 
     const dClientCtx = new Deferred<
         | {
@@ -114,8 +113,6 @@ export function createUtils<User, AutoLogin extends boolean>(params: {
                                     isMock: true,
                                     ...params
                                 }),
-                            // NOTE: The `as false` is lying here, it's just to preserve some level of type-safety.
-                            autoLogin: autoLogin as false,
                             isUserInitiallyLoggedIn: runtimeConfigs.isUserInitiallyLoggedIn ?? true,
 
                             issuerUri_mock: runtimeConfigs.issuerUri_mock,
@@ -150,8 +147,7 @@ export function createUtils<User, AutoLogin extends boolean>(params: {
                         let oidc: Oidc_core<User>;
 
                         try {
-                            oidc = await createOidc<User, AutoLogin>({
-                                autoLogin,
+                            oidc = await createOidc<User>({
                                 issuerUri: runtimeConfigs.issuerUri,
                                 clientId: runtimeConfigs.clientId,
                                 idleSessionLifetimeInSeconds:
@@ -315,16 +311,10 @@ export function createUtils<User, AutoLogin extends boolean>(params: {
 
             type State =
                 | {
-                      doWeHaveTheOidcObject: false;
-                      initializationError: OidcInitializationError;
-                  }
-                | {
-                      doWeHaveTheOidcObject: true;
                       isUserLoggedIn: false;
                       oidc: Oidc_core.NotLoggedIn;
                   }
                 | {
-                      doWeHaveTheOidcObject: true;
                       isUserLoggedIn: true;
                       oidc: Oidc_core.LoggedIn<User>;
                       evtUser: StatefulReadonlyEvt<User>;
@@ -338,44 +328,35 @@ export function createUtils<User, AutoLogin extends boolean>(params: {
                 }
 
                 if (!ctx.doWeHaveTheOidcObject) {
-                    if (autoLogin) {
-                        return {
-                            doWeHaveTheOidcObject: false as const,
-                            initializationError: ctx.initializationError
-                        };
-                    } else {
-                        const getAccessErrorMessage = (propertyName: string) =>
-                            `oidc-spa: Cannot read oidc.${propertyName} because OIDC initialization failed before a client was available. Check oidc.initializationError before accessing provider configuration.`;
+                    const getAccessErrorMessage = (propertyName: string) =>
+                        `oidc-spa: Cannot read oidc.${propertyName} because OIDC initialization failed before a client was available. Check oidc.initializationError before accessing provider configuration.`;
 
-                        return {
-                            doWeHaveTheOidcObject: true as const,
+                    return {
+                        isUserLoggedIn: false,
+                        oidc: id<Oidc_core.NotLoggedIn>({
                             isUserLoggedIn: false,
-                            oidc: id<Oidc_core.NotLoggedIn>({
-                                isUserLoggedIn: false,
-                                get clientId(): string {
-                                    throw new Error(getAccessErrorMessage("clientId"));
-                                },
-                                get issuerUri(): string {
-                                    throw new Error(getAccessErrorMessage("issuerUri"));
-                                },
-                                get validRedirectUri(): string {
-                                    throw new Error(getAccessErrorMessage("validRedirectUri"));
-                                },
-                                login: async () => {
-                                    alert(
-                                        "Authentication is currently unavailable. Please try again later."
-                                    );
-                                    return new Promise<never>(() => {});
-                                },
-                                initializationError: ctx.initializationError
-                            })
-                        };
-                    }
+                            get clientId(): string {
+                                throw new Error(getAccessErrorMessage("clientId"));
+                            },
+                            get issuerUri(): string {
+                                throw new Error(getAccessErrorMessage("issuerUri"));
+                            },
+                            get validRedirectUri(): string {
+                                throw new Error(getAccessErrorMessage("validRedirectUri"));
+                            },
+                            login: async () => {
+                                alert(
+                                    "Authentication is currently unavailable. Please try again later."
+                                );
+                                return new Promise<never>(() => {});
+                            },
+                            initializationError: ctx.initializationError
+                        })
+                    };
                 }
 
                 if (!ctx.isUserLoggedIn) {
                     return {
-                        doWeHaveTheOidcObject: true as const,
                         isUserLoggedIn: false,
                         oidc: ctx.oidc
                     };
@@ -388,54 +369,34 @@ export function createUtils<User, AutoLogin extends boolean>(params: {
                 }
 
                 if (wrap_user.hasCreateUserThrown) {
-                    if (autoLogin) {
-                        return {
-                            doWeHaveTheOidcObject: false as const,
+                    return {
+                        isUserLoggedIn: false as const,
+                        oidc: id<Oidc_core.NotLoggedIn>({
+                            isUserLoggedIn: false,
+                            issuerUri: ctx.oidc.issuerUri,
+                            clientId: ctx.oidc.clientId,
+                            validRedirectUri: ctx.oidc.validRedirectUri,
+                            login: () => {
+                                console.warn(
+                                    [
+                                        "oidc-spa: Calling login while user already logged in but the user",
+                                        "object couldn't be constructed, reloading the page"
+                                    ].join(" ")
+                                );
+                                window.location.reload();
+                                return new Promise<never>(() => {});
+                            },
                             initializationError: wrap_user.initializationError
-                        };
-                    } else {
-                        return {
-                            doWeHaveTheOidcObject: true as const,
-                            isUserLoggedIn: false as const,
-                            oidc: id<Oidc_core.NotLoggedIn>({
-                                isUserLoggedIn: false,
-                                issuerUri: ctx.oidc.issuerUri,
-                                clientId: ctx.oidc.clientId,
-                                validRedirectUri: ctx.oidc.validRedirectUri,
-                                login: () => {
-                                    console.warn(
-                                        [
-                                            "oidc-spa: Calling login while user already logged in but the user",
-                                            "object couldn't be constructed, reloading the page"
-                                        ].join(" ")
-                                    );
-                                    window.location.reload();
-                                    return new Promise<never>(() => {});
-                                },
-                                initializationError: wrap_user.initializationError
-                            })
-                        };
-                    }
+                        })
+                    };
                 }
 
                 return {
-                    doWeHaveTheOidcObject: true as const,
                     isUserLoggedIn: true as const,
                     oidc: ctx.oidc,
                     evtUser: wrap_user.evtUser
                 };
             })();
-
-            if (!state.doWeHaveTheOidcObject) {
-                assert(autoLogin, "32283339");
-                throw new Error(
-                    [
-                        "oidc-spa: There was an oidc initialization error.",
-                        "You should use <OidcInitializationErrorGate />",
-                        "to catch thoses errors gracefully"
-                    ].join(" ")
-                );
-            }
 
             check_assertion: {
                 if (assert_params === undefined) {
@@ -579,9 +540,15 @@ export function createUtils<User, AutoLogin extends boolean>(params: {
                 return id<Oidc_react.NotLoggedIn>({
                     isUserLoggedIn: false,
                     initializationError: state.oidc.initializationError,
-                    issuerUri: state.oidc.issuerUri,
-                    clientId: state.oidc.clientId,
-                    validRedirectUri: state.oidc.validRedirectUri,
+                    get issuerUri() {
+                        return state.oidc.issuerUri;
+                    },
+                    get clientId() {
+                        return state.oidc.clientId;
+                    },
+                    get validRedirectUri() {
+                        return state.oidc.validRedirectUri;
+                    },
                     autoLogoutState: { shouldDisplayWarning: false },
                     login: getLogin(state.oidc)
                 });
@@ -843,66 +810,13 @@ export function createUtils<User, AutoLogin extends boolean>(params: {
         return children;
     }
 
-    function OidcInitializationErrorGate(props: {
-        errorComponent: ComponentType<{
-            initializationError: OidcInitializationError;
-        }>;
-        children: ReactNode;
-    }): ReactNode {
-        const { errorComponent: ErrorComponent, children } = props;
-
-        if (!isBrowser) {
-            throw new Error(
-                [
-                    "oidc-spa: <OidcInitializationErrorGate /> can't be SSR'd.",
-                    "You can prevent this component from rendering on the server",
-                    "by wrapping it into <OidcInitializationGate />"
-                ].join(" ")
-            );
-        }
-
-        const initializationError = (() => {
-            const { hasResolved, value: ctx } = dClientCtx.getState();
-
-            if (!hasResolved) {
-                throw suspencePr;
-            }
-
-            if (!ctx.doWeHaveTheOidcObject) {
-                return ctx.initializationError;
-            }
-
-            // NOTE: OidcInitializationErrorGate is only exposed when autoLogin
-            // is enabled
-            assert(ctx.isUserLoggedIn, "293392");
-
-            const { hasResolved: hasResolved_user, value: ctx_user } = ctx.dUser.getState();
-
-            if (!hasResolved_user) {
-                throw suspencePr;
-            }
-
-            if (ctx_user.hasCreateUserThrown) {
-                return ctx_user.initializationError;
-            }
-
-            return undefined;
-        })();
-
-        if (initializationError !== undefined) {
-            return createElement(ErrorComponent, { initializationError });
-        }
-
-        return children;
-    }
-
-    // @ts-expect-error
     return {
+        // @ts-expect-error: We know what we are doing
         useOidc,
+        // @ts-expect-error: We know what we are doing
         getOidc,
         enforceLogin,
         withLoginEnforced,
-        OidcInitializationGate,
-        OidcInitializationErrorGate
+        OidcInitializationGate
     };
 }
