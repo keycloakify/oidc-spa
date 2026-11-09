@@ -14,7 +14,7 @@ import type {
 } from "./types";
 import { assert, is } from "../../tools/tsafe/assert";
 import { isAmong } from "../../tools/tsafe/isAmong";
-import { createOidc, type Oidc, type OidcTokens, OidcInitializationError } from "../../core";
+import { createOidc, type Oidc, type OidcTokens } from "../../core";
 import { Deferred } from "../../tools/Deferred";
 import { decodeJwt } from "../../tools/decodeJwt";
 import { type KeycloakUtils, createKeycloakUtils } from "../keycloakUtils";
@@ -132,52 +132,47 @@ export class Keycloak {
 
         const { constructorParams, issuerUri } = this.#state;
 
-        const autoLogin = onLoad === "login-required";
-
-        let hasCreateResolved = false;
-
-        const oidcOrError = await createOidc({
+        const oidc = await createOidc({
             createUser: () => ({}),
             sessionRestorationMethod: constructorParams.sessionRestorationMethod,
             issuerUri,
             clientId: this.#state.constructorParams.clientId,
-            autoLogin,
-            autoLogin_returnToUrl: redirectUri,
             debugLogs: enableLogging,
             scopes: scope?.split(" "),
-            autoLogout_returnToUrl,
-            authorizationParams:
-                !autoLogin || locale === undefined
-                    ? undefined
-                    : ({ isNonInteractive }) => {
-                          if (isNonInteractive) {
-                              return {};
-                          }
-                          if (hasCreateResolved) {
-                              return {};
-                          }
-                          return {
-                              ui_locales: locale
-                          };
-                      }
-        })
-            // NOTE: This can only happen when autoLogin is true, otherwise the error
-            // is in oidc.initializationError
-            .catch((error: OidcInitializationError) => error);
+            autoLogout_returnToUrl
+        });
 
-        hasCreateResolved = true;
+        onAuthError_call: {
+            if (oidc.isUserLoggedIn) {
+                break onAuthError_call;
+            }
 
-        if (oidcOrError instanceof OidcInitializationError) {
+            if (oidc.initializationError === undefined) {
+                break onAuthError_call;
+            }
+
             this.onAuthError?.({
-                error: oidcOrError.name,
-                error_description: oidcOrError.message
+                error: oidc.initializationError.name,
+                error_description: oidc.initializationError.message
             });
-
-            await new Promise<never>(() => {});
-            assert(false);
         }
 
-        const oidc = oidcOrError;
+        if (
+            onLoad === "login-required" &&
+            !oidc.isUserLoggedIn &&
+            oidc.initializationError === undefined
+        ) {
+            await oidc.login({
+                doesCurrentHrefEnforceLogin: true,
+                returnToUrl: redirectUri,
+                authorizationParams:
+                    locale === undefined
+                        ? undefined
+                        : {
+                              ui_locales: locale
+                          }
+            });
+        }
 
         if (oidc.isUserLoggedIn) {
             const tokens = await oidc.getTokens();
@@ -203,21 +198,6 @@ export class Keycloak {
             }
 
             this.onAuthSuccess?.();
-        }
-
-        onAuthError_call: {
-            if (oidc.isUserLoggedIn) {
-                break onAuthError_call;
-            }
-
-            if (oidc.initializationError === undefined) {
-                break onAuthError_call;
-            }
-
-            this.onAuthError?.({
-                error: oidc.initializationError.name,
-                error_description: oidc.initializationError.message
-            });
         }
 
         onActionUpdate_call: {
