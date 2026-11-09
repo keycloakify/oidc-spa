@@ -4,7 +4,7 @@ import type {
     IdTokenClaims,
     OidcProviderMetadata,
     OidcUserInfo,
-    Oidc as Oidc_client,
+    Oidc,
     OidcTokens
 } from "../../core";
 import type { FunctionMiddlewareAfterServer, RequestMiddlewareAfterServer } from "@tanstack/react-start";
@@ -12,7 +12,7 @@ import type { MaybeAsync } from "../../tools/MaybeAsync";
 import { assert, type Equals } from "../../tools/tsafe/assert";
 import type { AccessTokenClaims_specs as AccessTokenClaims } from "../../server";
 
-export type { IdTokenClaims, OidcProviderMetadata, OidcUserInfo, OidcTokens, Oidc_client };
+export type { IdTokenClaims, OidcProviderMetadata, OidcUserInfo, OidcTokens, Oidc };
 export type { AccessTokenClaims };
 
 export type UseOidc<User_client> = {
@@ -20,12 +20,6 @@ export type UseOidc<User_client> = {
     (params: { assert: "user logged in" }): Oidc_react.LoggedIn<User_client>;
     (params: { assert: "user not logged in" }): Oidc_react.NotLoggedIn;
 };
-
-export namespace UseOidc {
-    export type WithAutoLogin<User_client> = (params?: {
-        assert: "ready";
-    }) => Oidc_react.LoggedIn<User_client>;
-}
 
 export type Oidc_react<User_client> =
     | (Oidc_react.NotReady & {
@@ -90,30 +84,22 @@ export namespace Oidc_react {
         issuerUri: string;
         clientId: string;
         validRedirectUri: string;
-        logout: Oidc_client.LoggedIn["logout"];
-        renewTokens: Oidc_client.LoggedIn["renewTokens"];
-        startAuthorization: Oidc_client.LoggedIn["startAuthorization"];
-        authorizationResult: Oidc_client.LoggedIn["authorizationResult"];
+        logout: Oidc.LoggedIn["logout"];
+        renewTokens: Oidc.LoggedIn["renewTokens"];
+        startAuthorization: Oidc.LoggedIn["startAuthorization"];
+        authorizationResult: Oidc.LoggedIn["authorizationResult"];
         isNewBrowserSession: boolean;
-        autoLogoutState: Parameters<
-            Parameters<Oidc_client.LoggedIn["subscribeToAutoLogoutState"]>[0]
-        >[0];
+        autoLogoutState: Parameters<Parameters<Oidc.LoggedIn["subscribeToAutoLogoutState"]>[0]>[0];
         user: User_client;
         refreshUser: () => Promise<void>;
     };
 }
 
 export type GetOidc<User_client> = {
-    (params?: { assert?: undefined }): Promise<Oidc_client<User_client>>;
-    (params: { assert: "user logged in" }): Promise<Oidc_client.LoggedIn<User_client>>;
-    (params: { assert: "user not logged in" }): Promise<Oidc_client.NotLoggedIn>;
+    (params?: { assert?: undefined }): Promise<Oidc<User_client>>;
+    (params: { assert: "user logged in" }): Promise<Oidc.LoggedIn<User_client>>;
+    (params: { assert: "user not logged in" }): Promise<Oidc.NotLoggedIn>;
 };
-
-export namespace GetOidc {
-    export type WithAutoLogin<User_client> = (params?: {
-        assert: "user logged in";
-    }) => Promise<Oidc_client.LoggedIn<User_client>>;
-}
 
 export type OidcFnMiddleware<User_server> = {
     (params?: {
@@ -131,13 +117,6 @@ export type OidcFnMiddleware<User_server> = {
 };
 
 export namespace OidcFnMiddleware {
-    export type WithAutoLogin<User_server> = (params?: {
-        require?: "authed request";
-        hasAuthorization?: (params: { user: User_server }) => MaybeAsync<boolean>;
-    }) => TanStackFnMiddleware<{
-        oidc: Oidc_server.LoggedIn<User_server>;
-    }>;
-
     export type TanStackFnMiddleware<T> = FunctionMiddlewareAfterServer<
         {},
         unknown,
@@ -184,13 +163,6 @@ export type OidcRequestMiddleware<User_server> = {
 };
 
 export namespace OidcRequestMiddleware {
-    export type WithAutoLogin<User_server> = (params?: {
-        require?: "authed request";
-        hasAuthorization?: (params: { user: User_server }) => MaybeAsync<boolean>;
-    }) => TanstackRequestMiddleware<{
-        oidc: Oidc_server.LoggedIn<User_server>;
-    }>;
-
     export type TanstackRequestMiddleware<T> = RequestMiddlewareAfterServer<{}, undefined, T>;
 }
 
@@ -220,7 +192,7 @@ export namespace RuntimeConfigs {
             tokenParams?: Record<string, string | string[] | undefined>;
             sessionRestorationMethod?: "iframe" | "foreground redirect" | "auto";
             __oidcProviderMetadata?: OidcProviderMetadata;
-            autoLogout_returnToUrl?: ParamsOfCreateOidc<unknown, boolean>["autoLogout_returnToUrl"];
+            autoLogout_returnToUrl?: ParamsOfCreateOidc<unknown>["autoLogout_returnToUrl"];
             disableDPoP?: true;
         };
     } & (HasServer extends true
@@ -241,10 +213,7 @@ export namespace RuntimeConfigs {
     assert<
         Equals<
             Real<false>["client"] & Pick<Real<false>, "issuerUri" | "debugLogs">,
-            Omit<
-                ParamsOfCreateOidc<unknown, boolean>,
-                "createUser" | "autoLogin" | "autoLogin_returnToUrl"
-            >
+            Omit<ParamsOfCreateOidc<unknown>, "createUser">
         >
     >;
 
@@ -268,24 +237,16 @@ export namespace RuntimeConfigs {
         : {});
 }
 
-export type OidcSpaUtils<User_client, User_server, AutoLogin> = {
-    useOidc: AutoLogin extends true ? UseOidc.WithAutoLogin<User_client> : UseOidc<User_client>;
-    getOidc: AutoLogin extends true ? GetOidc.WithAutoLogin<User_client> : GetOidc<User_client>;
-} & (AutoLogin extends true
+export type OidcSpaUtils<User_client, User_server> = {
+    useOidc: UseOidc<User_client>;
+    getOidc: GetOidc<User_client>;
+    enforceLogin: (loaderContext: TanStackRouterLoaderContextLike) => Promise<void | never>;
+} & (User_server extends undefined
     ? {}
     : {
-          enforceLogin: (loaderContext: TanStackRouterLoaderContextLike) => Promise<void | never>;
-      }) &
-    (User_server extends undefined
-        ? {}
-        : {
-              oidcFnMiddleware: AutoLogin extends true
-                  ? OidcFnMiddleware.WithAutoLogin<User_server>
-                  : OidcFnMiddleware<User_server>;
-              oidcRequestMiddleware: AutoLogin extends true
-                  ? OidcRequestMiddleware.WithAutoLogin<User_server>
-                  : OidcRequestMiddleware<User_server>;
-          });
+          oidcFnMiddleware: OidcFnMiddleware<User_server>;
+          oidcRequestMiddleware: OidcRequestMiddleware<User_server>;
+      });
 
 export type TanStackRouterLoaderContextLike = {
     cause: "preload" | string;

@@ -83,7 +83,7 @@ test("TanStack Start runtime config environment manifest", async t => {
         return { root, handler, createHandler, context, resolvedSpecifiers, read, load };
     };
     const setup = `import { oidcSpa } from "oidc-spa/react-tanstack-start";
-        const builder = oidcSpa.withClientUser(() => ({})).withServerUser(() => ({})).withAutoLogin();
+        const builder = oidcSpa.withClientUser(() => ({})).withServerUser(() => ({}));
         const { withRuntimeConfigs } = builder;`;
 
     await t.test("analyzes the complete runtime configs builder chain", async () => {
@@ -92,7 +92,6 @@ test("TanStack Start runtime config environment manifest", async t => {
             export const { useOidc, getOidc } = oidcSpa
                 .withClientUser(({ idTokenClaims }) => idTokenClaims)
                 .withServerUser(({ accessTokenClaims }) => accessTokenClaims)
-                .withAutoLogin()
                 .withRuntimeConfigs(({ process }) => {
                     if (process.env.USE_MOCK === "true") {
                         return { mode: "mock", client: {
