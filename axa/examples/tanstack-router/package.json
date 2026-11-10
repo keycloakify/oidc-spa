@@ -1,0 +1,44 @@
+{
+    "name": "example-axa-tanstack-router",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "dev": "concurrently --kill-others \"vite\" \"tsx watch server/index.ts --api-only\"",
+        "generate-routes": "tsr generate",
+        "typecheck": "tsr generate && tsc --noEmit",
+        "build": "vite build && tsc --noEmit && esbuild server/index.ts --bundle --platform=node --format=esm --packages=external --outfile=dist/server/index.mjs",
+        "start": "node dist/server/index.mjs",
+        "postinstall": "node ./node_modules/@axa-fr/react-oidc/bin/copy-service-worker-files.mjs public",
+        "test": "tsx --test tests/*.test.ts"
+    },
+    "dependencies": {
+        "@axa-fr/react-oidc": "7.29.8",
+        "@tanstack/react-router": "1.170.46",
+        "@trpc/client": "11.18.0",
+        "@trpc/server": "11.18.0",
+        "@upstash/redis": "1.39.0",
+        "dotenv": "18.0.9",
+        "express": "5.3.0",
+        "oidc-spa": "11.0.0-rc.8",
+        "react": "19.2.8",
+        "react-dom": "19.2.8",
+        "zod": "4.6.7"
+    },
+    "devDependencies": {
+        "@tanstack/router-cli": "1.167.46",
+        "@tanstack/router-plugin": "1.168.48",
+        "@types/express": "5.0.6",
+        "@types/node": "24.10.0",
+        "@types/react": "19.2.18",
+        "@types/react-dom": "19.2.7",
+        "@vitejs/plugin-react": "6.1.2",
+        "concurrently": "10.0.6",
+        "esbuild": "0.28.2",
+        "tsx": "4.23.15",
+        "typescript": "6.0.3",
+        "vite": "8.3.7"
+    },
+    "engines": {
+        "node": ">=22.22.0"
+    }
+}
