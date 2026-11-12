@@ -1,0 +1,37 @@
+{
+    "name": "example-framework-agnostic",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "dev": "concurrently --kill-others \"vite\" \"tsx watch server/index.ts --api-only\"",
+        "typecheck": "vue-tsc --noEmit",
+        "build": "vue-tsc --noEmit && vite build && esbuild server/index.ts --bundle --platform=node --format=esm --packages=external --outfile=dist/server/index.mjs",
+        "start": "node dist/server/index.mjs",
+        "test": "node --test tests/*.test.mjs"
+    },
+    "dependencies": {
+        "@trpc/client": "11.18.0",
+        "@trpc/server": "11.18.0",
+        "@upstash/redis": "1.39.0",
+        "dotenv": "18.0.9",
+        "express": "5.3.0",
+        "oidc-spa": "file:../../dist",
+        "zod": "4.6.7",
+        "vue": "3.5.45",
+        "vue-router": "5.5.0"
+    },
+    "devDependencies": {
+        "@types/express": "5.0.6",
+        "@types/node": "24.10.0",
+        "concurrently": "10.0.6",
+        "esbuild": "0.28.2",
+        "tsx": "4.23.15",
+        "typescript": "6.0.3",
+        "vite": "8.3.8",
+        "@vitejs/plugin-vue": "6.0.11",
+        "vue-tsc": "3.3.14"
+    },
+    "engines": {
+        "node": ">=22.22.0"
+    }
+}

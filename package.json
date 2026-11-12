@@ -14,6 +14,7 @@
         "test:vite-plugin-handlers": "node --test scripts/tests/vite-plugin-handlers.test.mjs",
         "test:react-router-bootstrap": "node --test scripts/tests/react-router-bootstrap.test.mjs scripts/tests/react-router-bootstrap.integration.mjs",
         "test:react-nextjs": "tsc --project tests/react-nextjs/tsconfig.json",
+        "test:framework-agnostic": "node --test scripts/tests/framework-agnostic.test.mjs && tsc --project tests/framework-agnostic/tsconfig.json",
         "test:tanstack-start-runtime-configs": "tsx scripts/tests/tanstack-start-runtime-configs.test.ts && tsc --project tests/tanstack-start-runtime-configs/tsconfig.json",
         "test:tanstack-start-auth": "node --test scripts/tests/tanstack-start-client.test.mjs scripts/tests/tanstack-start-auth.integration.mjs",
         "_format": "prettier '**/*.{ts,tsx,json,md}'",
@@ -27,6 +28,7 @@
         "start-next-example": "bash ./scripts/start-example.sh next dev",
         "start-tanstack-start-example": "bash ./scripts/start-example.sh tanstack-start dev",
         "start-tanstack-router-example": "bash ./scripts/start-example.sh tanstack-router dev",
+        "start-framework-agnostic-example": "bash ./scripts/start-example.sh framework-agnostic dev",
         "start-nuxt-spa-example": "bash ./scripts/start-example.sh nuxt-spa dev"
     },
     "lint-staged": {
@@ -195,6 +197,11 @@
             "module": "./dist/esm/react-spa/index.mjs",
             "import": "./dist/esm/react-spa/index.mjs",
             "default": "./dist/react-spa/index.js"
+        },
+        "./framework-agnostic": {
+            "module": "./dist/esm/framework-agnostic/index.mjs",
+            "import": "./dist/esm/framework-agnostic/index.mjs",
+            "default": "./dist/framework-agnostic/index.js"
         },
         "./react-tanstack-start": {
             "types": "./dist/esm/tanstack-start/react/index.d.ts",

@@ -1,0 +1,11 @@
+{
+    "$schema": "https://openapi.vercel.sh/vercel.json",
+    "framework": "vite",
+    "installCommand": "cd ../.. && yarn install --frozen-lockfile && yarn build && cd examples/framework-agnostic && yarn install",
+    "buildCommand": "yarn build",
+    "outputDirectory": "dist/client",
+    "rewrites": [
+        { "source": "/api/:path*", "destination": "/api" },
+        { "source": "/:path*", "destination": "/index.html" }
+    ]
+}
