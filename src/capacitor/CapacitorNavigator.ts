@@ -1,6 +1,5 @@
 import { App } from "@capacitor/app";
 import { Browser } from "@capacitor/browser";
-import { Capacitor } from "@capacitor/core";
 import type { AsyncStorage, IWindow } from "../vendor/frontend/oidc-client-ts";
 import { hasOidcRedirectResponse } from "../core/parseOidcRedirectUrl";
 import { BaseNavigator, type BaseNavigatorWarning } from "../core/BaseNavigator";
@@ -14,10 +13,26 @@ export type NativeAuthorizationRequest = Readonly<{
     state: string;
 }>;
 
+/** Austauschbarer Browser für Login und Logout; Standard ist der Capacitor-Browser. */
+export type AuthBrowser = {
+    /** void keeps the browser open; the callback arrives separately via an App Link. */
+    open(params: {
+        url: string;
+        callbackUrl?: string;
+    }): Promise<{ callbackUrl: string } | { cancelled: true } | void>;
+    close(): Promise<void>;
+    /** Optional for browsers that report cancellation through open() instead. */
+    addListener?(
+        eventName: "browserFinished",
+        listener: () => void
+    ): Promise<{ remove(): Promise<void> | void }>;
+};
+
 type CapacitorNavigatorParams = {
+    authBrowser?: AuthBrowser;
     callbackUrlPolicy?: CapacitorCallbackUrlPolicy;
     browserFinishedGracePeriodMs?: number;
-    /** Awaited for sign-in only; rejection prevents Browser.open. */
+    /** Awaited for sign-in only; rejection prevents authBrowser.open. */
     beforeBrowserOpen?: (request: NativeAuthorizationRequest) => Promise<void>;
     /** Enable only with a token adapter that validates the accepted callback handoff. */
     persistAcceptedLaunchCallbackToTokenStorage?: boolean;
@@ -32,6 +47,8 @@ export class CapacitorNavigator extends BaseNavigator {
     readonly #browserFinishedGracePeriodMs: number;
     readonly #beforeBrowserOpen: CapacitorNavigatorParams["beforeBrowserOpen"];
     readonly #persistAcceptedLaunchCallbackToTokenStorage: boolean;
+
+    readonly #authBrowser: AuthBrowser;
 
     #listenerRemove: (() => void) | undefined;
     #browserFinishedListenerRemove: (() => void) | undefined;
@@ -49,11 +66,13 @@ export class CapacitorNavigator extends BaseNavigator {
             callbackUrlPolicy = "tolerant",
             browserFinishedGracePeriodMs = CapacitorNavigator.DEFAULT_BROWSER_FINISHED_GRACE_PERIOD_MS,
             beforeBrowserOpen,
+            authBrowser = Browser,
             persistAcceptedLaunchCallbackToTokenStorage = false
         } = params;
 
         this.#callbackUrlPolicy = callbackUrlPolicy;
         this.#beforeBrowserOpen = beforeBrowserOpen;
+        this.#authBrowser = authBrowser;
         this.#persistAcceptedLaunchCallbackToTokenStorage = persistAcceptedLaunchCallbackToTokenStorage;
         this.#browserFinishedGracePeriodMs = Math.max(
             CapacitorNavigator.MIN_BROWSER_FINISHED_GRACE_PERIOD_MS,
@@ -314,9 +333,14 @@ export class CapacitorNavigator extends BaseNavigator {
         this.#browserFinishedTimeoutId = undefined;
     }
 
-    async #closeBrowserIfNotAndroid(): Promise<void> {
-        if ((await Capacitor.getPlatform()) !== "android") {
-            await Browser.close();
+    async #closeBrowser(): Promise<void> {
+        try {
+            await this.#authBrowser.close();
+        } catch {
+            this.#emitWarning({
+                code: "CAPACITOR_CLOSE_BROWSER_FAILED",
+                message: "Failed to close authentication browser."
+            });
         }
     }
 
@@ -357,7 +381,7 @@ export class CapacitorNavigator extends BaseNavigator {
 
                         this.#hasCommittedCallback = true;
 
-                        await this.#closeBrowserIfNotAndroid();
+                        await this.#closeBrowser();
                     } catch {
                         this.#emitWarning({
                             code: "CAPACITOR_APP_URL_OPEN_REDIRECT_FAILED",
@@ -375,20 +399,24 @@ export class CapacitorNavigator extends BaseNavigator {
             navigate: async ({ url, state, response_mode }) => {
                 this.#clearBrowserFinishedTimeout();
                 this.#cleanupBrowserFinishedListenerRemove();
-                this.#browserFinishedListenerRemove = (
-                    await Browser.addListener("browserFinished", async () => {
-                        this.#cleanupBrowserFinishedListenerRemove();
-                        this.#clearBrowserFinishedTimeout();
-                        this.#browserFinishedTimeoutId = setTimeout(() => {
-                            this.#browserFinishedTimeoutId = undefined;
-                            this.#emitAuthFlowAborted();
-                        }, this.#browserFinishedGracePeriodMs);
-                    })
-                ).remove;
-
                 let beforeBrowserOpenPhase: "state" | "hook" | undefined;
+                let browserOpenAttempted = false;
 
                 try {
+                    this.#browserFinishedListenerRemove = (
+                        await this.#authBrowser.addListener?.("browserFinished", () => {
+                            this.#cleanupBrowserFinishedListenerRemove();
+                            this.#clearBrowserFinishedTimeout();
+                            this.#browserFinishedTimeoutId = setTimeout(() => {
+                                this.#browserFinishedTimeoutId = undefined;
+                                void this.#enqueueCallback(async () => {
+                                    this.#cleanupListener();
+                                    this.#emitAuthFlowAborted();
+                                });
+                            }, this.#browserFinishedGracePeriodMs);
+                        })
+                    )?.remove;
+
                     // oidc-client-ts passes response_mode for sign-in and omits it for
                     // sign-out. A sign-out URL may contain an id_token_hint.
                     if (this.#beforeBrowserOpen !== undefined && response_mode !== undefined) {
@@ -424,11 +452,37 @@ export class CapacitorNavigator extends BaseNavigator {
                         beforeBrowserOpenPhase = undefined;
                     }
 
-                    await Browser.open({ url });
+                    browserOpenAttempted = true;
+                    const result = await this.#authBrowser.open({
+                        url,
+                        callbackUrl: this.callbackUrl
+                    });
+                    if (result !== undefined) {
+                        if ("callbackUrl" in result) {
+                            await this.callback(result.callbackUrl);
+                            if (!this.#hasCommittedCallback) {
+                                throw new Error("Authentication browser callback was rejected.");
+                            }
+                        } else {
+                            await this.#enqueueCallback(async () => {
+                                this.#clearBrowserFinishedTimeout();
+                                this.#cleanupBrowserFinishedListenerRemove();
+                                this.#cleanupListener();
+                                this.#emitAuthFlowAborted();
+                            });
+                        }
+                    }
                 } catch (error) {
                     this.#clearBrowserFinishedTimeout();
                     this.#cleanupBrowserFinishedListenerRemove();
                     this.#cleanupListener();
+
+                    await this.#enqueueCallback(async () => {
+                        if (browserOpenAttempted) {
+                            await this.#closeBrowser();
+                        }
+                        this.#emitAuthFlowAborted();
+                    });
 
                     if (beforeBrowserOpenPhase !== undefined) {
                         this.#emitWarning({
@@ -459,17 +513,7 @@ export class CapacitorNavigator extends BaseNavigator {
                 this.#cleanupListener();
                 this.#cleanupBrowserFinishedListenerRemove();
 
-                void (async () => {
-                    try {
-                        await this.#closeBrowserIfNotAndroid();
-                    } catch (error) {
-                        this.#emitWarning({
-                            code: "CAPACITOR_CLOSE_BROWSER_FAILED",
-                            message: "Failed to close native browser during close().",
-                            error
-                        });
-                    }
-                })();
+                void this.#closeBrowser();
             }
         };
     }
@@ -509,7 +553,7 @@ export class CapacitorNavigator extends BaseNavigator {
 
                 this.#hasCommittedCallback = true;
 
-                await this.#closeBrowserIfNotAndroid();
+                await this.#closeBrowser();
             } catch {
                 this.#emitWarning({
                     code: "CAPACITOR_CALLBACK_REDIRECT_FAILED",

@@ -1,2 +1,2 @@
 export { CapacitorNavigator } from "./CapacitorNavigator";
-export type { NativeAuthorizationRequest } from "./CapacitorNavigator";
+export type { NativeAuthorizationRequest, AuthBrowser } from "./CapacitorNavigator";

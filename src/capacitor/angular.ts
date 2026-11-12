@@ -8,7 +8,8 @@ import {
 import {
     CapacitorNavigator,
     type CapacitorCallbackUrlPolicy,
-    type NativeAuthorizationRequest
+    type NativeAuthorizationRequest,
+    type AuthBrowser
 } from "./CapacitorNavigator";
 import { Capacitor } from "@capacitor/core";
 import { Oidc } from "../core/Oidc";
@@ -31,6 +32,7 @@ export const CAPACITOR_BROWSER_FINISHED_GRACE_PERIOD_MS = new InjectionToken<num
 export const CAPACITOR_IS_NATIVE_APP = new InjectionToken<boolean>("oidc-spa.capacitor.isNativeApp");
 
 export type ParamsOfCapacitorProvide = ParamsOfProvide & {
+    authBrowser?: AuthBrowser;
     callbackUrlPolicy?: CapacitorCallbackUrlPolicy;
     browserFinishedGracePeriodMs?: number;
     /** Awaited for native sign-in only, before Browser.open. */
@@ -55,6 +57,7 @@ export abstract class CapacitorOidcService<
             callbackUrlPolicy = "tolerant",
             browserFinishedGracePeriodMs = CapacitorNavigator.DEFAULT_BROWSER_FINISHED_GRACE_PERIOD_MS,
             beforeBrowserOpen,
+            authBrowser,
             persistAcceptedLaunchCallbackToTokenStorage = false,
             nativeSessionRestoreMode: nativeSessionRestoreMode_params,
             ...baseParams
@@ -65,7 +68,8 @@ export abstract class CapacitorOidcService<
         if (
             effectiveIsNativeApp &&
             baseParams.navigator !== undefined &&
-            (beforeBrowserOpen !== undefined ||
+            (authBrowser !== undefined ||
+                beforeBrowserOpen !== undefined ||
                 persistAcceptedLaunchCallbackToTokenStorage ||
                 baseParams.prepareNativeAutomaticLoginRedirect !== undefined)
         ) {
@@ -85,6 +89,7 @@ export abstract class CapacitorOidcService<
                   callbackUrlPolicy,
                   browserFinishedGracePeriodMs,
                   beforeBrowserOpen,
+                  authBrowser,
                   persistAcceptedLaunchCallbackToTokenStorage
               })
             : undefined;

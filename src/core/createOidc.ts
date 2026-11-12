@@ -1003,7 +1003,11 @@ export async function createOidc_nonMemoized<
 
     let resetOngoingAction: ReturnType<typeof createLoginOrGoToAuthServer>["resetOngoingAction"];
 
+    let dUnlockNativeLogout: Deferred<void> | undefined;
+
     const onAuthFlowAborted = () => {
+        dUnlockNativeLogout?.resolve();
+        dUnlockNativeLogout = undefined;
         assert(resetOngoingAction !== undefined, "559291");
         resetOngoingAction({ action: "login" });
         setHasLogoutBeenCalledForCurrentConfig(false);
@@ -2073,8 +2077,10 @@ export async function createOidc_nonMemoized<
                 }
             })().slice(window.location.origin.length);
 
+            const dUnlockOnAbort = isNativeApp ? new Deferred<void>() : undefined;
+            dUnlockNativeLogout = dUnlockOnAbort;
             await waitForAllOtherOngoingLoginOrRefreshProcessesToComplete({
-                prUnlock: new Promise<never>(() => {})
+                prUnlock: dUnlockOnAbort?.pr ?? new Promise<never>(() => {})
             });
 
             if (!oidcMetadata.end_session_endpoint) {
@@ -2148,6 +2154,13 @@ export async function createOidc_nonMemoized<
                     redirectMethod: "assign"
                 });
             } catch (error) {
+                if (isNativeApp) {
+                    dUnlockOnAbort?.resolve();
+                    if (dUnlockNativeLogout === dUnlockOnAbort) {
+                        onAuthFlowAborted();
+                    }
+                    throw error;
+                }
                 assert(false, `signoutRedirect() is not expected to throw but it did: ${String(error)}`);
             }
 

@@ -129,6 +129,7 @@ test("Capacitor provider leaves browser and PWA without a native navigator", () 
 test("native hook with an externally supplied navigator fails closed", () => {
     for (const nativeOption of [
         { beforeBrowserOpen: async () => {} },
+        { authBrowser: { open: async () => undefined, close: () => Promise.resolve() } },
         { prepareNativeAutomaticLoginRedirect: async () => async () => {} },
         { persistAcceptedLaunchCallbackToTokenStorage: true }
     ]) {
@@ -143,5 +144,35 @@ test("native hook with an externally supplied navigator fails closed", () => {
                 }),
             /native auth-flow options require the default CapacitorNavigator/
         );
+    }
+});
+
+test("Capacitor provider passes the native browser to its default navigator", async () => {
+    const configId = "native-provider-browser";
+    const authBrowser = {
+        open: vi.fn(async () => ({ cancelled: true as const })),
+        close: vi.fn(() => Promise.resolve())
+    };
+    opened.length = 0;
+    const result = CapacitorOidcService.provide({
+        issuerUri: "https://issuer.example",
+        clientId: "client",
+        isNativeApp: true,
+        authBrowser
+    }) as unknown as ProvideResult;
+    const navigator = result.providers.find(
+        provider => provider.provide === CAPACITOR_NAVIGATOR
+    )?.useValue;
+    assert.ok(navigator instanceof CapacitorNavigator);
+    const callbackUrl = "https://app.example/callback";
+    const url = "https://issuer.example/logout";
+    try {
+        await navigator.initialize({ tokenStorageAdapter: storage, configId, callbackUrl });
+        const browserWindow = await navigator.prepare({});
+        await browserWindow.navigate({ url });
+        assert.deepEqual(authBrowser.open.mock.calls, [[{ url, callbackUrl }]]);
+        assert.deepEqual(opened, []);
+    } finally {
+        cleanupExternalRedirectUrlContext({ configId });
     }
 });
