@@ -4,7 +4,7 @@
     "type": "module",
     "private": true,
     "scripts": {
-        "prepare": "[ ! -f .env.local ] && cp .env.local.sample .env.local || true",
+        "prepare": "node scripts/setup-env.mjs",
         "build": "nuxt build --dotenv .env.local",
         "dev": "nuxt dev --dotenv .env.local",
         "generate": "nuxt generate --dotenv .env.local",
@@ -12,23 +12,25 @@
         "postinstall": "nuxt prepare",
         "lint": "eslint .",
         "lint:fix": "eslint . --fix",
-        "typecheck": "nuxt typecheck"
+        "typecheck": "nuxt typecheck --dotenv .env.local"
     },
     "dependencies": {
-        "@nuxt/eslint": "1.15.2",
-        "@nuxt/icon": "2.2.1",
-        "@nuxt/ui": "4.5.0",
-        "nuxt": "^4.3.1",
-        "vue": "^3.5.29",
-        "vue-router": "^5.0.3",
+        "@iconify-json/lucide": "1.2.129",
+        "@nuxt/ui": "4.11.1",
+        "nuxt": "4.5.2",
+        "tailwindcss": "4.3.3",
+        "vue": "3.5.42",
+        "vue-router": "5.3.1",
         "oidc-spa": "latest",
-        "zod": "4.3.6"
+        "zod": "4.5.4"
     },
     "devDependencies": {
-        "@tailwindcss/vite": "^4.2.1",
-        "eslint-config-prettier": "^10.1.8",
-        "eslint-plugin-prettier": "^5.5.5",
-        "prettier": "^3.8.1",
-        "tailwindcss": "^4.2.1"
+        "@nuxt/eslint": "1.17.0",
+        "eslint": "10.10.0",
+        "typescript": "6.0.3",
+        "vue-tsc": "3.3.11"
+    },
+    "engines": {
+        "node": "^22.19.0 || ^24.11.0 || >=26.0.0"
     }
 }

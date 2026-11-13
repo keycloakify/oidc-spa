@@ -3,39 +3,27 @@ import { assert } from "../tools/tsafe/assert";
 import { id } from "../tools/tsafe/id";
 import { readExpirationTimeInJwt } from "../tools/readExpirationTimeInJwt";
 import { decodeJwt } from "../tools/decodeJwt";
-import type { Oidc } from "./Oidc";
+import type { OidcTokens, IdTokenClaims } from "./types";
 import { INFINITY_TIME } from "../tools/INFINITY_TIME";
 import { createGetServerDateNow, type ParamsOfCreateGetServerDateNow } from "../tools/getServerDateNow";
 import type { Exports_DPoP, Exports_tokenSubstitution } from "./createOidc";
 
-export function createOidcClientTsUserToTokens<DecodedIdToken extends Record<string, unknown>>(params: {
+export function createOidcClientTsUserToTokens(params: {
     configId: string;
-    decodedIdTokenSchema?: {
-        parse: (decodedIdToken_original: Oidc.Tokens.DecodedIdToken_OidcCoreSpec) => DecodedIdToken;
-    };
-    __unsafe_useIdTokenAsAccessToken: boolean;
-
     exports_DPoP: Pick<Exports_DPoP, "registerAccessTokenForDPoP"> | undefined;
     exports_tokenSubstitution: Pick<Exports_tokenSubstitution, "getTokensPlaceholders"> | undefined;
-
     log: typeof console.log | undefined;
 }) {
-    const {
-        configId,
-        decodedIdTokenSchema,
-        __unsafe_useIdTokenAsAccessToken,
-        exports_DPoP,
-        exports_tokenSubstitution,
-        log
-    } = params;
+    const { configId, exports_DPoP, exports_tokenSubstitution, log } = params;
 
-    function oidcClientTsUserToTokens(params: {
-        oidcClientTsUser: OidcClientTsUser;
-        decodedIdToken_previous: DecodedIdToken | undefined;
-    }): Oidc.Tokens<DecodedIdToken> {
-        const { oidcClientTsUser, decodedIdToken_previous } = params;
+    let isFirstCall_next = true;
 
-        const isFirstInit = decodedIdToken_previous === undefined;
+    function oidcClientTsUserToTokens(params: { oidcClientTsUser: OidcClientTsUser }): OidcTokens {
+        const isFirstCall = isFirstCall_next;
+
+        isFirstCall_next = false;
+
+        const { oidcClientTsUser } = params;
 
         const accessToken = oidcClientTsUser.access_token;
 
@@ -45,54 +33,18 @@ export function createOidcClientTsUserToTokens<DecodedIdToken extends Record<str
 
         assert(idToken !== undefined, "No id token provided by the oidc server");
 
-        const decodedIdToken_original = decodeJwt<Oidc.Tokens.DecodedIdToken_OidcCoreSpec>(idToken);
+        const idTokenClaims = decodeJwt<IdTokenClaims>(idToken);
 
-        if (isFirstInit) {
-            log?.(
-                [
-                    `Decoded ID token`,
-                    decodedIdTokenSchema === undefined ? "" : " before `decodedIdTokenSchema.parse()`\n",
-                    JSON.stringify(decodedIdToken_original, null, 2)
-                ].join("")
-            );
+        if (isFirstCall) {
+            log?.([`Decoded ID token`, JSON.stringify(idTokenClaims, null, 2)].join(""));
         }
-
-        const decodedIdToken = (() => {
-            let decodedIdToken: DecodedIdToken;
-
-            if (decodedIdTokenSchema !== undefined) {
-                decodedIdToken = decodedIdTokenSchema.parse(decodedIdToken_original);
-
-                if (isFirstInit) {
-                    log?.(
-                        [
-                            "Decoded ID token after `decodedIdTokenSchema.parse()`\n",
-                            JSON.stringify(decodedIdToken, null, 2)
-                        ].join("")
-                    );
-                }
-            } else {
-                // @ts-expect-error
-                decodedIdToken = decodedIdToken_original;
-            }
-
-            if (
-                decodedIdToken_previous !== undefined &&
-                JSON.stringify(decodedIdToken) === JSON.stringify(decodedIdToken_previous)
-            ) {
-                // NOTE: For stable ref, prevent re-render for component that would memoize
-                return decodedIdToken_previous;
-            }
-
-            return decodedIdToken;
-        })();
 
         const issuedAtTime = (() => {
             let id_token_iat = (() => {
                 let iat: number | undefined;
 
                 try {
-                    const iat_claimValue = toNumber(decodedIdToken_original.iat);
+                    const iat_claimValue = toNumber(idTokenClaims.iat);
                     iat = iat_claimValue;
                 } catch {
                     iat = undefined;
@@ -153,75 +105,54 @@ export function createOidcClientTsUserToTokens<DecodedIdToken extends Record<str
             issuedAtTime
         };
 
-        const tokens_common: Oidc.Tokens.Common<DecodedIdToken> = {
-            ...(__unsafe_useIdTokenAsAccessToken
-                ? {
-                      accessToken: idToken,
-                      accessTokenExpirationTime: (() => {
-                          const expirationTime = readExpirationTimeInJwt(idToken);
+        const tokens_common: OidcTokens.Common = {
+            accessToken,
+            accessTokenExpirationTime: (() => {
+                read_from_jwt: {
+                    const expirationTime = readExpirationTimeInJwt(accessToken);
 
-                          assert(
-                              expirationTime !== undefined,
-                              "Failed to get id token expiration time while trying to substitute the access token by the id token"
-                          );
+                    if (expirationTime === undefined) {
+                        break read_from_jwt;
+                    }
 
-                          return expirationTime;
-                      })()
-                  }
-                : {
-                      accessToken,
-                      accessTokenExpirationTime: (() => {
-                          read_from_jwt: {
-                              const expirationTime = readExpirationTimeInJwt(accessToken);
+                    return expirationTime;
+                }
 
-                              if (expirationTime === undefined) {
-                                  break read_from_jwt;
-                              }
+                read_from_token_response_expires_at: {
+                    const expires_at = toNumber(oidcClientTsUser.__oidc_spa_tokenResponse["expires_at"]);
 
-                              return expirationTime;
-                          }
+                    if (expires_at === undefined) {
+                        break read_from_token_response_expires_at;
+                    }
 
-                          read_from_token_response_expires_at: {
-                              const expires_at = toNumber(
-                                  oidcClientTsUser.__oidc_spa_tokenResponse["expires_at"]
-                              );
+                    return expires_at * 1000;
+                }
 
-                              if (expires_at === undefined) {
-                                  break read_from_token_response_expires_at;
-                              }
+                read_from_token_response_expires_in: {
+                    const expires_in = toNumber(oidcClientTsUser.__oidc_spa_tokenResponse["expires_in"]);
 
-                              return expires_at * 1000;
-                          }
+                    if (expires_in === undefined) {
+                        break read_from_token_response_expires_in;
+                    }
 
-                          read_from_token_response_expires_in: {
-                              const expires_in = toNumber(
-                                  oidcClientTsUser.__oidc_spa_tokenResponse["expires_in"]
-                              );
+                    return issuedAtTime + expires_in * 1_000;
+                }
 
-                              if (expires_in === undefined) {
-                                  break read_from_token_response_expires_in;
-                              }
-
-                              return issuedAtTime + expires_in * 1_000;
-                          }
-
-                          assert(false, "Failed to get access token expiration time");
-                      })()
-                  }),
+                assert(false, "Failed to get access token expiration time");
+            })(),
             idToken,
-            decodedIdToken,
-            decodedIdToken_original,
+            idTokenClaims,
             issuedAtTime,
             getServerDateNow: createGetServerDateNow(paramsOfCreateGetServerDateNow)
         };
 
-        const tokens: Oidc.Tokens<DecodedIdToken> =
+        const tokens: OidcTokens =
             refreshToken === undefined
-                ? id<Oidc.Tokens.WithoutRefreshToken<DecodedIdToken>>({
+                ? id<OidcTokens.WithoutRefreshToken>({
                       ...tokens_common,
                       hasRefreshToken: false
                   })
-                : id<Oidc.Tokens.WithRefreshToken<DecodedIdToken>>({
+                : id<OidcTokens.WithRefreshToken>({
                       ...tokens_common,
                       hasRefreshToken: true,
                       refreshToken,
@@ -298,7 +229,7 @@ export function createOidcClientTsUserToTokens<DecodedIdToken extends Record<str
         }
 
         if (
-            isFirstInit &&
+            isFirstCall &&
             tokens.hasRefreshToken &&
             tokens.refreshTokenExpirationTime !== undefined &&
             tokens.refreshTokenExpirationTime < tokens.accessTokenExpirationTime

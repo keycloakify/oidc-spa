@@ -14,28 +14,16 @@ import type {
 } from "./types";
 import { assert, is } from "../../tools/tsafe/assert";
 import { isAmong } from "../../tools/tsafe/isAmong";
-import { createOidc, type Oidc, OidcInitializationError } from "../../core";
+import { createOidc, type Oidc, type OidcTokens } from "../../core";
 import { Deferred } from "../../tools/Deferred";
 import { decodeJwt } from "../../tools/decodeJwt";
 import { type KeycloakUtils, createKeycloakUtils } from "../keycloakUtils";
 import { type StatefulEvt, createStatefulEvt } from "../../tools/StatefulEvt";
 import { readExpirationTimeInJwt } from "../../tools/readExpirationTimeInJwt";
-import { getHomeAndRedirectUri } from "../../core/homeAndRedirectUri";
+import { toFullyQualifiedUrl } from "../../tools/toFullyQualifiedUrl";
+import { getBASE_URL_earlyInit } from "../../core/earlyInit_BASE_URL";
 
 type ConstructorParams = KeycloakServerConfig & {
-    /**
-     * NOTE: This parameter is optional if you use the Vite plugin.
-     *
-     * This parameter let's you overwrite the value provided in
-     * oidcEarlyInit({ BASE_URL: xxx });
-     *
-     * What should you put in this parameter?
-     *   - Vite project:             `BASE_URL: import.meta.env.BASE_URL`
-     *   - Create React App project: `BASE_URL: process.env.PUBLIC_URL`
-     *   - Other:                    `BASE_URL: "/"` (Usually, or `/dashboard` if your app is not at the root of the domain)
-     */
-    BASE_URL?: string;
-
     /**
      * Determines how session restoration is handled.
      * Session restoration allows users to stay logged in between visits
@@ -47,10 +35,11 @@ type ConstructorParams = KeycloakServerConfig & {
      *   Automatically selects the best method.
      *   If the app’s domain shares a common parent domain with the authorization endpoint,
      *   an iframe is used for silent session restoration.
-     *   Otherwise, a full-page redirect is used.
+     *   Otherwise, a foreground redirect is used.
      *
-     * - **"full page redirect"**:
-     *   Forces full-page reloads for session restoration.
+     * - **"foreground redirect"**:
+     *   Restores the session by navigating the current document to the authorization server
+     *   and back. This unloads the application during the authorization round trip.
      *   Use this if your application is served with a restrictive CSP
      *   (e.g., `Content-Security-Policy: frame-ancestors "none"`)
      *   or `X-Frame-Options: DENY`, and you cannot modify those headers.
@@ -64,7 +53,7 @@ type ConstructorParams = KeycloakServerConfig & {
      *   to set third-party cookies this value will let you test your app
      *   with the local dev server as it will behave in production.
      */
-    sessionRestorationMethod?: "iframe" | "full page redirect" | "auto";
+    sessionRestorationMethod?: "iframe" | "foreground redirect" | "auto";
 };
 
 /**
@@ -82,7 +71,7 @@ export class Keycloak {
         dInitialized: Deferred<void>;
         initOptions: KeycloakInitOptions | undefined;
         oidc: Oidc | undefined;
-        tokens: Oidc.Tokens | undefined;
+        tokens: OidcTokens | undefined;
         profile: KeycloakProfile | undefined;
         userInfo: KeycloakUserInfo | undefined;
         $onTokenExpired: StatefulEvt<(() => void) | undefined>;
@@ -126,7 +115,7 @@ export class Keycloak {
             enableLogging,
             scope,
             locale,
-            autoLogoutParams
+            autoLogout_returnToUrl
         } = initOptions;
 
         if (this.#state.initOptions !== undefined) {
@@ -143,55 +132,52 @@ export class Keycloak {
 
         const { constructorParams, issuerUri } = this.#state;
 
-        const autoLogin = onLoad === "login-required";
-
-        let hasCreateResolved = false;
-
-        const oidcOrError = await createOidc({
-            BASE_URL: constructorParams.BASE_URL,
+        const oidc = await createOidc({
+            createUser: () => ({}),
             sessionRestorationMethod: constructorParams.sessionRestorationMethod,
             issuerUri,
             clientId: this.#state.constructorParams.clientId,
-            autoLogin,
-            postLoginRedirectUrl: redirectUri,
             debugLogs: enableLogging,
             scopes: scope?.split(" "),
-            autoLogoutParams,
-            extraQueryParams:
-                !autoLogin || locale === undefined
-                    ? undefined
-                    : () => {
-                          if (hasCreateResolved) {
-                              return {};
-                          }
+            autoLogout_returnToUrl
+        });
 
-                          return {
-                              ui_locales: locale
-                          };
-                      }
-        })
-            // NOTE: This can only happen when autoLogin is true, otherwise the error
-            // is in oidc.initializationError
-            .catch((error: OidcInitializationError) => error);
+        onAuthError_call: {
+            if (oidc.isUserLoggedIn) {
+                break onAuthError_call;
+            }
 
-        hasCreateResolved = true;
+            if (oidc.initializationError === undefined) {
+                break onAuthError_call;
+            }
 
-        if (oidcOrError instanceof OidcInitializationError) {
             this.onAuthError?.({
-                error: oidcOrError.name,
-                error_description: oidcOrError.message
+                error: oidc.initializationError.name,
+                error_description: oidc.initializationError.message
             });
-
-            await new Promise<never>(() => {});
-            assert(false);
         }
 
-        const oidc = oidcOrError;
+        if (
+            onLoad === "login-required" &&
+            !oidc.isUserLoggedIn &&
+            oidc.initializationError === undefined
+        ) {
+            await oidc.login({
+                doesCurrentHrefEnforceLogin: true,
+                returnToUrl: redirectUri,
+                authorizationParams:
+                    locale === undefined
+                        ? undefined
+                        : {
+                              ui_locales: locale
+                          }
+            });
+        }
 
         if (oidc.isUserLoggedIn) {
             const tokens = await oidc.getTokens();
 
-            const onNewToken = (tokens_new: Oidc.Tokens) => {
+            const onNewToken = (tokens_new: OidcTokens) => {
                 this.#state.tokens = tokens_new;
                 this.onAuthRefreshSuccess?.();
             };
@@ -214,21 +200,6 @@ export class Keycloak {
             this.onAuthSuccess?.();
         }
 
-        onAuthError_call: {
-            if (oidc.isUserLoggedIn) {
-                break onAuthError_call;
-            }
-
-            if (oidc.initializationError === undefined) {
-                break onAuthError_call;
-            }
-
-            this.onAuthError?.({
-                error: oidc.initializationError.name,
-                error_description: oidc.initializationError.message
-            });
-        }
-
         onActionUpdate_call: {
             if (!oidc.isUserLoggedIn) {
                 break onActionUpdate_call;
@@ -238,21 +209,21 @@ export class Keycloak {
                 break onActionUpdate_call;
             }
 
-            const { backFromAuthServer } = oidc;
+            const { authorizationResult } = oidc;
 
-            if (backFromAuthServer === undefined) {
+            if (authorizationResult === undefined) {
                 break onActionUpdate_call;
             }
 
-            const status = backFromAuthServer.result.kc_action_status;
+            const status = authorizationResult.response.kc_action_status;
 
             if (!isAmong(["success", "cancelled", "error"], status)) {
                 break onActionUpdate_call;
             }
 
-            const action = backFromAuthServer.extraQueryParams.kc_action;
+            const action = authorizationResult.authorizationParams.kc_action;
 
-            if (action === undefined) {
+            if (typeof action !== "string") {
                 break onActionUpdate_call;
             }
 
@@ -346,7 +317,7 @@ export class Keycloak {
 
         assert(tokens !== undefined);
 
-        return tokens.decodedIdToken_original.sub;
+        return tokens.idTokenClaims.sub;
     }
 
     /**
@@ -376,50 +347,14 @@ export class Keycloak {
      * The realm roles associated with the token.
      */
     get realmAccess(): KeycloakRoles | undefined {
-        if (!this.didInitialize) {
-            return undefined;
-        }
-
-        const { oidc, tokens } = this.#state;
-
-        assert(oidc !== undefined);
-
-        if (!oidc.isUserLoggedIn) {
-            console.warn(
-                "Trying to read keycloak.realAccess when keycloak.authenticated is false is a logical error in your application"
-            );
-            return undefined;
-        }
-
-        assert(tokens !== undefined);
-        assert(is<KeycloakTokenParsed>(tokens.decodedIdToken_original));
-
-        return tokens.decodedIdToken_original.realm_access;
+        return this.tokenParsed?.realm_access;
     }
 
     /**
      * The resource roles associated with the token.
      */
     get resourceAccess(): KeycloakResourceAccess | undefined {
-        if (!this.didInitialize) {
-            return undefined;
-        }
-
-        const { oidc, tokens } = this.#state;
-
-        assert(oidc !== undefined);
-
-        if (!oidc.isUserLoggedIn) {
-            console.warn(
-                "Trying to read keycloak.resourceAccess when keycloak.authenticated is false is a logical error in your application"
-            );
-            return undefined;
-        }
-
-        assert(tokens !== undefined);
-        assert(is<KeycloakTokenParsed>(tokens.decodedIdToken_original));
-
-        return tokens.decodedIdToken_original.resource_access;
+        return this.tokenParsed?.resource_access;
     }
 
     /**
@@ -570,7 +505,7 @@ export class Keycloak {
                 return undefined;
             }
 
-            return decodeJwt(idToken) as KeycloakTokenParsed;
+            return decodeJwt<KeycloakTokenParsed>(idToken);
         }
 
         const { oidc, tokens } = this.#state;
@@ -585,9 +520,9 @@ export class Keycloak {
         }
 
         assert(tokens !== undefined);
-        assert(is<KeycloakTokenParsed>(tokens.decodedIdToken_original));
+        assert(is<KeycloakTokenParsed>(tokens.idTokenClaims));
 
-        return tokens.decodedIdToken_original;
+        return tokens.idTokenClaims;
     }
 
     /**
@@ -704,7 +639,7 @@ export class Keycloak {
 
         assert(tokens !== undefined);
 
-        const { sid } = tokens.decodedIdToken_original;
+        const { sid } = tokens.idTokenClaims;
 
         assert(typeof sid === "string");
 
@@ -790,28 +725,28 @@ export class Keycloak {
      */
     login = this.#login.bind(this);
     async #login(
-        options?: KeycloakLoginOptions & { doesCurrentHrefRequiresAuth?: boolean }
+        options?: KeycloakLoginOptions & { doesCurrentHrefEnforceLogin?: boolean }
     ): Promise<never> {
+        if (!this.didInitialize) {
+            await this.#state.dInitialized.pr;
+        }
+
+        const { oidc, keycloakUtils, initOptions } = this.#state;
+
         const {
-            redirectUri,
+            redirectUri = initOptions?.redirectUri,
             action,
             loginHint,
             acr,
             acrValues,
             idpHint,
             locale,
-            doesCurrentHrefRequiresAuth
+            doesCurrentHrefEnforceLogin
         } = options ?? {};
-
-        if (!this.didInitialize) {
-            await this.#state.dInitialized.pr;
-        }
-
-        const { oidc, keycloakUtils } = this.#state;
 
         assert(oidc !== undefined);
 
-        const extraQueryParams_commons: Record<string, string | undefined> = {
+        const authorizationParams_common: Record<string, string | undefined> = {
             claims:
                 acr === undefined
                     ? undefined
@@ -828,12 +763,12 @@ export class Keycloak {
             assert(action !== "register");
             assert(loginHint === undefined);
             assert(idpHint === undefined);
-            assert(doesCurrentHrefRequiresAuth === undefined);
+            assert(doesCurrentHrefEnforceLogin === undefined);
 
-            await oidc.goToAuthServer({
-                redirectUrl: redirectUri,
-                extraQueryParams: {
-                    ...extraQueryParams_commons,
+            await oidc.startAuthorization({
+                returnToUrl: redirectUri,
+                authorizationParams: {
+                    ...authorizationParams_common,
                     kc_action: action,
                     ui_locales: locale
                 }
@@ -844,15 +779,15 @@ export class Keycloak {
         assert(action === undefined || action === "register");
 
         await oidc.login({
-            redirectUrl: redirectUri,
-            doesCurrentHrefRequiresAuth: doesCurrentHrefRequiresAuth ?? false,
-            extraQueryParams: {
-                ...extraQueryParams_commons,
+            returnToUrl: redirectUri,
+            doesCurrentHrefEnforceLogin: doesCurrentHrefEnforceLogin ?? false,
+            authorizationParams: {
+                ...authorizationParams_common,
                 login_hint: loginHint,
                 kc_idp_hint: idpHint
             },
-            transformUrlBeforeRedirect:
-                action !== "register" ? undefined : keycloakUtils.transformUrlBeforeRedirectForRegister
+            transformAuthorizationUrl:
+                action !== "register" ? undefined : keycloakUtils.transformAuthorizationUrl_register
         });
         assert(false);
     }
@@ -877,9 +812,7 @@ export class Keycloak {
         const redirectUri = options?.redirectUri ?? initOptions.redirectUri;
 
         await oidc.logout({
-            ...(redirectUri === undefined
-                ? { redirectTo: "current page" }
-                : { redirectTo: "specific url", url: redirectUri })
+            returnToUrl: redirectUri
         });
         assert(false);
     }
@@ -948,20 +881,33 @@ export class Keycloak {
     #createAccountUrl(options?: KeycloakAccountOptions & { locale?: string }): string {
         const { locale, redirectUri } = options ?? {};
 
-        const { keycloakUtils, constructorParams } = this.#state;
+        const { keycloakUtils } = this.#state;
 
         return keycloakUtils.getAccountUrl({
             clientId: this.clientId,
             validRedirectUri: (() => {
                 if (redirectUri !== undefined) {
-                    return redirectUri;
+                    return toFullyQualifiedUrl({
+                        urlish: redirectUri,
+                        doAssertNoQueryParams: false,
+                        rootUrl_fullyQualified: window.location.origin
+                    });
                 }
 
-                const { homeUrlAndRedirectUri } = getHomeAndRedirectUri({
-                    BASE_URL_params: constructorParams.BASE_URL
-                });
+                let BASE_URL: string;
 
-                return homeUrlAndRedirectUri;
+                try {
+                    BASE_URL = getBASE_URL_earlyInit();
+                } catch {
+                    BASE_URL = "/";
+                }
+
+                return toFullyQualifiedUrl({
+                    urlish: BASE_URL,
+                    doAssertNoQueryParams: true,
+                    doOutputWithTrailingSlash: true,
+                    rootUrl_fullyQualified: window.location.origin
+                });
             })(),
             locale
         });

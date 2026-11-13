@@ -2,10 +2,31 @@ import type { UserConfig } from "vite";
 import { getThisCodebaseRootDirPath } from "../tools/getThisCodebaseRootDirPath_esm";
 import * as fs from "node:fs";
 import { join as pathJoin } from "path";
-import type { ProjectType } from "./projectType";
+import { getProjectType, type ProjectType } from "./projectType";
 import { assert } from "../tools/tsafe/assert";
 import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
+
+export function configureDependencyOptimization(userConfig: UserConfig): UserConfig | undefined {
+    const pluginNames =
+        userConfig.plugins
+            ?.flat()
+            .filter(plugin => plugin instanceof Object)
+            .filter(plugin => "name" in plugin)
+            .map(plugin => plugin.name) ?? [];
+
+    if (
+        (userConfig as { configFile?: string | false }).configFile === false &&
+        pluginNames.includes("react-router:virtual-modules")
+    ) {
+        return;
+    }
+
+    // The raw config gives an early estimate for dependency optimization only.
+    // Framework handlers are selected later from Vite's resolved plugin list.
+    const projectType_bestEffort = getProjectType({ pluginNames });
+    return manageOptimizedDeps({ userConfig, projectType: projectType_bestEffort });
+}
 
 export function manageOptimizedDeps(params: {
     userConfig: UserConfig;
@@ -35,7 +56,11 @@ export function manageOptimizedDeps(params: {
                     "oidc-spa/react-spa",
                     "oidc-spa/entrypoint",
                     "oidc-spa/keycloak",
-                    "oidc-spa/core"
+                    "oidc-spa/core",
+                    "oidc-spa/decode-jwt",
+                    "oidc-spa/DPoP",
+                    "oidc-spa/browser-runtime-freeze",
+                    "oidc-spa/token-substitution"
                 ];
 
                 for (const moduleName of moduleNames_include) {

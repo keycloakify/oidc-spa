@@ -1,16 +1,16 @@
-import React from "react";
-import ReactDOM from "react-dom/client";
+import { StrictMode } from "react";
+import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router";
+import { OidcInitializationGate } from "./oidc";
 import { App } from "./App";
-import { OidcInitializationGate } from "~/oidc";
-import "./index.css";
+import "./styles.css";
 
-ReactDOM.createRoot(document.getElementById("root")!).render(
-    <React.StrictMode>
+createRoot(document.getElementById("root")!).render(
+    <StrictMode>
         <OidcInitializationGate>
             <BrowserRouter>
                 <App />
             </BrowserRouter>
         </OidcInitializationGate>
-    </React.StrictMode>
+    </StrictMode>
 );

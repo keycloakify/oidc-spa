@@ -31,23 +31,13 @@ export function __withOidcSpaServerEntry<T extends { fetch: RequestHandler<Regis
                     break render_deepLink_instead_of_home_on_authResponse;
                 }
 
-                const { stateDataCookie } = entry;
-
-                const rootRelativeRedirectUrl = (() => {
-                    if (
-                        stateDataCookie.action === "login" &&
-                        url.searchParams.get("error") === "consent_required"
-                    ) {
-                        return stateDataCookie.rootRelativeRedirectUrl_consentRequiredCase;
-                    }
-                    return stateDataCookie.rootRelativeRedirectUrl;
-                })();
+                const { rootRelativeReturnToUrl } = entry.stateDataCookie;
 
                 url.pathname = "/";
                 url.search = "";
                 url.hash = "";
 
-                const url_str_new = `${url.href.slice(0, -1)}${rootRelativeRedirectUrl}`;
+                const url_str_new = `${url.href.slice(0, -1)}${rootRelativeReturnToUrl}`;
 
                 const request_new = new Request(url_str_new, request);
 

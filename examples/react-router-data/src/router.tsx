@@ -1,40 +1,34 @@
-import { createBrowserRouter, Outlet, redirect } from "react-router";
-import { Header } from "./components/Header";
-import { AutoLogoutWarningOverlay } from "./components/AutoLogoutWarningOverlay";
+import { createBrowserRouter } from "react-router";
+import { Layout } from "./Layout";
 import Home from "./pages/Home";
-import Protected, * as protected_ from "./pages/Protected";
-import AdminOnly, * as adminOnly from "./pages/AdminOnly";
-
-function Layout() {
-    return (
-        <>
-            <Header />
-            <main className="mx-auto flex w-full max-w-4xl flex-col gap-10 px-6 pb-16 pt-28">
-                <Outlet />
-            </main>
-            <AutoLogoutWarningOverlay />
-        </>
-    );
-}
+import InactivityLogout from "./pages/InactivityLogout";
+import NotFound from "./pages/NotFound";
+import { AuthenticatedLayout } from "./pages/protected/AuthenticatedLayout";
+import { enforceLogin } from "./oidc";
 
 export const router = createBrowserRouter([
     {
-        path: "/",
-        element: <Layout />,
+        Component: Layout,
+        HydrateFallback: () => null,
         children: [
-            { index: true, element: <Home /> },
-            { path: "protected", element: <Protected />, loader: protected_.loader },
+            { index: true, Component: Home },
+            { path: "inactivity-logout", Component: InactivityLogout },
             {
-                path: "admin-only",
-                element: <AdminOnly />,
-                loader: adminOnly.loader,
-                ErrorBoundary: adminOnly.ErrorBoundary
+                Component: AuthenticatedLayout,
+                middleware: [
+                    async (args, next) => {
+                        await enforceLogin(args);
+                        return next();
+                    }
+                ],
+                children: [
+                    { path: "todo-list-trpc", lazy: () => import("./pages/protected/TodoListTrpc") },
+                    { path: "todo-list-api", lazy: () => import("./pages/protected/TodoListApi") },
+                    { path: "todo-list-admin", lazy: () => import("./pages/protected/TodoListAdmin") },
+                    { path: "account", lazy: () => import("./pages/protected/Account") }
+                ]
             },
-            {
-                path: "*",
-                loader: () => redirect("/"),
-                element: null
-            }
+            { path: "*", Component: NotFound }
         ]
     }
 ]);

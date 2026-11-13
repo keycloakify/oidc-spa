@@ -1,5 +1,7 @@
 <script setup lang="ts">
-const { isAuthenticated, idToken, keycloakUtils, login, register, logout } = useAuth();
+import type { DropdownMenuItem } from "@nuxt/ui";
+
+const { isAuthenticated, user, keycloakUtils, login, register, logout } = useAuth();
 const colorMode = useColorMode();
 
 if (!["light", "dark", "system"].includes(colorMode.preference)) {
@@ -14,7 +16,7 @@ function setColorMode(preference: "light" | "dark" | "system") {
     colorMode.preference = preference;
 }
 
-const colorModeItems = computed(() => {
+const colorModeItems = computed<DropdownMenuItem[][]>(() => {
     return [
         [
             {
@@ -42,22 +44,13 @@ const colorModeItems = computed(() => {
     ];
 });
 
-const profileImageSrc = computed(() => {
-    const picture = idToken.value?.picture;
-    return picture && picture.trim().length > 0 ? picture : undefined;
-});
-
-const profileName = computed(() => {
-    return idToken.value?.name ?? idToken.value?.preferred_username ?? "User";
-});
-
-const navigationItems = computed(() => {
-    return [
-        { label: "Home", to: "/", icon: "i-lucide-house" },
-        { label: "Protected", to: "/protected", icon: "i-lucide-lock" },
-        { label: "Admin", to: "/admin-only", icon: "i-lucide-shield-check" }
-    ];
-});
+const navigationItems = computed(() => [
+    { label: "Home", to: "/", icon: "i-lucide-house" },
+    { label: "Protected", to: "/protected", icon: "i-lucide-lock" },
+    ...(user.value?.canSeeKeycloakAdminNavigation
+        ? [{ label: "Admin", to: "/admin-only", icon: "i-lucide-shield-check" }]
+        : [])
+]);
 
 function registerWithProvider() {
     if (!keycloakUtils.value) {
@@ -115,11 +108,11 @@ function registerWithProvider() {
                             </UButton>
                         </template>
 
-                        <template v-else>
+                        <template v-else-if="user">
                             <UAvatar
-                                :src="profileImageSrc"
-                                :alt="`${profileName}'s avatar`"
-                                :text="profileName[0]"
+                                :src="user.avatarImgUrl"
+                                :alt="`${user.displayName}'s avatar`"
+                                :text="user.displayName[0]"
                                 size="xs"
                             />
                             <UButton

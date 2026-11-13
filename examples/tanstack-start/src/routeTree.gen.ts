@@ -9,179 +9,127 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as AccountRouteImport } from './routes/account'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as DemoStartServerFuncsRouteImport } from './routes/demo/start.server-funcs'
-import { Route as DemoStartApiRequestRouteImport } from './routes/demo/start.api-request'
-import { Route as DemoStartAdminOnlyRouteImport } from './routes/demo/start.admin-only'
-import { Route as DemoApiTodosRouteImport } from './routes/demo/api/todos'
-import { Route as DemoApiAdminDataRouteImport } from './routes/demo/api/admin-data'
-import { Route as DemoStartSsrIndexRouteImport } from './routes/demo/start.ssr.index'
-import { Route as DemoStartSsrSpaModeRouteImport } from './routes/demo/start.ssr.spa-mode'
-import { Route as DemoStartSsrFullSsrRouteImport } from './routes/demo/start.ssr.full-ssr'
-import { Route as DemoStartSsrDataOnlyRouteImport } from './routes/demo/start.ssr.data-only'
+import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
+import { Route as InactivityLogoutRouteImport } from './routes/inactivity-logout'
+import { Route as AuthenticatedAccountRouteImport } from './routes/_authenticated/account'
+import { Route as AuthenticatedTodoListAdminRouteImport } from './routes/_authenticated/todo-list-admin'
+import { Route as AuthenticatedTodoListApiRouteImport } from './routes/_authenticated/todo-list-api'
+import { Route as AuthenticatedTodoListServerFunctionRouteImport } from './routes/_authenticated/todo-list-server-function'
+import { Route as ApiTodosRouteImport } from './routes/api/todos'
 
-const AccountRoute = AccountRouteImport.update({
-  id: '/account',
-  path: '/account',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const DemoStartServerFuncsRoute = DemoStartServerFuncsRouteImport.update({
-  id: '/demo/start/server-funcs',
-  path: '/demo/start/server-funcs',
+const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
+  id: '/_authenticated',
   getParentRoute: () => rootRouteImport,
 } as any)
-const DemoStartApiRequestRoute = DemoStartApiRequestRouteImport.update({
-  id: '/demo/start/api-request',
-  path: '/demo/start/api-request',
+const InactivityLogoutRoute = InactivityLogoutRouteImport.update({
+  id: '/inactivity-logout',
+  path: '/inactivity-logout',
   getParentRoute: () => rootRouteImport,
 } as any)
-const DemoStartAdminOnlyRoute = DemoStartAdminOnlyRouteImport.update({
-  id: '/demo/start/admin-only',
-  path: '/demo/start/admin-only',
-  getParentRoute: () => rootRouteImport,
+const AuthenticatedAccountRoute = AuthenticatedAccountRouteImport.update({
+  id: '/account',
+  path: '/account',
+  getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const DemoApiTodosRoute = DemoApiTodosRouteImport.update({
-  id: '/demo/api/todos',
-  path: '/demo/api/todos',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const DemoApiAdminDataRoute = DemoApiAdminDataRouteImport.update({
-  id: '/demo/api/admin-data',
-  path: '/demo/api/admin-data',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const DemoStartSsrIndexRoute = DemoStartSsrIndexRouteImport.update({
-  id: '/demo/start/ssr/',
-  path: '/demo/start/ssr/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const DemoStartSsrSpaModeRoute = DemoStartSsrSpaModeRouteImport.update({
-  id: '/demo/start/ssr/spa-mode',
-  path: '/demo/start/ssr/spa-mode',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const DemoStartSsrFullSsrRoute = DemoStartSsrFullSsrRouteImport.update({
-  id: '/demo/start/ssr/full-ssr',
-  path: '/demo/start/ssr/full-ssr',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const DemoStartSsrDataOnlyRoute = DemoStartSsrDataOnlyRouteImport.update({
-  id: '/demo/start/ssr/data-only',
-  path: '/demo/start/ssr/data-only',
+const AuthenticatedTodoListAdminRoute =
+  AuthenticatedTodoListAdminRouteImport.update({
+    id: '/todo-list-admin',
+    path: '/todo-list-admin',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedTodoListApiRoute =
+  AuthenticatedTodoListApiRouteImport.update({
+    id: '/todo-list-api',
+    path: '/todo-list-api',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedTodoListServerFunctionRoute =
+  AuthenticatedTodoListServerFunctionRouteImport.update({
+    id: '/todo-list-server-function',
+    path: '/todo-list-server-function',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const ApiTodosRoute = ApiTodosRouteImport.update({
+  id: '/api/todos',
+  path: '/api/todos',
   getParentRoute: () => rootRouteImport,
 } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/account': typeof AccountRoute
-  '/demo/api/admin-data': typeof DemoApiAdminDataRoute
-  '/demo/api/todos': typeof DemoApiTodosRoute
-  '/demo/start/admin-only': typeof DemoStartAdminOnlyRoute
-  '/demo/start/api-request': typeof DemoStartApiRequestRoute
-  '/demo/start/server-funcs': typeof DemoStartServerFuncsRoute
-  '/demo/start/ssr/data-only': typeof DemoStartSsrDataOnlyRoute
-  '/demo/start/ssr/full-ssr': typeof DemoStartSsrFullSsrRoute
-  '/demo/start/ssr/spa-mode': typeof DemoStartSsrSpaModeRoute
-  '/demo/start/ssr/': typeof DemoStartSsrIndexRoute
+  '/inactivity-logout': typeof InactivityLogoutRoute
+  '/account': typeof AuthenticatedAccountRoute
+  '/todo-list-admin': typeof AuthenticatedTodoListAdminRoute
+  '/todo-list-api': typeof AuthenticatedTodoListApiRoute
+  '/todo-list-server-function': typeof AuthenticatedTodoListServerFunctionRoute
+  '/api/todos': typeof ApiTodosRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/account': typeof AccountRoute
-  '/demo/api/admin-data': typeof DemoApiAdminDataRoute
-  '/demo/api/todos': typeof DemoApiTodosRoute
-  '/demo/start/admin-only': typeof DemoStartAdminOnlyRoute
-  '/demo/start/api-request': typeof DemoStartApiRequestRoute
-  '/demo/start/server-funcs': typeof DemoStartServerFuncsRoute
-  '/demo/start/ssr/data-only': typeof DemoStartSsrDataOnlyRoute
-  '/demo/start/ssr/full-ssr': typeof DemoStartSsrFullSsrRoute
-  '/demo/start/ssr/spa-mode': typeof DemoStartSsrSpaModeRoute
-  '/demo/start/ssr': typeof DemoStartSsrIndexRoute
+  '/inactivity-logout': typeof InactivityLogoutRoute
+  '/account': typeof AuthenticatedAccountRoute
+  '/todo-list-admin': typeof AuthenticatedTodoListAdminRoute
+  '/todo-list-api': typeof AuthenticatedTodoListApiRoute
+  '/todo-list-server-function': typeof AuthenticatedTodoListServerFunctionRoute
+  '/api/todos': typeof ApiTodosRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/account': typeof AccountRoute
-  '/demo/api/admin-data': typeof DemoApiAdminDataRoute
-  '/demo/api/todos': typeof DemoApiTodosRoute
-  '/demo/start/admin-only': typeof DemoStartAdminOnlyRoute
-  '/demo/start/api-request': typeof DemoStartApiRequestRoute
-  '/demo/start/server-funcs': typeof DemoStartServerFuncsRoute
-  '/demo/start/ssr/data-only': typeof DemoStartSsrDataOnlyRoute
-  '/demo/start/ssr/full-ssr': typeof DemoStartSsrFullSsrRoute
-  '/demo/start/ssr/spa-mode': typeof DemoStartSsrSpaModeRoute
-  '/demo/start/ssr/': typeof DemoStartSsrIndexRoute
+  '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
+  '/inactivity-logout': typeof InactivityLogoutRoute
+  '/_authenticated/account': typeof AuthenticatedAccountRoute
+  '/_authenticated/todo-list-admin': typeof AuthenticatedTodoListAdminRoute
+  '/_authenticated/todo-list-api': typeof AuthenticatedTodoListApiRoute
+  '/_authenticated/todo-list-server-function': typeof AuthenticatedTodoListServerFunctionRoute
+  '/api/todos': typeof ApiTodosRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/inactivity-logout'
     | '/account'
-    | '/demo/api/admin-data'
-    | '/demo/api/todos'
-    | '/demo/start/admin-only'
-    | '/demo/start/api-request'
-    | '/demo/start/server-funcs'
-    | '/demo/start/ssr/data-only'
-    | '/demo/start/ssr/full-ssr'
-    | '/demo/start/ssr/spa-mode'
-    | '/demo/start/ssr/'
+    | '/todo-list-admin'
+    | '/todo-list-api'
+    | '/todo-list-server-function'
+    | '/api/todos'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/inactivity-logout'
     | '/account'
-    | '/demo/api/admin-data'
-    | '/demo/api/todos'
-    | '/demo/start/admin-only'
-    | '/demo/start/api-request'
-    | '/demo/start/server-funcs'
-    | '/demo/start/ssr/data-only'
-    | '/demo/start/ssr/full-ssr'
-    | '/demo/start/ssr/spa-mode'
-    | '/demo/start/ssr'
+    | '/todo-list-admin'
+    | '/todo-list-api'
+    | '/todo-list-server-function'
+    | '/api/todos'
   id:
     | '__root__'
     | '/'
-    | '/account'
-    | '/demo/api/admin-data'
-    | '/demo/api/todos'
-    | '/demo/start/admin-only'
-    | '/demo/start/api-request'
-    | '/demo/start/server-funcs'
-    | '/demo/start/ssr/data-only'
-    | '/demo/start/ssr/full-ssr'
-    | '/demo/start/ssr/spa-mode'
-    | '/demo/start/ssr/'
+    | '/_authenticated'
+    | '/inactivity-logout'
+    | '/_authenticated/account'
+    | '/_authenticated/todo-list-admin'
+    | '/_authenticated/todo-list-api'
+    | '/_authenticated/todo-list-server-function'
+    | '/api/todos'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  AccountRoute: typeof AccountRoute
-  DemoApiAdminDataRoute: typeof DemoApiAdminDataRoute
-  DemoApiTodosRoute: typeof DemoApiTodosRoute
-  DemoStartAdminOnlyRoute: typeof DemoStartAdminOnlyRoute
-  DemoStartApiRequestRoute: typeof DemoStartApiRequestRoute
-  DemoStartServerFuncsRoute: typeof DemoStartServerFuncsRoute
-  DemoStartSsrDataOnlyRoute: typeof DemoStartSsrDataOnlyRoute
-  DemoStartSsrFullSsrRoute: typeof DemoStartSsrFullSsrRoute
-  DemoStartSsrSpaModeRoute: typeof DemoStartSsrSpaModeRoute
-  DemoStartSsrIndexRoute: typeof DemoStartSsrIndexRoute
+  AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
+  InactivityLogoutRoute: typeof InactivityLogoutRoute
+  ApiTodosRoute: typeof ApiTodosRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/account': {
-      id: '/account'
-      path: '/account'
-      fullPath: '/account'
-      preLoaderRoute: typeof AccountRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/': {
       id: '/'
       path: '/'
@@ -189,84 +137,81 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/demo/start/server-funcs': {
-      id: '/demo/start/server-funcs'
-      path: '/demo/start/server-funcs'
-      fullPath: '/demo/start/server-funcs'
-      preLoaderRoute: typeof DemoStartServerFuncsRouteImport
+    '/_authenticated': {
+      id: '/_authenticated'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AuthenticatedRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/demo/start/api-request': {
-      id: '/demo/start/api-request'
-      path: '/demo/start/api-request'
-      fullPath: '/demo/start/api-request'
-      preLoaderRoute: typeof DemoStartApiRequestRouteImport
+    '/inactivity-logout': {
+      id: '/inactivity-logout'
+      path: '/inactivity-logout'
+      fullPath: '/inactivity-logout'
+      preLoaderRoute: typeof InactivityLogoutRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/demo/start/admin-only': {
-      id: '/demo/start/admin-only'
-      path: '/demo/start/admin-only'
-      fullPath: '/demo/start/admin-only'
-      preLoaderRoute: typeof DemoStartAdminOnlyRouteImport
-      parentRoute: typeof rootRouteImport
+    '/_authenticated/account': {
+      id: '/_authenticated/account'
+      path: '/account'
+      fullPath: '/account'
+      preLoaderRoute: typeof AuthenticatedAccountRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/demo/api/todos': {
-      id: '/demo/api/todos'
-      path: '/demo/api/todos'
-      fullPath: '/demo/api/todos'
-      preLoaderRoute: typeof DemoApiTodosRouteImport
-      parentRoute: typeof rootRouteImport
+    '/_authenticated/todo-list-admin': {
+      id: '/_authenticated/todo-list-admin'
+      path: '/todo-list-admin'
+      fullPath: '/todo-list-admin'
+      preLoaderRoute: typeof AuthenticatedTodoListAdminRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/demo/api/admin-data': {
-      id: '/demo/api/admin-data'
-      path: '/demo/api/admin-data'
-      fullPath: '/demo/api/admin-data'
-      preLoaderRoute: typeof DemoApiAdminDataRouteImport
-      parentRoute: typeof rootRouteImport
+    '/_authenticated/todo-list-api': {
+      id: '/_authenticated/todo-list-api'
+      path: '/todo-list-api'
+      fullPath: '/todo-list-api'
+      preLoaderRoute: typeof AuthenticatedTodoListApiRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/demo/start/ssr/': {
-      id: '/demo/start/ssr/'
-      path: '/demo/start/ssr'
-      fullPath: '/demo/start/ssr/'
-      preLoaderRoute: typeof DemoStartSsrIndexRouteImport
-      parentRoute: typeof rootRouteImport
+    '/_authenticated/todo-list-server-function': {
+      id: '/_authenticated/todo-list-server-function'
+      path: '/todo-list-server-function'
+      fullPath: '/todo-list-server-function'
+      preLoaderRoute: typeof AuthenticatedTodoListServerFunctionRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/demo/start/ssr/spa-mode': {
-      id: '/demo/start/ssr/spa-mode'
-      path: '/demo/start/ssr/spa-mode'
-      fullPath: '/demo/start/ssr/spa-mode'
-      preLoaderRoute: typeof DemoStartSsrSpaModeRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/demo/start/ssr/full-ssr': {
-      id: '/demo/start/ssr/full-ssr'
-      path: '/demo/start/ssr/full-ssr'
-      fullPath: '/demo/start/ssr/full-ssr'
-      preLoaderRoute: typeof DemoStartSsrFullSsrRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/demo/start/ssr/data-only': {
-      id: '/demo/start/ssr/data-only'
-      path: '/demo/start/ssr/data-only'
-      fullPath: '/demo/start/ssr/data-only'
-      preLoaderRoute: typeof DemoStartSsrDataOnlyRouteImport
+    '/api/todos': {
+      id: '/api/todos'
+      path: '/api/todos'
+      fullPath: '/api/todos'
+      preLoaderRoute: typeof ApiTodosRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
 }
 
+interface AuthenticatedRouteRouteChildren {
+  AuthenticatedAccountRoute: typeof AuthenticatedAccountRoute
+  AuthenticatedTodoListAdminRoute: typeof AuthenticatedTodoListAdminRoute
+  AuthenticatedTodoListApiRoute: typeof AuthenticatedTodoListApiRoute
+  AuthenticatedTodoListServerFunctionRoute: typeof AuthenticatedTodoListServerFunctionRoute
+}
+
+const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedAccountRoute: AuthenticatedAccountRoute,
+  AuthenticatedTodoListAdminRoute: AuthenticatedTodoListAdminRoute,
+  AuthenticatedTodoListApiRoute: AuthenticatedTodoListApiRoute,
+  AuthenticatedTodoListServerFunctionRoute:
+    AuthenticatedTodoListServerFunctionRoute,
+}
+
+const AuthenticatedRouteRouteWithChildren =
+  AuthenticatedRouteRoute._addFileChildren(AuthenticatedRouteRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  AccountRoute: AccountRoute,
-  DemoApiAdminDataRoute: DemoApiAdminDataRoute,
-  DemoApiTodosRoute: DemoApiTodosRoute,
-  DemoStartAdminOnlyRoute: DemoStartAdminOnlyRoute,
-  DemoStartApiRequestRoute: DemoStartApiRequestRoute,
-  DemoStartServerFuncsRoute: DemoStartServerFuncsRoute,
-  DemoStartSsrDataOnlyRoute: DemoStartSsrDataOnlyRoute,
-  DemoStartSsrFullSsrRoute: DemoStartSsrFullSsrRoute,
-  DemoStartSsrSpaModeRoute: DemoStartSsrSpaModeRoute,
-  DemoStartSsrIndexRoute: DemoStartSsrIndexRoute,
+  AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
+  InactivityLogoutRoute: InactivityLogoutRoute,
+  ApiTodosRoute: ApiTodosRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

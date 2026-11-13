@@ -44,54 +44,86 @@ It wraps the full Authorization Code + PKCE flow in a high-level API so you can 
 The Framework-Agnostic Adapter:
 
 ```ts
-import { createOidc, oidcEarlyInit } from "oidc-spa/core"; // ~33 KB min+gzip (See: https://docs.oidc-spa.dev/resources/bundle-size)
+import { oidcSpa } from "oidc-spa/framework-agnostic";
+import { oidcEarlyInit } from "oidc-spa";
 import { z } from "zod"; // 59 KB min+gzip, but it's optional.
 
 // Call this only if you don't use oidc-spa's Vite plugin.
-oidcEarlyInit({ BASE_URL: "/" });
+const { shouldLoadApp } = oidcEarlyInit({ BASE_URL: "/" });
 
-const oidc = await createOidc({
-    issuerUri: "https://auth.my-domain.net/realms/myrealm",
-    //issuerUri: "https://login.microsoftonline.com/...",
-    //issuerUri: "https://xxx.us.auth0.com/..."
-    //issuerUri: "https://accounts.google.com/o/oauth2/v2/auth"
-    clientId: "myclient",
-    // Optional; you can write a validator by hand, or give up some type-safety, your call.
-    decodedIdTokenSchema: z.object({
-        name: z.string(),
-        picture: z.string().optional(),
-        email: z.string(),
-        realm_access: z.object({ roles: z.array(z.string()) })
-    })
-    // Yes, really, it's that simple; there are no other parameters to provide.
-    // The Redirect URI (callback URL) is the root URL of your app (no public/callback.html involved).
-});
+// App specific representation of the user.
+// Shape it around the information the UI needs to render.
+type User = {
+    displayName: string;
+    avatarImgUrl: string;
+    canSeeAdminNavigation: boolean;
+};
 
-// In oidc-spa the user is either logged in or they aren't.
-// The state will never mutate without a full app reload.
-// This makes reasoning about auth much, much easier.
-if (!oidc.isUserLoggedIn) {
-    await oidc.login();
-    // Never here
-    return;
-}
+if (shouldLoadApp) {
+    const { getOidc } = oidcSpa
+        .withUser<User>(async ({ isMock, idTokenClaims }) => {
+            // Construct the representation of the user using:
+            // - The ID Token Claims
+            // - The Access Token Claims (supposed to be opaque to the client but hey...)
+            // - Fetching your own protected /api/user endpoint using accessToken.
+            // - Fetching the userinfo endpoint using fetchUserInfo().
+            // - ...
 
-const { name, realm_access } = oidc.getDecodedIdToken();
+            if (isMock) {
+                return {
+                    displayName: "John Doe",
+                    avatarImgUrl: "/anonymous.svg",
+                    canSeeAdminNavigation: true
+                };
+            }
+            const { name, picture, roles } = z
+                .object({
+                    name: z.string(),
+                    picture: z.string().optional(),
+                    roles: z.array(z.string()).optional()
+                })
+                .parse(idTokenClaims);
 
-console.log(`Hello ${name}`);
+            return {
+                displayName: name,
+                avatarImgUrl: picture ?? "/anonymous.svg",
+                canSeeAdminNavigation: roles?.includes("admin") ?? false
+            };
+        })
+        .withRuntimeConfigs(async () => ({
+            mode: "real", // Use mode: "mock" for development without an auth server.
+            issuerUri: "https://auth.my-domain.net/realms/myrealm",
+            clientId: "myclient"
+            // The Redirect URI (callback URL) is the root URL of your app.
+        }))
+        .createUtils();
 
-const { accessToken } = await oidc.getTokens();
+    const oidc = await getOidc();
 
-await fetch("https://my-domain.net/api/todos", {
-    headers: {
-        Authorization: `Bearer ${accessToken}`
+    // In oidc-spa the user is either logged in or they aren't.
+    // The state will never mutate without a full app reload.
+    // This makes reasoning about auth much, much easier.
+    if (!oidc.isUserLoggedIn) {
+        await oidc.login({ doesCurrentHrefEnforceLogin: true });
+        // Never here
+    } else {
+        const user = await oidc.getUser();
+
+        console.log(`Hello ${user.displayName}`);
+
+        const { accessToken } = await oidc.getTokens();
+
+        const todos = await fetch("/api/todos", {
+            headers: {
+                Authorization: `Bearer ${accessToken}`
+            }
+        }).then(r => r.json());
     }
-});
-
-if (realm_access.roles.includes("realm-admin")) {
-    // User is an admin
 }
 ```
+
+For a complete app using this adapter with Vue and Vue Router, see
+the [framework-agnostic example](examples/framework-agnostic).
 
 Higher-level adapters, example with React but we also feature a similar Angular adapter:
 
@@ -105,11 +137,9 @@ import { enforceLogin, oidcFnMiddleware } from "@/oidc";
 import fs from "node:fs/promises";
 
 const getTodos = createServerFn({ method: "GET" })
-    .middleware([oidcFnMiddleware({ assert: "user logged in" })])
+    .middleware([oidcFnMiddleware({ require: "authed request" })])
     .handler(async ({ context: { oidc } }) => {
-        const userId = oidc.accessTokenClaims.sub;
-
-        const json = await fs.readFile(`todos_${userId}.json`, "utf8");
+        const json = await fs.readFile(`todos_${oidc.user.id}.json`, "utf8");
 
         return JSON.parse(json);
     });

@@ -1,0 +1,3 @@
+# Native resolver used by the Next.js ESLint configuration (pnpm 10.26+).
+allowBuilds:
+    unrs-resolver: true

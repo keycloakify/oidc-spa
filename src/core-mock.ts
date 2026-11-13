@@ -1,1 +1,2 @@
-export { createMockOidc, type ParamsOfCreateMockOidc } from "./core/createMockOidc";
+export { createMockOidc } from "./core/createMockOidc";
+export type { ParamsOfCreateMockOidc } from "./core/types";

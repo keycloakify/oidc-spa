@@ -1,0 +1,7 @@
+# Match the official Nuxt UI starter: these packages supply prebuilt binaries.
+allowBuilds:
+    "@parcel/watcher": false
+    "@tailwindcss/oxide": false
+    esbuild: false
+    unrs-resolver: false
+    vue-demi: false

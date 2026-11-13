@@ -1,8 +1,10 @@
 {
+    "$schema": "https://openapi.vercel.sh/vercel.json",
+    "framework": "vite",
+    "buildCommand": "yarn build",
+    "outputDirectory": "dist/client",
     "rewrites": [
-        {
-            "source": "/(.*)",
-            "destination": "/"
-        }
+        { "source": "/api/:path*", "destination": "/api" },
+        { "source": "/:path*", "destination": "/index.html" }
     ]
 }
