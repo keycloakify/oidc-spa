@@ -157,14 +157,21 @@ test("authenticated fetch preserves Request headers and obtains a current token"
             request = { input, init };
         }
     });
-    const input = new Request("https://app.test/api/todos", { headers: { "X-Example": "present" } });
+    const input = new Request("https://app.test/api/todos", {
+        method: "POST",
+        headers: { "X-Example": "present" },
+        body: "new todo"
+    });
     await api.fetchWithAuth(input);
-    assert.equal(request.input, input);
-    assert.equal(request.init.headers.get("X-Example"), "present");
-    assert.equal(request.init.headers.get("Authorization"), "Bearer access-token");
+    assert.equal(request.input.url, input.url);
+    assert.equal(request.input.method, "POST");
+    assert.equal(await request.input.text(), "new todo");
+    assert.equal(request.input.headers.get("X-Example"), "present");
+    assert.equal(request.input.headers.get("Authorization"), "Bearer access-token");
+    assert.equal(input.headers.has("Authorization"), false);
 });
 
-test("logged-out fetch forwards the original request without an authorization header", async () => {
+test("logged-out fetch preserves URL input and init options without adding authorization", async () => {
     let request;
     const { api } = load(
         { isUserLoggedIn: false },
@@ -174,8 +181,19 @@ test("logged-out fetch forwards the original request without an authorization he
             }
         }
     );
-    const init = { headers: { "X-Example": "present" } };
-    await api.fetchWithAuth("/api/todos", init);
-    assert.equal(request.input, "/api/todos");
-    assert.equal(request.init, init);
+    const controller = new AbortController();
+    const input = new URL("https://app.test/api/todos");
+    await api.fetchWithAuth(input, {
+        method: "POST",
+        headers: { "X-Example": "present" },
+        body: "new todo",
+        signal: controller.signal
+    });
+    assert.equal(request.input.url, input.href);
+    assert.equal(request.input.method, "POST");
+    assert.equal(await request.input.text(), "new todo");
+    assert.equal(request.input.headers.get("X-Example"), "present");
+    assert.equal(request.input.headers.has("Authorization"), false);
+    controller.abort();
+    assert.equal(request.input.signal.aborted, true);
 });

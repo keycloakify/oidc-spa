@@ -186,11 +186,12 @@ export const {
 
 // Attaches the access token when logged in; otherwise behaves like fetch.
 export const fetchWithAuth: typeof fetch = async (input, init) => {
+    const request = new Request(input, init);
     const oidc = await getOidc();
-    if (!oidc.isUserLoggedIn) return fetch(input, init);
 
-    const headers = new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined));
-    headers.set("Authorization", `Bearer ${await oidc.getAccessToken()}`);
+    if (oidc.isUserLoggedIn) {
+        request.headers.set("Authorization", `Bearer ${await oidc.getAccessToken()}`);
+    }
 
-    return fetch(input, { ...init, headers });
+    return fetch(request);
 };
