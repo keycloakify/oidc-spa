@@ -1,0 +1,29 @@
+# Nuxt dev/build outputs
+.output
+.data
+.nuxt
+.nitro
+.cache
+dist
+
+# Node dependencies
+node_modules
+
+# Logs
+logs
+*.log
+
+# Misc
+.DS_Store
+.fleet
+.idea
+
+# Local env files
+.env.*
+!.env.example
+
+# Local example data and package manager locks
+/todos_*.json
+/yarn.lock
+/package-lock.json
+/pnpm-lock.yaml

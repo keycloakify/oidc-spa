@@ -1,6 +1,6 @@
 import type { OidcSpaVitePluginParams } from "./vite-plugin";
 import type { ResolvedConfig } from "vite";
-import type { PluginContext } from "rollup";
+import type { PluginContext, InputOption } from "rollup";
 import { promises as fs, readFileSync, existsSync } from "node:fs";
 import * as path from "node:path";
 import { assert } from "../tools/tsafe/assert";
@@ -43,15 +43,28 @@ export function createHandleClientEntrypoint(params: {
         projectType
     });
 
+    const doWeProvideSsrSupportForProjectType = (() => {
+        switch (projectType) {
+            case "nuxt":
+                return false;
+            case "react-router-framework":
+                return false;
+            case "tanstack-start":
+                return true;
+            case "other":
+                return false;
+        }
+    })();
+
     function getClientEntrypointSource(params: {
         applicationEntrypointImportSpecifier: string;
     }): string {
         const { applicationEntrypointImportSpecifier } = params;
-        const { browserRuntimeFreeze, tokenSubstitution, DPoP, sessionRestorationMethod } =
-            oidcSpaVitePluginParams ?? {};
+        const { browserRuntimeFreeze, tokenSubstitution, DPoP } = oidcSpaVitePluginParams ?? {};
 
         return [
-            `import { oidcEarlyInit } from "oidc-spa/entrypoint";`,
+            // prettier-ignore
+            `import { oidcEarlyInit${!doWeProvideSsrSupportForProjectType?"":", enableSSRCapability"} } from "oidc-spa/entrypoint";`,
             // prettier-ignore
             !browserRuntimeFreeze ? "" : `import { browserRuntimeFreeze } from "oidc-spa/browser-runtime-freeze";`,
             // prettier-ignore
@@ -61,8 +74,6 @@ export function createHandleClientEntrypoint(params: {
             `const { shouldLoadApp } = oidcEarlyInit({`,
             // prettier-ignore
             `BASE_URL: ${(() => { switch (projectType) { case "nuxt": return "__NUXT__.config.app.baseURL"; default: return `"${resolvedConfig.base}"`; } })()},`,
-            // prettier-ignore
-            sessionRestorationMethod === undefined ? "" : `sessionRestorationMethod: "${sessionRestorationMethod}",`,
             `securityDefenses: {`,
             // prettier-ignore
             !browserRuntimeFreeze ? "" : `...browserRuntimeFreeze(${paramsToJsLiteral(browserRuntimeFreeze)}),`,
@@ -74,6 +85,7 @@ export function createHandleClientEntrypoint(params: {
             `});`,
             ``,
             `if (shouldLoadApp) {`,
+            !doWeProvideSsrSupportForProjectType ? "" : `enableSSRCapability();`,
             `import(${JSON.stringify(applicationEntrypointImportSpecifier)});`,
             `}`
         ].join("\n");
@@ -196,6 +208,11 @@ function resolveEntryForProject({
         }
 
         case "react-router-framework": {
+            const frameworkEntry = (
+                config as ResolvedConfig & {
+                    __reactRouterPluginContext?: { entryClientFilePath?: string };
+                }
+            ).__reactRouterPluginContext?.entryClientFilePath;
             const candidate = resolveCandidate({
                 root,
                 subDirectories: ["app"],
@@ -203,6 +220,7 @@ function resolveEntryForProject({
             });
 
             const entryPath =
+                frameworkEntry ??
                 candidate ??
                 resolvePackageFile("@react-router/dev", [
                     "dist",
@@ -223,31 +241,35 @@ function resolveEntryForProject({
         }
 
         case "nuxt": {
-            const rollupInput = config.build.rollupOptions?.input;
+            // With Vite's Environment API, Nuxt keeps the client input on its environment.
+            const build = (config.environments?.client?.build ?? config.build) as typeof config.build & {
+                rolldownOptions?: { input?: InputOption };
+            };
+            const input = build.rolldownOptions?.input ?? build.rollupOptions?.input;
 
             let entryPath: string;
 
-            if (typeof rollupInput === "string") {
-                entryPath = rollupInput;
-            } else if (Array.isArray(rollupInput)) {
-                assert(rollupInput.length > 0, "Nuxt rollupOptions.input array is empty");
-                entryPath = rollupInput[0];
-            } else if (rollupInput && typeof rollupInput === "object") {
-                const inputRecord = rollupInput;
+            if (typeof input === "string") {
+                entryPath = input;
+            } else if (Array.isArray(input)) {
+                assert(input.length > 0, "Nuxt client build input array is empty");
+                entryPath = input[0];
+            } else if (input && typeof input === "object") {
+                const inputRecord = input;
                 assert(
                     Object.keys(inputRecord).length > 0,
-                    "Nuxt rollupOptions.input object must contain at least one entry"
+                    "Nuxt client build input object must contain at least one entry"
                 );
                 entryPath = Object.values(inputRecord)[0];
             } else {
                 throw new Error(
                     "Could not resolve Nuxt entry point from Vite config. " +
-                        "rollupOptions.input is undefined or has an unexpected type."
+                        "The client build input is undefined or has an unexpected type."
                 );
             }
 
             // Ensure entryPath is absolute before normalizing.
-            // Nuxt's rollupOptions.input can be relative, but Vite resolves IDs to absolute paths.
+            // Nuxt's build input can be relative, but Vite resolves IDs to absolute paths.
             const absoluteEntryPath = path.isAbsolute(entryPath)
                 ? entryPath
                 : path.resolve(root, entryPath);

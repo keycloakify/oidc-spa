@@ -1,6 +1,6 @@
 {
     "name": "oidc-spa",
-    "version": "10.2.18",
+    "version": "11.0.0-rc.9",
     "description": "OpenID Connect / OAuth2 solution for client-first Web Applications",
     "repository": {
         "type": "git",
@@ -9,19 +9,29 @@
     "scripts": {
         "prepare": "patch-package",
         "build": "tsx scripts/build.ts",
+        "test:angular": "tsc --project tests/angular/tsconfig.json && tsx scripts/test-angular.ts",
+        "test:authorization-callbacks": "node --test scripts/tests/authorization-callbacks.test.mjs",
+        "test:vite-plugin-handlers": "node --test scripts/tests/vite-plugin-handlers.test.mjs",
+        "test:react-router-bootstrap": "node --test scripts/tests/react-router-bootstrap.test.mjs scripts/tests/react-router-bootstrap.integration.mjs",
+        "test:react-nextjs": "tsc --project tests/react-nextjs/tsconfig.json && node --test scripts/tests/nextjs-plugin.test.mjs",
+        "test:framework-agnostic": "node --test scripts/tests/framework-agnostic.test.mjs && tsc --project tests/framework-agnostic/tsconfig.json",
+        "test:vue": "node --test scripts/tests/vue.test.mjs && vue-tsc --project tests/vue/tsconfig.json",
+        "test:tanstack-start-runtime-configs": "tsx scripts/tests/tanstack-start-runtime-configs.test.ts && tsc --project tests/tanstack-start-runtime-configs/tsconfig.json",
+        "test:tanstack-start-auth": "node --test scripts/tests/tanstack-start-client.test.mjs scripts/tests/tanstack-start-auth.integration.mjs",
         "_format": "prettier '**/*.{ts,tsx,json,md}'",
         "format": "yarn _format --write",
         "format:check": "yarn _format --list-different",
         "size": "bash ./scripts/compute-payload.sh",
-        "start-angular-example": "bash ./scripts/start-example.sh angular start",
-        "start-angular-kitchensink-example": "bash ./scripts/start-example.sh angular-kitchensink start",
+        "start-angular-example": "bash ./scripts/start-example.sh angular dev",
         "start-react-router-framework-example": "bash ./scripts/start-example.sh react-router-framework dev",
         "start-react-router-data-example": "bash ./scripts/start-example.sh react-router-data dev",
         "start-react-router-declarative-example": "bash ./scripts/start-example.sh react-router-declarative dev",
         "start-next-example": "bash ./scripts/start-example.sh next dev",
         "start-tanstack-start-example": "bash ./scripts/start-example.sh tanstack-start dev",
-        "start-tanstack-router-file-router-example": "bash ./scripts/start-example.sh tanstack-router-file-router dev",
-        "start-nuxt-spa-example": "bash ./scripts/start-example.sh nuxt-spa dev"
+        "start-tanstack-router-example": "bash ./scripts/start-example.sh tanstack-router dev",
+        "start-framework-agnostic-example": "bash ./scripts/start-example.sh framework-agnostic dev",
+        "start-vue-example": "bash ./scripts/start-example.sh vue dev",
+        "start-nuxt-example": "bash ./scripts/start-example.sh nuxt dev"
     },
     "lint-staged": {
         "*.{ts,tsx,json,md}": [
@@ -43,6 +53,7 @@
         "keycloak",
         "keycloak-js",
         "react",
+        "vue",
         "angular",
         "TanStack Start"
     ],
@@ -54,12 +65,17 @@
         "@angular/router": "*",
         "@nuxt/kit": "*",
         "@tanstack/react-router": "*",
-        "@tanstack/react-start": ">=1.168.25",
+        "@tanstack/react-start": ">=1.168.60",
         "@types/react": "*",
+        "next": "*",
         "react": "*",
-        "rxjs": "*"
+        "rxjs": "*",
+        "vue": "^3.5.0"
     },
     "peerDependenciesMeta": {
+        "next": {
+            "optional": true
+        },
         "react": {
             "optional": true
         },
@@ -86,10 +102,14 @@
         },
         "@tanstack/react-router": {
             "optional": true
+        },
+        "vue": {
+            "optional": true
         }
     },
     "devDependencies": {
         "@angular/common": "^20.3.1",
+        "@angular/compiler": "^20.3.1",
         "@angular/core": "^20.3.1",
         "@angular/platform-browser": "^20.3.1",
         "@angular/router": "^20.3.1",
@@ -101,7 +121,7 @@
         "@babel/types": "^7.28.4",
         "@nuxt/kit": "^4.3.1",
         "@nuxt/schema": "^4.3.1",
-        "@tanstack/react-start": "^1.168.25",
+        "@tanstack/react-start": "1.169.4",
         "@types/babel__generator": "^7.6.4",
         "@types/babel__traverse": "^7.28.0",
         "@types/node": "^20.2.1",
@@ -116,7 +136,9 @@
         "js2mjs": "^1.0.1",
         "lint-staged": "^11.1.1",
         "magic-string": "^0.30.19",
+        "next": "16.3.4",
         "oidc-client-ts": "3.1.0",
+        "parse5": "8.0.1",
         "patch-package": "^8.0.0",
         "prettier": "^2.8.8",
         "punycode": "^2.3.1",
@@ -128,6 +150,8 @@
         "tsx": "^4.15.5",
         "typescript": "5.7.2",
         "vite": "^7.1.10",
+        "vue": "^3.5.0",
+        "vue-tsc": "^3.3.14",
         "webcrypto-liner-shim": "1.4.8",
         "webpack": "5.93.0",
         "webpack-cli": "5.1.4",
@@ -136,7 +160,9 @@
     "publishConfig": {
         "access": "public"
     },
-    "sideEffects": false,
+    "sideEffects": [
+        "**/nextjs-plugin/client.*"
+    ],
     "main": "dist/entrypoint.js",
     "types": "dist/entrypoint.d.ts",
     "module": "dist/esm/entrypoint.mjs",
@@ -151,15 +177,10 @@
             "import": "./dist/esm/entrypoint.mjs",
             "default": "./dist/entrypoint.js"
         },
-        "./core": {
-            "module": "./dist/esm/core/index.mjs",
-            "import": "./dist/esm/core/index.mjs",
-            "default": "./dist/core/index.js"
-        },
-        "./core-mock": {
-            "module": "./dist/esm/core-mock.mjs",
-            "import": "./dist/esm/core-mock.mjs",
-            "default": "./dist/core-mock.js"
+        "./client": {
+            "module": "./dist/esm/client/index.mjs",
+            "import": "./dist/esm/client/index.mjs",
+            "default": "./dist/client/index.js"
         },
         "./vite-plugin": {
             "types": "./dist/esm/vite-plugin/index.d.ts",
@@ -167,43 +188,55 @@
             "import": "./dist/esm/vite-plugin/index.mjs",
             "default": "./dist/esm/vite-plugin/index.mjs"
         },
-        "./nuxt-spa": {
-            "types": "./dist/esm/nuxt-spa/index.d.ts",
-            "module": "./dist/esm/nuxt-spa/index.mjs",
-            "import": "./dist/esm/nuxt-spa/index.mjs",
-            "default": "./dist/esm/nuxt-spa/index.mjs"
+        "./nuxt-module": {
+            "types": "./dist/esm/nuxt-module.d.ts",
+            "module": "./dist/esm/nuxt-module.mjs",
+            "import": "./dist/esm/nuxt-module.mjs",
+            "default": "./dist/esm/nuxt-module.mjs"
         },
         "./server": {
             "module": "./dist/esm/server/index.mjs",
             "import": "./dist/esm/server/index.mjs",
             "default": "./dist/server/index.js"
         },
-        "./react-spa": {
-            "module": "./dist/esm/react-spa/index.mjs",
-            "import": "./dist/esm/react-spa/index.mjs",
-            "default": "./dist/react-spa/index.js"
+        "./react": {
+            "module": "./dist/esm/react/index.mjs",
+            "import": "./dist/esm/react/index.mjs",
+            "default": "./dist/react/index.js"
         },
-        "./react-tanstack-start": {
-            "types": "./dist/esm/tanstack-start/react/index.d.ts",
-            "module": "./dist/esm/tanstack-start/react/index.mjs",
-            "import": "./dist/esm/tanstack-start/react/index.mjs",
-            "default": "./dist/esm/tanstack-start/react/index.mjs"
+        "./vue": {
+            "types": "./dist/esm/vue/index.d.ts",
+            "module": "./dist/esm/vue/index.mjs",
+            "import": "./dist/esm/vue/index.mjs",
+            "default": "./dist/esm/vue/index.mjs"
+        },
+        "./tanstack-start-react": {
+            "types": "./dist/esm/tanstack-start-react/index.d.ts",
+            "module": "./dist/esm/tanstack-start-react/index.mjs",
+            "import": "./dist/esm/tanstack-start-react/index.mjs",
+            "default": "./dist/esm/tanstack-start-react/index.mjs"
+        },
+        "./tanstack-start/server-entry": {
+            "types": "./dist/esm/tanstack-start-react/withOidcSpaServerEntry.d.ts",
+            "module": "./dist/esm/tanstack-start-react/withOidcSpaServerEntry.mjs",
+            "import": "./dist/esm/tanstack-start-react/withOidcSpaServerEntry.mjs",
+            "default": "./dist/esm/tanstack-start-react/withOidcSpaServerEntry.mjs"
         },
         "./angular": {
-            "types": "./dist/esm/angular.d.ts",
-            "module": "./dist/esm/angular.mjs",
-            "import": "./dist/esm/angular.mjs",
-            "default": "./dist/esm/angular.mjs"
+            "types": "./dist/esm/angular/index.d.ts",
+            "module": "./dist/esm/angular/index.mjs",
+            "import": "./dist/esm/angular/index.mjs",
+            "default": "./dist/esm/angular/index.mjs"
         },
-        "./keycloak": {
-            "module": "./dist/esm/keycloak/index.mjs",
-            "import": "./dist/esm/keycloak/index.mjs",
-            "default": "./dist/keycloak/index.js"
+        "./keycloak-utils": {
+            "module": "./dist/esm/keycloak-utils/index.mjs",
+            "import": "./dist/esm/keycloak-utils/index.mjs",
+            "default": "./dist/keycloak-utils/index.js"
         },
         "./keycloak-js": {
-            "module": "./dist/esm/keycloak-js.mjs",
-            "import": "./dist/esm/keycloak-js.mjs",
-            "default": "./dist/keycloak-js.js"
+            "module": "./dist/esm/keycloak-js/index.mjs",
+            "import": "./dist/esm/keycloak-js/index.mjs",
+            "default": "./dist/keycloak-js/index.js"
         },
         "./keycloak-js-authz": {
             "module": "./dist/esm/keycloak-js-authz.mjs",
@@ -229,6 +262,24 @@
             "module": "./dist/esm/decode-jwt.mjs",
             "import": "./dist/esm/decode-jwt.mjs",
             "default": "./dist/decode-jwt.js"
+        },
+        "./nextjs-plugin": {
+            "types": "./dist/esm/nextjs-plugin/index.d.ts",
+            "module": "./dist/esm/nextjs-plugin/index.mjs",
+            "import": "./dist/esm/nextjs-plugin/index.mjs",
+            "default": "./dist/esm/nextjs-plugin/index.mjs"
+        },
+        "./nextjs-plugin/client": {
+            "types": "./dist/esm/nextjs-plugin/client.d.ts",
+            "module": "./dist/esm/nextjs-plugin/client.mjs",
+            "import": "./dist/esm/nextjs-plugin/client.mjs",
+            "default": "./dist/esm/nextjs-plugin/client.mjs"
+        },
+        "./nextjs-plugin/proxy": {
+            "types": "./dist/esm/nextjs-plugin/proxy.d.ts",
+            "module": "./dist/esm/nextjs-plugin/proxy.mjs",
+            "import": "./dist/esm/nextjs-plugin/proxy.mjs",
+            "default": "./dist/esm/nextjs-plugin/proxy.mjs"
         }
     }
 }

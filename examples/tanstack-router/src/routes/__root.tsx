@@ -1,0 +1,18 @@
+import { Outlet, createRootRoute } from "@tanstack/react-router";
+import { AppHeader } from "~/components/AppHeader";
+import { AutoLogoutWarningOverlay } from "~/components/AutoLogoutWarningOverlay";
+import "../styles.css";
+
+export const Route = createRootRoute({ component: Root });
+
+function Root() {
+    return (
+        <>
+            <AppHeader />
+            <main>
+                <Outlet />
+            </main>
+            <AutoLogoutWarningOverlay />
+        </>
+    );
+}

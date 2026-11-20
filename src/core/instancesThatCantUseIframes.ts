@@ -2,7 +2,7 @@ import { createStatefulEvt } from "../tools/StatefulEvt";
 
 const SESSION_STORAGE_KEY = "oidc-spa:more-than-one-instance-cant-use-iframe";
 
-export const evtIsThereMoreThanOneInstanceThatCantUserIframes = createStatefulEvt(
+export const evtIsThereMoreThanOneInstanceThatCantUseIframes = createStatefulEvt(
     () => sessionStorage.getItem(SESSION_STORAGE_KEY) !== null
 );
 
@@ -15,10 +15,10 @@ export function notifyNewInstanceThatCantUseIframes() {
         return;
     }
 
-    if (evtIsThereMoreThanOneInstanceThatCantUserIframes.current) {
+    if (evtIsThereMoreThanOneInstanceThatCantUseIframes.current) {
         return;
     }
 
     sessionStorage.setItem(SESSION_STORAGE_KEY, "true");
-    evtIsThereMoreThanOneInstanceThatCantUserIframes.current = true;
+    evtIsThereMoreThanOneInstanceThatCantUseIframes.current = true;
 }

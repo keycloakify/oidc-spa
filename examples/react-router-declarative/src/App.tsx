@@ -1,23 +1,37 @@
-import { lazy } from "react";
-import { Navigate, Route, Routes } from "react-router";
+import { Suspense, lazy } from "react";
+import { Outlet, Route, Routes } from "react-router";
+import { AppHeader } from "./components/AppHeader";
 import { AutoLogoutWarningOverlay } from "./components/AutoLogoutWarningOverlay";
-import { Header } from "./components/Header";
-import { Home } from "./pages/Home";
+import { withLoginEnforced } from "./oidc";
+import Home from "./pages/Home";
+import InactivityLogout from "./pages/InactivityLogout";
+import NotFound from "./pages/NotFound";
 
-const Protected = lazy(() => import("./pages/Protected"));
-const AdminOnly = lazy(() => import("./pages/AdminOnly"));
+const LoginRequired = withLoginEnforced({ component: Outlet });
+
+const TodoListTrpc = lazy(() => import("./pages/protected/TodoListTrpc"));
+const TodoListApi = lazy(() => import("./pages/protected/TodoListApi"));
+const TodoListAdmin = lazy(() => import("./pages/protected/TodoListAdmin"));
+const Account = lazy(() => import("./pages/protected/Account"));
 
 export function App() {
     return (
         <>
-            <Header />
-            <main className="mx-auto flex w-full max-w-4xl flex-col gap-10 px-6 pb-16 pt-28">
-                <Routes>
-                    <Route index element={<Home />} />
-                    <Route path="protected" element={<Protected />} />
-                    <Route path="admin-only" element={<AdminOnly />} />
-                    <Route path="*" element={<Navigate to="/" replace />} />
-                </Routes>
+            <AppHeader />
+            <main>
+                <Suspense fallback={<p>Loading...</p>}>
+                    <Routes>
+                        <Route index element={<Home />} />
+                        <Route path="inactivity-logout" element={<InactivityLogout />} />
+                        <Route element={<LoginRequired />}>
+                            <Route path="todo-list-trpc" element={<TodoListTrpc />} />
+                            <Route path="todo-list-api" element={<TodoListApi />} />
+                            <Route path="todo-list-admin" element={<TodoListAdmin />} />
+                            <Route path="account" element={<Account />} />
+                        </Route>
+                        <Route path="*" element={<NotFound />} />
+                    </Routes>
+                </Suspense>
             </main>
             <AutoLogoutWarningOverlay />
         </>

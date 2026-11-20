@@ -1,4 +1,4 @@
-import { isKeycloak, createKeycloakUtils } from "../keycloak";
+import { isKeycloak, createKeycloakUtils } from "../keycloak-utils";
 
 /**
  * Return undefined if the issuerUri doesn't match the expected shape of a Keycloak issuerUri

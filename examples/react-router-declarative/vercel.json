@@ -1,8 +1,29 @@
 {
-    "rewrites": [
-        {
-            "source": "/(.*)",
-            "destination": "/"
+    "$schema": "https://openapi.vercel.sh/vercel.json",
+    "framework": "vite",
+    "buildCommand": "npm run typecheck && npm run build:client",
+    "outputDirectory": "dist/client",
+    "functions": {
+        "api/index-vercel.ts": {
+            "includeFiles": ".env"
         }
+    },
+    "headers": [
+        {
+            "source": "/assets/:path*",
+            "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
+        },
+        {
+            "source": "/api/:path*",
+            "headers": [{ "key": "Cache-Control", "value": "no-store" }]
+        },
+        {
+            "source": "/((?!api(?:/|$)|assets(?:/|$)).*)",
+            "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
+        }
+    ],
+    "rewrites": [
+        { "source": "/api/:path*", "destination": "/api/index-vercel" },
+        { "source": "/((?!api(?:/|$)|assets(?:/|$)).*)", "destination": "/index.html" }
     ]
 }
