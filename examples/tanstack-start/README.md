@@ -47,26 +47,20 @@ yarn start-tanstack-start-example
 
 ## Production
 
-`SPA_MODE` in `vite.config.ts` defaults to `true`. Start automatically discovers and prerenders
-static page paths and generates a separate `_shell.html`. No page list is needed. Public pages
-contain their rendered content; protected page components inherit `ssr: false` and render on the
-client. API routes are excluded from page discovery. Parameterized routes need concrete URLs,
-either discovered by crawling links or supplied through Start's `pages` option.
+Start automatically discovers and prerenders static page paths and generates a separate
+`_shell.html`. Public pages contain their rendered content; protected page components inherit
+`ssr: false` and render on the client. API routes are excluded from page discovery.
+Parameterized routes need concrete URLs, either discovered by crawling links or supplied through
+Start's `pages` option. The distinct `spa.maskPath` works around
+[Start issue #8741](https://github.com/TanStack/router/issues/8741), which otherwise prevents the
+home page from being prerendered alongside the shell.
 
 The generic `_shell.html` contains no app UI. Start omits non-root route components when rendering
 this shell, including the `_app` layout. Its header and page content mount on the client after
 oidc-spa restores the return URL. Ordinary prerendered pages still include the shared layout,
-and public pages include their content. No per-link hydration workaround is needed.
+and public pages include their content. In development, public pages render on demand.
 
-In development, public pages render on demand. Setting `SPA_MODE` to `false` restores
-request-time document rendering.
-
-```sh
-yarn build
-yarn start
-```
-
-This builds the default Nitro Node target. To generate the Vercel deployment artifact locally:
+To generate the Vercel deployment artifact locally:
 
 ```sh
 yarn build:vercel
@@ -74,30 +68,30 @@ yarn build:vercel
 
 Import the repository in Vercel with `examples/tanstack-start` as the project root and the TanStack
 Start framework preset. Nitro detects Vercel during deployment and writes `.vercel/output`.
-Nitro supplies the function, static-file routing, and immutable asset caching. The additions in
-`vite.config.ts` set document/API cache headers, serve the shell on OIDC callbacks, and adapt
-Nitro's default SSR fallback to Start's documented SPA routing:
 
-| Request                                  | Destination                                       | Cache-Control                         |
-| ---------------------------------------- | ------------------------------------------------- | ------------------------------------- |
-| `/?state=…`                              | Static `_shell.html`, preserving the callback URL | `no-cache`                            |
-| Discovered static page paths             | Prerendered HTML                                  | `no-cache`                            |
-| `/api/*` and `/_serverFn/*`, all methods | Nitro server function                             | `no-store`                            |
-| `/assets/*`                              | Static assets                                     | `public, max-age=31536000, immutable` |
-| Other page URLs, GET/HEAD                | Static `_shell.html`                              | `no-cache`                            |
+The `oidcSpa()` Vite plugin generates the complete SPA routing in
+`.vercel/output/config.json`. Existing static files are served first, remaining page URLs use
+`/_shell.html`, and `/api/*` and `/_serverFn/*` remain dynamic. No `vercel.json` is required.
+Nitro supplies the backend function and immutable asset caching.
 
-The callback rule runs before filesystem lookup so the prerendered home page cannot replace the
-shell on an OIDC response. API and server-function requests bypass the document fallback.
+The plugin also adds a callback rule before filesystem lookup: GET/HEAD requests to `/` with a
+`state` query value beginning with
+`b2lkYy1zcGEu` use `/_shell.html`. This rule runs before filesystem lookup, preserving the callback
+URL while preventing the prerendered home page from being served for an OIDC callback. Ordinary
+`state` query values keep the normal home page. No application-level build hook is needed.
+
+This automatic CDN callback rule currently supports Vercel and assumes the standard `_shell.html`
+filename. The plugin adds it only when the build emits that shell. Other hosting targets need
+equivalent callback and SPA fallback routing.
 
 No custom `src/server.ts` is required: Start's default server entry handles APIs, server functions,
 and build-time prerendering. The oidc-spa plugin automatically wraps that entry with
 `withOidcSpaServerEntry` for request-time SSR callbacks. Static callback routing runs at the CDN,
 before that entry is invoked.
 
-The installed Nitro Vercel preset routes all non-static requests to SSR by default. The build hook
-keeps its generated routing and changes only that final fallback: APIs and server functions go to
-the runtime; other GET/HEAD requests use `_shell.html`. Other hosting targets need equivalent SPA
-fallback routing if documents should be served entirely from static files.
+`yarn build` still builds Nitro's default Node target, runnable with `yarn start`. The Vercel CDN
+routing described above applies to the Vercel deployment; self-hosting needs equivalent static
+routing in front of Node.
 
 Use `KV_REST_API_URL` and `KV_REST_API_TOKEN` for persistent todos on Vercel. The filesystem store is
 for local development.

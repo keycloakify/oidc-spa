@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { oidcSpa } from "../../dist/esm/vite-plugin/vite-plugin.mjs";
 
 function callHook(plugin, name, context, ...args) {
+    if (Array.isArray(plugin)) plugin = plugin.find(plugin => plugin.name === "oidc-spa");
     const hook = plugin[name];
     return (typeof hook === "function" ? hook : hook.handler).call(context, ...args);
 }

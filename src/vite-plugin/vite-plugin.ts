@@ -7,6 +7,7 @@ import { createTanstackStartHandlers } from "./tanstack-start/createHandlers";
 import { createReactRouterFrameworkHandlers } from "./react-router-framework/createHandlers";
 import { configureDependencyOptimization } from "./manageOptimizedDeps";
 import { getProjectType, type ProjectType } from "./projectType";
+import { createTanstackStartVercelOutput } from "./tanstack-start/vercelOutput";
 
 export type OidcSpaVitePluginParams = {
     /** See: https://docs.oidc-spa.dev/v/v10/security-features/browser-runtime-freeze */
@@ -36,6 +37,9 @@ export type OidcSpaVitePluginParams = {
 export function oidcSpa(params: OidcSpaVitePluginParams = {}) {
     let handlers: Handlers | undefined;
     let projectType: ProjectType | undefined;
+    const vercelOutput = createTanstackStartVercelOutput({
+        isTanstackStart: () => projectType === "tanstack-start"
+    });
 
     const plugin: Plugin = {
         name: "oidc-spa",
@@ -98,5 +102,7 @@ export function oidcSpa(params: OidcSpaVitePluginParams = {}) {
         }
     };
 
-    return plugin;
+    // Nitro discovers modules across the complete plugin array, regardless of
+    // whether nitro() appears before or after oidcSpa().
+    return [Object.assign(plugin, { nitro: vercelOutput.nitroModule }), vercelOutput.plugin];
 }
