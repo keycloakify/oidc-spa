@@ -60,38 +60,52 @@ this shell, including the `_app` layout. Its header and page content mount on th
 oidc-spa restores the return URL. Ordinary prerendered pages still include the shared layout,
 and public pages include their content. In development, public pages render on demand.
 
-To generate the Vercel deployment artifact locally:
+Build all three deployment targets:
 
 ```sh
-yarn build:vercel
+npm run build
 ```
 
-Import the repository in Vercel with `examples/tanstack-start` as the project root and the TanStack
-Start framework preset. Nitro detects Vercel during deployment and writes `.vercel/output`.
+Or build one target:
 
-The `oidcSpa()` Vite plugin generates the complete SPA routing in
-`.vercel/output/config.json`. Existing static files are served first, remaining page URLs use
-`/_shell.html`, and `/api/*` and `/_serverFn/*` remain dynamic. No `vercel.json` is required.
-Nitro supplies the backend function and immutable asset caching.
+| Command                    | Static frontend         | Backend / deployment configuration                       |
+| -------------------------- | ----------------------- | -------------------------------------------------------- |
+| `npm run build:vercel`     | `.vercel/output/static` | `.vercel/output/functions`, `.vercel/output/config.json` |
+| `npm run build:cloudflare` | `.output/public`        | `.output/server`, `.output/server/wrangler.json`         |
+| `npm run build:netlify`    | `dist`                  | `.netlify/functions-internal`, `.netlify/edge-functions` |
 
-The plugin also adds a callback rule before filesystem lookup: GET/HEAD requests to `/` with a
-`state` query value beginning with
-`b2lkYy1zcGEu` use `/_shell.html`. This rule runs before filesystem lookup, preserving the callback
-URL while preventing the prerendered home page from being served for an OIDC callback. Ordinary
-`state` query values keep the normal home page. No application-level build hook is needed.
+All three outputs remain available after `npm run build`. With newer Nitro versions, Netlify uses
+`.netlify/v1/functions` and `.netlify/v1/edge-functions` instead.
 
-This automatic CDN callback rule currently supports Vercel and assumes the standard `_shell.html`
-filename. The plugin adds it only when the build emits that shell. Other hosting targets need
-equivalent callback and SPA fallback routing.
+For Vercel, import the repository with `examples/tanstack-start` as the project root and the TanStack
+Start framework preset. `vercel.json` selects `npm run build:vercel`; it contains no routing rules.
+For Cloudflare Workers, select `npm run build:cloudflare` as the build command and deploy with
+`npx wrangler deploy`. You can preview the Cloudflare output locally with `npx wrangler dev`.
+For Netlify, `netlify.toml` selects `npm run build:netlify` and `dist` as the publish directory.
+Set the project base directory to `examples/tanstack-start`.
+
+Cloudflare Workers Builds currently does not honor Wrangler's custom `build.command` setting, so
+its hosted build command must be selected in the project's build settings. Nitro generates the
+Wrangler deployment configuration automatically; no handwritten routing configuration is needed.
+
+The `oidcSpa()` Vite plugin generates deployment routing only when Start emits `_shell.html`.
+Existing static pages and assets are served directly, remaining page URLs use the shell, and
+`/api/*` and `/_serverFn/*` remain dynamic. A GET/HEAD callback to `/` whose `state` starts with
+`b2lkYy1zcGEu` receives the neutral shell while the browser retains the original callback URL.
+Ordinary `state` values keep the prerendered home page. SSR builds without a shell retain Nitro's
+normal routing. No application-level build hook is needed.
+
+Vercel expresses this entirely through CDN routing rules. Cloudflare Workers and Netlify need a
+small generated edge dispatcher for the query-dependent callback. These dispatchers select static
+files; they do not render pages. On Cloudflare, the Worker handles the home page and page misses;
+other existing files bypass it. On Netlify, the callback edge function runs only at `/`, and a CDN
+rewrite supplies the SPA fallback. Cloudflare's build-time preview also receives Start's prerender
+flag so that its generated shell is empty; this flag is removed from the final preview command.
 
 No custom `src/server.ts` is required: Start's default server entry handles APIs, server functions,
 and build-time prerendering. The oidc-spa plugin automatically wraps that entry with
 `withOidcSpaServerEntry` for request-time SSR callbacks. Static callback routing runs at the CDN,
 before that entry is invoked.
 
-`yarn build` still builds Nitro's default Node target, runnable with `yarn start`. The Vercel CDN
-routing described above applies to the Vercel deployment; self-hosting needs equivalent static
-routing in front of Node.
-
-Use `KV_REST_API_URL` and `KV_REST_API_TOKEN` for persistent todos on Vercel. The filesystem store is
-for local development.
+Set `KV_REST_API_URL` and `KV_REST_API_TOKEN` in the deployment environment for persistent todos on
+all three platforms. The filesystem store is for local Node development.

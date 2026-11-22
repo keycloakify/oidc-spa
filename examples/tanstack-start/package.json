@@ -5,10 +5,11 @@
     "type": "module",
     "scripts": {
         "dev": "vite dev",
-        "build": "vite build && tsc --noEmit",
+        "build": "npm run build:vercel && npm run build:cloudflare && npm run build:netlify",
         "build:vercel": "NITRO_PRESET=vercel vite build && tsc --noEmit",
-        "preview": "vite preview",
-        "start": "node .output/server/index.mjs"
+        "build:cloudflare": "NITRO_PRESET=cloudflare-module vite build && tsc --noEmit",
+        "build:netlify": "NITRO_PRESET=netlify vite build && tsc --noEmit",
+        "preview": "vite preview"
     },
     "dependencies": {
         "oidc-spa": "next",
@@ -27,6 +28,7 @@
         "nitro": "3.0.260903-beta",
         "@typescript/native": "npm:typescript@7.0.2",
         "typescript": "npm:@typescript/typescript6@6.0.2",
-        "vite": "8.3.5"
+        "vite": "8.3.5",
+        "wrangler": "4.166.0"
     }
 }

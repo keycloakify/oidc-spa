@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { mkdtemp, mkdir, readFile, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createTanstackStartVercelOutput } from "../../dist/esm/vite-plugin/tanstack-start/vercelOutput.mjs";
+import { createTanstackStartNitroOutput } from "../../dist/esm/vite-plugin/tanstack-start/nitroOutput.mjs";
 
 async function fixture(t, { preset = "vercel", shell = true, tanstack = true, dev = false } = {}) {
     const dir = await mkdtemp(join(tmpdir(), "oidc-spa-vercel-"));
@@ -24,10 +24,10 @@ async function fixture(t, { preset = "vercel", shell = true, tanstack = true, de
     const configPath = join(dir, "config.json");
     const originalSource = JSON.stringify(original);
     await writeFile(configPath, originalSource);
-    const { nitroModule, plugin } = createTanstackStartVercelOutput({
+    const { nitroModule, plugin } = createTanstackStartNitroOutput({
         isTanstackStart: () => tanstack
     });
-    nitroModule.setup({ options: { preset, dev, output: { dir, publicDir } } });
+    nitroModule.setup({ options: { preset, dev, output: { dir, publicDir } }, hooks: { hook() {} } });
     return {
         original,
         originalSource,
@@ -99,7 +99,7 @@ test("Vercel output serves callbacks and SPA fallbacks statically while retainin
 
 for (const options of [
     { preset: "node-server" },
-    { preset: "netlify" },
+    { preset: "cloudflare-pages" },
     { shell: false },
     { tanstack: false },
     { dev: true }

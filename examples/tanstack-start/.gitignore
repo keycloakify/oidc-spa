@@ -18,3 +18,7 @@ yarn.lock
 /playwright/.cache/
 .tanstack
 /todos_*
+
+.netlify
+.wrangler
+/dist/
