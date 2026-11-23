@@ -5,6 +5,8 @@ import { patchVercelOutput } from "./vercelOutput";
 import { patchCloudflareOutput, prepareCloudflarePrerender } from "./cloudflareOutput";
 import { patchNetlifyOutput, removeNetlifyCallback } from "./netlifyOutput";
 
+// TODO: This need complete rewrite, we don't want to use a worker anymore we can just use the rooting rules.
+
 export type NitroOutput = { dir: string; publicDir: string; serverDir: string };
 
 // Keep Nitro optional: describe only the module API we use.

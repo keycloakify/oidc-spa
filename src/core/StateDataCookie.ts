@@ -1,5 +1,3 @@
-import { getIsStateDataCookieEnabled } from "./StateDataCookie.toggle";
-
 export type StateDataCookie = {
     rootRelativeReturnToUrl: string;
 };
@@ -49,7 +47,7 @@ function parseStateDataCookie(params: { stateDataCookie_str: string }):
 
 const COOKIE_NAME_PREFIX = "oidc_";
 
-export function setStateDataCookieIfEnabled(params: {
+export function setStateDataCookie(params: {
     stateDataCookie: StateDataCookie;
     stateUrlParamValue_instance: string;
     homeUrl: string;
@@ -72,10 +70,6 @@ export function setStateDataCookieIfEnabled(params: {
         cookieNames_toDelete.forEach(cookieName => {
             document.cookie = `${cookieName}=; Path=/; Max-Age=0`;
         });
-    }
-
-    if (!getIsStateDataCookieEnabled()) {
-        return;
     }
 
     document.cookie = [

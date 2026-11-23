@@ -32,6 +32,14 @@ export type OidcSpaVitePluginParams = {
               enabled: true;
               mode: "auto" | "enforced";
           };
+
+    /**
+     * Use the application home URL, including its base path, as the redirect URI
+     * to preserve existing IAM registrations when migrating from oidc-spa v10.
+     * Defaults to false: the redirect URI is /openid-callback/ under the base path.
+     * Not supported with TanStack Start in SPA mode.
+     */
+    useLegacyRedirectUri?: boolean;
 };
 
 export function oidcSpa(params: OidcSpaVitePluginParams = {}) {

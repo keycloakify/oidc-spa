@@ -33,8 +33,9 @@ import { assert } from "../tools/tsafe/assert";
 import { id } from "../tools/tsafe/id";
 import type { OptionallyAsyncGetterOrDirectValue } from "../tools/GetterOrDirectValue";
 import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";
-import { getBASE_URL_earlyInit } from "../core/earlyInit_BASE_URL";
-import { getIsStateDataCookieEnabled } from "../core/StateDataCookie.toggle";
+import { getHomeUrl_earlyInit } from "../core/earlyInit_homeUrl";
+import { getValidRedirectUri } from "../core/validRedirectUri";
+import { getSsr_earlyInit } from "../core/earlyInit_ssr";
 
 const wasServerRendered = makeStateKey<boolean>("oidc-spa:angular:server-rendered");
 
@@ -49,8 +50,15 @@ export function createUtils<User>(params: { createUser: CreateClientUser<User> }
     function createRuntime() {
         const injector = inject(Injector);
         const destroyRef = inject(DestroyRef);
+        const getIsSsrEnabled = () => {
+            try {
+                return getSsr_earlyInit();
+            } catch {
+                return false;
+            }
+        };
         const hasHydrated = signal(
-            !getIsStateDataCookieEnabled() && !inject(TransferState).get(wasServerRendered, false)
+            !getIsSsrEnabled() && !inject(TransferState).get(wasServerRendered, false)
         );
         const dClientCtx = new Deferred<
             | {
@@ -466,7 +474,7 @@ export function createUtils<User>(params: { createUser: CreateClientUser<User> }
                     return oidc_cached;
                 }
 
-                oidc_cached = (() => {
+                oidc_cached = await (async () => {
                     if (!ctx.doWeHaveOidcInstance) {
                         return id<Oidc.NotLoggedIn>({
                             isUserLoggedIn: false,
@@ -483,13 +491,14 @@ export function createUtils<User>(params: { createUser: CreateClientUser<User> }
                                 ctx.runtimeConfigs === undefined
                                     ? "not-resolved-yet"
                                     : ctx.runtimeConfigs.clientId,
-                            get validRedirectUri(): string {
-                                return toFullyQualifiedUrl({
-                                    urlish: getBASE_URL_earlyInit(),
-                                    doAssertNoQueryParams: true,
-                                    doOutputWithTrailingSlash: true,
-                                    rootUrl_fullyQualified: window.location.origin
-                                });
+                            get validRedirectUri() {
+                                let homeUrl: string;
+                                try {
+                                    homeUrl = getHomeUrl_earlyInit();
+                                } catch {
+                                    return "redirect-uri-is-unknown";
+                                }
+                                return getValidRedirectUri({ homeUrl });
                             },
                             login: async () => {
                                 throw ctx.oidcInitializationError;
@@ -776,7 +785,7 @@ export function createUtils<User>(params: { createUser: CreateClientUser<User> }
                             { queryParams: route.queryParams, fragment: route.fragment ?? undefined }
                         )
                     ),
-                rootUrl_fullyQualified: ctx.oidc.validRedirectUri,
+                rootUrl_fullyQualified: getHomeUrl_earlyInit(),
                 doAssertNoQueryParams: false
             });
             const isUrlAlreadyReplaced =

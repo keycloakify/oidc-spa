@@ -35,36 +35,29 @@ export function createHandleClientEntrypoint(params: {
     oidcSpaVitePluginParams: OidcSpaVitePluginParams;
     resolvedConfig: ResolvedConfig;
     projectType: ProjectType;
+    ssr: boolean;
 }) {
-    const { oidcSpaVitePluginParams, resolvedConfig, projectType } = params;
+    const { oidcSpaVitePluginParams, resolvedConfig, projectType, ssr } = params;
 
     const entryResolution = resolveEntryForProject({
         config: resolvedConfig,
         projectType
     });
 
-    const doWeProvideSsrSupportForProjectType = (() => {
-        switch (projectType) {
-            case "nuxt":
-                return false;
-            case "react-router-framework":
-                return false;
-            case "tanstack-start":
-                return true;
-            case "other":
-                return false;
-        }
-    })();
-
     function getClientEntrypointSource(params: {
         applicationEntrypointImportSpecifier: string;
     }): string {
         const { applicationEntrypointImportSpecifier } = params;
-        const { browserRuntimeFreeze, tokenSubstitution, DPoP } = oidcSpaVitePluginParams ?? {};
+        const {
+            browserRuntimeFreeze,
+            tokenSubstitution,
+            DPoP,
+            useLegacyRedirectUri = false
+        } = oidcSpaVitePluginParams ?? {};
 
         return [
             // prettier-ignore
-            `import { oidcEarlyInit${!doWeProvideSsrSupportForProjectType?"":", enableSSRCapability"} } from "oidc-spa/entrypoint";`,
+            `import { oidcEarlyInit } from "oidc-spa/entrypoint";`,
             // prettier-ignore
             !browserRuntimeFreeze ? "" : `import { browserRuntimeFreeze } from "oidc-spa/browser-runtime-freeze";`,
             // prettier-ignore
@@ -80,12 +73,13 @@ export function createHandleClientEntrypoint(params: {
             // prettier-ignore
             !DPoP ? "" : `...DPoP(${paramsToJsLiteral(DPoP)}),`,
             // prettier-ignore
-            !tokenSubstitution ? "" : `...tokenSubstitution(${paramsToJsLiteral_tokenSubstitution(tokenSubstitution)})`,
-            `}`,
+            !tokenSubstitution ? "" : `...tokenSubstitution(${paramsToJsLiteral_tokenSubstitution(tokenSubstitution)}),`,
+            `},`,
+            `ssr: ${ssr ? "true" : "false"},`,
+            !useLegacyRedirectUri ? "" : `useLegacyRedirectUri: true,`,
             `});`,
             ``,
             `if (shouldLoadApp) {`,
-            !doWeProvideSsrSupportForProjectType ? "" : `enableSSRCapability();`,
             `import(${JSON.stringify(applicationEntrypointImportSpecifier)});`,
             `}`
         ].join("\n");

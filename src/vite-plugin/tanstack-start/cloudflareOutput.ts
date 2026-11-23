@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { NitroOutput } from "./nitroOutput";
-import { backendPaths, stateQueryParamValuePrefix } from "./spaRouting";
+import { BACKEND_PATHS, stateQueryParamValuePrefix } from "./spaRouting";
 
 export function prepareCloudflarePrerender(options: {
     output: NitroOutput;
@@ -77,7 +77,7 @@ export default {
     config.assets.not_found_handling = "none";
     if (config.assets.run_worker_first !== true) {
         config.assets.run_worker_first = Array.from(
-            new Set([...(config.assets.run_worker_first || []), "/", ...backendPaths])
+            new Set([...(config.assets.run_worker_first || []), "/", ...BACKEND_PATHS])
         );
     }
     await writeFile(configPath, JSON.stringify(config, null, 2) + "\n");

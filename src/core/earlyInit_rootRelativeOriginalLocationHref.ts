@@ -7,7 +7,7 @@ export function getRootRelativeOriginalLocationHref_earlyInit() {
     return rootRelativeOriginalLocationHref;
 }
 
-export function setGetRootRelativeOriginalLocationHref_earlyInit(params: {
+export function setRootRelativeOriginalLocationHref_earlyInit(params: {
     rootRelativeOriginalLocationHref: string;
 }) {
     assert(rootRelativeOriginalLocationHref === undefined, "393");

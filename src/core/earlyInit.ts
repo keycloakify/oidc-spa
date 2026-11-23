@@ -1,12 +1,14 @@
 import { getStateData, getIsStatQueryParamValue } from "./StateData";
 import { assert, type Equals } from "../tools/tsafe/assert";
+import { typeGuard } from "../tools/tsafe/typeGuard";
 import type { AuthResponse } from "./AuthResponse";
-import { setBASE_URL_earlyInit, getBASE_URL_earlyInit } from "./earlyInit_BASE_URL";
+import { getHomeUrl_earlyInit, setHomeUrl_earlyInit } from "./earlyInit_homeUrl";
 import { isBrowser } from "../tools/isBrowser";
 import { createEvt, type Evt } from "../tools/Evt";
-import { setGetRootRelativeOriginalLocationHref_earlyInit } from "./earlyInit_rootRelativeOriginalLocationHref";
+import { setRootRelativeOriginalLocationHref_earlyInit } from "./earlyInit_rootRelativeOriginalLocationHref";
 import { prModuleCreateOidc } from "./earlyInit_prModuleCreateOidc";
-import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";
+import { getValidRedirectUri, enableCompatibilityModeHomeAsRedirectUri } from "./validRedirectUri";
+import { setSsr_earlyInit } from "./earlyInit_ssr";
 
 const IFRAME_MESSAGE_PREFIX = "oidc-spa:cross-window-messaging:";
 
@@ -23,6 +25,16 @@ export type ParamsOfEarlyInit = {
         enableDPoP?: () => void;
         enableTokenSubstitution?: () => void;
     };
+
+    ssr?: boolean;
+
+    /**
+     * Use the application home URL, including its base path, as the redirect URI
+     * to preserve existing IAM registrations when migrating from oidc-spa v10.
+     * Defaults to false: the redirect URI is /openid-callback/ under the base path.
+     * Not supported with TanStack Start in SPA mode.
+     */
+    useLegacyRedirectUri?: boolean;
 };
 
 let shouldLoadApp: boolean | undefined = undefined;
@@ -38,13 +50,18 @@ export function oidcEarlyInit(params: ParamsOfEarlyInit) {
 }
 
 function oidcEarlyInit_nonMemoized(params: ParamsOfEarlyInit) {
-    const { BASE_URL, securityDefenses = {} } = params;
+    const { ssr = false, BASE_URL, securityDefenses = {}, useLegacyRedirectUri = false } = params;
 
     if (!isBrowser) {
         return { shouldLoadApp: true };
     }
 
-    setBASE_URL_earlyInit({ BASE_URL });
+    setHomeUrl_earlyInit({ BASE_URL });
+    setSsr_earlyInit({ ssr });
+
+    if (useLegacyRedirectUri) {
+        enableCompatibilityModeHomeAsRedirectUri();
+    }
 
     const { shouldLoadApp } = handleOidcCallback();
 
@@ -155,88 +172,126 @@ function oidcEarlyInit_nonMemoized(params: ParamsOfEarlyInit) {
 
 let redirectAuthResponse: AuthResponse | undefined = undefined;
 
-function handleOidcCallback(): {
-    shouldLoadApp: boolean;
-} {
-    const location_urlObj = new URL(window.location.href);
+function handleOidcCallback(): { shouldLoadApp: boolean } {
+    const originalLocationHref_obj = new URL(window.location.href);
 
-    const locationHrefAssessment = (() => {
-        fragment: {
-            const stateUrlParamValue = new URLSearchParams(location_urlObj.hash.replace(/^#/, "")).get(
-                "state"
+    const homeUrl = getHomeUrl_earlyInit();
+    const validRedirectUri = getValidRedirectUri({ homeUrl });
+
+    const areWeOnTheCallbackUrl = (() => {
+        const removeQueryAndHash = (url: string) => {
+            const url_obj = new URL(url);
+            url_obj.hash = "";
+            url_obj.search = "";
+            return url_obj.href;
+        };
+
+        return (
+            removeQueryAndHash(originalLocationHref_obj.href) === removeQueryAndHash(validRedirectUri)
+        );
+    })();
+
+    const { readUrlParameter, readAllUrlParameters } = (() => {
+        let urlSearchParams_fragment: URLSearchParams;
+
+        try {
+            urlSearchParams_fragment = new URLSearchParams(
+                originalLocationHref_obj.hash.replace(/^#/, "")
             );
+        } catch {}
 
-            if (stateUrlParamValue === null) {
-                break fragment;
+        const urlSearchParams_query = originalLocationHref_obj.searchParams;
+
+        const getSearchParams = (from: "fragment" | "query") => {
+            switch (from) {
+                case "fragment":
+                    return urlSearchParams_fragment;
+                case "query":
+                    return urlSearchParams_query;
+                default:
+                    assert<Equals<typeof from, never>>(false);
             }
+        };
 
-            if (!getIsStatQueryParamValue({ maybeStateUrlParamValue: stateUrlParamValue })) {
-                break fragment;
-            }
+        function readUrlParameter(params: {
+            from: "fragment" | "query";
+            name: string;
+        }): string | undefined {
+            const { from, name } = params;
 
-            return { hasAuthResponseInUrl: true, responseMode: "fragment" } as const;
+            const searchParams = getSearchParams(from);
+
+            return searchParams.get(name) ?? undefined;
         }
 
-        query: {
-            const stateUrlParamValue = location_urlObj.searchParams.get("state");
+        function readAllUrlParameters(params: { from: "fragment" | "query" }) {
+            const { from } = params;
+            const record: Record<string, string | undefined> = {};
 
-            if (stateUrlParamValue === null) {
-                break query;
+            for (const [key, value] of getSearchParams(from)) {
+                record[key] = value;
             }
 
-            if (!getIsStatQueryParamValue({ maybeStateUrlParamValue: stateUrlParamValue })) {
+            return record;
+        }
+
+        return { readUrlParameter, readAllUrlParameters };
+    })();
+
+    const toRootRelative = (url: string) => url.slice(new URL(url).origin.length);
+
+    const { hasAuthResponseInUrl, responseMode } = (() => {
+        fragment: {
+            const stateUrlParamValue = readUrlParameter({ from: "fragment", name: "state" });
+
+            if (stateUrlParamValue === undefined) {
+                break fragment;
+            }
+
+            return {
+                hasAuthResponseInUrl: true,
+                responseMode: "fragment"
+            } as const;
+        }
+        query: {
+            const stateUrlParamValue = readUrlParameter({ from: "query", name: "state" });
+
+            if (stateUrlParamValue === undefined) {
                 break query;
             }
 
             if (
-                location_urlObj.searchParams.get("client_id") !== null &&
-                location_urlObj.searchParams.get("response_type") !== null &&
-                location_urlObj.searchParams.get("redirect_uri") !== null
+                readUrlParameter({ from: "query", name: "client_id" }) !== undefined &&
+                readUrlParameter({ from: "query", name: "response_type" }) !== undefined &&
+                readUrlParameter({ from: "query", name: "redirect_uri" }) !== undefined
             ) {
                 // NOTE: We are probably in a Keycloakify theme and oidc-spa was loaded by mistake.
                 break query;
             }
 
-            return { hasAuthResponseInUrl: true, responseMode: "query" } as const;
+            return {
+                hasAuthResponseInUrl: true,
+                responseMode: "query"
+            } as const;
         }
-
         return { hasAuthResponseInUrl: false } as const;
     })();
 
-    if (!locationHrefAssessment.hasAuthResponseInUrl) {
-        setGetRootRelativeOriginalLocationHref_earlyInit({
-            rootRelativeOriginalLocationHref: location_urlObj.href.slice(location_urlObj.origin.length)
-        });
-        return { shouldLoadApp: true };
-    }
+    const getRootRelativeOriginalLocationHref_withAuthResponseCleared = () => {
+        assert(hasAuthResponseInUrl, "3922");
 
-    const { authResponse } = (() => {
-        const authResponse: AuthResponse = { state: "" };
+        const url_obj = new URL(originalLocationHref_obj.href);
 
-        const searchParams = (() => {
-            switch (locationHrefAssessment.responseMode) {
+        const urlSearchParams: URLSearchParams = (() => {
+            switch (responseMode) {
                 case "fragment":
-                    return new URLSearchParams(location_urlObj.hash.replace(/^#/, ""));
+                    return new URLSearchParams(url_obj.hash.replace(/^#/, ""));
                 case "query":
-                    return location_urlObj.searchParams;
-                default:
-                    assert<Equals<typeof locationHrefAssessment, never>>(false);
+                    return url_obj.searchParams;
             }
         })();
 
-        for (const [key, value] of searchParams) {
-            authResponse[key] = value;
-        }
-
-        assert(authResponse.state !== "", "063965");
-
-        return { authResponse };
-    })();
-
-    const stateData = getStateData({ stateUrlParamValue: authResponse.state });
-
-    const getRootRelativeReturnToUrl_strippedFromAuthResponse = () => {
-        const authResponseParamNames = new Set([
+        for (const name of [
             "state",
             "session_state",
             "code",
@@ -244,70 +299,144 @@ function handleOidcCallback(): {
             "error",
             "error_description",
             "error_uri"
-        ]);
-
-        const rootRelativeReturnToUrl = location_urlObj.href.slice(location_urlObj.origin.length);
-
-        const { prefix, delimiter, serializedParams, suffix } = (() => {
-            switch (locationHrefAssessment.responseMode) {
-                case "query": {
-                    const queryStartIndex = rootRelativeReturnToUrl.indexOf("?");
-                    assert(queryStartIndex !== -1);
-
-                    const fragmentStartIndex = rootRelativeReturnToUrl.indexOf("#", queryStartIndex);
-
-                    return {
-                        prefix: rootRelativeReturnToUrl.slice(0, queryStartIndex),
-                        delimiter: "?",
-                        serializedParams: rootRelativeReturnToUrl.slice(
-                            queryStartIndex + 1,
-                            fragmentStartIndex === -1 ? undefined : fragmentStartIndex
-                        ),
-                        suffix:
-                            fragmentStartIndex === -1
-                                ? ""
-                                : rootRelativeReturnToUrl.slice(fragmentStartIndex)
-                    };
-                }
-                case "fragment": {
-                    const fragmentStartIndex = rootRelativeReturnToUrl.indexOf("#");
-                    assert(fragmentStartIndex !== -1);
-
-                    return {
-                        prefix: rootRelativeReturnToUrl.slice(0, fragmentStartIndex),
-                        delimiter: "#",
-                        serializedParams: rootRelativeReturnToUrl.slice(fragmentStartIndex + 1),
-                        suffix: ""
-                    };
-                }
-                default:
-                    assert<Equals<typeof locationHrefAssessment, never>>(false);
+        ]) {
+            if (urlSearchParams.has(name)) {
+                urlSearchParams.delete(name);
             }
-        })();
+        }
 
-        const remainingSerializedParams = serializedParams.split("&").filter(serializedParam => {
-            const paramName = new URLSearchParams(serializedParam).keys().next().value;
+        switch (responseMode) {
+            case "fragment":
+                url_obj.hash = `#${urlSearchParams}`;
+                break;
+            case "query":
+                url_obj.search = `?${urlSearchParams}`;
+                break;
+            default:
+                assert<Equals<typeof responseMode, never>>(false);
+        }
 
-            return paramName === undefined || !authResponseParamNames.has(paramName);
-        });
-
-        return [
-            prefix,
-            remainingSerializedParams.some(serializedParam => serializedParam !== "")
-                ? `${delimiter}${remainingSerializedParams.join("&")}`
-                : "",
-            suffix
-        ].join("");
+        return toRootRelative(url_obj.href);
     };
 
-    if (stateData === undefined) {
-        const rootRelativeReturnToUrl = getRootRelativeReturnToUrl_strippedFromAuthResponse();
+    if (!areWeOnTheCallbackUrl) {
+        // See: https://github.com/keycloakify/keycloak-account-ui/issues/10
+        special_compat_case: {
+            if (!hasAuthResponseInUrl) {
+                break special_compat_case;
+            }
 
-        setGetRootRelativeOriginalLocationHref_earlyInit({
-            rootRelativeOriginalLocationHref: rootRelativeReturnToUrl
+            const stateUrlParamValue = readUrlParameter({ from: responseMode, name: "state" });
+
+            assert(stateUrlParamValue !== undefined);
+
+            const isOidcSpaState = getIsStatQueryParamValue({
+                maybeStateUrlParamValue: stateUrlParamValue
+            });
+
+            if (!isOidcSpaState) {
+                break special_compat_case;
+            }
+
+            const rootRelativeOriginalLocationHref_withAuthResponseCleared =
+                getRootRelativeOriginalLocationHref_withAuthResponseCleared();
+
+            setRootRelativeOriginalLocationHref_earlyInit({
+                rootRelativeOriginalLocationHref:
+                    rootRelativeOriginalLocationHref_withAuthResponseCleared
+            });
+
+            history.replaceState({}, "", rootRelativeOriginalLocationHref_withAuthResponseCleared);
+
+            return { shouldLoadApp: true };
+        }
+
+        setRootRelativeOriginalLocationHref_earlyInit({
+            rootRelativeOriginalLocationHref: toRootRelative(originalLocationHref_obj.href)
         });
 
-        history.replaceState({}, "", rootRelativeReturnToUrl);
+        return { shouldLoadApp: true };
+    }
+
+    block_rogue_authorization: {
+        do_not_block_if_state_is_from_oidc_spa: {
+            if (!hasAuthResponseInUrl) {
+                break do_not_block_if_state_is_from_oidc_spa;
+            }
+
+            const stateUrlParamValue = readUrlParameter({ from: responseMode, name: "state" });
+
+            assert(stateUrlParamValue !== undefined, "39293");
+
+            const isFromOidcSpa = getIsStatQueryParamValue({
+                maybeStateUrlParamValue: stateUrlParamValue
+            });
+
+            if (isFromOidcSpa) {
+                break block_rogue_authorization;
+            }
+        }
+
+        const code_fragment = readUrlParameter({ from: "fragment", name: "code" });
+        const code_query = readUrlParameter({ from: "query", name: "code" });
+
+        if (code_fragment === undefined && code_query === undefined) {
+            break block_rogue_authorization;
+        }
+
+        console.error("oidc-spa: A process is trying to get issued tokens");
+
+        window.location.href = homeUrl;
+
+        return { shouldLoadApp: false };
+    }
+
+    if (!hasAuthResponseInUrl) {
+        if (homeUrl === validRedirectUri) {
+            const rootRelativeOriginalLocationHref = toRootRelative(originalLocationHref_obj.href);
+
+            setRootRelativeOriginalLocationHref_earlyInit({
+                rootRelativeOriginalLocationHref
+            });
+
+            return { shouldLoadApp: true };
+        }
+
+        setRootRelativeOriginalLocationHref_earlyInit({
+            rootRelativeOriginalLocationHref: toRootRelative(homeUrl)
+        });
+
+        history.replaceState({}, "", homeUrl);
+
+        return { shouldLoadApp: true };
+    }
+
+    const authResponse = readAllUrlParameters({ from: responseMode });
+
+    assert(typeGuard<AuthResponse>(authResponse, authResponse["state"] !== undefined), "3382203");
+
+    const stateData = getStateData({ stateUrlParamValue: authResponse.state });
+
+    if (stateData === undefined) {
+        if (homeUrl === validRedirectUri) {
+            const rootRelativeOriginalLocationHref_withAuthResponseCleared =
+                getRootRelativeOriginalLocationHref_withAuthResponseCleared();
+
+            setRootRelativeOriginalLocationHref_earlyInit({
+                rootRelativeOriginalLocationHref:
+                    rootRelativeOriginalLocationHref_withAuthResponseCleared
+            });
+
+            history.replaceState({}, "", rootRelativeOriginalLocationHref_withAuthResponseCleared);
+
+            return { shouldLoadApp: true };
+        }
+
+        setRootRelativeOriginalLocationHref_earlyInit({
+            rootRelativeOriginalLocationHref: toRootRelative(homeUrl)
+        });
+
+        history.replaceState({}, "", homeUrl);
 
         return { shouldLoadApp: true };
     }
@@ -320,44 +449,10 @@ function handleOidcCallback(): {
             );
             return { shouldLoadApp: false };
         case "redirect": {
-            // See: https://github.com/keycloakify/keycloak-account-ui/issues/10
-            abort_case: {
-                const BASE_URL = getBASE_URL_earlyInit();
-
-                let BASE_URL_fullyQualified: string;
-
-                try {
-                    BASE_URL_fullyQualified = toFullyQualifiedUrl({
-                        urlish: BASE_URL,
-                        doAssertNoQueryParams: true,
-                        doOutputWithTrailingSlash: true,
-                        rootUrl_fullyQualified: location_urlObj.origin
-                    });
-                } catch {
-                    // NOTE: Any potential configuration error will be handled properly downstream.
-                    break abort_case;
-                }
-
-                // NOTE: This should ALWAYS be true in normal circumstances.
-                if (new URL(BASE_URL_fullyQualified).pathname === location_urlObj.pathname) {
-                    break abort_case;
-                }
-
-                const rootRelativeReturnToUrl = getRootRelativeReturnToUrl_strippedFromAuthResponse();
-
-                setGetRootRelativeOriginalLocationHref_earlyInit({
-                    rootRelativeOriginalLocationHref: rootRelativeReturnToUrl
-                });
-
-                history.replaceState({}, "", rootRelativeReturnToUrl);
-
-                return { shouldLoadApp: true };
-            }
-
             redirectAuthResponse = authResponse;
             const { rootRelativeReturnToUrl } = stateData;
 
-            setGetRootRelativeOriginalLocationHref_earlyInit({
+            setRootRelativeOriginalLocationHref_earlyInit({
                 rootRelativeOriginalLocationHref: rootRelativeReturnToUrl
             });
 

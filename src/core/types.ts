@@ -557,6 +557,7 @@ export type OidcProviderMetadata = {
     userinfo_endpoint?: string;
     end_session_endpoint?: string;
     dpop_signing_alg_values_supported?: string[];
+    response_modes_supported?: string[];
 };
 
 assert<

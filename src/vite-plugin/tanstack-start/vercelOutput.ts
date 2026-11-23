@@ -1,6 +1,10 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { stateQueryParamValuePrefix } from "./spaRouting";
+import { STATE_QUERY_PARAM_VALUE_IDENTIFIER_PREFIX, REDIRECT_URI_RESERVED_PATH } from "./spaRouting";
+
+// TODO: Update, use REDIRECT_URI_RESERVED_PATH
+// maybe we have to keep in mind that the app is not necessarily hosted at the root path
+// it can be at https://mycompany.com/dashboard/ please test.
 
 export async function patchVercelOutput(output: { dir: string }) {
     const configPath = join(output.dir, "config.json");
@@ -18,7 +22,7 @@ export async function patchVercelOutput(output: { dir: string }) {
                 type: "query",
                 key: "state",
                 value: {
-                    pre: stateQueryParamValuePrefix
+                    pre: STATE_QUERY_PARAM_VALUE_IDENTIFIER_PREFIX
                 }
             }
         ],

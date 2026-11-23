@@ -2,9 +2,11 @@ import { existsSync } from "node:fs";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, basename, join } from "node:path";
 import type { NitroOutput } from "./nitroOutput";
-import { backendPaths, stateQueryParamValuePrefix } from "./spaRouting";
+import { BACKEND_PATHS, STATE_QUERY_PARAM_VALUE_IDENTIFIER_PREFIX } from "./spaRouting";
 import { babelParser, babelTypes as t } from "../../vendor/build-runtime/babel";
 import { MagicString } from "../../vendor/build-runtime/magic-string";
+
+// TODO: This needs update
 
 const callbackName = "oidc-spa-callback";
 
@@ -48,7 +50,11 @@ export async function patchNetlifyOutput(output: NitroOutput) {
                 )
                     continue;
                 if (property.value.start == null || property.value.end == null) continue;
-                source.overwrite(property.value.start, property.value.end, JSON.stringify(backendPaths));
+                source.overwrite(
+                    property.value.start,
+                    property.value.end,
+                    JSON.stringify(BACKEND_PATHS)
+                );
                 patched = true;
             }
         }
@@ -75,7 +81,9 @@ export async function patchNetlifyOutput(output: NitroOutput) {
         `export default function(request) {
     const url = new URL(request.url);
     if (url.pathname === "/" && (request.method === "GET" || request.method === "HEAD") &&
-        url.searchParams.get("state")?.startsWith(${JSON.stringify(stateQueryParamValuePrefix)})) {
+        url.searchParams.get("state")?.startsWith(${JSON.stringify(
+            STATE_QUERY_PARAM_VALUE_IDENTIFIER_PREFIX
+        )})) {
         return new URL("/_shell.html", url);
     }
 }

@@ -6,7 +6,8 @@ import { assert } from "../tools/tsafe/assert";
 import { id } from "../tools/tsafe/id";
 import type { OptionallyAsyncGetterOrDirectValue } from "../tools/GetterOrDirectValue";
 import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";
-import { getBASE_URL_earlyInit } from "../core/earlyInit_BASE_URL";
+import { getHomeUrl_earlyInit } from "../core/earlyInit_homeUrl";
+import { getValidRedirectUri } from "../core/validRedirectUri";
 
 export function createUtils<User>(params: {
     createClientUser: CreateClientUser<User>;
@@ -231,7 +232,7 @@ export function createUtils<User>(params: {
                 return oidc_cached;
             }
 
-            oidc_cached = (() => {
+            oidc_cached = await (async () => {
                 if (!ctx.doWeHaveOidcInstance) {
                     return id<Oidc.NotLoggedIn>({
                         isUserLoggedIn: false,
@@ -248,13 +249,14 @@ export function createUtils<User>(params: {
                             ctx.runtimeConfigs === undefined
                                 ? "not-resolved-yet"
                                 : ctx.runtimeConfigs.clientId,
-                        get validRedirectUri(): string {
-                            return toFullyQualifiedUrl({
-                                urlish: getBASE_URL_earlyInit(),
-                                doAssertNoQueryParams: true,
-                                doOutputWithTrailingSlash: true,
-                                rootUrl_fullyQualified: window.location.origin
-                            });
+                        get validRedirectUri() {
+                            let homeUrl: string;
+                            try {
+                                homeUrl = getHomeUrl_earlyInit();
+                            } catch {
+                                return "redirect-uri-is-unknown";
+                            }
+                            return getValidRedirectUri({ homeUrl });
                         },
                         login: async () => {
                             throw ctx.oidcInitializationError;

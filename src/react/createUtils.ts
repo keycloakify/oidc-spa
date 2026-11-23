@@ -23,8 +23,9 @@ import { createStatefulEvt, type StatefulReadonlyEvt, type StatefulEvt } from ".
 import { id } from "../tools/tsafe/id";
 import type { OptionallyAsyncGetterOrDirectValue } from "../tools/GetterOrDirectValue";
 import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";
-import { getBASE_URL_earlyInit } from "../core/earlyInit_BASE_URL";
-import { getIsStateDataCookieEnabled } from "../core/StateDataCookie.toggle";
+import { getHomeUrl_earlyInit } from "../core/earlyInit_homeUrl";
+import { getValidRedirectUri } from "../core/validRedirectUri";
+import { getSsr_earlyInit } from "../core/earlyInit_ssr";
 
 export function createUtils<User>(params: {
     createClientUser: CreateClientUser<User>;
@@ -309,6 +310,14 @@ export function createUtils<User>(params: {
 
             const prNever = new Promise<never>(() => {});
 
+            const getIsSsrEnabled = () => {
+                try {
+                    return getSsr_earlyInit();
+                } catch {
+                    return false;
+                }
+            };
+
             function useOidc(params?: {
                 assert?: "user logged in" | "user not logged in";
             }): Oidc_react<User> {
@@ -572,7 +581,7 @@ export function createUtils<User>(params: {
 
                 const [hasHydrated, setHasHydratedToTrue] = useReducer(
                     () => true,
-                    assert_params !== undefined || !getIsStateDataCookieEnabled() ? undefined : false
+                    assert_params !== undefined || !getIsSsrEnabled() ? undefined : false
                 );
 
                 useEffect(() => {
@@ -591,7 +600,7 @@ export function createUtils<User>(params: {
                             oidc.login({ doesCurrentHrefEnforceLogin: false, ...params }));
                 });
 
-                if (hasHydrated === false || !state.isReady) {
+                if (!state.isReady || hasHydrated === false) {
                     const oidc_react = id<Oidc_react.NotReady>({
                         isOidcReady: false,
                         autoLogoutState: {
@@ -602,7 +611,7 @@ export function createUtils<User>(params: {
                                 ? state.oidcInitializationError
                                 : undefined,
                         get suspensePromise() {
-                            if (getIsStateDataCookieEnabled() || !isBrowser) {
+                            if (getIsSsrEnabled() || !isBrowser) {
                                 throw new Error(
                                     [
                                         "oidc-spa: Usage error, oidc.suspensePromise cannot be used,",
@@ -725,7 +734,7 @@ export function createUtils<User>(params: {
                     return oidc_cached;
                 }
 
-                oidc_cached = (() => {
+                oidc_cached = await (async () => {
                     if (!ctx.doWeHaveOidcInstance) {
                         return id<Oidc.NotLoggedIn>({
                             isUserLoggedIn: false,
@@ -742,13 +751,14 @@ export function createUtils<User>(params: {
                                 ctx.runtimeConfigs === undefined
                                     ? "not-resolved-yet"
                                     : ctx.runtimeConfigs.clientId,
-                            get validRedirectUri(): string {
-                                return toFullyQualifiedUrl({
-                                    urlish: getBASE_URL_earlyInit(),
-                                    doAssertNoQueryParams: true,
-                                    doOutputWithTrailingSlash: true,
-                                    rootUrl_fullyQualified: window.location.origin
-                                });
+                            get validRedirectUri() {
+                                let homeUrl: string;
+                                try {
+                                    homeUrl = getHomeUrl_earlyInit();
+                                } catch {
+                                    return "redirect-uri-is-unknown";
+                                }
+                                return getValidRedirectUri({ homeUrl });
                             },
                             login: async () => {
                                 throw ctx.oidcInitializationError;
@@ -845,7 +855,7 @@ export function createUtils<User>(params: {
                         return toFullyQualifiedUrl({
                             urlish: loaderContext_discriminated.loaderContext.location.href,
                             doAssertNoQueryParams: false,
-                            rootUrl_fullyQualified: ctx.oidc.validRedirectUri
+                            rootUrl_fullyQualified: getHomeUrl_earlyInit()
                         });
                     case "React Router":
                         return loaderContext_discriminated.loaderContext.request.url;

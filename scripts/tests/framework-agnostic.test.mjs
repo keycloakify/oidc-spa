@@ -9,8 +9,9 @@ const { outputFiles, metafile } = await build({
     stdin: {
         contents: `
             export * from "./src/client";
-            export { setBASE_URL_earlyInit } from "./src/core/earlyInit_BASE_URL";
-            export { setGetRootRelativeOriginalLocationHref_earlyInit } from "./src/core/earlyInit_rootRelativeOriginalLocationHref";
+            export { setHomeUrl_earlyInit } from "./src/core/earlyInit_homeUrl";
+            export { setRootRelativeOriginalLocationHref_earlyInit } from "./src/core/earlyInit_rootRelativeOriginalLocationHref";
+            export { enableCompatibilityModeHomeAsRedirectUri } from "./src/core/validRedirectUri";
         `,
         resolveDir: fileURLToPath(new URL("../../", import.meta.url))
     },
@@ -36,7 +37,7 @@ const { outputFiles, metafile } = await build({
     ]
 });
 
-function load({ browser = true, createOidc } = {}) {
+function load({ browser = true, createOidc, useLegacyRedirectUri = false, initializeHomeUrl = true } = {}) {
     const module = { exports: {} };
     const location = new URL("https://app.test/app/");
     const document = {};
@@ -59,8 +60,9 @@ function load({ browser = true, createOidc } = {}) {
             : {})
     });
     const api = module.exports;
-    api.setBASE_URL_earlyInit({ BASE_URL: "/app/" });
-    api.setGetRootRelativeOriginalLocationHref_earlyInit({
+    if (browser && initializeHomeUrl) api.setHomeUrl_earlyInit({ BASE_URL: "/app/" });
+    if (useLegacyRedirectUri) api.enableCompatibilityModeHomeAsRedirectUri();
+    api.setRootRelativeOriginalLocationHref_earlyInit({
         rootRelativeOriginalLocationHref: "/app/"
     });
     return api;
@@ -107,7 +109,7 @@ test("mock mode shares initialization and integrates user reads, refreshes and s
     assert.equal(oidc.isUserLoggedIn, true);
     assert.equal(oidc.clientId, "test-client");
     assert.equal(oidc.issuerUri, "https://auth.test");
-    assert.equal(oidc.validRedirectUri, "https://app.test/app/");
+    assert.equal(oidc.validRedirectUri, "https://app.test/app/openid-callback/");
     assert.equal(await oidc.getAccessToken(), "test-access-token");
     const tokens = await oidc.getTokens();
     assert.equal(tokens.refreshToken, "test-refresh-token");
@@ -194,7 +196,7 @@ test("runtime config failures expose a stable initialization error", async () =>
     assert.equal(await getOidc(), oidc);
     assert.equal(oidc.issuerUri, "https://not-resolved-yet");
     assert.equal(oidc.clientId, "not-resolved-yet");
-    assert.equal(oidc.validRedirectUri, "https://app.test/app/");
+    assert.equal(oidc.validRedirectUri, "https://app.test/app/openid-callback/");
 });
 
 test("real initialization failures use the public error type", async () => {
@@ -216,7 +218,7 @@ test("real initialization failures use the public error type", async () => {
     assert.equal(oidc.initializationError, failure);
     assert.equal(oidc.issuerUri, "https://auth.test");
     assert.equal(oidc.clientId, "app");
-    assert.equal(oidc.validRedirectUri, "https://app.test/app/");
+    assert.equal(oidc.validRedirectUri, "https://app.test/app/openid-callback/");
 });
 
 for (const issuerUri of ["/realms/demo/", "https://auth.test/realms/demo/"]) {
@@ -242,7 +244,7 @@ for (const issuerUri of ["/realms/demo/", "https://auth.test/realms/demo/"]) {
             issuerUri.startsWith("/") ? "https://app.test/realms/demo" : "https://auth.test/realms/demo"
         );
         assert.equal(oidc.clientId, "configured-client");
-        assert.equal(oidc.validRedirectUri, "https://app.test/app/");
+        assert.equal(oidc.validRedirectUri, "https://app.test/app/openid-callback/");
     });
 }
 
@@ -253,4 +255,26 @@ test("server reads fail before evaluating runtime configs", async () => {
         .withRuntimeConfigs(() => assert.fail("must not initialize on the server"))
         .createUtils();
     await assert.rejects(getOidc(), /can't be used on the server/);
+});
+
+test("legacy redirect URIs agree in mock mode and initialization failures", async () => {
+    const { oidcSpa } = load({ useLegacyRedirectUri: true });
+    for (const runtimeConfigs of [
+        { mode: "mock", isUserInitiallyLoggedIn: false },
+        () => { throw new Error("config unavailable"); }
+    ]) {
+        const { getOidc } = oidcSpa.withUser(() => ({})).withRuntimeConfigs(runtimeConfigs).createUtils();
+        assert.equal((await getOidc()).validRedirectUri, "https://app.test/app/");
+    }
+});
+
+test("failed initialization exposes the redirect URI once the home URL becomes known", async () => {
+    const { oidcSpa, setHomeUrl_earlyInit } = load({ initializeHomeUrl: false });
+    const { getOidc } = oidcSpa.withUser(() => ({})).withRuntimeConfigs(() => {
+        throw new Error("config unavailable");
+    }).createUtils();
+    const oidc = await getOidc();
+    assert.equal(oidc.validRedirectUri, "redirect-uri-is-unknown");
+    setHomeUrl_earlyInit({ BASE_URL: "/app/" });
+    assert.equal(oidc.validRedirectUri, "https://app.test/app/openid-callback/");
 });

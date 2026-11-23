@@ -22,7 +22,8 @@ import { createServerFn, createMiddleware } from "@tanstack/react-start";
 import { getRequest, setResponseHeader, setResponseStatus } from "@tanstack/react-start/server";
 //import { getRequest, setResponseHeader, setResponseStatus } from "@tanstack/react-start-server";
 import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";
-import { getBASE_URL_earlyInit } from "../core/earlyInit_BASE_URL";
+import { getHomeUrl_earlyInit } from "../core/earlyInit_homeUrl";
+import { getValidRedirectUri } from "../core/validRedirectUri";
 import { BEFORE_LOAD_FN_BRAND_PROPERTY_NAME } from "./disableSsrIfLoginEnforced";
 import type { MaybeAsync } from "../tools/MaybeAsync";
 import { createObjectThatThrowsIfAccessed } from "../tools/createObjectThatThrowsIfAccessed";
@@ -730,7 +731,7 @@ export function createUtils<User_client, User_server>(params: {
                     return oidc_cached;
                 }
 
-                oidc_cached = (() => {
+                oidc_cached = await (async () => {
                     if (!ctx.doWeHaveOidcInstance) {
                         return id<Oidc.NotLoggedIn>({
                             isUserLoggedIn: false,
@@ -747,13 +748,14 @@ export function createUtils<User_client, User_server>(params: {
                                 ctx.runtimeConfigs === undefined
                                     ? "not-resolved-yet"
                                     : ctx.runtimeConfigs.clientId,
-                            get validRedirectUri(): string {
-                                return toFullyQualifiedUrl({
-                                    urlish: getBASE_URL_earlyInit(),
-                                    doAssertNoQueryParams: true,
-                                    doOutputWithTrailingSlash: true,
-                                    rootUrl_fullyQualified: window.location.origin
-                                });
+                            get validRedirectUri() {
+                                let homeUrl: string;
+                                try {
+                                    homeUrl = getHomeUrl_earlyInit();
+                                } catch {
+                                    return "redirect-uri-is-unknown";
+                                }
+                                return getValidRedirectUri({ homeUrl });
                             },
                             login: async () => {
                                 throw ctx.oidcInitializationError;
@@ -833,7 +835,7 @@ export function createUtils<User_client, User_server>(params: {
             const returnToUrl = toFullyQualifiedUrl({
                 urlish: loaderContext.location.href,
                 doAssertNoQueryParams: false,
-                rootUrl_fullyQualified: ctx.oidc.validRedirectUri
+                rootUrl_fullyQualified: getHomeUrl_earlyInit()
             });
 
             const isUrlAlreadyReplaced =
