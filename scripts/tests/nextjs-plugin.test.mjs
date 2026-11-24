@@ -125,7 +125,7 @@ test("injected client calls earlyInit synchronously with configured defenses and
                         record("earlyInit", params);
                         return { shouldLoadApp: true };
                     }
-                    export function enableSSRCapability() { record("enableSSRCapability"); }
+
                 `,
                 "../DPoP":
                     'export function DPoP(params) { record("DPoP", params); return { enableDPoP() {} }; }',
@@ -135,32 +135,33 @@ test("injected client calls earlyInit synchronously with configured defenses and
                     'export function tokenSubstitution(params) { record("substitution", params); return { enableTokenSubstitution() {} }; }'
             }
         });
-        const [name, params] = calls.at(-2);
+        const [name, params] = calls.at(-1);
         assert.equal(name, "earlyInit");
         assert.equal(params.BASE_URL, "/app/");
         assert.equal(Object.keys(params.securityDefenses).length, options.DPoP ? 3 : 0);
-        assert.deepEqual(calls.at(-1), ["enableSSRCapability"]);
-        assert.equal(calls.length, options.DPoP ? 5 : 2);
+        assert.equal(params.ssr, true);
+        assert.equal(calls.length, options.DPoP ? 4 : 1);
     }
 });
 
-test("Next client instrumentation enables SSR capability when early initialization loads the app", async () => {
+test("Next client instrumentation passes the SSR flag regardless of callback handling", async () => {
     const { env } = await withOidcSpa()("phase-production-build", { defaultConfig: {} });
     for (const shouldLoadApp of [false, true]) {
-        const { getIsStateDataCookieEnabled } = await load(
-            `
-                import "./src/nextjs-plugin/client";
-                export { getIsStateDataCookieEnabled } from "./src/core/StateDataCookie.toggle";
-            `,
-            {
-                globals: { process: { env }, shouldLoadApp },
-                stubs: {
-                    "./core/earlyInit":
-                        "export function oidcEarlyInit() { return { shouldLoadApp }; }"
+        let received;
+        await load('import "./src/nextjs-plugin/client";', {
+            globals: {
+                process: { env },
+                shouldLoadApp,
+                capture: params => {
+                    received = params;
                 }
+            },
+            stubs: {
+                "./core/earlyInit":
+                    "export function oidcEarlyInit(params) { capture(params); return { shouldLoadApp }; }"
             }
-        );
-        assert.equal(getIsStateDataCookieEnabled(), shouldLoadApp);
+        });
+        assert.equal(received.ssr, true);
     }
 });
 

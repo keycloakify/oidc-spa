@@ -53,7 +53,7 @@ function load(source, globals = {}) {
 const callbackSource = await bundle(
     `
     export * from "./src/core/StateDataCookie";
-    export { oidcEarlyInit, enableSSRCapability } from "./src/entrypoint";
+    export { oidcEarlyInit } from "./src/entrypoint";
     export { getRootRelativeOriginalLocationHref_earlyInit } from "./src/core/earlyInit_rootRelativeOriginalLocationHref";
     export { withOidcSpaServerEntry } from "./src/tanstack-start-react/withOidcSpaServerEntry";
 `,
@@ -68,9 +68,11 @@ const state = "b2lkYy1zcGEu".padEnd(32, "a");
 const destination = "/app/account-auth0?tab=security#methods";
 const cookieValue = `${Math.floor(Date.now() / 1000)}%_${encodeURIComponent(destination)}`;
 
-function browser(authResponse, data) {
-    const location = new URL("https://app.test/app/");
-    location.search = new URLSearchParams(authResponse).toString();
+function browser(authResponse, data, { legacyRedirect = false, responseMode = "query" } = {}) {
+    const location = new URL(`https://app.test/app/${legacyRedirect ? "" : "openid-callback/"}`);
+    location[responseMode === "query" ? "search" : "hash"] = new URLSearchParams(
+        authResponse
+    ).toString();
     const history = {
         replaceState: (_state, _title, url) => {
             location.href = new URL(url, location).href;
@@ -137,9 +139,12 @@ for (const legacy of [false, true]) {
                 }
             });
             await server.fetch(
-                new Request(`https://app.test/app/?${new URLSearchParams(authResponse)}`, {
-                    headers: { cookie, "X-Fixture": "preserved" }
-                })
+                new Request(
+                    `https://app.test/app/openid-callback/?${new URLSearchParams(authResponse)}`,
+                    {
+                        headers: { cookie, "X-Fixture": "preserved" }
+                    }
+                )
             );
             assert.equal(renderedRequest.url, location.href);
             assert.equal(renderedRequest.headers.get("X-Fixture"), "preserved");
@@ -149,8 +154,7 @@ for (const legacy of [false, true]) {
 
 test("cookies serialize one destination and preserve query and fragment", () => {
     const { api, document } = browser({}, undefined);
-    api.enableSSRCapability();
-    api.setStateDataCookieIfEnabled({
+    api.setStateDataCookie({
         homeUrl: "https://app.test/app/",
         stateUrlParamValue_instance: state,
         stateDataCookie: { rootRelativeReturnToUrl: destination }
@@ -205,4 +209,70 @@ test("the server leaves ordinary requests and unmatched callbacks unchanged", as
         });
         assert.equal(await server.fetch(request, opts), response);
     }
+});
+
+for (const legacyRedirect of [false, true]) {
+    for (const responseMode of ["query", "fragment"]) {
+        for (const context of ["redirect", "iframe"]) {
+            test(`callback: ${responseMode}, ${context}, legacy redirect=${legacyRedirect}`, async () => {
+                const authResponse = { state, code: "code" };
+                const data =
+                    context === "iframe"
+                        ? { context, configId: "app" }
+                        : {
+                              context,
+                              action: "login",
+                              configId: "app",
+                              authorizationParams: {},
+                              rootRelativeReturnToUrl: destination
+                          };
+                const { api, location, record } = browser(authResponse, data, {
+                    legacyRedirect,
+                    responseMode
+                });
+                assert.equal(
+                    api.oidcEarlyInit({ BASE_URL: "/app/", useLegacyRedirectUri: legacyRedirect })
+                        .shouldLoadApp,
+                    context === "redirect"
+                );
+                await Promise.resolve();
+                if (context === "redirect") {
+                    assert.equal(location.href, `https://app.test${destination}`);
+                    assert.equal(record.earlyInit.getRedirectAuthResponse().authResponse.code, "code");
+                } else {
+                    assert(record.message.message.endsWith(JSON.stringify(authResponse)));
+                }
+            });
+        }
+    }
+}
+
+test("ordinary legacy home visits retain query parameters and fragments", () => {
+    const { api, location } = browser({}, undefined, { legacyRedirect: true });
+    location.search = "?tab=security";
+    location.hash = "#methods";
+    assert.equal(
+        api.oidcEarlyInit({ BASE_URL: "/app/", useLegacyRedirectUri: true }).shouldLoadApp,
+        true
+    );
+    assert.equal(location.href, "https://app.test/app/?tab=security#methods");
+});
+
+test("creation, explicit deletion and stale cleanup use the application base path", () => {
+    const { api, document } = browser({}, undefined);
+    const writes = [];
+    Object.defineProperty(document, "cookie", {
+        get: () => "oidc_stale=1%_%2Fapp%2Faccount; oidc_invalid=unparseable",
+        set: value => writes.push(value)
+    });
+    const homeUrl = "https://app.test/app/";
+    api.setStateDataCookie({
+        homeUrl,
+        stateUrlParamValue_instance: state,
+        stateDataCookie: { rootRelativeReturnToUrl: destination }
+    });
+    api.clearStateDataCookie({ homeUrl, stateUrlParamValue: state });
+    assert.equal(writes.length, 4);
+    for (const value of writes) assert.match(value, /Path=\/app\/(?:;|$)/);
+    assert.equal(writes.filter(value => value.includes("Max-Age=0")).length, 3);
 });

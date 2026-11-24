@@ -35,6 +35,8 @@ yarn dev
 ```
 
 Open <http://app.localhost:3000>.
+Register `http://app.localhost:3000/openid-callback/` as the redirect URI in your IAM console.
+For an app hosted under `/dashboard/`, register `/dashboard/openid-callback/` on its origin.
 
 In the tracked `.env` file, choose `OIDC_PROVIDER` and configure the matching variables.
 Set `OIDC_PROVIDER=mock` to try the example without an identity provider.
@@ -72,10 +74,10 @@ Or build one target:
 | -------------------------- | ----------------------- | -------------------------------------------------------- |
 | `npm run build:vercel`     | `.vercel/output/static` | `.vercel/output/functions`, `.vercel/output/config.json` |
 | `npm run build:cloudflare` | `.output/public`        | `.output/server`, `.output/server/wrangler.json`         |
-| `npm run build:netlify`    | `dist`                  | `.netlify/functions-internal`, `.netlify/edge-functions` |
+| `npm run build:netlify`    | `dist`                  | `.netlify/functions-internal`                            |
 
 All three outputs remain available after `npm run build`. With newer Nitro versions, Netlify uses
-`.netlify/v1/functions` and `.netlify/v1/edge-functions` instead.
+`.netlify/v1/functions` instead.
 
 For Vercel, import the repository with `examples/tanstack-start` as the project root and the TanStack
 Start framework preset. `vercel.json` selects `npm run build:vercel`; it contains no routing rules.
@@ -90,17 +92,23 @@ Wrangler deployment configuration automatically; no handwritten routing configur
 
 The `oidcSpa()` Vite plugin generates deployment routing only when Start emits `_shell.html`.
 Existing static pages and assets are served directly, remaining page URLs use the shell, and
-`/api/*` and `/_serverFn/*` remain dynamic. A GET/HEAD callback to `/` whose `state` starts with
-`b2lkYy1zcGEu` receives the neutral shell while the browser retains the original callback URL.
-Ordinary `state` values keep the prerendered home page. SSR builds without a shell retain Nitro's
-normal routing. No application-level build hook is needed.
+`/api/*` and `/_serverFn/*` remain dynamic. `/openid-callback/` receives the neutral shell for
+both query and fragment responses, while the browser retains the callback URL. The home page
+always receives its prerendered content, including when its query contains `state`.
+These paths include the application's base path when configured with Vite's `base`.
+SSR builds without a shell retain Nitro's normal routing. No application-level build hook is needed.
 
-Vercel expresses this entirely through CDN routing rules. Cloudflare Workers and Netlify need a
-small generated edge dispatcher for the query-dependent callback. These dispatchers select static
-files; they do not render pages. On Cloudflare, the Worker handles the home page and page misses;
-other existing files bypass it. On Netlify, the callback edge function runs only at `/`, and a CDN
-rewrite supplies the SPA fallback. Cloudflare's build-time preview also receives Start's prerender
-flag so that its generated shell is empty; this flag is removed from the final preview command.
+All three targets use native static routing; no callback edge function or generated Worker
+dispatcher is needed. On Cloudflare, the native SPA fallback requires the shell at `/index.html`.
+For an app at `/`, the plugin preserves the prerendered home as `_prerendered-index.html` and
+adds a static home rewrite. Cloudflare's native fallback also returns the shell for missing asset
+URLs. Its build-time preview receives Start's prerender flag so the shell is empty; the flag is
+removed from the final preview command.
+
+`useLegacyRedirectUri: true` preserves an existing IAM registration using the application's home
+URL in integrations that support it. TanStack Start SPA deployments require the dedicated callback
+path: update the IAM registration before upgrading this example. The build reports a migration
+error if the legacy option is enabled in SPA mode.
 
 No custom `src/server.ts` is required: Start's default server entry handles APIs, server functions,
 and build-time prerendering. The oidc-spa plugin automatically wraps that entry with

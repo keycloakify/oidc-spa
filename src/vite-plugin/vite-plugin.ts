@@ -46,7 +46,8 @@ export function oidcSpa(params: OidcSpaVitePluginParams = {}) {
     let handlers: Handlers | undefined;
     let projectType: ProjectType | undefined;
     const nitroOutput = createTanstackStartNitroOutput({
-        isTanstackStart: () => projectType === "tanstack-start"
+        isTanstackStart: () => projectType === "tanstack-start",
+        useLegacyRedirectUri: params.useLegacyRedirectUri
     });
 
     const plugin: Plugin = {

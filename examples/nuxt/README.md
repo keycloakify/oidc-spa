@@ -30,7 +30,7 @@ state in the URL.
 To use Keycloak, Keycloak introspection (`Keycloak2`), Auth0, or Microsoft Entra ID,
 copy `.env.example` to `.env` and choose `NUXT_PUBLIC_OIDC_PROVIDER`. The file contains
 the same demo provider settings as the other examples. Register
-`http://app.localhost:3000/` as the redirect URI when using your own provider.
+`http://app.localhost:3000/openid-callback/` as the redirect URI when using your own provider.
 
 Nuxt reads `.env` during development and builds. Production reads environment
 variables supplied to the server process. Public configuration uses `NUXT_PUBLIC_*`;

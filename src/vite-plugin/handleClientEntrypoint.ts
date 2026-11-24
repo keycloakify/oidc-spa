@@ -35,7 +35,7 @@ export function createHandleClientEntrypoint(params: {
     oidcSpaVitePluginParams: OidcSpaVitePluginParams;
     resolvedConfig: ResolvedConfig;
     projectType: ProjectType;
-    ssr: boolean;
+    ssr: boolean | string;
 }) {
     const { oidcSpaVitePluginParams, resolvedConfig, projectType, ssr } = params;
 
@@ -75,7 +75,7 @@ export function createHandleClientEntrypoint(params: {
             // prettier-ignore
             !tokenSubstitution ? "" : `...tokenSubstitution(${paramsToJsLiteral_tokenSubstitution(tokenSubstitution)}),`,
             `},`,
-            `ssr: ${ssr ? "true" : "false"},`,
+            `ssr: ${typeof ssr === "string" ? ssr : JSON.stringify(ssr)},`,
             !useLegacyRedirectUri ? "" : `useLegacyRedirectUri: true,`,
             `});`,
             ``,

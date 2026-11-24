@@ -1,8 +1,8 @@
 import { existsSync } from "node:fs";
-import { readFile, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { NitroOutput } from "./nitroOutput";
-import { BACKEND_PATHS, stateQueryParamValuePrefix } from "./spaRouting";
+import { getSpaPaths } from "./spaRouting";
 
 export function prepareCloudflarePrerender(options: {
     output: NitroOutput;
@@ -24,7 +24,8 @@ export function prepareCloudflarePrerender(options: {
     };
 }
 
-export async function patchCloudflareOutput(output: NitroOutput, assetsDir: string) {
+export async function patchCloudflareOutput(output: NitroOutput, base = "/") {
+    const { basePath, callback, shell, backend } = getSpaPaths(base);
     const configPath = join(output.serverDir, "wrangler.json");
     const config = JSON.parse(await readFile(configPath, "utf8"));
     if (typeof config.main !== "string" || typeof config.assets?.binding !== "string") {
@@ -32,52 +33,34 @@ export async function patchCloudflareOutput(output: NitroOutput, assetsDir: stri
             "oidc-spa: Expected a Worker entry and assets binding in Nitro's Wrangler config"
         );
     }
-    const filename = "oidc-spa-worker.mjs";
-    if (config.main === filename) return;
-    const entry = JSON.stringify(config.main.startsWith(".") ? config.main : `./${config.main}`);
-    // Workers assets cannot match query strings. Run a small dispatcher on the
-    // home page and on misses; it serves files through ASSETS without invoking SSR.
-    const source = `
-import server from ${entry};
-export * from ${entry};
-export default {
-    ...server,
-    async fetch(request, env, context) {
-        const url = new URL(request.url);
-        if (/^\\/(?:api|_serverFn)(?:\\/|$)/.test(url.pathname)) {
-            return server.fetch(request, env, context);
+
+    // The callback is an ordinary static directory index. Query and fragment
+    // response modes therefore use exactly the same CDN path.
+    const callbackDirectory = join(output.publicDir, callback.slice(1));
+    await mkdir(callbackDirectory, { recursive: true });
+    await copyFile(join(output.publicDir, shell.slice(1)), join(callbackDirectory, "index.html"));
+
+    // Workers' native SPA fallback always serves /index.html. Preserve the
+    // prerendered home separately and rewrite only / to it; other page misses
+    // receive the neutral shell directly from the assets service.
+    if (basePath === "/") {
+        const homePath = join(output.publicDir, "_prerendered-index.html");
+        const indexPath = join(output.publicDir, "index.html");
+        if (!existsSync(homePath) && existsSync(indexPath)) await copyFile(indexPath, homePath);
+        if (existsSync(homePath)) {
+            const redirectsPath = join(output.publicDir, "_redirects");
+            const redirects = existsSync(redirectsPath) ? await readFile(redirectsPath, "utf8") : "";
+            const rule = "/ /_prerendered-index.html 200";
+            if (!redirects.split("\n").includes(rule)) {
+                await writeFile(redirectsPath, redirects.trimEnd() + "\n" + rule + "\n");
+            }
         }
-        const assets = env[${JSON.stringify(config.assets.binding)}];
-        const callback = url.pathname === "/" &&
-            (request.method === "GET" || request.method === "HEAD") &&
-            url.searchParams.get("state")?.startsWith(${JSON.stringify(stateQueryParamValuePrefix)});
-        if (!callback) {
-            const response = await assets.fetch(request);
-            if (response.status !== 404 || url.pathname.startsWith(${JSON.stringify(
-                `/${assetsDir}/`
-            )})) return response;
-        }
-        // Follow the assets service's HTML canonicalization internally, keeping
-        // the original callback URL (and code/state) in the browser untouched.
-        let shell = new URL("/_shell.html", url);
-        for (let i = 0; i < 3; i++) {
-            const response = await assets.fetch(new Request(shell, {
-                method: request.method === "HEAD" ? "HEAD" : "GET"
-            }));
-            const location = response.headers.get("location");
-            if (response.status < 300 || response.status >= 400 || !location) return response;
-            shell = new URL(location, shell);
-        }
-        throw new Error("oidc-spa: Could not resolve the static SPA shell");
     }
-};
-`;
-    await writeFile(join(output.serverDir, filename), source.trimStart());
-    config.main = filename;
-    config.assets.not_found_handling = "none";
+    await copyFile(join(output.publicDir, shell.slice(1)), join(output.publicDir, "index.html"));
+    config.assets.not_found_handling = "single-page-application";
     if (config.assets.run_worker_first !== true) {
         config.assets.run_worker_first = Array.from(
-            new Set([...(config.assets.run_worker_first || []), "/", ...BACKEND_PATHS])
+            new Set([...(config.assets.run_worker_first || []), ...backend])
         );
     }
     await writeFile(configPath, JSON.stringify(config, null, 2) + "\n");

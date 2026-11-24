@@ -10,8 +10,8 @@ const { outputFiles } = await build({
         contents: `
             export * from "./src/tanstack-start-react";
             export { oidcSpa as reactSpa } from "./src/react";
-            export { setBASE_URL_earlyInit } from "./src/core/earlyInit_BASE_URL";
-            export { setGetRootRelativeOriginalLocationHref_earlyInit } from "./src/core/earlyInit_rootRelativeOriginalLocationHref";
+            export { setHomeUrl_earlyInit } from "./src/core/earlyInit_homeUrl";
+            export { setRootRelativeOriginalLocationHref_earlyInit } from "./src/core/earlyInit_rootRelativeOriginalLocationHref";
         `,
         resolveDir: repo
     },
@@ -148,7 +148,7 @@ function fixture({ browser = true, loggedIn = true, envNames = [] } = {}) {
             const common = {
                 issuerUri: params.issuerUri,
                 clientId: params.clientId,
-                validRedirectUri: "https://app.test/"
+                validRedirectUri: "https://app.test/openid-callback/"
             };
             if (!control.loggedIn || control.coreError) {
                 return {
@@ -204,8 +204,8 @@ function fixture({ browser = true, loggedIn = true, envNames = [] } = {}) {
             navigator: {}
         });
     runInNewContext(outputFiles[0].text, context);
-    module.exports.setBASE_URL_earlyInit({ BASE_URL: "/" });
-    module.exports.setGetRootRelativeOriginalLocationHref_earlyInit({
+    if (browser) module.exports.setHomeUrl_earlyInit({ BASE_URL: "/" });
+    module.exports.setRootRelativeOriginalLocationHref_earlyInit({
         rootRelativeOriginalLocationHref: "/public"
     });
     return {
@@ -255,7 +255,7 @@ for (const asynchronous of [false, true]) {
         assert.equal(oidc.isUserLoggedIn, false);
         assert.equal(oidc.issuerUri, "https://not-resolved-yet");
         assert.equal(oidc.clientId, "not-resolved-yet");
-        assert.equal(oidc.validRedirectUri, "https://app.test/");
+        assert.equal(oidc.validRedirectUri, "https://app.test/openid-callback/");
         assert.equal(await utils.getOidc(), oidc);
         assert.equal(await utils.getOidc({ assert: "user not logged in" }), oidc);
         await assert.rejects(oidc.login({ doesCurrentHrefEnforceLogin: false }), e => e === error);
@@ -304,7 +304,7 @@ for (const adapter of ["react", "tanstack-start"]) {
         const { issuerUri, clientId, validRedirectUri, initializationError } = await utils.getOidc();
         assert.equal(issuerUri, "https://not-resolved-yet");
         assert.equal(clientId, "not-resolved-yet");
-        assert.equal(validRedirectUri, "https://app.test/");
+        assert.equal(validRedirectUri, "https://app.test/openid-callback/");
         assert.equal(initializationError.cause.cause, cause);
         f.render(utils.useOidc);
         f.commit();
@@ -332,7 +332,7 @@ for (const adapter of ["react", "tanstack-start"]) {
             const oidc = await utils.getOidc();
             assert.equal(oidc.initializationError, error);
             assert.equal(oidc.clientId, "configured-client");
-            assert.equal(oidc.validRedirectUri, "https://app.test/");
+            assert.equal(oidc.validRedirectUri, "https://app.test/openid-callback/");
             assert.equal(
                 oidc.issuerUri,
                 issuerUri.startsWith("/")

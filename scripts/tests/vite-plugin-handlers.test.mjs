@@ -84,7 +84,7 @@ for (const command of ["serve", "build"]) {
                 assert(!client.includes("oidcEarlyInit"));
             } else {
                 assert.match(client, /oidcEarlyInit/);
-                assert.match(client, /if \(shouldLoadApp\) \{\s*enableSSRCapability\(\);\s*import\(/);
+                assert.match(client, /if \(shouldLoadApp\) \{\s*import\(/);
             }
             assert.equal(await callHook(plugin, "load", context, join(f.root, "unrelated.ts")), null);
             await callHook(plugin, "buildStart", context, {});
@@ -94,7 +94,7 @@ for (const command of ["serve", "build"]) {
                 const id = await callHook(plugin, "resolveId", context, emitted[0].id);
                 const bootstrap = await callHook(plugin, "load", context, id);
                 assert.match(bootstrap, /oidcEarlyInit/);
-                assert.match(bootstrap, /if \(shouldLoadApp\) \{\s*enableSSRCapability\(\);\s*import\(/);
+                assert.match(bootstrap, /if \(shouldLoadApp\) \{\s*import\(/);
             }
             const transformed = await callHook(
                 plugin,
@@ -228,4 +228,46 @@ test("dependency optimization distinguishes the main and child React Router comp
     const vanillaConfig = { configFile: false, plugins: [vanilla] };
     callHook(vanilla, "config", undefined, vanillaConfig);
     assert(vanillaConfig.optimizeDeps.exclude.includes("oidc-spa"));
+});
+
+for (const command of ["serve", "build"]) {
+    for (const spa of [false, true]) {
+        test(`TanStack bootstrap sets ssr correctly: command=${command}, spa=${spa}`, async t => {
+            const f = await fixture(t);
+            const plugin = oidcSpa();
+            callHook(plugin, "configResolved", undefined, {
+                ...f.config,
+                command,
+                define: { "import.meta.env.TSS_SHELL": JSON.stringify(String(spa)) },
+                plugins: [{ name: "tanstack-react-start:config" }]
+            });
+            const { context } = pluginContext("ssr");
+            const source = await callHook(plugin, "load", context, f.client);
+            const { runInNewContext } = await import("node:vm");
+            let received;
+            runInNewContext(source.replace(/^import .*;$/gm, ""), {
+                document: { documentElement: { hasAttribute: () => spa } },
+                oidcEarlyInit(params) {
+                    received = params;
+                    return { shouldLoadApp: false };
+                }
+            });
+            assert.equal(received.ssr, !spa);
+            assert(!Object.hasOwn(received.securityDefenses, "ssr"));
+        });
+    }
+}
+
+test("TanStack dev SPA rejects the legacy redirect URI before startup", async t => {
+    const f = await fixture(t);
+    const plugin = oidcSpa({ useLegacyRedirectUri: true });
+    assert.throws(
+        () =>
+            callHook(plugin, "configResolved", undefined, {
+                ...f.config,
+                define: { "import.meta.env.TSS_SHELL": JSON.stringify("true") },
+                plugins: [{ name: "tanstack-react-start:config" }]
+            }),
+        /useLegacyRedirectUri is not supported.*openid-callback/
+    );
 });

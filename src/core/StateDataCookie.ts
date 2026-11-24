@@ -68,7 +68,7 @@ export function setStateDataCookie(params: {
         });
 
         cookieNames_toDelete.forEach(cookieName => {
-            document.cookie = `${cookieName}=; Path=/; Max-Age=0`;
+            document.cookie = `${cookieName}=; Path=${new URL(homeUrl).pathname}; Max-Age=0`;
         });
     }
 
@@ -83,10 +83,12 @@ export function setStateDataCookie(params: {
     ].join("");
 }
 
-export function clearStateDataCookie(params: { stateUrlParamValue: string }) {
-    const { stateUrlParamValue } = params;
+export function clearStateDataCookie(params: { stateUrlParamValue: string; homeUrl: string }) {
+    const { stateUrlParamValue, homeUrl } = params;
 
-    document.cookie = `${COOKIE_NAME_PREFIX}${stateUrlParamValue}=; Path=/; Max-Age=0`;
+    document.cookie = `${COOKIE_NAME_PREFIX}${stateUrlParamValue}=; Path=${
+        new URL(homeUrl).pathname
+    }; Max-Age=0`;
 }
 
 export function getStateDataCookies(params: { cookieHeaderParamValue: string | null }): {

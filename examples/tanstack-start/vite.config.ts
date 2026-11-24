@@ -23,6 +23,7 @@ export default defineConfig(({ command, isPreview }) => ({
                 enabled: command === "build",
                 // Keep the home and shell renders distinct until this is fixed:
                 // https://github.com/TanStack/router/issues/8741
+                // This is a bug unrelated to the oidc-spa context.
                 maskPath: "/?__spa_shell"
             }
         }),

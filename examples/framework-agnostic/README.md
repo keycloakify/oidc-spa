@@ -29,7 +29,7 @@ state in the URL. Both API implementations use mock validation in this mode.
 
 To use a real provider, choose `Keycloak`, `Keycloak2` (introspection), `Auth0`, or
 `EntraID` and replace its placeholder settings in `.env`. Register
-`http://app.localhost:3000/` as the redirect URI and allow the app's origin at your
+`http://app.localhost:3000/openid-callback/` as the redirect URI and allow the app's origin at your
 provider. Restart development or rebuild after configuration changes. The browser
 and API must use matching provider settings. `VITE_*` values are public and embedded
 in the frontend; introspection secrets and KV credentials stay on the server.

@@ -3,42 +3,30 @@ import type { Handlers, HandlerFactoryParams } from "../handlers";
 import { createHandleTanStackStartServerEntrypoint } from "./createHandleTanStackStartServerEntrypoint";
 import { createHandleTanstackStartClientOutput } from "./handleTanstackStartClientOutput";
 import { createHandleTanstackStartRuntimeConfigs } from "./handleTanstackStartRuntimeConfigs";
+import { SPA_DOCUMENT_ATTRIBUTE, LEGACY_REDIRECT_URI_SPA_ERROR } from "./spaRouting";
 import { transformCreateFileRoute } from "./transformTanstackRouterCreateFileRoute";
 
 export function createTanstackStartHandlers(params: HandlerFactoryParams): Handlers {
     const { resolvedConfig, oidcSpaVitePluginParams } = params;
 
-    // TODO: Here it depends if we are building for static
-    // rendering (a _shell.html is generated) then we should
-    // set this to false.
-    // otherwise to true.
-    // basically if src/tanstack-start-react/withOidcSpaServerEntry.ts is
-    // gonna run then true otherwise false.
-    const ssr: boolean = TODO;
+    // Start exposes the shell flag in dev. Build-time SPA options are private;
+    // the output hook marks static SPA documents once prerendering has finished.
+    const ssr =
+        resolvedConfig.command === "serve"
+            ? resolvedConfig.define?.["import.meta.env.TSS_SHELL"] !== JSON.stringify("true")
+            : `typeof document === "undefined" || !document.documentElement.hasAttribute(${JSON.stringify(
+                  SPA_DOCUMENT_ATTRIBUTE
+              )})`;
 
-    if (oidcSpaVitePluginParams.useLegacyRedirectUri === true && !ssr) {
-        throw new Error(
-            [
-                "oidc-spa: useLegacyRedirectUri is not supported with TanStack Start in SPA mode.",
-                "Remove useLegacyRedirectUri (or set it to false) and update the registered redirect URI",
-                "in your IAM administration console to your application URL followed by openid-callback/",
-                "(for example, https://myapp.mycompany.com/openid-callback/ or",
-                "https://myapp.mycompany.com/dashboard/openid-callback/ if your base path is /dashboard/)."
-            ].join(" ")
-        );
+    if (oidcSpaVitePluginParams.useLegacyRedirectUri === true && ssr === false) {
+        throw new Error(LEGACY_REDIRECT_URI_SPA_ERROR);
     }
 
     const clientEntrypoint = createHandleClientEntrypoint({
         oidcSpaVitePluginParams,
         resolvedConfig,
         projectType: "tanstack-start",
-        // TODO: Here it depends if we are building for static
-        // rendering (a _shell.html is generated) then we should
-        // set this to false.
-        // otherwise to true.
-        // basically if src/tanstack-start-react/withOidcSpaServerEntry.ts is
-        // gonna run then true otherwise false.
-        ssr: null
+        ssr
     });
     const runtimeConfigs = createHandleTanstackStartRuntimeConfigs({ resolvedConfig });
     const serverEntrypoint = createHandleTanStackStartServerEntrypoint({ resolvedConfig });

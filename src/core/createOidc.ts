@@ -892,7 +892,7 @@ export async function createOidc_nonMemoized<User>(params: {
 
                         const authResponseUrl = authResponseToUrl(authResponse);
 
-                        clearStateDataCookie({ stateUrlParamValue: authResponse.state });
+                        clearStateDataCookie({ homeUrl, stateUrlParamValue: authResponse.state });
 
                         let oidcClientTsUser: OidcClientTsUser | undefined = undefined;
 
@@ -1117,7 +1117,7 @@ export async function createOidc_nonMemoized<User>(params: {
                     )}`
                 );
 
-                clearStateDataCookie({ stateUrlParamValue: authResponse_iframe.state });
+                clearStateDataCookie({ homeUrl, stateUrlParamValue: authResponse_iframe.state });
 
                 try {
                     oidcClientTsUser = await oidcClientTsUserManager.signinRedirectCallback(
@@ -1509,7 +1509,7 @@ export async function createOidc_nonMemoized<User>(params: {
                     {
                         const { authResponse } = result_loginSilent;
 
-                        clearStateDataCookie({ stateUrlParamValue: authResponse.state });
+                        clearStateDataCookie({ homeUrl, stateUrlParamValue: authResponse.state });
 
                         const authResponse_error = authResponse.error;
 

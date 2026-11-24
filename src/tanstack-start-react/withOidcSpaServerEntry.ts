@@ -10,7 +10,6 @@ export function withOidcSpaServerEntry<T extends { fetch: RequestHandler<Registe
     return {
         ...serverEntry_original,
         fetch: async (request, requestOpts) => {
-            // Note: Here we would match only
             render_deepLink_instead_of_home_on_authResponse: {
                 const url = new URL(request.url);
 

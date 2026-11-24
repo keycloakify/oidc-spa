@@ -37,7 +37,8 @@ for development.
 Restart the server and reload the page after changing providers. Settings are loaded at runtime,
 including in production; changing providers does not require rebuilding Angular. Both server entry
 points load the committed `.env`; existing environment variables take precedence over the file.
-The OIDC client must allow <http://app.localhost:3000> as an application origin and redirect destination.
+The OIDC client must allow <http://app.localhost:3000> as an application origin and
+`http://app.localhost:3000/openid-callback/` as the redirect destination.
 
 ## Pages
 

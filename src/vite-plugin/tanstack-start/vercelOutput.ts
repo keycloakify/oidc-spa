@@ -1,12 +1,10 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { STATE_QUERY_PARAM_VALUE_IDENTIFIER_PREFIX, REDIRECT_URI_RESERVED_PATH } from "./spaRouting";
+import { getSpaPaths } from "./spaRouting";
 
-// TODO: Update, use REDIRECT_URI_RESERVED_PATH
-// maybe we have to keep in mind that the app is not necessarily hosted at the root path
-// it can be at https://mycompany.com/dashboard/ please test.
-
-export async function patchVercelOutput(output: { dir: string }) {
+export async function patchVercelOutput(output: { dir: string }, base = "/") {
+    const { basePath, callback, shell } = getSpaPaths(base);
+    const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const configPath = join(output.dir, "config.json");
     const config = JSON.parse(await readFile(configPath, "utf8")) as {
         routes?: unknown[];
@@ -16,23 +14,14 @@ export async function patchVercelOutput(output: { dir: string }) {
     }
 
     const callbackRoute = {
-        src: "^/$",
-        has: [
-            {
-                type: "query",
-                key: "state",
-                value: {
-                    pre: STATE_QUERY_PARAM_VALUE_IDENTIFIER_PREFIX
-                }
-            }
-        ],
+        src: `^${escapeRegExp(callback)}$`,
         methods: ["GET", "HEAD"],
-        dest: "/_shell.html"
+        dest: shell
     };
 
     const spaRoute = {
-        src: "^/(?!api(?:/|$)|_serverFn(?:/|$)).*$",
-        dest: "/_shell.html"
+        src: `^${escapeRegExp(basePath)}(?!api(?:/|$)|_serverFn(?:/|$)).*$`,
+        dest: shell
     };
 
     // Reinsert our rules at their required phases, without duplicating
@@ -46,8 +35,7 @@ export async function patchVercelOutput(output: { dir: string }) {
         throw new Error("oidc-spa: Expected filesystem routing in Nitro's Vercel output config");
     }
 
-    // A callback must reach the neutral shell before the prerendered home
-    // page wins filesystem lookup. Other pages use the shell only after
+    // Reserve the callback path for the neutral shell. Other pages use it after
     // static lookup; APIs and server functions retain Nitro's routing.
     routes.splice(filesystemIndex + 1, 0, spaRoute);
     routes.unshift(callbackRoute);
