@@ -17,15 +17,13 @@ export function withOidcSpa(
 ): ConfigFunction {
     return async (phase, context) => {
         const nextConfig = typeof config === "function" ? await config(phase, context) : config;
-        const { browserRuntimeFreeze, DPoP, tokenSubstitution } = params;
+        const { browserRuntimeFreeze, DPoP, tokenSubstitution, useLegacyRedirectUri = false } = params;
 
         const result: NextConfig = {
             ...nextConfig,
-            // OIDC redirect URIs end in '/'. Next's default redirect would remove it
-            // from a non-empty basePath before earlyInit can consume the callback.
-            ...(nextConfig.basePath && !nextConfig.trailingSlash
-                ? { skipTrailingSlashRedirect: true }
-                : {}),
+            // The dedicated callback ends in '/', including when there is no basePath.
+            // Preserve it until earlyInit can consume the authorization response.
+            ...(!nextConfig.trailingSlash ? { skipTrailingSlashRedirect: true } : {}),
             instrumentationClientInject: [
                 "oidc-spa/nextjs-plugin/client",
                 ...(nextConfig.instrumentationClientInject ?? [])
@@ -33,6 +31,7 @@ export function withOidcSpa(
             env: {
                 ...nextConfig.env,
                 OIDC_SPA_NEXTJS_BASE_URL: `${nextConfig.basePath ?? ""}/`,
+                OIDC_SPA_NEXTJS_USE_LEGACY_REDIRECT_URI: JSON.stringify(useLegacyRedirectUri),
                 OIDC_SPA_NEXTJS_BROWSER_RUNTIME_FREEZE: JSON.stringify(
                     browserRuntimeFreeze
                         ? { excludes: [...new Set(["Array", ...(browserRuntimeFreeze.excludes ?? [])])] }

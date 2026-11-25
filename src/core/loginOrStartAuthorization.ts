@@ -2,7 +2,7 @@ import type { UserManager as OidcClientTsUserManager } from "../vendor/frontend/
 import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";
 import { assert, type Equals } from "../tools/tsafe/assert";
 import { noUndefined } from "../tools/tsafe/noUndefined";
-import { type StateData, generateStateUrlParamValue } from "./StateData";
+import { type StateData, generateOidcSpaBrandedStateUrlParamValue } from "./StateData";
 import type { NonPostableEvt } from "../tools/Evt";
 import { createStatefulEvt } from "../tools/StatefulEvt";
 import { Deferred } from "../tools/Deferred";
@@ -563,7 +563,7 @@ export function getAuthorizationAudienceAndResourceParamsValues(params: {
                             case "scope":
                                 return scopes.join(" ");
                             case "state":
-                                return generateStateUrlParamValue();
+                                return generateOidcSpaBrandedStateUrlParamValue();
                             case "code_challenge":
                                 return "probe";
                             case "response_mode":

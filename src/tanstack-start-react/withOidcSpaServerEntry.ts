@@ -3,6 +3,8 @@ import type { Register } from "@tanstack/react-router";
 // it does not matter since it's type level only.
 import type { RequestHandler } from "@tanstack/react-start-server";
 import { getStateDataCookies } from "../core/StateDataCookie";
+import { getIsOidcSpaStateUrlParamValue } from "../core/StateData";
+import { REDIRECT_URI_RESERVED_PATH } from "../core/validRedirectUri";
 
 export function withOidcSpaServerEntry<T extends { fetch: RequestHandler<Register> }>(
     serverEntry_original: T
@@ -19,6 +21,10 @@ export function withOidcSpaServerEntry<T extends { fetch: RequestHandler<Registe
                     break render_deepLink_instead_of_home_on_authResponse;
                 }
 
+                if (!getIsOidcSpaStateUrlParamValue({ maybeStateUrlParamValue: stateUrlParamValue })) {
+                    break render_deepLink_instead_of_home_on_authResponse;
+                }
+
                 const { stateDataCookies } = getStateDataCookies({
                     cookieHeaderParamValue: request.headers.get("cookie")
                 });
@@ -28,6 +34,14 @@ export function withOidcSpaServerEntry<T extends { fetch: RequestHandler<Registe
                 );
 
                 if (entry === undefined) {
+                    if (url.pathname.endsWith(REDIRECT_URI_RESERVED_PATH)) {
+                        url.pathname = url.pathname.slice(0, -REDIRECT_URI_RESERVED_PATH.length);
+                        url.search = "";
+                        url.hash = "";
+                        const request_new = new Request(url.href, request);
+                        return serverEntry_original.fetch(request_new, requestOpts);
+                    }
+
                     break render_deepLink_instead_of_home_on_authResponse;
                 }
 

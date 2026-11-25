@@ -1,4 +1,4 @@
-import { getStateData, getIsStatQueryParamValue } from "./StateData";
+import { getStateData, getIsOidcSpaStateUrlParamValue } from "./StateData";
 import { assert, type Equals } from "../tools/tsafe/assert";
 import { typeGuard } from "../tools/tsafe/typeGuard";
 import type { AuthResponse } from "./AuthResponse";
@@ -330,7 +330,7 @@ function handleOidcCallback(): { shouldLoadApp: boolean } {
 
             assert(stateUrlParamValue !== undefined);
 
-            const isOidcSpaState = getIsStatQueryParamValue({
+            const isOidcSpaState = getIsOidcSpaStateUrlParamValue({
                 maybeStateUrlParamValue: stateUrlParamValue
             });
 
@@ -368,7 +368,7 @@ function handleOidcCallback(): { shouldLoadApp: boolean } {
 
             assert(stateUrlParamValue !== undefined, "39293");
 
-            const isFromOidcSpa = getIsStatQueryParamValue({
+            const isFromOidcSpa = getIsOidcSpaStateUrlParamValue({
                 maybeStateUrlParamValue: stateUrlParamValue
             });
 
@@ -431,6 +431,8 @@ function handleOidcCallback(): { shouldLoadApp: boolean } {
 
             return { shouldLoadApp: true };
         }
+
+        console.log("This is an outdated state, we redirect to home");
 
         setRootRelativeOriginalLocationHref_earlyInit({
             rootRelativeOriginalLocationHref: toRootRelative(homeUrl)

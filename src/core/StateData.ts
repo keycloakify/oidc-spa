@@ -38,13 +38,13 @@ export const STATE_QUERY_PARAM_VALUE_IDENTIFIER_PREFIX = "b2lkYy1zcGEu";
 export type STATE_QUERY_PARAM_VALUE_IDENTIFIER_PREFIX = typeof STATE_QUERY_PARAM_VALUE_IDENTIFIER_PREFIX;
 const RANDOM_STRING_LENGTH = 32 - STATE_QUERY_PARAM_VALUE_IDENTIFIER_PREFIX.length;
 
-export function generateStateUrlParamValue(): string {
+export function generateOidcSpaBrandedStateUrlParamValue(): string {
     return `${STATE_QUERY_PARAM_VALUE_IDENTIFIER_PREFIX}${generateUrlSafeRandom({
         length: RANDOM_STRING_LENGTH
     })}`;
 }
 
-export function getIsStatQueryParamValue(params: { maybeStateUrlParamValue: string }): boolean {
+export function getIsOidcSpaStateUrlParamValue(params: { maybeStateUrlParamValue: string }): boolean {
     const { maybeStateUrlParamValue } = params;
 
     return (

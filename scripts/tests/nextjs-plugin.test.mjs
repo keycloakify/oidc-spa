@@ -165,9 +165,11 @@ test("Next client instrumentation passes the SSR flag regardless of callback han
     }
 });
 
-for (const outcome of ["code=auth-code", "error=login_required"]) {
-    test(`callback ${outcome} fetches the destination without changing the browser URL`, async () => {
-        const req = request(`/?${outcome}&state=${state}`, {
+for (const [outcome, callbackPath] of ["code=auth-code", "error=login_required"].flatMap(outcome =>
+    ["/", "/openid-callback/"].map(path => [outcome, path])
+)) {
+    test(`callback ${callbackPath} ${outcome} fetches the destination without changing the browser URL`, async () => {
+        const req = request(`${callbackPath}?${outcome}&state=${state}`, {
             destination: "/account?tab=security#methods",
             extraCookie: "session=kept; deployment-protection=kept"
         });
@@ -230,7 +232,7 @@ test("ordinary requests and invalid callback destinations are left alone", async
         request("/", { destination: "/account" }),
         request(`/?code=x&state=${state}`),
         request("/?code=x&state=different", { destination: "/account" }),
-        request(`/account?code=x&state=${state}`, { destination: "/account" }),
+        request(`/account?code=x&state=${state}`),
         request(`/?code=x&state=${state}`, { destination: "/account", method: "POST" }),
         request(`/app/?code=x&state=${state}`, { destination: "/other", basePath: "/app" }),
         request(`/?code=x&state=${state}`, { destination: "//other.test/account" }),
@@ -315,6 +317,8 @@ test("the internal request cannot reprocess the same callback, including a retur
     });
     await proxy(request(`/?code=x&state=${state}`, { destination: `/?state=${state}` }));
     assert.equal(calls, 1);
+    await proxy(request(`/openid-callback/?code=x&state=${state}`));
+    assert.equal(calls, 2);
 });
 
 test("destination redirects and error responses retain their status and headers", async () => {
@@ -447,7 +451,7 @@ test("proxy generation writes an ignored literal config once and preserves exist
     assert(source.includes("// noinspection JSUnusedGlobalSymbols"));
     assert(source.includes("// @formatter:off"));
     assert(source.includes('withOidcSpa(nextConfig, { proxy: "./my-proxy.ts" })'));
-    assert(source.includes('"source": "/"'));
+    assert(source.includes('"source": "/:path*"'));
     assert(source.includes('"key": "state"'));
     assert(source.includes('export { proxy } from "oidc-spa/nextjs-plugin/proxy"'));
     await generateProxy(generationParams(root));
@@ -651,4 +655,113 @@ test("custom matchers apply to the forwarded destination, including headers, que
     await wrapped(new NextRequest(callback.url, { headers: callback.headers }), {});
     await wrapped(request("/private?tab=profile"), {});
     assert.equal(calls, 1);
+});
+
+for (const basePath of ["", "/app"]) {
+    test(`dedicated callbacks restore the destination or render home after the routing cookie expires: ${
+        basePath || "/"
+    }`, async () => {
+        const callbackPath = `${basePath}/openid-callback/`;
+        const home = `https://app.test${basePath}/`;
+        for (const outcome of ["code=x", "error=login_required"]) {
+            const req = request(`${callbackPath}?${outcome}&state=${state}`, { basePath });
+            assert.equal(await forwardedUrl(req), home);
+            assert.equal(new URL(req.url).pathname, callbackPath);
+            assert.equal(new URL(req.url).searchParams.get("state"), state);
+            assert.equal(
+                await forwardedUrl(
+                    request(`${callbackPath}?${outcome}&state=${state}`, {
+                        basePath,
+                        destination: `${basePath}/pricing?plan=pro#details`
+                    })
+                ),
+                `https://app.test${basePath}/pricing?plan=pro`
+            );
+        }
+        const { proxy } = await loadProxy();
+        for (const path of [
+            callbackPath,
+            `${callbackPath}?state=unrelated&code=x`,
+            `${basePath}/nested/openid-callback/?state=${state}&code=x`,
+            `${basePath}/?state=${state}&code=x`
+        ]) {
+            assert.equal(
+                (await proxy(request(path, { basePath }))).headers.get("x-middleware-next"),
+                "1"
+            );
+        }
+    });
+}
+
+test("a matching cookie without an oidc-spa state identifier does not trigger callback forwarding", async () => {
+    const { proxy } = await loadProxy();
+    for (const foreignState of ["foreign-state", `${state}x`, "b2lkYy1zcGEu"]) {
+        for (const path of ["/", "/openid-callback/"]) {
+            const req = request(`${path}?state=${foreignState}&code=x`);
+            req.headers.set("cookie", cookie("/account").replace(state, foreignState));
+            assert.equal((await proxy(req)).headers.get("x-middleware-next"), "1");
+        }
+    }
+});
+
+test("matching state cookies support callback paths other than the home URL", async () => {
+    assert.equal(
+        await forwardedUrl(
+            request(`/previous-callback?state=${state}&code=x`, {
+                destination: "/account"
+            })
+        ),
+        "https://app.test/account"
+    );
+});
+
+test("Next configuration preserves callback trailing slashes and passes the legacy option to early initialization", async () => {
+    for (const basePath of [undefined, "/app"]) {
+        for (const useLegacyRedirectUri of [false, true]) {
+            const config = await withOidcSpa({ basePath }, { useLegacyRedirectUri })(
+                "phase-production-build",
+                { defaultConfig: {} }
+            );
+            assert.equal(config.skipTrailingSlashRedirect, true);
+            assert.equal(
+                config.env.OIDC_SPA_NEXTJS_USE_LEGACY_REDIRECT_URI,
+                String(useLegacyRedirectUri)
+            );
+            let received;
+            await load('import "./src/nextjs-plugin/client";', {
+                globals: {
+                    process: { env: config.env },
+                    capture: params => {
+                        received = params;
+                    }
+                },
+                stubs: {
+                    "../entrypoint":
+                        "export function oidcEarlyInit(params) { capture(params); return { shouldLoadApp: true }; }"
+                }
+            });
+            assert.equal(received.useLegacyRedirectUri, useLegacyRedirectUri);
+            assert.equal(received.BASE_URL, `${basePath ?? ""}/`);
+            assert.equal(received.ssr, true);
+        }
+    }
+});
+
+test("generated matchers cover dedicated and legacy callbacks with Next's base-path handling", async t => {
+    const { getMiddlewareMatchers } = require("next/dist/build/analysis/get-page-static-info.js");
+    const {
+        getMiddlewareRouteMatcher
+    } = require("next/dist/shared/lib/router/utils/middleware-route-matcher.js");
+    for (const basePath of ["", "/app"]) {
+        const root = await project(t);
+        await generateProxy({ ...generationParams(root), nextConfig: { basePath } });
+        const source = await readFile(join(root, "proxy.ts"), "utf8");
+        const config = JSON.parse(source.match(/export const config = ([\s\S]*);\s*$/)[1]);
+        const matches = getMiddlewareRouteMatcher(getMiddlewareMatchers(config.matcher, { basePath }));
+        for (const path of ["/", "/openid-callback/", "/previous-callback"]) {
+            assert.equal(matches(`${basePath}${path}`, { headers: {} }, { state }), true);
+            assert.equal(matches(`${basePath}${path}`, { headers: {} }, {}), false);
+        }
+        if (basePath) assert.equal(matches("/openid-callback/", { headers: {} }, { state }), false);
+    }
 });

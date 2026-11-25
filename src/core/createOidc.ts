@@ -16,7 +16,7 @@ import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";
 import { OidcInitializationError } from "./OidcInitializationError";
 import {
     type StateData,
-    generateStateUrlParamValue,
+    generateOidcSpaBrandedStateUrlParamValue,
     STATE_STORE_KEY_PREFIX,
     getStateData
 } from "./StateData";
@@ -502,7 +502,7 @@ export async function createOidc_nonMemoized<User>(params: {
         );
     }
 
-    const stateUrlParamValue_instance = generateStateUrlParamValue();
+    const stateUrlParamValue_instance = generateOidcSpaBrandedStateUrlParamValue();
 
     const shouldEnableDPoP = (() => {
         if (disableDPoP_params) {

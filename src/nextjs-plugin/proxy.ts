@@ -2,10 +2,12 @@ import { NextRequest, NextResponse, type NextProxy } from "next/server.js";
 import type { ProxyMatcher } from "next/dist/build/analysis/get-page-static-info.js";
 import { getMiddlewareRouteMatcher } from "next/dist/shared/lib/router/utils/middleware-route-matcher.js";
 import { getStateDataCookies } from "../core/StateDataCookie";
+import { getIsOidcSpaStateUrlParamValue } from "../core/StateData";
+import { REDIRECT_URI_RESERVED_PATH } from "../core/validRedirectUri";
 
 /** Fetch the return page so Next renders its router state using the URL earlyInit will restore. */
 export async function proxy(request: NextRequest) {
-    if (request.method !== "GET" || request.nextUrl.pathname !== "/") {
+    if (request.method !== "GET") {
         return NextResponse.next();
     }
 
@@ -15,24 +17,35 @@ export async function proxy(request: NextRequest) {
         return NextResponse.next();
     }
 
+    if (!getIsOidcSpaStateUrlParamValue({ maybeStateUrlParamValue: stateUrlParamValue })) {
+        return NextResponse.next();
+    }
+
     const { stateDataCookies } = getStateDataCookies({
         cookieHeaderParamValue: request.headers.get("cookie")
     });
     const entry = stateDataCookies.find(entry => entry.stateUrlParamValue === stateUrlParamValue);
 
-    if (entry === undefined) {
-        return NextResponse.next();
-    }
-
-    const { rootRelativeReturnToUrl } = entry.stateDataCookie;
     const url = new URL(request.url);
+    const basePath = request.nextUrl.basePath;
+    let rootRelativeReturnToUrl: string;
+
+    if (entry === undefined) {
+        // Next exposes the configured base path separately from pathname.
+        // Only the dedicated callback falls back to the application home.
+        if (url.pathname !== `${basePath}${REDIRECT_URI_RESERVED_PATH}`) {
+            return NextResponse.next();
+        }
+        rootRelativeReturnToUrl = `${basePath}/`;
+    } else {
+        rootRelativeReturnToUrl = entry.stateDataCookie.rootRelativeReturnToUrl;
+    }
 
     if (!rootRelativeReturnToUrl.startsWith("/") || !URL.canParse(rootRelativeReturnToUrl, url.origin)) {
         return NextResponse.next();
     }
 
     const returnToUrl = new URL(rootRelativeReturnToUrl, url.origin);
-    const basePath = request.nextUrl.basePath;
 
     if (
         returnToUrl.origin !== url.origin ||

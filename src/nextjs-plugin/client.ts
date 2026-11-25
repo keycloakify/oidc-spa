@@ -17,7 +17,8 @@ const { shouldLoadApp } = oidcEarlyInit({
             ? undefined
             : tokenSubstitution(JSON.parse(process.env.OIDC_SPA_NEXTJS_TOKEN_SUBSTITUTION!)))
     },
-    ssr: true
+    ssr: true,
+    useLegacyRedirectUri: process.env.OIDC_SPA_NEXTJS_USE_LEGACY_REDIRECT_URI === "true"
 });
 
 if (!shouldLoadApp) {
