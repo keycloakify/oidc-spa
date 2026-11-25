@@ -98,6 +98,13 @@ always receives its prerendered content, including when its query contains `stat
 These paths include the application's base path when configured with Vite's `base`.
 SSR builds without a shell retain Nitro's normal routing. No application-level build hook is needed.
 
+Run `yarn preview` after building to preview the most recently built target. After `yarn build`,
+that is Netlify because it runs last. The oidc-spa plugin uses Nitro's build metadata to find the
+selected output and applies the static SPA routing locally: callbacks retain their trailing slash,
+existing frontend files are served directly, and other page URLs receive the shell. APIs and server
+functions continue through Nitro. No extra preview configuration is needed; SSR builds without a
+shell use the normal server preview.
+
 All three targets use native static routing; no callback edge function or generated Worker
 dispatcher is needed. On Cloudflare, the native SPA fallback requires the shell at `/index.html`.
 For an app at `/`, the plugin preserves the prerendered home as `_prerendered-index.html` and

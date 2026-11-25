@@ -2,7 +2,14 @@ import type { Plugin, ResolvedConfig } from "vite";
 import type { OidcSpaVitePluginParams } from "./vite-plugin";
 
 type HookHandler<Hook> = Hook extends { handler: infer Handler } ? Handler : Hook;
-type HookName = "resolveId" | "load" | "transform" | "buildStart" | "configureServer" | "generateBundle";
+type HookName =
+    | "resolveId"
+    | "load"
+    | "transform"
+    | "buildStart"
+    | "configureServer"
+    | "configurePreviewServer"
+    | "generateBundle";
 
 // Use Vite's function signatures, including each hook's `this` context.
 export type Handlers = {

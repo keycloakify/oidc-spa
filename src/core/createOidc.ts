@@ -221,7 +221,8 @@ export async function createOidc<User = undefined>(
             if (ssr) {
                 return "query";
             }
-            return oidcProviderMetadata?.response_modes_supported?.includes("fragment")
+            return isKeycloak({ issuerUri: issuerUri }) &&
+                oidcProviderMetadata?.response_modes_supported?.includes("fragment")
                 ? "fragment"
                 : "query";
         })();

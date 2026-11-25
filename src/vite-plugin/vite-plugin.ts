@@ -102,6 +102,15 @@ export function oidcSpa(params: OidcSpaVitePluginParams = {}) {
             assert(handlers !== undefined);
             return handlers.configureServer?.call(this, server);
         },
+        configurePreviewServer: {
+            // Nitro's preview handler consumes misses too, so install our static
+            // SPA routing before it, regardless of plugin array order.
+            order: "pre",
+            handler(server) {
+                assert(handlers !== undefined);
+                return handlers.configurePreviewServer?.call(this, server);
+            }
+        },
         generateBundle: {
             order: "pre",
             handler(options, bundle, isWrite) {

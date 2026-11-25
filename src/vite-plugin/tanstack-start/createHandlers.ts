@@ -5,6 +5,7 @@ import { createHandleTanstackStartClientOutput } from "./handleTanstackStartClie
 import { createHandleTanstackStartRuntimeConfigs } from "./handleTanstackStartRuntimeConfigs";
 import { SPA_DOCUMENT_ATTRIBUTE, LEGACY_REDIRECT_URI_SPA_ERROR } from "./spaRouting";
 import { transformCreateFileRoute } from "./transformTanstackRouterCreateFileRoute";
+import { configureTanstackStartPreview } from "./configurePreviewServer";
 
 export function createTanstackStartHandlers(params: HandlerFactoryParams): Handlers {
     const { resolvedConfig, oidcSpaVitePluginParams } = params;
@@ -70,6 +71,7 @@ export function createTanstackStartHandlers(params: HandlerFactoryParams): Handl
         },
         buildStart: clientOutput?.buildStart,
         generateBundle: clientOutput?.generateBundle,
-        configureServer: runtimeConfigs.configureServer
+        configureServer: runtimeConfigs.configureServer,
+        configurePreviewServer: configureTanstackStartPreview
     };
 }
