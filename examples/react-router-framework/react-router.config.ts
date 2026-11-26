@@ -6,7 +6,7 @@ export default {
     // The oidc-spa plugin adds resource routing to the generated server build.
     // To use ssr: false with your own backend instead:
     // - Delete app/entry.client.tsx, app/.server/, and api/.
-    // - Remove the resource routes and their route registrations.
+    // - Remove the resource route files.
     // - Remove server loader/action exports and their server-only imports from routes.
     //   export async function action({ request }: Route.ActionArgs) will no longer work.
     // - Keep the protected layout's clientMiddleware, but replace
@@ -14,5 +14,8 @@ export default {
     // - Remove the Vercel function rewrites.
     //   Deploy build/client as a static SPA.
     // ssr: true is not supported by this integration: authentication initializes in the browser.
-    ssr: "unstable_api-only"
+    ssr: "unstable_api-only",
+    async prerender() {
+        return ["/", "/inactivity-logout"];
+    }
 } satisfies Config;

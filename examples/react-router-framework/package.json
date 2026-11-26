@@ -24,6 +24,7 @@
     },
     "devDependencies": {
         "@react-router/dev": "8.5.0",
+        "@react-router/fs-routes": "8.5.0",
         "@types/node": "24.10.0",
         "@types/react": "19.2.18",
         "@types/react-dom": "19.2.7",

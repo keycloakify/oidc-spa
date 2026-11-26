@@ -95,10 +95,11 @@ export default function HomePage() {
                     <li>
                         <h3>Protect navigation and authenticate server requests</h3>
                         <p>
-                            <a href={`${sourceUrl}/app/routes.ts`}>
-                                <code>app/routes.ts</code>
+                            <a href={`${sourceUrl}/app/routes/_auth/layout.tsx`}>
+                                <code>app/routes/_auth/layout.tsx</code>
                             </a>{" "}
-                            groups protected pages under a pathless layout. Its client middleware calls{" "}
+                            is a pathless layout for pages in <code>_auth/</code>, discovered through{" "}
+                            <code>@react-router/fs-routes</code>. Its client middleware calls{" "}
                             <code>enforceLogin(args)</code> before child loaders and actions run:
                         </p>
                         <pre>

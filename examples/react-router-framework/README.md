@@ -42,12 +42,19 @@ authorization endpoint is fixed.
 
 ## Authentication and navigation
 
+`app/routes.ts` uses the official `@react-router/fs-routes` conventions to discover route modules
+in `app/routes`. `_index.tsx` serves `/`; dots separate URL segments, and `$` matches a splat.
+`routes.ts` also discovers pages inside `_auth/` and wraps them in its pathless `layout.tsx`,
+which is registered once and excluded from child-route discovery.
+Resource routes are discovered inside `app/routes/api` with an `/api` URL prefix.
+Add a route file to register a page; there is no separate route list to maintain.
+
 `app/oidc.ts` maps claims to `User_client` and configures the browser client. Public pages render
 while OIDC initializes; the header checks `isOidcReady` before showing authentication controls.
 The root mounts `AutoLogoutWarningOverlay`, and its `HydrateFallback` returns `null`.
 
 The pathless protected layout uses `clientMiddleware` to await `enforceLogin(args)` before child
-loaders/actions run. URLs do not include the layout's directory name. Each backend handler also
+loaders/actions run. URLs do not include the `_auth` directory name. Each backend handler also
 validates access tokens independently through `app/.server/oidc.ts`. Admin handlers additionally
 check `user.isAdmin`.
 
@@ -62,7 +69,7 @@ The resume link returns there, where the client guard requires login again.
 
 ### Native loaders and actions
 
-`app/routes/protected/todo-list.tsx` exports server `loader` and `action` functions. Client wrappers
+`app/routes/_auth/todo-list.tsx` exports server `loader` and `action` functions. Client wrappers
 delegate through `args.serverLoader()` and `args.serverAction()`. The React Router form posts to the
 action and automatically revalidates loader data.
 
@@ -73,23 +80,23 @@ protected routes: browser-issued prefetches bypass this custom fetch.
 
 ### JSON resource routes
 
-`app/routes/api.todos.ts` has a GET `loader` and POST `action`, with no React component. It reads
+`app/routes/api/todos.ts` has a GET `loader` and POST `action`, with no React component. It reads
 JSON, validates input with Zod, and returns ordinary JSON responses. It can be called by any HTTP
 client; a form is not required.
 
-`app/routes/protected/todo-list-api.tsx` reads the API in its `clientLoader`. Its submit handler posts
+`app/routes/_auth/todo-list-api.tsx` reads the API in its `clientLoader`. Its submit handler posts
 JSON and revalidates through `useRevalidator()`. The `fetchWithAuth` helper in `app/oidc.ts` attaches
 the access token to these requests.
 
 ### tRPC resource routes
 
-`app/routes/api.trpc.ts` delegates GET and POST requests to tRPC's Fetch adapter.
+`app/routes/api/trpc.$.ts` delegates GET and POST requests to tRPC's Fetch adapter.
 `app/.server/trpc.ts` defines typed procedures; each authenticates the incoming `Request` and uses
 the same store as the other handlers. Keeping the same request in the tRPC context also allows
 OIDC validation to reuse a request's DPoP verification across batched procedures.
 
 `app/trpc.ts` imports only the server router's type and attaches tokens through `httpBatchLink`'s
-headers callback. `app/routes/protected/todo-list-trpc.tsx` uses the typed client for queries and
+headers callback. `app/routes/_auth/todo-list-trpc.tsx` uses the typed client for queries and
 mutations, then revalidates its client loader. React Router's custom fetch only handles native data
 requests; the API helper and tRPC link authenticate their own requests.
 

@@ -1,4 +1,4 @@
-import type { Route } from "./+types/api.todos";
+import type { Route } from "./+types/todos";
 import { z } from "zod";
 import { getUser } from "~/.server/oidc";
 import { getTodosStore, type TodoItem } from "~/.server/data/todos";

@@ -199,6 +199,13 @@ test(
             try {
                 await exercise(server.origin, "NODE");
                 const html = await readFile(join(root, "build/client/index.html"), "utf8");
+                const fallback = await readFile(
+                    join(root, "build/client/__spa-fallback.html"),
+                    "utf8"
+                ).catch(error => {
+                    if (error.code !== "ENOENT") throw error;
+                    return html;
+                });
                 for (const path of [
                     "/",
                     "/todo-list",
@@ -213,7 +220,7 @@ test(
                     assert.equal(response.headers.get("location"), null);
                     assert.equal(
                         await response.text(),
-                        html,
+                        path === "/" ? html : fallback,
                         "page requests return the build-time document verbatim"
                     );
                 }

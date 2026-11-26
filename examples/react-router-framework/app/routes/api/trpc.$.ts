@@ -1,5 +1,5 @@
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
-import type { Route } from "./+types/api.trpc";
+import type { Route } from "./+types/trpc.$";
 import { appRouter } from "~/.server/trpc";
 
 function handle({ request }: Route.LoaderArgs | Route.ActionArgs) {
