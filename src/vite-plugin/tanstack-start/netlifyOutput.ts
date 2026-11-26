@@ -1,8 +1,8 @@
 import { existsSync } from "node:fs";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import { dirname, basename, join } from "node:path";
+import { readFile, rm, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import type { NitroOutput } from "./nitroOutput";
-import { backendPaths, stateQueryParamValuePrefix } from "./spaRouting";
+import { getSpaPaths } from "./spaRouting";
 import { babelParser, babelTypes as t } from "../../vendor/build-runtime/babel";
 import { MagicString } from "../../vendor/build-runtime/magic-string";
 
@@ -20,7 +20,8 @@ export async function removeNetlifyCallback(output: NitroOutput) {
     await writeFile(manifestPath, JSON.stringify(manifest, null, 2) + "\n");
 }
 
-export async function patchNetlifyOutput(output: NitroOutput) {
+export async function patchNetlifyOutput(output: NitroOutput, base = "/") {
+    const { basePath, callback, shell, backend } = getSpaPaths(base);
     const entryPath = join(output.serverDir, "server.mjs");
     const original = await readFile(entryPath, "utf8");
     // Netlify statically reads this exported object; importing or spreading a
@@ -48,7 +49,7 @@ export async function patchNetlifyOutput(output: NitroOutput) {
                 )
                     continue;
                 if (property.value.start == null || property.value.end == null) continue;
-                source.overwrite(property.value.start, property.value.end, JSON.stringify(backendPaths));
+                source.overwrite(property.value.start, property.value.end, JSON.stringify(backend));
                 patched = true;
             }
         }
@@ -60,39 +61,17 @@ export async function patchNetlifyOutput(output: NitroOutput) {
     await writeFile(entryPath, source.toString());
     const redirectsPath = join(output.publicDir, "_redirects");
     const redirects = existsSync(redirectsPath) ? await readFile(redirectsPath, "utf8") : "";
-    const fallback = "/* /_shell.html 200";
-    if (!redirects.split("\n").includes(fallback)) {
-        await writeFile(redirectsPath, redirects.trimEnd() + "\n" + fallback + "\n");
-    }
-
-    // Netlify query matching requires an exact parameter set, whereas providers
-    // may return additional callback parameters. An edge function checks just
-    // our state prefix and rewrites to the CDN file, preserving the browser URL.
-    const dir = join(dirname(output.dir), "edge-functions");
-    await mkdir(dir, { recursive: true });
+    const callbackRule = `${callback} ${shell} 200!`;
+    const fallbackRule = `${basePath}* ${shell} 200`;
+    const existing = redirects
+        .split("\n")
+        .filter(line => line !== callbackRule && line !== fallbackRule);
+    // The reserved callback must win even over a user-supplied catch-all.
+    // Leave all other redirects in order and keep the SPA fallback last.
     await writeFile(
-        join(dir, `${callbackName}.js`),
-        `export default function(request) {
-    const url = new URL(request.url);
-    if (url.pathname === "/" && (request.method === "GET" || request.method === "HEAD") &&
-        url.searchParams.get("state")?.startsWith(${JSON.stringify(stateQueryParamValuePrefix)})) {
-        return new URL("/_shell.html", url);
-    }
-}
-export const config = { path: "/" };
-`
+        redirectsPath,
+        [callbackRule, ...existing.filter(line => line.trim() !== ""), fallbackRule, ""].join("\n")
     );
-    // Nitro's older functions-internal layout needs an explicit edge manifest.
-    // The current Frameworks API discovers the function's exported config itself.
-    if (basename(output.dir) === "functions-internal") {
-        const path = join(dir, "manifest.json");
-        const manifest = existsSync(path)
-            ? JSON.parse(await readFile(path, "utf8"))
-            : { version: 1, functions: [] };
-        manifest.functions = manifest.functions.filter(
-            (entry: { function: string }) => entry.function !== callbackName
-        );
-        manifest.functions.unshift({ function: callbackName, path: "/" });
-        await writeFile(path, JSON.stringify(manifest, null, 2) + "\n");
-    }
+    // Remove the query-dependent dispatcher from previous oidc-spa builds.
+    await removeNetlifyCallback(output);
 }

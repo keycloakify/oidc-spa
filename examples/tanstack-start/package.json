@@ -5,10 +5,10 @@
     "type": "module",
     "scripts": {
         "dev": "vite dev",
-        "build": "npm run build:vercel && npm run build:cloudflare && npm run build:netlify",
         "build:vercel": "NITRO_PRESET=vercel vite build && tsc --noEmit",
         "build:cloudflare": "NITRO_PRESET=cloudflare-module vite build && tsc --noEmit",
         "build:netlify": "NITRO_PRESET=netlify vite build && tsc --noEmit",
+        "build:self-hosted": "NITRO_PRESET=node-server vite build && tsc --noEmit",
         "preview": "vite preview"
     },
     "dependencies": {

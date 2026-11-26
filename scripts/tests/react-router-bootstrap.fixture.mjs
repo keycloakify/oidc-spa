@@ -127,7 +127,7 @@ if(event.data==="unexpected-app-evaluation")failed=true;
 if(typeof event.data==="string"&&event.data.startsWith("oidc-spa:cross-window-messaging:"))posted=true;
 update();});
 frame.onload=()=>{loaded=true;update();};
-frame.src=${JSON.stringify(base)}+"todo?code=fixture&state="+state;
+frame.src=${JSON.stringify(base)}+"openid-callback/?code=fixture&state="+state;
 document.body.append(frame);
 </script></body></html>`
     };

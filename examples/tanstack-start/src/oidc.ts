@@ -20,15 +20,7 @@ export type User_server = {
     isAdmin: boolean;
 };
 
-export const {
-    useOidc,
-    getOidc,
-    // NOTE: The oidc-spa Vite plugin switches routes using enforceLogin to `ssr: false`.
-    // Their children inherit this, while the root shell and AppHeader remain SSR'd.
-    enforceLogin,
-    oidcFnMiddleware,
-    oidcRequestMiddleware
-} = oidcSpa
+export const { useOidc, getOidc, enforceLogin, oidcFnMiddleware, oidcRequestMiddleware } = oidcSpa
     // Runs only on the client
     .withClientUser<User_client>(async ({ isMock, idTokenClaims, accessToken }) => {
         if (isMock) {

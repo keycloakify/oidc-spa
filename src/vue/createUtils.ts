@@ -23,8 +23,9 @@ import { assert, type Equals } from "../tools/tsafe/assert";
 import { id } from "../tools/tsafe/id";
 import type { OptionallyAsyncGetterOrDirectValue } from "../tools/GetterOrDirectValue";
 import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";
-import { getBASE_URL_earlyInit } from "../core/earlyInit_BASE_URL";
-import { getIsStateDataCookieEnabled } from "../core/StateDataCookie.toggle";
+import { getHomeUrl_earlyInit } from "../core/earlyInit_homeUrl";
+import { getValidRedirectUri } from "../core/validRedirectUri";
+import { getSsr_earlyInit } from "../core/earlyInit_ssr";
 
 export function createUtils<User>(params: {
     createClientUser: CreateClientUser<User>;
@@ -351,6 +352,14 @@ export function createUtils<User>(params: {
                 (login ??= params => oidc.login({ doesCurrentHrefEnforceLogin: false, ...params }));
         })();
 
+        const getIsSsrEnabled = () => {
+            try {
+                return getSsr_earlyInit();
+            } catch {
+                return false;
+            }
+        };
+
         function useOidc(params?: { assert?: undefined }): Oidc_vue.Ref<User>;
         function useOidc(params: { assert: "user logged in" }): Oidc_vue.LoggedIn<User>;
         function useOidc(params: { assert: "user not logged in" }): Oidc_vue.NotLoggedIn;
@@ -360,9 +369,7 @@ export function createUtils<User>(params: {
             const { assert: assert_params } = params ?? {};
             const instance = getCurrentInstance();
             const hasHydrated = shallowRef(
-                assert_params !== undefined ||
-                    !getIsStateDataCookieEnabled() ||
-                    instance?.isMounted !== false
+                assert_params !== undefined || !getIsSsrEnabled() || instance?.isMounted !== false
             );
 
             if (isBrowser && instance !== null && !instance.isMounted) {
@@ -544,7 +551,7 @@ export function createUtils<User>(params: {
                 return oidc_cached;
             }
 
-            oidc_cached = (() => {
+            oidc_cached = await (async () => {
                 if (!ctx.doWeHaveOidcInstance) {
                     return id<Oidc.NotLoggedIn>({
                         isUserLoggedIn: false,
@@ -561,13 +568,14 @@ export function createUtils<User>(params: {
                             ctx.runtimeConfigs === undefined
                                 ? "not-resolved-yet"
                                 : ctx.runtimeConfigs.clientId,
-                        get validRedirectUri(): string {
-                            return toFullyQualifiedUrl({
-                                urlish: getBASE_URL_earlyInit(),
-                                doAssertNoQueryParams: true,
-                                doOutputWithTrailingSlash: true,
-                                rootUrl_fullyQualified: window.location.origin
-                            });
+                        get validRedirectUri() {
+                            let homeUrl: string;
+                            try {
+                                homeUrl = getHomeUrl_earlyInit();
+                            } catch {
+                                return "redirect-uri-is-unknown";
+                            }
+                            return getValidRedirectUri({ homeUrl });
                         },
                         login: async () => {
                             throw ctx.oidcInitializationError;
@@ -630,7 +638,7 @@ export function createUtils<User>(params: {
         const returnToUrl = toFullyQualifiedUrl({
             urlish: to.fullPath,
             doAssertNoQueryParams: false,
-            rootUrl_fullyQualified: ctx.oidc.validRedirectUri
+            rootUrl_fullyQualified: getHomeUrl_earlyInit()
         });
         const isUrlAlreadyReplaced =
             window.location.href.replace(/\/$/, "") === returnToUrl.replace(/\/$/, "");

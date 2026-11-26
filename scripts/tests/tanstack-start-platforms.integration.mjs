@@ -47,8 +47,29 @@ test(
     `
         );
 
-        for (const preset of ["cloudflare-module", "netlify"]) {
-            await t.test(preset, async t => {
+        for (const [preset, base] of [
+            ["cloudflare-module", "/"],
+            ["netlify", "/"],
+            ["cloudflare-module", "/dashboard/"],
+            ["netlify", "/dashboard/"]
+        ]) {
+            const projectRoot =
+                base === "/" ? root : await mkdtemp(join(tmpdir(), "oidc-spa-base-build-"));
+            if (base !== "/") {
+                t.after(() => rm(projectRoot, { recursive: true, force: true }));
+                for (const name of [
+                    "src",
+                    "public",
+                    "package.json",
+                    "tsconfig.json",
+                    ".env",
+                    "node_modules"
+                ]) {
+                    await cp(join(root, name), join(projectRoot, name), { recursive: true });
+                }
+            }
+            await t.test(`${preset} ${base}`, async t => {
+                const root = projectRoot;
                 const build = async spa => {
                     await writeFile(
                         join(root, "vite.config.ts"),
@@ -58,7 +79,9 @@ test(
                     import react from "@vitejs/plugin-react";
                     import { nitro } from "nitro/vite";
                     import { oidcSpa } from "oidc-spa/vite-plugin";
-                    export default defineConfig({ resolve: { tsconfigPaths: true }, plugins: [
+                    export default defineConfig({ base: ${JSON.stringify(
+                        base
+                    )}, resolve: { tsconfigPaths: true }, plugins: [
                         tanstackStart({ prerender: { enabled: ${spa} }, spa: { enabled: ${spa}, maskPath: "/?__spa_shell" } }),
                         nitro({ preset: ${JSON.stringify(preset)} }), react(), oidcSpa()
                     ] });
@@ -92,8 +115,18 @@ test(
                     : join(root, ".netlify/functions-internal");
                 const publicDir = cloudflare ? join(output, "public") : join(root, "dist");
                 const serverDir = join(output, "server");
-                assert.match(await readFile(join(publicDir, "index.html"), "utf8"), /<h1>/);
-                const shell = await readFile(join(publicDir, "_shell.html"), "utf8");
+                assert.match(
+                    await readFile(
+                        join(
+                            publicDir,
+                            base,
+                            cloudflare && base === "/" ? "_prerendered-index.html" : "index.html"
+                        ),
+                        "utf8"
+                    ),
+                    /<h1>/
+                );
+                const shell = await readFile(join(publicDir, base, "_shell.html"), "utf8");
                 assert(
                     !shell.includes("<h1>"),
                     `${preset}: callback shell must contain no home-page UI`
@@ -107,7 +140,7 @@ test(
                 let stop = () => {};
                 if (cloudflare) {
                     const config = await json(join(serverDir, "wrangler.json"));
-                    assert.equal(config.main, "oidc-spa-worker.mjs");
+                    assert.equal(config.main, "index.mjs");
                     assert(!config.vars?.TSS_PRERENDERING);
                     await assert.rejects(readFile(join(serverDir, ".dev.vars")), { code: "ENOENT" });
                     const socket = createServer();
@@ -146,7 +179,8 @@ test(
                         await exited;
                     };
                     t.after(stop);
-                    request = (path, init) => fetch(`http://127.0.0.1:${port}${path}`, init);
+                    request = (path, init) =>
+                        fetch(`http://127.0.0.1:${port}${base}${path.replace(/^\//, "")}`, init);
                     let ready = false;
                     for (let i = 0; i < 100; i++) {
                         try {
@@ -158,29 +192,36 @@ test(
                     }
                     assert(ready, logs);
                     for (const path of [
-                        `/?state=b2lkYy1zcGEu${"a".repeat(20)}&code=123`,
+                        `/openid-callback/?state=b2lkYy1zcGEu${"a".repeat(20)}&code=123`,
                         "/unknown-page"
                     ]) {
-                        const response = await request(path);
+                        const response = await request(path, {
+                            headers: { "sec-fetch-mode": "navigate" }
+                        });
                         assert.equal(response.status, 200);
                         assert.equal(await response.text(), shell);
                     }
                     assert.match(await (await request("/?state=unrelated")).text(), /<h1>/);
                     assert.match(await (await request("/probe")).text(), /PROBE PAGE/);
-                    assert.equal((await request("/assets/missing.js")).status, 404);
+                    // Native Cloudflare SPA fallback applies to missing asset URLs too.
+                    const missingAsset = await request("/assets/missing.js");
+                    assert.equal(missingAsset.status, 200);
+                    assert.equal(await missingAsset.text(), shell);
                 } else {
                     const entry = await import(pathToFileURL(join(serverDir, "server.mjs")));
-                    assert.deepEqual(entry.config.path, [
-                        "/api",
-                        "/api/*",
-                        "/_serverFn",
-                        "/_serverFn/*"
-                    ]);
+                    assert.deepEqual(
+                        entry.config.path,
+                        ["api", "api/*", "_serverFn", "_serverFn/*"].map(path => base + path)
+                    );
                     request = (path, init) =>
-                        entry.default(new Request(`https://example.com${path}`, init), {});
-                    assert.match(
-                        await readFile(join(publicDir, "_redirects"), "utf8"),
-                        /\/\* \/_shell\.html 200/
+                        entry.default(
+                            new Request(`https://example.com${base}${path.replace(/^\//, "")}`, init),
+                            {}
+                        );
+                    assert(
+                        (await readFile(join(publicDir, "_redirects"), "utf8")).includes(
+                            `${base}* ${base}_shell.html 200`
+                        )
                     );
                 }
                 for (const method of ["GET", "POST"]) {
@@ -196,7 +237,7 @@ test(
                 await stop();
 
                 await build(false);
-                await assert.rejects(readFile(join(publicDir, "_shell.html")), { code: "ENOENT" });
+                await assert.rejects(readFile(join(publicDir, base, "_shell.html")), { code: "ENOENT" });
                 if (cloudflare) {
                     assert.equal((await json(join(serverDir, "wrangler.json"))).main, "index.mjs");
                 } else {

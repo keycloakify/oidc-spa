@@ -22,3 +22,5 @@ yarn.lock
 .netlify
 .wrangler
 /dist/
+/self-hosted-static-frontend/.output/
+/self-hosted-ssr/.output/

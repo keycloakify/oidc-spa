@@ -50,11 +50,11 @@ import {
 import { firstValueFrom, Subject } from "rxjs";
 import { oidcSpa, type Oidc_angular } from "../../src/angular";
 import { OidcInitializationError } from "../../src/core/OidcInitializationError";
-import { setBASE_URL_earlyInit } from "../../src/core/earlyInit_BASE_URL";
-import { setGetRootRelativeOriginalLocationHref_earlyInit } from "../../src/core/earlyInit_rootRelativeOriginalLocationHref";
+import { setHomeUrl_earlyInit } from "../../src/core/earlyInit_homeUrl";
+import { setRootRelativeOriginalLocationHref_earlyInit } from "../../src/core/earlyInit_rootRelativeOriginalLocationHref";
 import { resetCore } from "./core";
 
-const location = new URL("https://app.test/");
+const location = new URL("https://app.test/base/");
 const history = { pushState() {}, replaceState() {} };
 const document = {
     getElementById: () => null,
@@ -67,8 +67,8 @@ Object.assign(globalThis, {
     history,
     document
 });
-setBASE_URL_earlyInit({ BASE_URL: "/" });
-setGetRootRelativeOriginalLocationHref_earlyInit({ rootRelativeOriginalLocationHref: "/" });
+setHomeUrl_earlyInit({ BASE_URL: "/base/" });
+setRootRelativeOriginalLocationHref_earlyInit({ rootRelativeOriginalLocationHref: "/base/" });
 const OPTIONAL = new HttpContextToken(() => false);
 const REQUIRED = new HttpContextToken(() => false);
 const INJECTED_NAME = new InjectionToken<string>("name");
@@ -366,7 +366,7 @@ for (const isAsync of [false, true]) {
         assert.equal(imperative.initializationError, error);
         assert.equal(imperative.issuerUri, "https://not-resolved-yet");
         assert.equal(imperative.clientId, "not-resolved-yet");
-        assert.equal(imperative.validRedirectUri, "https://app.test/");
+        assert.equal(imperative.validRedirectUri, "https://app.test/base/openid-callback/");
         assert.equal(await utils.getOidc(), imperative);
         await assert.rejects(utils.getOidc({ assert: "user logged in" }), /not currently logged in/);
         assert.throws(
@@ -456,7 +456,7 @@ for (const issuerUri of ["/realms/demo/", "https://auth.test/realms/demo/"]) {
             issuerUri.startsWith("/") ? "https://app.test/realms/demo" : "https://auth.test/realms/demo"
         );
         assert.equal(imperative.clientId, "configured-client");
-        assert.equal(imperative.validRedirectUri, "https://app.test/");
+        assert.equal(imperative.validRedirectUri, "https://app.test/base/openid-callback/");
         await assert.rejects(
             runInInjectionContext(injector, () =>
                 utils.enforceLoginGuard(route, routerState("/protected"))

@@ -2,7 +2,7 @@ import type { UserManager as OidcClientTsUserManager } from "../vendor/frontend/
 import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";
 import { assert, type Equals } from "../tools/tsafe/assert";
 import { noUndefined } from "../tools/tsafe/noUndefined";
-import { type StateData, generateStateUrlParamValue } from "./StateData";
+import { type StateData, generateOidcSpaBrandedStateUrlParamValue } from "./StateData";
 import type { NonPostableEvt } from "../tools/Evt";
 import { createStatefulEvt } from "../tools/StatefulEvt";
 import { Deferred } from "../tools/Deferred";
@@ -10,10 +10,11 @@ import { addOrUpdateSearchParam, getAllSearchParams } from "../tools/urlSearchPa
 import { getIsOnline } from "../tools/getIsOnline";
 import { isNetworkError } from "../tools/isNetworkError";
 import { OidcInitializationError } from "./OidcInitializationError";
-import { setStateDataCookieIfEnabled } from "./StateDataCookie";
+import { setStateDataCookie } from "./StateDataCookie";
 import type { OidcProviderMetadata } from "./types";
 import { getIsDeepLink } from "../tools/isDeepLink";
 import { deepLinkToRootRelativeUrl } from "../tools/deepLinkToRootRelativeUrl";
+import { getValidRedirectUri } from "./validRedirectUri";
 
 const globalContext = {
     evtHasLoginBeenCalled: createStatefulEvt(() => false)
@@ -63,6 +64,7 @@ export function getPrSafelyRestoredFromBfCacheAfterLoginBackNavigationOrInitiali
 
 export function createLoginOrStartAuthorization(params: {
     configId: string;
+    ssr: boolean;
     oidcClientTsUserManager: OidcClientTsUserManager;
     transformAuthorizationUrl_paramOfCreateOidc:
         | ((params: { authorizationUrl: string; isNonInteractive: boolean }) => string)
@@ -82,6 +84,7 @@ export function createLoginOrStartAuthorization(params: {
 }) {
     const {
         configId,
+        ssr,
         oidcClientTsUserManager,
 
         transformAuthorizationUrl_paramOfCreateOidc,
@@ -214,13 +217,15 @@ export function createLoginOrStartAuthorization(params: {
             }
         })();
 
-        setStateDataCookieIfEnabled({
-            homeUrl,
-            stateUrlParamValue_instance,
-            stateDataCookie: {
-                rootRelativeReturnToUrl
-            }
-        });
+        if (ssr) {
+            setStateDataCookie({
+                homeUrl,
+                stateUrlParamValue_instance,
+                stateDataCookie: {
+                    rootRelativeReturnToUrl
+                }
+            });
+        }
 
         const isNonInteractive =
             params.action === "login" && params.interaction === "ensure no interaction";
@@ -513,7 +518,7 @@ export function transformAuthorizationUrl_internal(params: {
 export function getAuthorizationAudienceAndResourceParamsValues(params: {
     oidcProviderMetadata: Pick<OidcProviderMetadata, "authorization_endpoint">;
     clientId: string;
-    homeUrlAndRedirectUri: string;
+    homeUrl: string;
     scopes: string[];
     response_mode: "fragment" | "query";
     transformAuthorizationUrl_paramOfCreateOidc:
@@ -530,7 +535,7 @@ export function getAuthorizationAudienceAndResourceParamsValues(params: {
     const {
         oidcProviderMetadata,
         clientId,
-        homeUrlAndRedirectUri,
+        homeUrl,
         scopes,
         response_mode,
         transformAuthorizationUrl_paramOfCreateOidc,
@@ -552,13 +557,13 @@ export function getAuthorizationAudienceAndResourceParamsValues(params: {
                             case "client_id":
                                 return clientId;
                             case "redirect_uri":
-                                return homeUrlAndRedirectUri;
+                                return getValidRedirectUri({ homeUrl });
                             case "response_type":
                                 return "code";
                             case "scope":
                                 return scopes.join(" ");
                             case "state":
-                                return generateStateUrlParamValue();
+                                return generateOidcSpaBrandedStateUrlParamValue();
                             case "code_challenge":
                                 return "probe";
                             case "response_mode":

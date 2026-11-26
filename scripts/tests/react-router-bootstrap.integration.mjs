@@ -106,7 +106,7 @@ for (const apiOnly of [false, true]) {
                 assert.equal(head.status, 200);
                 assert.equal(await head.text(), "");
                 const callback = await fetch(
-                    origin + "/demo/todo?code=fixture&state=b2lkYy1zcGEu" + "x".repeat(20),
+                    origin + "/demo/openid-callback/?code=fixture&state=b2lkYy1zcGEu" + "x".repeat(20),
                     { headers: { Accept: "text/html" } }
                 );
                 assert.equal(callback.status, 200);

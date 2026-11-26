@@ -26,14 +26,27 @@ test("packaged plugin detects SPA output across rebuilds and either Nitro plugin
     await cp(join(repository, "dist"), join(root, "node_modules/oidc-spa"), { recursive: true });
 
     let baselineRoutes;
-    for (const mode of ["ssr", "nitro-first", "ssr-after-spa", "ssr-prerender", "oidc-first"]) {
+    for (const mode of [
+        "ssr",
+        "nitro-first",
+        "ssr-after-spa",
+        "ssr-prerender",
+        "oidc-first",
+        "ssr-legacy",
+        "spa-base",
+        "spa-legacy-rejected"
+    ]) {
         await t.test(mode, async t => {
-            const spa = mode === "nitro-first" || mode === "oidc-first";
+            const spa = mode === "nitro-first" || mode === "oidc-first" || mode.startsWith("spa-");
+            const base = mode === "spa-base" ? "/dashboard/" : "/";
+            const shellPath = base + "_shell.html";
             const prerender = spa || mode === "ssr-prerender";
             const plugins =
                 mode === "oidc-first"
                     ? 'oidcSpa(), nitro({ preset: "vercel" })'
-                    : 'nitro({ preset: "vercel" }), oidcSpa()';
+                    : `nitro({ preset: "vercel" }), oidcSpa({ useLegacyRedirectUri: ${mode.includes(
+                          "legacy"
+                      )} })`;
             await writeFile(
                 join(root, "vite.config.ts"),
                 `import { defineConfig } from "vite";
@@ -42,6 +55,7 @@ test("packaged plugin detects SPA output across rebuilds and either Nitro plugin
                 import { nitro } from "nitro/vite";
                 import { oidcSpa } from "oidc-spa/vite-plugin";
                 export default defineConfig({
+                    base: ${JSON.stringify(base)},
                     resolve: { tsconfigPaths: true },
                     plugins: [
                         tanstackStart({
@@ -64,43 +78,61 @@ test("packaged plugin detects SPA output across rebuilds and either Nitro plugin
                     }
                 );
             } catch (error) {
+                if (mode === "spa-legacy-rejected") {
+                    assert.match(
+                        error.stdout + error.stderr,
+                        /useLegacyRedirectUri is not supported.*openid-callback/s
+                    );
+                    return;
+                }
                 throw new Error(`Vercel ${mode} build failed:\n${error.stdout}\n${error.stderr}`, {
                     cause: error
                 });
             }
+            assert.notEqual(mode, "spa-legacy-rejected", "legacy SPA must reject the build");
             const output = join(root, ".vercel/output");
             const config = JSON.parse(await readFile(join(output, "config.json"), "utf8"));
             if (!spa) {
                 assert.equal(
-                    config.routes.some(route => route.dest === "/_shell.html"),
+                    config.routes.some(route => route.dest === shellPath),
                     false
                 );
-                await assert.rejects(readFile(join(output, "static/_shell.html")), { code: "ENOENT" });
+                await assert.rejects(readFile(join(output, "static", base, "_shell.html")), {
+                    code: "ENOENT"
+                });
                 if (baselineRoutes === undefined) baselineRoutes = config.routes;
                 else assert.deepEqual(config.routes, baselineRoutes);
                 if (prerender) {
-                    assert.match(await readFile(join(output, "static/index.html"), "utf8"), /<h1>/);
+                    assert.match(
+                        await readFile(join(output, "static", base, "index.html"), "utf8"),
+                        /<h1>/
+                    );
                 }
                 return;
             }
-            assert.equal(config.routes[0].dest, "/_shell.html");
-            assert.equal(config.routes[0].has[0].value.pre, "b2lkYy1zcGEu");
+            assert.equal(config.routes[0].dest, shellPath);
+            assert.equal(config.routes[0].src, `^${base}openid-callback/$`);
+            assert.equal(config.routes[0].has, undefined);
             assert.deepEqual(
-                config.routes.filter(route => route.dest !== "/_shell.html"),
+                config.routes.filter(route => route.dest !== shellPath),
                 baselineRoutes
             );
             const filesystemIndex = config.routes.findIndex(route => route.handle === "filesystem");
-            assert.equal(config.routes[filesystemIndex + 1].dest, "/_shell.html");
+            assert.equal(config.routes[filesystemIndex + 1].dest, shellPath);
             assert.equal(
-                new RegExp(config.routes[filesystemIndex + 1].src).test("/not-prerendered"),
+                new RegExp(config.routes[filesystemIndex + 1].src).test(base + "not-prerendered"),
                 true
             );
             for (const path of ["/api", "/api/todos", "/_serverFn", "/_serverFn/example"]) {
-                assert.equal(new RegExp(config.routes[filesystemIndex + 1].src).test(path), false);
+                assert.equal(
+                    new RegExp(config.routes[filesystemIndex + 1].src).test(base + path.slice(1)),
+                    false
+                );
             }
-            assert.match(await readFile(join(output, "static/index.html"), "utf8"), /<h1>/);
-            const shell = await readFile(join(output, "static/_shell.html"), "utf8");
+            assert.match(await readFile(join(output, "static", base, "index.html"), "utf8"), /<h1>/);
+            const shell = await readFile(join(output, "static", base, "_shell.html"), "utf8");
             assert(!shell.includes("<h1>"), "callback shell must omit the home-page content");
+            assert.match(shell, /data-oidc-spa-static/);
         });
     }
 });

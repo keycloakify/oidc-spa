@@ -21,7 +21,8 @@ import { type KeycloakUtils, createKeycloakUtils } from "../keycloak-utils/keycl
 import { type StatefulEvt, createStatefulEvt } from "../tools/StatefulEvt";
 import { readExpirationTimeInJwt } from "../tools/readExpirationTimeInJwt";
 import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";
-import { getBASE_URL_earlyInit } from "../core/earlyInit_BASE_URL";
+import { getHomeUrl_earlyInit } from "../core/earlyInit_homeUrl";
+import { getValidRedirectUri } from "../core/validRedirectUri";
 
 type ConstructorParams = KeycloakServerConfig & {
     /**
@@ -894,20 +895,21 @@ export class Keycloak {
                     });
                 }
 
-                let BASE_URL: string;
+                let homeUrl: string;
 
                 try {
-                    BASE_URL = getBASE_URL_earlyInit();
+                    homeUrl = getHomeUrl_earlyInit();
                 } catch {
-                    BASE_URL = "/";
+                    const url_obj = new URL(window.location.href);
+
+                    url_obj.pathname = "";
+                    url_obj.search = "";
+                    url_obj.hash = "";
+
+                    homeUrl = url_obj.href;
                 }
 
-                return toFullyQualifiedUrl({
-                    urlish: BASE_URL,
-                    doAssertNoQueryParams: true,
-                    doOutputWithTrailingSlash: true,
-                    rootUrl_fullyQualified: window.location.origin
-                });
+                return getValidRedirectUri({ homeUrl });
             })(),
             locale
         });

@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { Readable } from "node:stream";
 import { babelParser, babelTraverse, babelTypes, babelGenerate } from "../../vendor/build-runtime/babel";
 import { resumeReactRouterDocument } from "./reactRouterDocument";
+import { getSpaPaths } from "../tanstack-start/spaRouting";
 
 const BOOTSTRAP_ID = "virtual:oidc-spa/react-router-bootstrap";
 const RESUME_ID = "virtual:oidc-spa/react-router-resume";
@@ -230,8 +231,11 @@ function __oidcSpaDocumentRoutes(routes) {
                 const module = await (
                     environment.runner as { import(id: string): Promise<DevDocumentModule> }
                 ).import(DOCUMENT_ID);
-                // SPA mode already omits non-root server loaders. Retain its public build-time root loader.
-                if (!module.isApiOnly || pathname === module.manifestPath) return next();
+                // Dedicated callbacks always receive the neutral document. Other
+                // SPA requests retain their public build-time root loader.
+                const isCallback = pathname === getSpaPaths(module.basename).callback;
+                if ((!module.isApiOnly && !isCallback) || pathname === module.manifestPath)
+                    return next();
                 const base = module.basename.replace(/\/$/, "");
                 if (base && pathname !== base && !pathname.startsWith(`${base}/`)) return next();
                 const headers = new Headers();

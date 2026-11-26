@@ -32,13 +32,22 @@ export type OidcSpaVitePluginParams = {
               enabled: true;
               mode: "auto" | "enforced";
           };
+
+    /**
+     * Use the application home URL, including its base path, as the redirect URI
+     * to preserve existing IAM registrations when migrating from oidc-spa v10.
+     * Defaults to false: the redirect URI is /openid-callback/ under the base path.
+     * Not supported with TanStack Start in SPA mode.
+     */
+    useLegacyRedirectUri?: boolean;
 };
 
 export function oidcSpa(params: OidcSpaVitePluginParams = {}) {
     let handlers: Handlers | undefined;
     let projectType: ProjectType | undefined;
     const nitroOutput = createTanstackStartNitroOutput({
-        isTanstackStart: () => projectType === "tanstack-start"
+        isTanstackStart: () => projectType === "tanstack-start",
+        useLegacyRedirectUri: params.useLegacyRedirectUri
     });
 
     const plugin: Plugin = {
@@ -89,9 +98,22 @@ export function oidcSpa(params: OidcSpaVitePluginParams = {}) {
             assert(handlers !== undefined);
             return handlers.buildStart?.call(this, options);
         },
-        configureServer(server) {
-            assert(handlers !== undefined);
-            return handlers.configureServer?.call(this, server);
+        configureServer: {
+            // Apply SPA callback rewrites before Nitro or Start handles the request.
+            order: "pre",
+            handler(server) {
+                assert(handlers !== undefined);
+                return handlers.configureServer?.call(this, server);
+            }
+        },
+        configurePreviewServer: {
+            // Nitro's preview handler consumes misses too, so install our static
+            // SPA routing before it, regardless of plugin array order.
+            order: "pre",
+            handler(server) {
+                assert(handlers !== undefined);
+                return handlers.configurePreviewServer?.call(this, server);
+            }
         },
         generateBundle: {
             order: "pre",

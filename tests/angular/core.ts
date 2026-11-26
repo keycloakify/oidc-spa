@@ -68,7 +68,7 @@ export function createCoreController() {
             const common = {
                 issuerUri: params.issuerUri,
                 clientId: params.clientId,
-                validRedirectUri: "https://app.test/base/"
+                validRedirectUri: "https://app.test/base/openid-callback/"
             };
             if (!controller.loggedIn || initializationError !== undefined) {
                 return {
