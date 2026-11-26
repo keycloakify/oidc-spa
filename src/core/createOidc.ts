@@ -44,6 +44,7 @@ import { isNetworkError } from "../tools/isNetworkError";
 import { isKeycloak } from "../keycloak/isKeycloak";
 import { INFINITY_TIME } from "../tools/INFINITY_TIME";
 import { getRootRelativeOriginalLocationHref_earlyInit } from "./earlyInit_rootRelativeOriginalLocationHref";
+import { getMicroFrontendOwner_earlyInit } from "./earlyInit_microFrontendOwner";
 import { getIsLikelyDevServer } from "../tools/isLikelyDevServer";
 import { createObjectThatThrowsIfAccessed } from "../tools/createObjectThatThrowsIfAccessed";
 import {
@@ -350,6 +351,14 @@ export async function createOidc<
 >(
     params: ParamsOfCreateOidc<DecodedIdToken, AutoLogin>
 ): Promise<AutoLogin extends true ? Oidc.LoggedIn<DecodedIdToken> : Oidc<DecodedIdToken>> {
+    const microFrontendOwner = getMicroFrontendOwner_earlyInit();
+
+    if (microFrontendOwner !== undefined) {
+        const { createOidc } = await microFrontendOwner.prModuleCreateOidc;
+        // The owner's BASE_URL applies, its callback handling only accepts its own path.
+        return createOidc({ ...params, BASE_URL: undefined });
+    }
+
     for (const name of ["issuerUri", "clientId"] as const) {
         const value = params[name];
         if (!value) {
