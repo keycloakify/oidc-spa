@@ -11,6 +11,9 @@
     "dependencies": {
         "@react-router/node": "8.5.0",
         "@react-router/serve": "8.5.0",
+        "@remix-run/node-fetch-server": "0.14.2",
+        "@trpc/client": "11.18.0",
+        "@trpc/server": "11.18.0",
         "@upstash/redis": "1.39.0",
         "isbot": "5.2.2",
         "oidc-spa": "next",

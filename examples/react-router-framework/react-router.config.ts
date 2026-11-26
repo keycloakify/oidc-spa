@@ -2,9 +2,11 @@ import type { Config } from "@react-router/dev/config";
 
 export default {
     // This oidc-spa integration supports "unstable_api-only" or false.
-    // API-only keeps native server loaders/actions while rendering the UI in the browser.
+    // API-only keeps the UI static and native loaders/actions on the server.
+    // The oidc-spa plugin adds resource routing to the generated server build.
     // To use ssr: false with your own backend instead:
     // - Delete app/entry.client.tsx, app/.server/, and api/.
+    // - Remove the resource routes and their route registrations.
     // - Remove server loader/action exports and their server-only imports from routes.
     //   export async function action({ request }: Route.ActionArgs) will no longer work.
     // - Keep the protected layout's clientMiddleware, but replace

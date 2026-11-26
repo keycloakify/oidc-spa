@@ -42,7 +42,7 @@ export default function TodoListPage({ loaderData: { todos }, actionData }: Rout
 
     return (
         <>
-            <h1>Todo List</h1>
+            <h1>Todo List (Loaders)</h1>
             <p>Your personal todo list, using React Router Framework server loaders and actions.</p>
             {todos.length === 0 ? (
                 <p className="empty-state">No todos yet.</p>

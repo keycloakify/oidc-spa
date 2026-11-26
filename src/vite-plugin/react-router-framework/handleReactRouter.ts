@@ -4,9 +4,11 @@ import { existsSync, statSync } from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Readable } from "node:stream";
+import type { IncomingMessage, ServerResponse } from "node:http";
 import { babelParser, babelTraverse, babelTypes, babelGenerate } from "../../vendor/build-runtime/babel";
 import { resumeReactRouterDocument } from "./reactRouterDocument";
 import { getSpaPaths } from "../tanstack-start/spaRouting";
+import type { createReactRouterRequestHandler } from "./reactRouterServer";
 
 const BOOTSTRAP_ID = "virtual:oidc-spa/react-router-bootstrap";
 const RESUME_ID = "virtual:oidc-spa/react-router-resume";
@@ -27,6 +29,8 @@ type DevDocumentModule = {
     isApiOnly: boolean;
     basename: string;
     manifestPath: string | undefined;
+    isResourceRequest: ReturnType<typeof createReactRouterRequestHandler>["isResourceRequest"];
+    handleResourceRequest: (req: IncomingMessage, res: ServerResponse) => Promise<void>;
 };
 
 export function createHandleReactRouter(params: {
@@ -48,6 +52,7 @@ export function createHandleReactRouter(params: {
     }
     const extension = path.extname(fileURLToPath(import.meta.url));
     const documentRuntime = fileURLToPath(new URL(`./reactRouterDocument${extension}`, import.meta.url));
+    const serverRuntime = fileURLToPath(new URL(`./reactRouterServer${extension}`, import.meta.url));
     let bootstrapFile: string | undefined;
     const bootstrapSource = getClientEntrypointSource({
         applicationEntrypointImportSpecifier: RESUME_ID
@@ -75,6 +80,13 @@ export function createHandleReactRouter(params: {
             return `
 import * as build from ${JSON.stringify(SERVER_BUILD_ID)};
 import { createRequestHandler } from "react-router";
+import { createReactRouterRequestHandler } from ${JSON.stringify(serverRuntime)};
+import { createRequest, sendResponse } from "@remix-run/node-fetch-server";
+const handleRequest = createReactRouterRequestHandler(build, "development");
+export const isResourceRequest = handleRequest.isResourceRequest;
+export async function handleResourceRequest(req, res) {
+    await sendResponse(res, await handleRequest(createRequest(req, res)));
+}
 export const isApiOnly = build.unstable_apiOnly === true;
 export const basename = build.basename;
 export const manifestPath = build.routeDiscovery.mode === "lazy"
@@ -183,16 +195,75 @@ function __oidcSpaDocumentRoutes(routes) {
             { sourceType: "module" }
         );
         ast.program.body.push(...helper.program.body);
+        if (resolvedConfig.command === "build" && routerConfig.ssr === "unstable_api-only") {
+            // Capture the framework's exports rather than maintaining a second
+            // ServerBuild schema. Re-exports (notably assets) need local bindings.
+            const properties: ReturnType<typeof babelTypes.objectProperty>[] = [];
+            const imports: ReturnType<typeof babelTypes.importDeclaration>[] = [];
+            for (const node of ast.program.body) {
+                if (!babelTypes.isExportNamedDeclaration(node)) continue;
+                if (babelTypes.isVariableDeclaration(node.declaration)) {
+                    for (const declaration of node.declaration.declarations) {
+                        if (!babelTypes.isIdentifier(declaration.id)) continue;
+                        properties.push(babelTypes.objectProperty(declaration.id, declaration.id));
+                    }
+                }
+                for (const specifier of node.specifiers) {
+                    if (
+                        !babelTypes.isExportSpecifier(specifier) ||
+                        !babelTypes.isIdentifier(specifier.exported)
+                    ) {
+                        throw new Error("oidc-spa: Unsupported React Router server build export.");
+                    }
+                    const local = node.source
+                        ? babelTypes.identifier(`__oidcSpaBuild_${specifier.exported.name}`)
+                        : specifier.local;
+                    if (node.source)
+                        imports.push(
+                            babelTypes.importDeclaration(
+                                [babelTypes.importSpecifier(local, specifier.local)],
+                                node.source
+                            )
+                        );
+                    properties.push(babelTypes.objectProperty(specifier.exported, local));
+                }
+            }
+            if (properties.some(property => babelTypes.isIdentifier(property.key, { name: "fetch" }))) {
+                throw new Error(
+                    "oidc-spa: React Router's server build already exports a fetch handler."
+                );
+            }
+            ast.program.body.push(
+                ...imports,
+                babelTypes.importDeclaration(
+                    [
+                        babelTypes.importSpecifier(
+                            babelTypes.identifier("__oidcSpaCreateFetch"),
+                            babelTypes.identifier("createReactRouterFetchHandler")
+                        )
+                    ],
+                    babelTypes.stringLiteral(serverRuntime)
+                ),
+                babelTypes.exportNamedDeclaration(
+                    babelTypes.variableDeclaration("const", [
+                        babelTypes.variableDeclarator(
+                            babelTypes.identifier("fetch"),
+                            babelTypes.callExpression(babelTypes.identifier("__oidcSpaCreateFetch"), [
+                                babelTypes.arrowFunctionExpression(
+                                    [],
+                                    babelTypes.objectExpression(properties)
+                                )
+                            ])
+                        )
+                    ])
+                )
+            );
+        }
         return babelGenerate(ast, { sourceMaps: true, sourceFileName: id }, code);
     }
 
     function configureServer(server: ViteDevServer): void {
         server.middlewares.use(async (req, res, next) => {
-            if (
-                !["GET", "HEAD"].includes(req.method ?? "") ||
-                !req.headers.accept?.includes("text/html")
-            )
-                return next();
             try {
                 const url = new URL(
                     req.originalUrl ?? req.url ?? "/",
@@ -231,6 +302,16 @@ function __oidcSpaDocumentRoutes(routes) {
                 const module = await (
                     environment.runner as { import(id: string): Promise<DevDocumentModule> }
                 ).import(DOCUMENT_ID);
+                if (module.isResourceRequest(url)) {
+                    await module.handleResourceRequest(req, res);
+                    return;
+                }
+                if (
+                    !["GET", "HEAD"].includes(req.method ?? "") ||
+                    !req.headers.accept?.includes("text/html")
+                ) {
+                    return next();
+                }
                 // Dedicated callbacks always receive the neutral document. Other
                 // SPA requests retain their public build-time root loader.
                 const isCallback = pathname === getSpaPaths(module.basename).callback;

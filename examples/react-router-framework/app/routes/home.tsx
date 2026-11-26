@@ -8,8 +8,8 @@ export default function HomePage() {
             <h1>oidc-spa + React Router</h1>
             <p>
                 A minimal todo app showing OpenID Connect across the stack. The browser handles sign-in;
-                React Router server loaders and actions validate access tokens and work with a typed
-                user.
+                React Router server loaders, resource routes, and tRPC validate access tokens and work
+                with the same typed user and todo store.
             </p>
             <p>
                 Framework mode with <code>ssr: "unstable_api-only"</code> keeps the UI in the browser and
@@ -18,8 +18,16 @@ export default function HomePage() {
             </p>
             <div className="example-links">
                 <Link to="/todo-list">
-                    <strong>Todo List</strong>
+                    <strong>Todos · Loaders</strong>
                     <span>Load and add your personal todos with native loaders and actions.</span>
+                </Link>
+                <Link to="/todo-list-api">
+                    <strong>Todos · API</strong>
+                    <span>Call JSON resource routes with fetchWithAuth and a client loader.</span>
+                </Link>
+                <Link to="/todo-list-trpc">
+                    <strong>Todos · tRPC</strong>
+                    <span>Call a typed tRPC API hosted by a resource route.</span>
                 </Link>
                 <Link to="/todo-list-admin">
                     <strong>Todo List Admin</strong>
@@ -134,6 +142,22 @@ export default function HomePage() {
                             Todos use the same storage implementation as the Next.js example: JSON files
                             locally, or Upstash Redis when configured. On Vercel, configure Upstash for
                             persistent storage.
+                        </p>
+                    </li>
+                    <li>
+                        <h3>Use a JSON API or a typed API</h3>
+                        <p>
+                            <Link to="/todo-list-api">The API page</Link> uses a client loader and
+                            <code> fetchWithAuth()</code> to call <code>/api/todos</code>. The resource
+                            route exports a server loader for GET and an action for POST, returns JSON,
+                            and has no UI component. Its action accepts JSON from any HTTP client.
+                        </p>
+                        <p>
+                            <Link to="/todo-list-trpc">The tRPC page</Link> uses a typed client to call
+                            <code> /api/trpc/*</code>. That resource route delegates to tRPC's Fetch
+                            adapter. The client attaches access tokens through its headers callback, and
+                            each procedure authenticates the request. Both pages revalidate their client
+                            loader after a mutation. All three approaches share the same todos.
                         </p>
                     </li>
                     <li>

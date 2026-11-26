@@ -12,7 +12,8 @@
         "test:angular": "tsc --project tests/angular/tsconfig.json && tsx scripts/test-angular.ts",
         "test:authorization-callbacks": "node --test scripts/tests/authorization-callbacks.test.mjs",
         "test:vite-plugin-handlers": "node --test scripts/tests/vite-plugin-handlers.test.mjs scripts/tests/tanstack-start-vercel.test.mjs scripts/tests/tanstack-start-platforms.test.mjs scripts/tests/tanstack-start-preview.test.mjs",
-        "test:react-router-bootstrap": "node --test scripts/tests/react-router-bootstrap.test.mjs scripts/tests/react-router-bootstrap.integration.mjs",
+        "test:react-router-bootstrap": "node --test scripts/tests/react-router-bootstrap.test.mjs scripts/tests/react-router-bootstrap.integration.mjs scripts/tests/react-router-resources.test.mjs",
+        "test:react-router-example": "node --test scripts/tests/react-router-example.integration.mjs",
         "test:react-nextjs": "tsc --project tests/react-nextjs/tsconfig.json && node --test scripts/tests/nextjs-plugin.test.mjs",
         "test:framework-agnostic": "node --test scripts/tests/framework-agnostic.test.mjs && tsc --project tests/framework-agnostic/tsconfig.json",
         "test:vue": "node --test scripts/tests/vue.test.mjs && vue-tsc --project tests/vue/tsconfig.json",
@@ -73,6 +74,7 @@
         "@types/react": "*",
         "next": "*",
         "react": "*",
+        "react-router": "*",
         "rxjs": "*",
         "vue": "^3.5.0"
     },
@@ -81,6 +83,9 @@
             "optional": true
         },
         "react": {
+            "optional": true
+        },
+        "react-router": {
             "optional": true
         },
         "@types/react": {
@@ -147,6 +152,7 @@
         "prettier": "^2.8.8",
         "punycode": "^2.3.1",
         "react": "19.1.1",
+        "react-router": "8.5.0",
         "rxjs": "^7.8.2",
         "ts-add-js-extension": "^1.6.6",
         "ts-node": "^10.9.1",

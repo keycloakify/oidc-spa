@@ -144,11 +144,20 @@ for (const apiOnly of [false, true]) {
                 assert(!logs.includes("optimized dependencies changed"), logs);
                 child.kill("SIGTERM");
                 await new Promise(resolve => child.once("exit", resolve));
-                child = spawn(process.execPath, ["serve.mjs"], {
-                    cwd: root,
-                    env: { ...process.env, NODE_ENV: "production", PORT: String(port) },
-                    stdio: ["ignore", "pipe", "pipe"]
-                });
+                child = spawn(
+                    process.execPath,
+                    apiOnly
+                        ? [
+                              join(root, "node_modules/@react-router/serve/bin.cjs"),
+                              "build/server/index.js"
+                          ]
+                        : ["serve.mjs"],
+                    {
+                        cwd: root,
+                        env: { ...process.env, NODE_ENV: "production", PORT: String(port) },
+                        stdio: ["ignore", "pipe", "pipe"]
+                    }
+                );
                 child.stdout.on("data", b => {
                     logs += b;
                 });
@@ -167,7 +176,13 @@ for (const apiOnly of [false, true]) {
                 assert(production, logs);
                 assert.equal(production.status, 200);
                 assertProtected(await production.text());
-                assert.match(production.headers.get("Content-Security-Policy"), /nonce-fixture-nonce/);
+                // The standalone SPA fixture supplies its own CSP header. The
+                // built-in CLI serves static documents without custom headers.
+                if (!apiOnly)
+                    assert.match(
+                        production.headers.get("Content-Security-Policy"),
+                        /nonce-fixture-nonce/
+                    );
                 if (apiOnly) {
                     const blocked = await fetch(origin + "/demo/todo.data", {
                         headers: { "X-React-Router-SPA-Mode": "yes" }
