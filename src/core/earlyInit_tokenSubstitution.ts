@@ -245,6 +245,9 @@ function patchFetchApiToSubstituteTokenPlaceholder(params: {
                 headers.set(key, nextValue);
             });
 
+            //@ts-expect-error
+            const duplex = init?.duplex ?? (input instanceof Request ? input.duplex : undefined);
+
             let body: BodyInit | undefined;
 
             handle_body: {
@@ -370,7 +373,12 @@ function patchFetchApiToSubstituteTokenPlaceholder(params: {
                 })();
 
                 if (!shouldInspectBody) {
-                    body = request.body;
+                    // `request.body` is a ReadableStream, which can only be sent with
+                    // `duplex: "half"` (and not at all in Firefox). The caller opted into
+                    // streaming only if it set `duplex`. Anything else (a Blob or File upload,
+                    // an ArrayBuffer, a Request built from one) is buffered and sent as-is,
+                    // keeping its Content-Length.
+                    body = duplex !== undefined ? request.body : await request.blob();
                     break handle_body;
                 }
 
@@ -429,14 +437,9 @@ function patchFetchApiToSubstituteTokenPlaceholder(params: {
                 signal: request.signal
             };
 
-            {
+            if (duplex !== undefined) {
                 //@ts-expect-error
-                const duplex = init?.duplex ?? (input instanceof Request ? input.duplex : undefined);
-
-                if (duplex !== undefined) {
-                    //@ts-expect-error
-                    nextInit.duplex = duplex;
-                }
+                nextInit.duplex = duplex;
             }
 
             fetch_later: {
