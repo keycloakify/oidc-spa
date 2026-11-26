@@ -8,19 +8,26 @@ in the browser.
 
 ## Build and run
 
-From `examples/tanstack-start`, with dependencies installed and Docker running:
+Make sure `STATIC_FRONTEND` in [`../vite.config.ts`](../vite.config.ts) is set to `false` before
+building. This selects SSR and writes its build output into this directory.
+
+Run these commands from `examples/tanstack-start/self-hosted-ssr`, with Node dependencies installed
+in the parent example and Docker running:
 
 ```sh
-npm run build:self-hosted-ssr
-docker compose -f self-hosted-ssr/compose.yaml up --build -d --wait
+npm --prefix .. run build:self-hosted
+docker compose up --build
 ```
+
+Compose runs in the foreground and streams the application logs. Keep this terminal open;
+press `Ctrl+C` to stop the application containers.
 
 Open <http://app.localhost:3000>. Register
 `http://app.localhost:3000/openid-callback/` as the redirect URI in your IAM console.
 Stop any other server using port 3000 first, or select another port:
 
 ```sh
-SELF_HOSTED_PORT=3001 docker compose -f self-hosted-ssr/compose.yaml up --build -d --wait
+SELF_HOSTED_PORT=3001 docker compose up --build
 ```
 
 Register the corresponding redirect URI when changing the origin. `localhost` also works for
@@ -30,9 +37,10 @@ The build writes the standalone backend to `.output/server/` and assets to `.out
 inside this directory. The Dockerfile packages both directories without running an install or
 build inside Docker. It does not copy source files or `.env` into the image.
 
-`npm run build:self-hosted` builds both self-hosted variants. `npm run build` also builds Vercel,
-Cloudflare, and Netlify. The five outputs remain independent, and building does not require Docker.
-To try SSR during development, run `STATIC_FRONTEND=false npm run dev` from the example directory.
+Both self-hosted variants use the same `build:self-hosted` script. `STATIC_FRONTEND` chooses which
+variant is built; it does not build both at once. The other deployment targets keep their own
+output directories, and building does not require Docker.
+To try SSR during development, keep `STATIC_FRONTEND = false` and run `npm --prefix .. run dev`.
 
 ## Callbacks and routing
 
@@ -52,15 +60,15 @@ to its slashless form before returning 404.
 Compose loads the example's `../.env` into the container at startup. To choose a different file:
 
 ```sh
-SELF_HOSTED_ENV_FILE=../.env.production docker compose -f self-hosted-ssr/compose.yaml up --build -d --wait
+SELF_HOSTED_ENV_FILE=../.env.production docker compose up --build
 ```
 
 Environment file paths are relative to `self-hosted-ssr/compose.yaml`; absolute paths also work.
-Use the same selection when recreating the container. Provider settings are read at runtime, so
-changing them requires recreating the container rather than rebuilding the image:
+Use the same selection when recreating the container. Provider settings are read at runtime.
+Stop Compose with `Ctrl+C`, then recreate the container to load new values without rebuilding:
 
 ```sh
-SELF_HOSTED_ENV_FILE=../.env.production docker compose -f self-hosted-ssr/compose.yaml up -d --force-recreate --wait
+SELF_HOSTED_ENV_FILE=../.env.production docker compose up --force-recreate
 ```
 
 For a trial without an identity provider, select a file containing `OIDC_PROVIDER=mock`. Mock mode
@@ -74,34 +82,35 @@ For multiple app replicas, use the shared Redis store by setting `KV_REST_API_UR
 
 ## Verify and manage
 
-From the example directory:
+Run these checks in another terminal, from the same directory, while Compose stays attached in
+the original terminal:
 
 ```sh
-docker compose -f self-hosted-ssr/compose.yaml ps
+docker compose ps
 curl -i http://localhost:3000/
 curl -i http://localhost:3000/a-page-that-does-not-exist
 curl -i http://localhost:3000/api/todos
-docker compose -f self-hosted-ssr/compose.yaml logs -f
+docker compose logs -f
 ```
 
 The home response contains its rendered heading. An unknown page returns 404. With a real provider,
 the unauthenticated API request returns 401; in mock mode it returns todos. Sign in and try both
 todo pages to verify authenticated API calls and server functions, including writes.
 
-Rebuild after application changes, then recreate the image and container:
+After application changes, stop Compose with `Ctrl+C`, keep `STATIC_FRONTEND = false`, and rebuild
+the image and container:
 
 ```sh
-npm run build:self-hosted-ssr
-docker compose -f self-hosted-ssr/compose.yaml up --build -d --wait
+npm --prefix .. run build:self-hosted
+docker compose up --build
 ```
 
-Stop this deployment with:
+Press `Ctrl+C` in the Compose terminal to stop the app. To also remove the container and network:
 
 ```sh
-docker compose -f self-hosted-ssr/compose.yaml down
+docker compose down
 ```
 
-You can also change into `self-hosted-ssr` and run ordinary `docker compose` commands there.
 For deployment, tag and push `oidc-spa-tanstack-start-ssr:local` to your image registry. Configure
 HTTPS through your hosting platform or ingress, including its forwarded headers and the runtime's
 proxy trust configuration for the public origin. Register the public `/openid-callback/` URL and

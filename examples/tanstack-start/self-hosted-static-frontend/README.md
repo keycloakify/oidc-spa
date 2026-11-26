@@ -7,20 +7,26 @@ itself does not provide a CDN.
 
 ## Build and run
 
-Run these commands from `examples/tanstack-start`, with Node dependencies installed and Docker
-running:
+Make sure `STATIC_FRONTEND` in [`../vite.config.ts`](../vite.config.ts) is set to `true` before
+building. This selects the static frontend and writes its build output into this directory.
+
+Run these commands from `examples/tanstack-start/self-hosted-static-frontend`, with Node
+dependencies installed in the parent example and Docker running:
 
 ```sh
-npm run build:self-hosted-static-frontend
-docker compose -f self-hosted-static-frontend/compose.yaml up --build -d
+npm --prefix .. run build:self-hosted
+docker compose up --build
 ```
+
+Compose runs in the foreground and streams the application logs. Keep this terminal open;
+press `Ctrl+C` to stop the application containers.
 
 Open <http://app.localhost:3000>. The default port and hostname match the development example, so
 the IAM redirect URI is still `http://app.localhost:3000/openid-callback/`.
 Stop any development or preview server using port 3000 first. To select another port:
 
 ```sh
-SELF_HOSTED_PORT=3001 docker compose -f self-hosted-static-frontend/compose.yaml up --build -d
+SELF_HOSTED_PORT=3001 docker compose up --build
 ```
 
 Register the corresponding redirect URI in your IAM console when changing the origin.
@@ -34,15 +40,16 @@ The build produces independent directories:
 | `self-hosted-static-frontend/.output/server/`    | Standalone Node backend, including its bundled dependencies |
 | `self-hosted-static-frontend/.output/nitro.json` | Nitro build metadata                                        |
 
-The other deployment targets keep their own output directories. `npm run build` builds all five
-targets without requiring Docker; Docker is only needed to package and run the self-hosted output.
+Both self-hosted variants use the same `build:self-hosted` script. `STATIC_FRONTEND` chooses which
+variant is built; it does not build both at once. The other deployment targets keep their own
+output directories. Building does not require Docker; Docker packages and runs the output.
 
-`npm run build:self-hosted` builds both self-hosted variants. For request-time rendering, see
-the [SSR target](../self-hosted-ssr/README.md), which has its own Compose file and Node image.
+For request-time rendering, see the [SSR target](../self-hosted-ssr/README.md), which uses
+`STATIC_FRONTEND = false` and has its own Compose file and Node image.
 
 The Dockerfile packages these existing build artifacts. It does not install packages or run the
-application build. Run `npm run build:self-hosted-static-frontend` again after changing application code, then
-`docker compose -f self-hosted-static-frontend/compose.yaml up --build -d` to update both containers.
+application build. After application changes, stop Compose with `Ctrl+C`, keep
+`STATIC_FRONTEND = true`, and rerun the build and Compose commands above to update both containers.
 
 ## Routing
 
@@ -75,21 +82,21 @@ public OIDC configuration through a server function; `.env` is not copied into e
 For a deployment-specific file, use:
 
 ```sh
-SELF_HOSTED_ENV_FILE=../.env.production docker compose -f self-hosted-static-frontend/compose.yaml up --build -d
+SELF_HOSTED_ENV_FILE=../.env.production docker compose up --build
 ```
 
 Environment file paths are relative to this Compose file; absolute paths also work.
 Use the same selection when recreating containers. Provider settings can change without rebuilding
-the images; recreate the backend to load the new values:
+the images; stop Compose with `Ctrl+C`, then recreate the containers to load the new values:
 
 ```sh
-SELF_HOSTED_ENV_FILE=../.env.production docker compose -f self-hosted-static-frontend/compose.yaml up -d --force-recreate backend
+SELF_HOSTED_ENV_FILE=../.env.production docker compose up --force-recreate
 ```
 
 Without `KV_REST_API_URL` and `KV_REST_API_TOKEN`, the example saves todos in the named `todos`
 volume mounted at `/data`. The backend runs as the unprivileged `node` user, with `/data` as its
-working directory. The volume survives container replacement and `docker compose -f self-hosted-static-frontend/compose.yaml down`.
-`docker compose -f self-hosted-static-frontend/compose.yaml down --volumes` removes it and its todos.
+working directory. The volume survives container replacement and `docker compose down`.
+`docker compose down --volumes` removes it and its todos.
 
 This filesystem store is a simple single-backend example. For multiple backend replicas, use the
 existing shared Redis store by setting both KV variables. Only Nginx publishes a host port; Node
@@ -101,8 +108,11 @@ mock admin user; use a real provider for a public deployment.
 
 ## Verify the deployment
 
+Run these checks in another terminal, from the same directory, while Compose stays attached in
+the original terminal:
+
 ```sh
-docker compose -f self-hosted-static-frontend/compose.yaml ps
+docker compose ps
 curl -i http://localhost:3000/
 curl -i 'http://localhost:3000/openid-callback/?state=example&code=example'
 curl -i http://localhost:3000/a-page-that-does-not-exist
@@ -119,20 +129,25 @@ functions, including writes.
 To verify that page delivery does not depend on Node:
 
 ```sh
-docker compose -f self-hosted-static-frontend/compose.yaml stop backend
+docker compose stop backend
 curl -i http://localhost:3000/
 curl -i http://localhost:3000/openid-callback/
-docker compose -f self-hosted-static-frontend/compose.yaml start backend
+docker compose start backend
 ```
 
 Those HTML responses still work. Runtime configuration and authenticated operations need the
 backend, so this check verifies document delivery rather than full browser functionality.
 
-Inspect logs or stop the deployment with:
+Compose already streams logs in its terminal. To inspect them separately, use another terminal:
 
 ```sh
-docker compose -f self-hosted-static-frontend/compose.yaml logs -f
-docker compose -f self-hosted-static-frontend/compose.yaml down
+docker compose logs -f
+```
+
+Press `Ctrl+C` in the Compose terminal to stop the app. To also remove the containers and network:
+
+```sh
+docker compose down
 ```
 
 ## Deploy the images
@@ -152,5 +167,3 @@ Hosting the app on the same site as the authorization server helps session resto
 redirects and flashes. Microsoft Entra ID is an exception because its authorization endpoint is
 fixed. Keep the existing API registration and scope configuration for the selected provider;
 changing hosting does not replace backend access-token validation.
-
-You can also change into `self-hosted-static-frontend` and run ordinary `docker compose` commands there.
