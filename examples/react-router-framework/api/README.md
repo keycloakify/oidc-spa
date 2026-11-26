@@ -7,6 +7,12 @@ The rewrites in [`../vercel.json`](../vercel.json) forward `/api/*`, `.data`, an
 route-discovery requests to this function. Vercel serves the frontend from
 `build/client` as static files.
 
+Existing static files, including prerendered pages, take precedence over the
+rewrites. `/openid-callback/` and frontend URLs without a static file use
+`__spa-fallback.html`, the empty shell generated when `/` is prerendered. The
+fallback excludes `/api` and `/assets`, keeping backend requests on the function
+and allowing missing assets to return 404.
+
 The application API routes live in [`../app/routes/api`](../app/routes/api):
 `todos.ts` and `trpc.$.ts`. This directory only adapts those routes and the
 server loaders/actions to Vercel's request interface.

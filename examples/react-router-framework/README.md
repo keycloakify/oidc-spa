@@ -160,6 +160,13 @@ are set. Use shared storage for multiple backend instances.
 4. Deploy with `vercel.json`. Static pages/assets come from `build/client`. `/api/*`, `.data`, and
    route-discovery requests go to `api/index.js`, preserving the original request URL and body.
 
+Vercel serves existing prerendered files before applying the frontend fallback. The home page uses
+`index.html`, and `/inactivity-logout` uses its own prerendered HTML. `/openid-callback/` and frontend
+paths without a static page use the clean `__spa-fallback.html` shell. Missing assets and API paths
+are excluded from the frontend fallback. This configuration assumes `/` remains in the prerender
+list; if it is removed, React Router writes the fallback to `index.html` instead, and the frontend
+rewrite destination must be updated accordingly.
+
 The function and built-in Node server use the generated `fetch` handler. Vercel invokes the function
 rather than running `yarn start`. The function's public origin is recovered through Vercel's trusted proxy headers.
 Native forms, JSON requests, and tRPC calls all reach the same framework resource/data handlers.

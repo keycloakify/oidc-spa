@@ -1,9 +1,15 @@
-import { useSearchParams } from "react-router";
+import { useEffect, useState } from "react";
+import { Link, useSearchParams } from "react-router";
 import { z } from "zod";
 
 export default function InactivityLogout() {
     const [searchParams] = useSearchParams();
-    const returnToUrl = z.url().catch("/").parse(searchParams.get("return_url"));
+
+    // NOTE: We set the value in a useEffect so that the page can be pre-rendered.
+    const [returnToUrl, setReturnUrl] = useState("/");
+    useEffect(() => {
+        setReturnUrl(z.url().parse(searchParams.get("return_url")));
+    }, []);
 
     return (
         <>

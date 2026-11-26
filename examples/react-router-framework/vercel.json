@@ -7,6 +7,9 @@
         { "source": "/api/:path*", "destination": "/api" },
         { "source": "/:path*.data", "destination": "/api" },
         { "source": "/__manifest", "destination": "/api" },
-        { "source": "/:path*", "destination": "/index.html" }
+        {
+            "source": "/((?!api(?:/|$)|assets(?:/|$)).*)",
+            "destination": "/__spa-fallback.html"
+        }
     ]
 }

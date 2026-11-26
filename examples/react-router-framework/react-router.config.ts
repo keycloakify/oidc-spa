@@ -15,6 +15,7 @@ export default {
     //   Deploy build/client as a static SPA.
     // ssr: true is not supported by this integration: authentication initializes in the browser.
     ssr: "unstable_api-only",
+    // List the pages that you want to pre-render.
     async prerender() {
         return ["/", "/inactivity-logout"];
     }
