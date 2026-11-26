@@ -49,7 +49,7 @@ yarn start-tanstack-start-example
 
 ## Production
 
-Start automatically discovers and prerenders static page paths and generates a separate
+With `STATIC_FRONTEND` enabled, Start automatically discovers and prerenders static page paths and generates a separate
 `_shell.html`. Public pages contain their rendered content; protected page components inherit
 `ssr: false` and render on the client. API routes are excluded from page discovery.
 Parameterized routes need concrete URLs, either discovered by crawling links or supplied through
@@ -62,9 +62,9 @@ this shell, including the `_app` layout. Its header and page content mount on th
 oidc-spa restores the return URL. Ordinary prerendered pages still include the shared layout,
 and public pages include their content. Development also uses SPA mode: Start renders the neutral
 shell on demand, and pages render in the browser. The oidc-spa plugin handles the callback URL
-internally without a redirect. Setting `spa.enabled: false` retains normal SSR development behavior.
+internally without a redirect. Run `STATIC_FRONTEND=false npm run dev` to use SSR during development.
 
-Build all four deployment targets:
+Build all five deployment targets:
 
 ```sh
 npm run build
@@ -72,21 +72,37 @@ npm run build
 
 Or build one target:
 
-| Command                     | Static frontend              | Backend / deployment configuration                       |
-| --------------------------- | ---------------------------- | -------------------------------------------------------- |
-| `npm run build:vercel`      | `.vercel/output/static`      | `.vercel/output/functions`, `.vercel/output/config.json` |
-| `npm run build:cloudflare`  | `.output/public`             | `.output/server`, `.output/server/wrangler.json`         |
-| `npm run build:netlify`     | `dist`                       | `.netlify/functions-internal`                            |
-| `npm run build:self-hosted` | `self-hosted/.output/public` | `self-hosted/.output/server`, `compose.yaml`             |
+| Command                                     | Frontend                                                     | Backend / deployment configuration                                   |
+| ------------------------------------------- | ------------------------------------------------------------ | -------------------------------------------------------------------- |
+| `npm run build:vercel`                      | `.vercel/output/static`                                      | `.vercel/output/functions`, `.vercel/output/config.json`             |
+| `npm run build:cloudflare`                  | `.output/public`                                             | `.output/server`, `.output/server/wrangler.json`                     |
+| `npm run build:netlify`                     | `dist`                                                       | `.netlify/functions-internal`                                        |
+| `npm run build:self-hosted-static-frontend` | `self-hosted-static-frontend/.output/public`                 | `self-hosted-static-frontend/.output/server`, its own `compose.yaml` |
+| `npm run build:self-hosted-ssr`             | Rendered by Node; assets in `self-hosted-ssr/.output/public` | `self-hosted-ssr/.output/server`, its own `compose.yaml`             |
 
-All four outputs remain available after `npm run build`. With newer Nitro versions, Netlify uses
+All five outputs remain available after `npm run build`. With newer Nitro versions, Netlify uses
 `.netlify/v1/functions` instead.
 
-For self-hosting, run `npm run build:self-hosted` followed by `docker compose up --build -d`.
-Open <http://app.localhost:3000>. Nginx serves the static frontend and forwards only API routes and
-server functions to the Node backend. See [the self-hosting guide](self-hosted/README.md) for runtime
-configuration, persistence, deployment, and verification commands. The Docker and Nginx
-configuration lives in this example; the oidc-spa plugin prepares static SPA documents automatically.
+`npm run build:self-hosted` builds both self-hosted variants. Their build scripts select
+`STATIC_FRONTEND=true` or `false` without editing Vite configuration. Each directory contains its
+own Dockerfile, Compose file, and deployment guide:
+
+-   [Static frontend](self-hosted-static-frontend/README.md): Nginx serves prerendered pages and the
+    callback shell, with a separate Node backend for APIs and server functions.
+-   [SSR](self-hosted-ssr/README.md): one Node container serves assets, renders public pages per
+    request, and handles APIs and server functions. This target disables SPA mode and prerendering.
+
+From this directory, start the variant you built:
+
+```sh
+docker compose -f self-hosted-static-frontend/compose.yaml up --build -d --wait
+# Or:
+docker compose -f self-hosted-ssr/compose.yaml up --build -d --wait
+```
+
+Both default to <http://app.localhost:3000> and have independent data volumes. Set
+`SELF_HOSTED_PORT=3001` on one command to run them together. The Docker configuration lives in
+this example; the oidc-spa plugin prepares static SPA documents automatically when a shell exists.
 
 For Vercel, import the repository with `examples/tanstack-start` as the project root and the TanStack
 Start framework preset. `vercel.json` selects `npm run build:vercel`; it contains no routing rules.
@@ -106,15 +122,16 @@ Existing static pages and assets are served directly, remaining page URLs use th
 both query and fragment responses, while the browser retains the callback URL. The home page
 always receives its prerendered content, including when its query contains `state`.
 These paths include the application's base path when configured with Vite's `base`.
-SSR builds without a shell retain Nitro's normal routing. All four targets use the plugin's static
-document preparation without an application-level build hook; self-hosted routing lives in Nginx.
+SSR builds without a shell retain Nitro's normal routing. Static builds use the plugin's document
+preparation without an application-level build hook. Self-hosted static routing lives in Nginx;
+self-hosted SSR uses Nitro's Node server.
 
 Run `yarn preview` after building to preview the most recently built target. After `yarn build`,
-that is the self-hosted Node output because it runs last. The oidc-spa plugin uses Nitro's build metadata to find the
-selected output and applies the static SPA routing locally: callbacks retain their trailing slash,
-existing frontend files are served directly, and other page URLs receive the shell. APIs and server
-functions continue through Nitro. No extra preview configuration is needed; SSR builds without a
-shell use the normal server preview.
+that is the self-hosted SSR output because it runs last. The oidc-spa plugin uses Nitro's build
+metadata to find the selected output. Static SPA builds get the same callback and fallback routing
+locally: callbacks retain their trailing slash, existing frontend files are served directly, and
+other page URLs receive the shell. APIs and server functions continue through Nitro. SSR builds
+without a shell use the normal server preview. No extra preview configuration is needed.
 
 All three cloud targets use native static routing; no callback edge function or generated Worker
 dispatcher is needed. On Cloudflare, the native SPA fallback requires the shell at `/index.html`.
@@ -134,4 +151,4 @@ and build-time prerendering. The oidc-spa plugin automatically wraps that entry 
 before that entry is invoked.
 
 Set `KV_REST_API_URL` and `KV_REST_API_TOKEN` in the deployment environment for persistent todos on
-the three cloud platforms. The self-hosted example persists the filesystem store in a Docker volume.
+the three cloud platforms. Both self-hosted variants persist the filesystem store in their own Docker volume.

@@ -1,23 +1,12 @@
 services:
-    frontend:
-        image: oidc-spa-tanstack-start-frontend:local
+    app:
+        image: oidc-spa-tanstack-start-ssr:local
         build:
-            context: ./self-hosted
-            target: frontend
+            context: .
         ports:
-            - "${SELF_HOSTED_PORT:-3000}:80"
-        depends_on:
-            backend:
-                condition: service_healthy
-        restart: unless-stopped
-
-    backend:
-        image: oidc-spa-tanstack-start-backend:local
-        build:
-            context: ./self-hosted
-            target: backend
+            - "${SELF_HOSTED_PORT:-3000}:3000"
         env_file:
-            - ${SELF_HOSTED_ENV_FILE:-.env}
+            - ${SELF_HOSTED_ENV_FILE:-../.env}
         volumes:
             - todos:/data
         healthcheck:

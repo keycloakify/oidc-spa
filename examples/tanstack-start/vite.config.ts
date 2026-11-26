@@ -4,6 +4,10 @@ import viteReact from "@vitejs/plugin-react";
 import { nitro } from "nitro/vite";
 import { oidcSpa } from "oidc-spa/vite-plugin";
 
+// When true, your frontend is pre-rendered and served by CDN.
+// When false, every request is server side rendered.
+const STATIC_FRONTEND = true;
+
 export default defineConfig(({ isPreview }) => ({
     // Preview also uses command: "serve". Only the dev server needs this hostname.
     server: {
@@ -18,20 +22,30 @@ export default defineConfig(({ isPreview }) => ({
     },
     plugins: [
         tanstackStart({
-            prerender: { enabled: true },
-            spa: {
-                enabled: true,
-                // Keep the home and shell renders distinct until this is fixed:
-                // https://github.com/TanStack/router/issues/8741
-                // This is a bug unrelated to the oidc-spa context.
-                maskPath: "/?__spa_shell"
-            }
+            ...(!STATIC_FRONTEND
+                ? undefined
+                : {
+                      prerender: { enabled: true },
+                      spa: {
+                          enabled: true,
+                          // Keep the home and shell renders distinct until this is fixed:
+                          // https://github.com/TanStack/router/issues/8741
+                          // This is a bug unrelated to the oidc-spa context.
+                          maskPath: "/?__spa_shell"
+                      }
+                  })
         }),
         viteReact(),
         nitro({
-            // Keep the self-hosted output alongside the three cloud builds.
+            // Keep both self-hosted outputs alongside the three cloud builds.
             output:
-                process.env.NITRO_PRESET === "node-server" ? { dir: "self-hosted/.output" } : undefined
+                process.env.NITRO_PRESET === "node-server"
+                    ? {
+                          dir: STATIC_FRONTEND
+                              ? "self-hosted-static-frontend/.output"
+                              : "self-hosted-ssr/.output"
+                      }
+                    : undefined
         }),
         oidcSpa({
             browserRuntimeFreeze: {

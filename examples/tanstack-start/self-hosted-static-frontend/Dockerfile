@@ -1,4 +1,4 @@
-# Package the output of `npm run build:self-hosted`; no source or .env is copied.
+# Package `npm run build:self-hosted-static-frontend`; no source or .env is copied.
 FROM nginx:1.30-alpine AS frontend
 # The official entrypoint reads the container's DNS configuration and substitutes
 # NGINX_LOCAL_RESOLVERS in the template before starting Nginx.
