@@ -17,13 +17,14 @@ export namespace StateData {
     export namespace Redirect {
         type Common_Redirect = Common & {
             context: "redirect";
-            rootRelativeRedirectUrl: string;
+            rootRelativeReturnToUrl: string;
+            returnToUrl_external: string | undefined;
+            isNonInteractive: boolean;
         };
 
         export type Login = Common_Redirect & {
             action: "login";
-            rootRelativeRedirectUrl_consentRequiredCase: string;
-            extraQueryParams: Record<string, string>;
+            authorizationParams: Record<string, string | string[]>;
         };
 
         export type Logout = Common_Redirect & {
@@ -33,16 +34,17 @@ export namespace StateData {
     }
 }
 
-const STATE_QUERY_PARAM_VALUE_IDENTIFIER_PREFIX = "b2lkYy1zcGEu";
+export const STATE_QUERY_PARAM_VALUE_IDENTIFIER_PREFIX = "b2lkYy1zcGEu";
+export type STATE_QUERY_PARAM_VALUE_IDENTIFIER_PREFIX = typeof STATE_QUERY_PARAM_VALUE_IDENTIFIER_PREFIX;
 const RANDOM_STRING_LENGTH = 32 - STATE_QUERY_PARAM_VALUE_IDENTIFIER_PREFIX.length;
 
-export function generateStateUrlParamValue(): string {
+export function generateOidcSpaBrandedStateUrlParamValue(): string {
     return `${STATE_QUERY_PARAM_VALUE_IDENTIFIER_PREFIX}${generateUrlSafeRandom({
         length: RANDOM_STRING_LENGTH
     })}`;
 }
 
-export function getIsStatQueryParamValue(params: { maybeStateUrlParamValue: string }): boolean {
+export function getIsOidcSpaStateUrlParamValue(params: { maybeStateUrlParamValue: string }): boolean {
     const { maybeStateUrlParamValue } = params;
 
     return (

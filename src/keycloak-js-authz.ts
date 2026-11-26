@@ -1,1 +1,1 @@
-export * from "./keycloak/keycloak-js/keycloak-authz";
+export * from "./keycloak-js/keycloak-authz";

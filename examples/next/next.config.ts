@@ -1,7 +1,9 @@
 import type { NextConfig } from "next";
+import { withOidcSpa } from "oidc-spa/nextjs-plugin";
 
-const nextConfig: NextConfig = {
-    /* config options here */
-};
+const nextConfig: NextConfig = {};
 
-export default nextConfig;
+export default withOidcSpa(nextConfig, {
+    browserRuntimeFreeze: { enabled: true },
+    DPoP: { enabled: true, mode: "auto" }
+});

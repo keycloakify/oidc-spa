@@ -2,11 +2,12 @@ import { assert, type Equals, objectFromEntries, id, isAmong } from "../vendor/s
 import type { IncomingMessage } from "node:http";
 import type { HonoRequest } from "hono";
 import type { FastifyRequest } from "fastify";
-import type { ValidateAndDecodeAccessToken } from "./types";
+import type { ValidateAndGetAccessTokenClaims } from "./types";
 
 export type AnyRequest =
     | AnyRequest.Unified
     | AnyRequest.RequestLike
+    | AnyRequest.NextJsRequestLike
     | AnyRequest.IncomingMessageLike
     | AnyRequest.HonoRequestLike
     | AnyRequest.FastifyRequestLike;
@@ -32,6 +33,7 @@ export namespace AnyRequest {
         };
         method?: string;
         url?: string;
+        originalUrl?: string;
         socket: Record<string, any>;
     };
 
@@ -46,6 +48,10 @@ export namespace AnyRequest {
     };
 
     assert<Request extends RequestLike ? true : false>;
+
+    export type NextJsRequestLike = RequestLike & {
+        nextUrl: { basePath: string };
+    };
 
     export type HonoRequestLike = {
         raw: RequestLike;
@@ -72,8 +78,12 @@ function isRequest(req: AnyRequest): req is AnyRequest.RequestLike {
     if ("type" in req || "raw" in req || "socket" in req) {
         return false;
     }
-    assert<Equals<typeof req, AnyRequest.RequestLike>>;
+    assert<Equals<typeof req, AnyRequest.RequestLike | AnyRequest.NextJsRequestLike>>;
     return true;
+}
+
+function isNextJsRequest(req: AnyRequest): req is AnyRequest.NextJsRequestLike {
+    return "nextUrl" in req;
 }
 
 function isIncomingMessage(req: AnyRequest): req is AnyRequest.IncomingMessageLike {
@@ -107,6 +117,13 @@ function anyRequestToUnified(req: AnyRequest): AnyRequest.Unified {
 
     if (isRequest(req)) {
         const url = new URL(req.url);
+
+        if (isNextJsRequest(req) && req.nextUrl.basePath === "") {
+            // Next removes basePath before constructing Route Handler requests.
+            // Its compiler supplies the configured prefix; NextRequests whose
+            // nextUrl already has a basePath retain the full URL and need no correction.
+            url.pathname = `${process.env.__NEXT_ROUTER_BASEPATH ?? ""}${url.pathname}`;
+        }
 
         return {
             type: "unified",
@@ -149,7 +166,7 @@ function anyRequestToUnified(req: AnyRequest): AnyRequest.Unified {
                 ":scheme":
                     getHeaderValue(":scheme") || (req.socket.encrypted === true ? "https" : "http"),
                 ":authority": getHeaderValue(":authority") || getHeaderValue("host") || "localhost",
-                ":path": req.url
+                ":path": req.originalUrl ?? req.url
             },
             headers: objectFromEntries(
                 (
@@ -184,7 +201,7 @@ export type RequestAuthContext = RequestAuthContext.Success | RequestAuthContext
 export namespace RequestAuthContext {
     export type Success = {
         isWellFormed: true;
-        accessTokenAndMetadata: ValidateAndDecodeAccessToken.Params;
+        accessTokenAndMetadata: ValidateAndGetAccessTokenClaims.Params;
     };
 
     export type Errored = {
@@ -193,7 +210,35 @@ export namespace RequestAuthContext {
     };
 }
 
+const requestAuthContextByRequest_trustProxy = new WeakMap<AnyRequest, RequestAuthContext | undefined>();
+const requestAuthContextByRequest_dontTrustProxy = new WeakMap<
+    AnyRequest,
+    RequestAuthContext | undefined
+>();
+
 export function extractRequestAuthContext(params: {
+    request: AnyRequest;
+    trustProxy: boolean;
+}): RequestAuthContext | undefined {
+    const { request, trustProxy } = params;
+
+    const requestAuthContextByRequest = trustProxy
+        ? requestAuthContextByRequest_trustProxy
+        : requestAuthContextByRequest_dontTrustProxy;
+
+    if (requestAuthContextByRequest.has(request)) {
+        const requestAuthContext = requestAuthContextByRequest.get(request);
+        return requestAuthContext;
+    }
+
+    const requestAuthContext = extractRequestAuthContext_nonMemoized(params);
+
+    requestAuthContextByRequest.set(request, requestAuthContext);
+
+    return requestAuthContext;
+}
+
+function extractRequestAuthContext_nonMemoized(params: {
     request: AnyRequest;
     trustProxy: boolean;
 }): RequestAuthContext | undefined {
@@ -226,7 +271,7 @@ export function extractRequestAuthContext(params: {
     if (scheme === "Bearer") {
         return id<RequestAuthContext.Success>({
             isWellFormed: true,
-            accessTokenAndMetadata: id<ValidateAndDecodeAccessToken.Params.Bearer>({
+            accessTokenAndMetadata: id<ValidateAndGetAccessTokenClaims.Params.Bearer>({
                 scheme: "Bearer",
                 accessToken,
                 rejectIfAccessTokenDPoPBound: true
@@ -340,7 +385,7 @@ export function extractRequestAuthContext(params: {
 
     return id<RequestAuthContext.Success>({
         isWellFormed: true,
-        accessTokenAndMetadata: id<ValidateAndDecodeAccessToken.Params.DPoP>({
+        accessTokenAndMetadata: id<ValidateAndGetAccessTokenClaims.Params.DPoP>({
             scheme: "DPoP",
             accessToken,
             dpopProof: request_unified.headers.DPoP,

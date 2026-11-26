@@ -16,6 +16,27 @@ const startTime = Date.now();
 const projectDirPath = pathJoin(__dirname, "..");
 const distDirPath_root = pathJoin(projectDirPath, "dist");
 const cacheDirPath = pathJoin(__dirname, "..", "node_modules", ".cache", "scripts");
+const srcDirPath = pathJoin(projectDirPath, "src");
+const packageJson = JSON.parse(fs.readFileSync(pathJoin(projectDirPath, "package.json"), "utf8")) as {
+    version: string;
+    exports: Record<string, { types?: string; module: string; import: string; default: string }>;
+};
+
+// Follow the actual export targets: ESM-only entries use an .mjs fallback,
+// while dual-format entries fall back to CommonJS in dist/.
+const runtimeExportPaths = Array.from(
+    new Set(Object.values(packageJson.exports).flatMap(entry => [entry.import, entry.default]))
+);
+
+for (const [name, entry] of Object.entries(packageJson.exports)) {
+    assert(entry.module === entry.import, `Inconsistent ESM targets for ${name}`);
+    assert(entry.import.startsWith("./dist/esm/") && entry.import.endsWith(".mjs"));
+    assert(
+        entry.default === entry.import ||
+            entry.default === entry.import.replace("/esm/", "/").replace(/\.mjs$/, ".js"),
+        `Invalid fallback target for ${name}`
+    );
+}
 
 if (!fs.existsSync(cacheDirPath)) {
     fs.mkdirSync(cacheDirPath, { recursive: true });
@@ -82,6 +103,8 @@ for (const targetFormat of ["cjs", "esm"] as const) {
                     ...tsconfig,
                     compilerOptions: {
                         ...tsconfig.compilerOptions,
+                        rootDir: srcDirPath,
+                        tsBuildInfoFile: pathJoin(distDirPath, "tsconfig.tsbuildinfo"),
                         module: (() => {
                             switch (targetFormat) {
                                 case "cjs":
@@ -92,23 +115,24 @@ for (const targetFormat of ["cjs", "esm"] as const) {
                         })(),
                         outDir: distDirPath
                     },
-                    include: [pathJoin(projectDirPath, "src")],
-                    exclude: (() => {
-                        switch (targetFormat) {
-                            case "cjs":
-                                return [
-                                    "angular.ts",
-                                    "tanstack-start",
-                                    pathJoin("tools", "inferIsViteDev.ts"),
-                                    pathJoin("tools", "getThisCodebaseRootDirPath_esm.ts"),
-                                    "vite-plugin",
-                                    "nuxt-spa",
-                                    pathJoin("vendor", "build-runtime")
-                                ];
-                            case "esm":
-                                return [];
-                        }
-                    })().map(relativePath => pathJoin(projectDirPath, "src", relativePath))
+                    // Compile exported entrypoints and their dependencies only. Ambient
+                    // declarations (including virtual modules) must still be available.
+                    files: runtimeExportPaths
+                        .filter(exportPath =>
+                            targetFormat === "esm"
+                                ? exportPath.endsWith(".mjs")
+                                : exportPath.endsWith(".js")
+                        )
+                        .map(exportPath =>
+                            pathJoin(
+                                srcDirPath,
+                                exportPath
+                                    .replace(/^\.\/dist\/(esm\/)?/, "")
+                                    .replace(/\.(mjs|js)$/, ".ts")
+                            )
+                        ),
+                    include: [pathJoin(srcDirPath, "**", "*.d.ts")],
+                    exclude: []
                 },
                 null,
                 2
@@ -121,9 +145,7 @@ for (const targetFormat of ["cjs", "esm"] as const) {
     fs.rmSync(pathJoin(distDirPath, "tsconfig.tsbuildinfo"));
 
     {
-        const version: string = JSON.parse(
-            fs.readFileSync(pathJoin(process.cwd(), "package.json")).toString("utf8")
-        ).version;
+        const { version } = packageJson;
 
         assert(typeof version === "string");
 
@@ -462,6 +484,27 @@ if (preBuildDistWithOnlyVendorDirPath !== undefined) {
         srcDirPath: preBuildDistWithOnlyVendorDirPath,
         destDirPath: distDirPath_root
     });
+}
+
+// Check the packaged contract after all transformations and cache restores.
+for (const [name, entry] of Object.entries(packageJson.exports)) {
+    for (const exportPath of Object.values(entry)) {
+        assert(fs.existsSync(pathJoin(projectDirPath, exportPath)), `Missing ${name}: ${exportPath}`);
+    }
+
+    const declarationPath = entry.import.replace(/\.mjs$/, ".d.ts");
+    assert(fs.existsSync(pathJoin(projectDirPath, declarationPath)), `Missing types for ${name}`);
+
+    if (entry.default !== entry.import) {
+        assert(
+            fs.existsSync(pathJoin(projectDirPath, entry.default.replace(/\.js$/, ".d.ts"))),
+            `Missing CommonJS types for ${name}`
+        );
+        continue;
+    }
+
+    const cjsPath = entry.import.replace("/esm/", "/").replace(/\.mjs$/, ".js");
+    assert(!fs.existsSync(pathJoin(projectDirPath, cjsPath)), `Unexpected CommonJS build for ${name}`);
 }
 
 console.log(`✓ built in ${((Date.now() - startTime) / 1000).toFixed(2)}s`);

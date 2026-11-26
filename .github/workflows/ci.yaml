@@ -34,6 +34,11 @@ jobs:
       with:
         node-version: '22.x'
     - uses: bahmutov/npm-install@v1
+    - run: yarn test:vue
+    - run: yarn test:angular
+    - run: yarn test:react-nextjs
+    - run: yarn test:tanstack-start-runtime-configs
+    - run: node --test scripts/tests/tanstack-start-client.test.mjs
     - run: yarn build
 
   check_if_version_upgraded:

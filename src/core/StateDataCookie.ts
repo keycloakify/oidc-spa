@@ -1,44 +1,15 @@
-import { assert, type Equals } from "../tools/tsafe/assert";
-import { id } from "../tools/tsafe/id";
-
-export type StateDataCookie = StateDataCookie.Login | StateDataCookie.Logout;
-
-export namespace StateDataCookie {
-    type Common = {
-        rootRelativeRedirectUrl: string;
-    };
-
-    export type Login = Common & {
-        action: "login";
-        rootRelativeRedirectUrl_consentRequiredCase: string;
-    };
-
-    export type Logout = Common & {
-        action: "logout";
-    };
-}
+export type StateDataCookie = {
+    rootRelativeReturnToUrl: string;
+};
 
 const SEPARATOR = "%_";
 
 function serializeStateDataCookie(params: { stateDataCookie: StateDataCookie; time: number }): string {
     const { stateDataCookie, time } = params;
 
-    let cookieValue = `${Math.floor(time / 1_000)}`;
-    cookieValue += `${SEPARATOR}${encodeURIComponent(stateDataCookie.rootRelativeRedirectUrl)}`;
-
-    switch (stateDataCookie.action) {
-        case "login":
-            cookieValue += `${SEPARATOR}${encodeURIComponent(
-                stateDataCookie.rootRelativeRedirectUrl_consentRequiredCase
-            )}`;
-            break;
-        case "logout":
-            break;
-        default:
-            assert<Equals<typeof stateDataCookie, never>>(false, "30449274");
-    }
-
-    return cookieValue;
+    return `${Math.floor(time / 1_000)}${SEPARATOR}${encodeURIComponent(
+        stateDataCookie.rootRelativeReturnToUrl
+    )}`;
 }
 
 function parseStateDataCookie(params: { stateDataCookie_str: string }):
@@ -57,57 +28,26 @@ function parseStateDataCookie(params: { stateDataCookie_str: string }):
         return undefined;
     }
 
+    // Older login cookies include a second return URL. Ignore it for pending callbacks.
     if (rest.length !== 1 && rest.length !== 2) {
         return undefined;
     }
 
-    const rootRelativeRedirectUrl = decodeURIComponent(rest[0]);
+    let rootRelativeReturnToUrl: string;
 
-    const rootRelativeRedirectUrl_consentRequiredCase =
-        rest.length === 1 ? undefined : decodeURIComponent(rest[1]);
-
-    for (const rootRelativeUrl of [
-        rootRelativeRedirectUrl,
-        rootRelativeRedirectUrl_consentRequiredCase
-    ]) {
-        if (rootRelativeRedirectUrl === undefined) {
-            continue;
-        }
-        try {
-            new URL(`http://localhost${rootRelativeUrl}`);
-        } catch {
-            return undefined;
-        }
+    try {
+        rootRelativeReturnToUrl = decodeURIComponent(rest[0]);
+        new URL(`http://localhost${rootRelativeReturnToUrl}`);
+    } catch {
+        return undefined;
     }
 
-    const stateDataCookie =
-        rootRelativeRedirectUrl_consentRequiredCase === undefined
-            ? id<StateDataCookie.Logout>({
-                  action: "logout",
-                  rootRelativeRedirectUrl
-              })
-            : id<StateDataCookie.Login>({
-                  action: "login",
-                  rootRelativeRedirectUrl,
-                  rootRelativeRedirectUrl_consentRequiredCase
-              });
-
-    return { stateDataCookie, time };
-}
-
-let isEnabled = false;
-
-export function enableStateDataCookie() {
-    isEnabled = true;
-}
-
-export function getIsStateDataCookieEnabled() {
-    return isEnabled;
+    return { stateDataCookie: { rootRelativeReturnToUrl }, time };
 }
 
 const COOKIE_NAME_PREFIX = "oidc_";
 
-export function setStateDataCookieIfEnabled(params: {
+export function setStateDataCookie(params: {
     stateDataCookie: StateDataCookie;
     stateUrlParamValue_instance: string;
     homeUrl: string;
@@ -128,12 +68,8 @@ export function setStateDataCookieIfEnabled(params: {
         });
 
         cookieNames_toDelete.forEach(cookieName => {
-            document.cookie = `${cookieName}=; Path=/; Max-Age=0`;
+            document.cookie = `${cookieName}=; Path=${new URL(homeUrl).pathname}; Max-Age=0`;
         });
-    }
-
-    if (!isEnabled) {
-        return;
     }
 
     document.cookie = [
@@ -147,10 +83,12 @@ export function setStateDataCookieIfEnabled(params: {
     ].join("");
 }
 
-export function clearStateDataCookie(params: { stateUrlParamValue: string }) {
-    const { stateUrlParamValue } = params;
+export function clearStateDataCookie(params: { stateUrlParamValue: string; homeUrl: string }) {
+    const { stateUrlParamValue, homeUrl } = params;
 
-    document.cookie = `${COOKIE_NAME_PREFIX}${stateUrlParamValue}=; Path=/; Max-Age=0`;
+    document.cookie = `${COOKIE_NAME_PREFIX}${stateUrlParamValue}=; Path=${
+        new URL(homeUrl).pathname
+    }; Max-Age=0`;
 }
 
 export function getStateDataCookies(params: { cookieHeaderParamValue: string | null }): {
