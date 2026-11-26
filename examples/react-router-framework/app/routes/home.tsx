@@ -13,8 +13,8 @@ export default function HomePage() {
             </p>
             <p>
                 Framework mode with <code>ssr: "unstable_api-only"</code> keeps the UI in the browser and
-                hosts backend code in the same project. The application waits for authentication to
-                initialize, and protected pages require login before loading their data.
+                hosts backend code in the same project. Public pages render while authentication
+                initializes, and protected pages require login before loading their data.
             </p>
             <div className="example-links">
                 <Link to="/todo-list">
@@ -34,15 +34,16 @@ export default function HomePage() {
                 <h2 id="integration-heading">How the integration is set up</h2>
                 <ol>
                     <li>
-                        <h3>Initialize authentication before rendering</h3>
+                        <h3>Register the plugin and handle readiness</h3>
                         <p>
                             <a href={`${sourceUrl}/vite.config.ts`}>
                                 <code>vite.config.ts</code>
                             </a>{" "}
                             registers the oidc-spa Vite plugin with browser runtime protection and DPoP.
-                            The plugin installs early initialization before application code runs. In{" "}
-                            <code>app/root.tsx</code>, one <code>OidcInitializationGate</code> wraps the
-                            header and pages. <code>HydrateFallback</code> returns <code>null</code>.
+                            The plugin installs early initialization before application code runs. Public
+                            pages render while OIDC initializes; the header checks{" "}
+                            <code>isOidcReady</code> before showing authentication controls.{" "}
+                            <code>HydrateFallback</code> returns <code>null</code>.
                         </p>
                     </li>
                     <li>
@@ -138,10 +139,11 @@ export default function HomePage() {
                     <li>
                         <h3>Resume after inactivity logout</h3>
                         <p>
-                            The protected layout also mounts <code>AutoLogoutWarningOverlay</code>. When
-                            the session expires, <code>autoLogout_returnToUrl</code> sends the user to
-                            the public <code>/inactivity-logout</code> page, preserving the current URL
-                            in <code>return_url</code>. Its resume link returns to that URL, where the
+                            The root mounts <code>AutoLogoutWarningOverlay</code> so session warnings can
+                            appear on every page. When the session expires,{" "}
+                            <code>autoLogout_returnToUrl</code> sends the user to the public{" "}
+                            <code>/inactivity-logout</code> page, preserving the current URL in{" "}
+                            <code>return_url</code>. Its resume link returns to that URL, where the
                             protected layout requires login again. The home page remains public too.
                         </p>
                     </li>
@@ -149,7 +151,7 @@ export default function HomePage() {
                         <h3>Already have a backend? Use SPA mode</h3>
                         <p>
                             Set <code>ssr: false</code>, remove the server code and custom client entry,
-                            and keep the initialization gate and client guards. In client loaders and
+                            and keep the readiness checks and client guards. In client loaders and
                             actions, call your API with an access token instead of using{" "}
                             <code>args.serverLoader()</code> or <code>args.serverAction()</code>. The
                             comments in{" "}

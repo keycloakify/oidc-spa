@@ -15,6 +15,10 @@ yarn dev
 
 Open **http://app.localhost:3000**. One React Router development server handles
 both the application and its server loaders/actions.
+Register `http://app.localhost:3000/openid-callback/` as the redirect URI with your provider.
+
+To use the workspace version of oidc-spa, run `yarn start-react-router-framework-example`
+from the repository root, matching the TanStack Router example's development workflow.
 
 The oidc-spa Vite plugin serves the API-only development shell without running
 server loaders or middleware. The browser then requests authenticated loader data,
@@ -31,6 +35,12 @@ are embedded in the frontend at build time; rebuild to change them in production
 Introspection secrets and KV credentials have no public prefix. The backend reads
 its configuration from `process.env`; local development and `yarn start` load `.env`.
 
+When using your own IAM configuration, register the backend API and allow the browser client
+to request its required scopes. Configure the client scopes/audience in `app/oidc.ts` and the
+matching token audience or introspection settings in `app/.server/oidc.ts`.
+Hosting the app on the same site as the authorization server helps session restoration avoid
+redirects and flashes. Microsoft Entra ID is an exception because its authorization endpoint is fixed.
+
 ## Pages and integration
 
 -   `/`: an introduction and integration guide.
@@ -40,7 +50,8 @@ its configuration from `process.env`; local development and `yarn start` load `.
 -   `/inactivity-logout`: a public page with a link to resume after session expiry.
 
 `react-router.config.ts` selects API-only mode. The root `HydrateFallback` returns
-`null`, and `OidcInitializationGate` wraps the whole application. The oidc-spa Vite
+`null`. Public pages render while OIDC initializes; the header checks `isOidcReady`
+before showing authentication controls. The oidc-spa Vite
 plugin installs early initialization, browser runtime protection, and automatic
 DPoP support. It defers the document's executable scripts, including React Router's
 root imports and development runtime, until early initialization permits loading
@@ -64,16 +75,16 @@ parallel. The todo pages' client loaders/actions simply delegate to
 action and automatically revalidate loader data afterward. No `clientLoader.hydrate`
 flag is needed for this setup without prerendering.
 
-The header stays in the root, while `AutoLogoutWarningOverlay` mounts only inside
-the protected layout. The home and inactivity logout pages remain public.
+The header and `AutoLogoutWarningOverlay` stay in the root, so session warnings can
+appear on every page. The home and inactivity logout pages remain public.
 `autoLogout_returnToUrl` in `app/oidc.ts` sends an expired session to
 `/inactivity-logout?return_url=…`, preserving the current URL, including its query
 and hash. The resume link returns there; the protected layout handles login again.
 
 `app/entry.client.tsx` uses `HydratedRouter`'s `unstable_fetch` to attach the current
 access token to same-origin loader/action requests. It waits for OIDC initialization
-itself because initial router requests can start before the initialization gate
-renders. Route discovery requests do not need a token. Do not enable native link
+itself because initial router requests can start while OIDC is still initializing.
+Route discovery requests do not need a token. Do not enable native link
 data prefetching (`prefetch` or `PrefetchPageLinks`) for protected routes: these
 browser-issued requests bypass the custom fetch.
 
@@ -111,7 +122,7 @@ To turn the example into a static SPA:
    the `.data` and `/__manifest` function rewrites from `vercel.json`. The `start`
    script and `@react-router/serve` are no longer needed.
 
-The initialization gate, early initialization, and client route guards remain.
+The readiness checks, early initialization, and client route guards remain.
 Your backend can validate tokens using oidc-spa/server or its own implementation.
 
 ## Build and run

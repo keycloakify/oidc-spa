@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
 import { isRouteErrorResponse, Links, Meta, Outlet, Scripts, ScrollRestoration } from "react-router";
 import type { Route } from "./+types/root";
-import { OidcInitializationGate } from "~/oidc";
 import { AppHeader } from "./components/AppHeader";
+import { AutoLogoutWarningOverlay } from "./components/AutoLogoutWarningOverlay";
 import "./app.css";
 
 export function meta() {
@@ -35,12 +35,13 @@ export function Layout({ children }: { children: ReactNode }) {
 
 export default function App() {
     return (
-        <OidcInitializationGate>
+        <>
             <AppHeader />
             <main>
                 <Outlet />
             </main>
-        </OidcInitializationGate>
+            <AutoLogoutWarningOverlay />
+        </>
     );
 }
 

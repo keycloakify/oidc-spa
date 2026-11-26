@@ -13,7 +13,7 @@ export type User_client = {
     canSeeAdminNavigation: boolean;
 };
 
-export const { useOidc, getOidc, OidcInitializationGate, enforceLogin } = oidcSpa
+export const { useOidc, getOidc, enforceLogin } = oidcSpa
     .withUser<User_client>(async ({ isMock, idTokenClaims, accessToken }) => {
         if (isMock) {
             const user_mock: User_client = {
@@ -33,11 +33,13 @@ export const { useOidc, getOidc, OidcInitializationGate, enforceLogin } = oidcSp
             })
             .parse(idTokenClaims);
 
+        const accessTokenClaims = decodeJwt(accessToken);
+
         const { roles } = z
             .object({
                 roles: z.array(z.string()).optional()
             })
-            .parse(decodeJwt(accessToken));
+            .parse(accessTokenClaims);
 
         const user: User_client = {
             displayName: name,

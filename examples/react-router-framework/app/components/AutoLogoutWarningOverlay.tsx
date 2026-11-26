@@ -2,7 +2,7 @@ import { useOidc } from "~/oidc";
 
 /** See: https://docs.oidc-spa.dev/auto-logout */
 export function AutoLogoutWarningOverlay() {
-    const { autoLogoutState } = useOidc({ assert: "user logged in" });
+    const { autoLogoutState } = useOidc();
 
     if (!autoLogoutState.shouldDisplayWarning) {
         return null;

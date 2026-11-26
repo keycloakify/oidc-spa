@@ -3,7 +3,8 @@ import { hydrateRoot } from "react-dom/client";
 import { HydratedRouter, type unstable_RouterFetch as RouterFetch } from "react-router/dom";
 import { getOidc } from "./oidc";
 
-// Authenticate React Router's server loader/action requests.
+// Authenticate React Router's server loader/action requests. Initial router
+// requests can start while OIDC initializes; getOidc() waits until it is ready.
 const fetchWithAuth: RouterFetch = async (input, context) => {
     if (context.type === "manifest") {
         return fetch(input);
