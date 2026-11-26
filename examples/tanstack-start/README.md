@@ -62,7 +62,7 @@ this shell, including the `_app` layout. Its header and page content mount on th
 oidc-spa restores the return URL. Ordinary prerendered pages still include the shared layout,
 and public pages include their content. In development, public pages render on demand.
 
-Build all three deployment targets:
+Build all four deployment targets:
 
 ```sh
 npm run build
@@ -70,14 +70,21 @@ npm run build
 
 Or build one target:
 
-| Command                    | Static frontend         | Backend / deployment configuration                       |
-| -------------------------- | ----------------------- | -------------------------------------------------------- |
-| `npm run build:vercel`     | `.vercel/output/static` | `.vercel/output/functions`, `.vercel/output/config.json` |
-| `npm run build:cloudflare` | `.output/public`        | `.output/server`, `.output/server/wrangler.json`         |
-| `npm run build:netlify`    | `dist`                  | `.netlify/functions-internal`                            |
+| Command                     | Static frontend              | Backend / deployment configuration                       |
+| --------------------------- | ---------------------------- | -------------------------------------------------------- |
+| `npm run build:vercel`      | `.vercel/output/static`      | `.vercel/output/functions`, `.vercel/output/config.json` |
+| `npm run build:cloudflare`  | `.output/public`             | `.output/server`, `.output/server/wrangler.json`         |
+| `npm run build:netlify`     | `dist`                       | `.netlify/functions-internal`                            |
+| `npm run build:self-hosted` | `self-hosted/.output/public` | `self-hosted/.output/server`, `compose.yaml`             |
 
-All three outputs remain available after `npm run build`. With newer Nitro versions, Netlify uses
+All four outputs remain available after `npm run build`. With newer Nitro versions, Netlify uses
 `.netlify/v1/functions` instead.
+
+For self-hosting, run `npm run build:self-hosted` followed by `docker compose up --build -d`.
+Open <http://app.localhost:3000>. Nginx serves the static frontend and forwards only API routes and
+server functions to the Node backend. See [the self-hosting guide](self-hosted/README.md) for runtime
+configuration, persistence, deployment, and verification commands. The Docker and Nginx
+configuration lives in this example; the oidc-spa plugin prepares static SPA documents automatically.
 
 For Vercel, import the repository with `examples/tanstack-start` as the project root and the TanStack
 Start framework preset. `vercel.json` selects `npm run build:vercel`; it contains no routing rules.
@@ -90,22 +97,24 @@ Cloudflare Workers Builds currently does not honor Wrangler's custom `build.comm
 its hosted build command must be selected in the project's build settings. Nitro generates the
 Wrangler deployment configuration automatically; no handwritten routing configuration is needed.
 
-The `oidcSpa()` Vite plugin generates deployment routing only when Start emits `_shell.html`.
+For the three cloud targets, the `oidcSpa()` Vite plugin generates deployment routing only when
+Start emits `_shell.html`.
 Existing static pages and assets are served directly, remaining page URLs use the shell, and
 `/api/*` and `/_serverFn/*` remain dynamic. `/openid-callback/` receives the neutral shell for
 both query and fragment responses, while the browser retains the callback URL. The home page
 always receives its prerendered content, including when its query contains `state`.
 These paths include the application's base path when configured with Vite's `base`.
-SSR builds without a shell retain Nitro's normal routing. No application-level build hook is needed.
+SSR builds without a shell retain Nitro's normal routing. All four targets use the plugin's static
+document preparation without an application-level build hook; self-hosted routing lives in Nginx.
 
 Run `yarn preview` after building to preview the most recently built target. After `yarn build`,
-that is Netlify because it runs last. The oidc-spa plugin uses Nitro's build metadata to find the
+that is the self-hosted Node output because it runs last. The oidc-spa plugin uses Nitro's build metadata to find the
 selected output and applies the static SPA routing locally: callbacks retain their trailing slash,
 existing frontend files are served directly, and other page URLs receive the shell. APIs and server
 functions continue through Nitro. No extra preview configuration is needed; SSR builds without a
 shell use the normal server preview.
 
-All three targets use native static routing; no callback edge function or generated Worker
+All three cloud targets use native static routing; no callback edge function or generated Worker
 dispatcher is needed. On Cloudflare, the native SPA fallback requires the shell at `/index.html`.
 For an app at `/`, the plugin preserves the prerendered home as `_prerendered-index.html` and
 adds a static home rewrite. Cloudflare's native fallback also returns the shell for missing asset
@@ -123,4 +132,4 @@ and build-time prerendering. The oidc-spa plugin automatically wraps that entry 
 before that entry is invoked.
 
 Set `KV_REST_API_URL` and `KV_REST_API_TOKEN` in the deployment environment for persistent todos on
-all three platforms. The filesystem store is for local Node development.
+the three cloud platforms. The self-hosted example persists the filesystem store in a Docker volume.

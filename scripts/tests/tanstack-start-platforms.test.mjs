@@ -47,6 +47,33 @@ async function fixture(t, preset, { spa = true, modern = false, base = "/", lega
 }
 
 for (const base of ["/", "/dashboard/"]) {
+    test(`Node server prepares static SPA documents without changing backend output: ${base}`, async t => {
+        const f = await fixture(t, "node-server", { base });
+        await mkdir(join(f.output.publicDir, "pricing"));
+        await mkdir(join(f.output.publicDir, "assets"));
+        await writeFile(join(f.output.publicDir, "pricing/index.html"), home.replace("HOME", "PRICING"));
+        const asset = 'console.log("APP");';
+        const backend = 'export default () => new Response("BACKEND");';
+        await writeFile(join(f.output.publicDir, "assets/app.js"), asset);
+        await writeFile(join(f.output.serverDir, "index.mjs"), backend);
+        await f.build();
+        const markedShell = shell.replace("<html>", "<html data-oidc-spa-static>");
+        assert.equal(await readFile(join(f.output.publicDir, base, "_shell.html"), "utf8"), markedShell);
+        for (const [path, content] of [
+            ["index.html", "HOME"],
+            ["pricing/index.html", "PRICING"]
+        ]) {
+            assert.equal(
+                await readFile(join(f.output.publicDir, base, path), "utf8"),
+                markedShell.replace("SHELL", content)
+            );
+        }
+        assert.equal(await readFile(join(f.output.publicDir, base, "assets/app.js"), "utf8"), asset);
+        assert.equal(await readFile(join(f.output.serverDir, "index.mjs"), "utf8"), backend);
+        await f.build();
+        assert.equal(await readFile(join(f.output.publicDir, base, "_shell.html"), "utf8"), markedShell);
+    });
+
     test(`Cloudflare uses native static SPA routing without a dispatcher: ${base}`, async t => {
         const f = await fixture(t, "cloudflare-module", { base });
         const configPath = join(f.output.serverDir, "wrangler.json");
@@ -150,8 +177,16 @@ test("Cloudflare SSR without a shell leaves deployment and documents untouched",
     await assert.rejects(readFile(join(f.output.serverDir, "oidc-spa-worker.mjs")), { code: "ENOENT" });
 });
 
-test("TanStack SPA rejects legacy home callbacks with migration instructions", async t => {
-    const f = await fixture(t, "vercel", { legacy: true });
-    await assert.rejects(f.build(), /useLegacyRedirectUri is not supported.*openid-callback/);
+test("Node server SSR without a shell leaves documents untouched", async t => {
+    const f = await fixture(t, "node-server", { spa: false, base: "/dashboard/" });
+    await f.build();
     assert.equal(await readFile(join(f.output.publicDir, "index.html"), "utf8"), home);
 });
+
+for (const preset of ["vercel", "node-server"]) {
+    test(`${preset} SPA rejects legacy home callbacks with migration instructions`, async t => {
+        const f = await fixture(t, preset, { legacy: true });
+        await assert.rejects(f.build(), /useLegacyRedirectUri is not supported.*openid-callback/);
+        assert.equal(await readFile(join(f.output.publicDir, "index.html"), "utf8"), home);
+    });
+}

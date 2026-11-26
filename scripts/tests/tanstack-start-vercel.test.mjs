@@ -117,7 +117,9 @@ for (const options of [
     { tanstack: false },
     { dev: true }
 ]) {
-    test(`other builds keep their output unchanged: ${JSON.stringify(options)}`, async t => {
+    test(`builds outside Vercel SPA routing keep its config unchanged: ${JSON.stringify(
+        options
+    )}`, async t => {
         const f = await fixture(t, options);
         await f.build();
         assert.equal(await readFile(f.configPath, "utf8"), f.originalSource);

@@ -52,7 +52,8 @@ export function createTanstackStartNitroOutput(params: {
                 finishCloudflarePrerender = undefined;
                 if (!params.isTanstackStart() || nitro === undefined || nitro.options.dev) return;
                 const { preset, output } = nitro.options;
-                if (!["vercel", "cloudflare-module", "netlify"].includes(preset ?? "")) return;
+                if (!["vercel", "cloudflare-module", "netlify", "node-server"].includes(preset ?? ""))
+                    return;
 
                 const { basePath, shell } = getSpaPaths(base);
                 const unmounted = existsSync(join(output.publicDir, "_shell.html"));

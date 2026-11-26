@@ -28,7 +28,11 @@ export default defineConfig(({ command, isPreview }) => ({
             }
         }),
         viteReact(),
-        nitro(),
+        nitro({
+            // Keep the self-hosted output alongside the three cloud builds.
+            output:
+                process.env.NITRO_PRESET === "node-server" ? { dir: "self-hosted/.output" } : undefined
+        }),
         oidcSpa({
             browserRuntimeFreeze: {
                 enabled: true

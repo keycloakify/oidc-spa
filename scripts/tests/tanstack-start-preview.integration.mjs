@@ -121,7 +121,7 @@ test(
                 });
             }
         };
-        for (const preset of ["netlify", "vercel", "cloudflare-module"]) {
+        for (const preset of ["netlify", "vercel", "cloudflare-module", "node-server"]) {
             for (const base of ["/", "/dashboard/"]) {
                 await t.test(`${preset} SPA ${base}`, async () => {
                     await build({ preset, base, spa: true, oidcFirst: base !== "/" });
@@ -133,6 +133,7 @@ test(
                             : join(root, ".output/public");
                     const shell = await readFile(join(publicDir, base, "_shell.html"), "utf8");
                     assert(!shell.includes("<h1>"));
+                    assert.match(shell, /<html\b[^>]*\bdata-oidc-spa-static/);
                     const preview = await startPreview(root);
                     try {
                         for (const path of [
