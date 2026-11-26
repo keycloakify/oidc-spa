@@ -3,6 +3,7 @@ import { test } from "node:test";
 import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { EventEmitter } from "node:events";
 import { oidcSpa } from "../../dist/esm/vite-plugin/vite-plugin.mjs";
 
 function callHook(plugin, name, context, ...args) {
@@ -271,3 +272,56 @@ test("TanStack dev SPA rejects the legacy redirect URI before startup", async t 
         /useLegacyRedirectUri is not supported.*openid-callback/
     );
 });
+
+for (const spa of [false, true]) {
+    for (const base of ["/", "/dashboard/"]) {
+        test(`TanStack dev rewrites only SPA callback document requests: spa=${spa}, base=${base}`, async t => {
+            const f = await fixture(t);
+            const plugin = oidcSpa();
+            callHook(plugin, "configResolved", undefined, {
+                ...f.config,
+                base,
+                define: { "import.meta.env.TSS_SHELL": JSON.stringify(String(spa)) },
+                plugins: [{ name: "tanstack-react-start:config" }]
+            });
+            const middleware = [];
+            const watcher = new EventEmitter();
+            const httpServer = new EventEmitter();
+            callHook(plugin, "configureServer", undefined, {
+                environments: {},
+                watcher,
+                httpServer,
+                middlewares: { use: handler => middleware.push(handler) }
+            });
+            assert.equal(watcher.listenerCount("change"), 1, "runtime config watching remains active");
+            assert.equal(middleware.length, spa ? 1 : 0);
+            for (const method of ["GET", "HEAD", "POST", "PUT"]) {
+                for (const path of [
+                    "openid-callback/",
+                    "openid-callback/?state=example&code=example",
+                    "openid-callback",
+                    "openid-callback/other",
+                    "api/todos?state=example",
+                    "_serverFn/example?state=example",
+                    "@vite/client",
+                    "src/router.tsx"
+                ]) {
+                    const url = base + path;
+                    const req = { method, url, originalUrl: url };
+                    let nextCalls = 0;
+                    for (const handler of middleware) handler(req, {}, () => nextCalls++);
+                    const rewrite =
+                        spa &&
+                        ["GET", "HEAD"].includes(method) &&
+                        path.startsWith("openid-callback/") &&
+                        path.split("?", 1)[0] === "openid-callback/";
+                    assert.equal(req.url, rewrite ? base : url, `${method} ${url}`);
+                    assert.equal(req.originalUrl, rewrite ? base : url);
+                    assert.equal(nextCalls, middleware.length);
+                }
+            }
+            httpServer.emit("close");
+            assert.equal(watcher.listenerCount("change"), 0);
+        });
+    }
+}

@@ -4,7 +4,7 @@ import viteReact from "@vitejs/plugin-react";
 import { nitro } from "nitro/vite";
 import { oidcSpa } from "oidc-spa/vite-plugin";
 
-export default defineConfig(({ command, isPreview }) => ({
+export default defineConfig(({ isPreview }) => ({
     // Preview also uses command: "serve". Only the dev server needs this hostname.
     server: {
         // oidc-spa: It's better to have a fixed port to register the valid redirect uri for dev
@@ -20,7 +20,7 @@ export default defineConfig(({ command, isPreview }) => ({
         tanstackStart({
             prerender: { enabled: true },
             spa: {
-                enabled: command === "build",
+                enabled: true,
                 // Keep the home and shell renders distinct until this is fixed:
                 // https://github.com/TanStack/router/issues/8741
                 // This is a bug unrelated to the oidc-spa context.

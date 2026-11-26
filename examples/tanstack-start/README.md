@@ -60,7 +60,9 @@ home page from being prerendered alongside the shell.
 The generic `_shell.html` contains no app UI. Start omits non-root route components when rendering
 this shell, including the `_app` layout. Its header and page content mount on the client after
 oidc-spa restores the return URL. Ordinary prerendered pages still include the shared layout,
-and public pages include their content. In development, public pages render on demand.
+and public pages include their content. Development also uses SPA mode: Start renders the neutral
+shell on demand, and pages render in the browser. The oidc-spa plugin handles the callback URL
+internally without a redirect. Setting `spa.enabled: false` retains normal SSR development behavior.
 
 Build all four deployment targets:
 

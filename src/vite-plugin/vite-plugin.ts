@@ -98,9 +98,13 @@ export function oidcSpa(params: OidcSpaVitePluginParams = {}) {
             assert(handlers !== undefined);
             return handlers.buildStart?.call(this, options);
         },
-        configureServer(server) {
-            assert(handlers !== undefined);
-            return handlers.configureServer?.call(this, server);
+        configureServer: {
+            // Apply SPA callback rewrites before Nitro or Start handles the request.
+            order: "pre",
+            handler(server) {
+                assert(handlers !== undefined);
+                return handlers.configureServer?.call(this, server);
+            }
         },
         configurePreviewServer: {
             // Nitro's preview handler consumes misses too, so install our static

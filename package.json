@@ -20,6 +20,7 @@
         "test:tanstack-start-auth": "node --test scripts/tests/tanstack-start-client.test.mjs scripts/tests/tanstack-start-auth.integration.mjs",
         "test:tanstack-start-vercel": "node --test scripts/tests/tanstack-start-vercel.test.mjs scripts/tests/tanstack-start-vercel.integration.mjs",
         "test:tanstack-start-preview": "node --test scripts/tests/tanstack-start-preview.test.mjs scripts/tests/tanstack-start-preview.integration.mjs",
+        "test:tanstack-start-dev": "node --test scripts/tests/tanstack-start-dev.integration.mjs",
         "test:tanstack-start-platforms": "node --test scripts/tests/tanstack-start-platforms.test.mjs scripts/tests/tanstack-start-platforms.integration.mjs",
         "_format": "prettier '**/*.{ts,tsx,json,md}'",
         "format": "yarn _format --write",

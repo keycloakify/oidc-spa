@@ -3,7 +3,7 @@ import type { Handlers, HandlerFactoryParams } from "../handlers";
 import { createHandleTanStackStartServerEntrypoint } from "./createHandleTanStackStartServerEntrypoint";
 import { createHandleTanstackStartClientOutput } from "./handleTanstackStartClientOutput";
 import { createHandleTanstackStartRuntimeConfigs } from "./handleTanstackStartRuntimeConfigs";
-import { SPA_DOCUMENT_ATTRIBUTE, LEGACY_REDIRECT_URI_SPA_ERROR } from "./spaRouting";
+import { getSpaPaths, SPA_DOCUMENT_ATTRIBUTE, LEGACY_REDIRECT_URI_SPA_ERROR } from "./spaRouting";
 import { transformCreateFileRoute } from "./transformTanstackRouterCreateFileRoute";
 import { configureTanstackStartPreview } from "./configurePreviewServer";
 
@@ -71,7 +71,27 @@ export function createTanstackStartHandlers(params: HandlerFactoryParams): Handl
         },
         buildStart: clientOutput?.buildStart,
         generateBundle: clientOutput?.generateBundle,
-        configureServer: runtimeConfigs.configureServer,
+        configureServer(server) {
+            runtimeConfigs.configureServer(server);
+            if (ssr !== false) return;
+
+            const { basePath, callback } = getSpaPaths(resolvedConfig.base);
+            server.middlewares.use((req, _res, next) => {
+                if (
+                    (req.method === "GET" || req.method === "HEAD") &&
+                    req.url?.split("?", 1)[0] === callback
+                ) {
+                    // Start renders a live shell in SPA dev mode, but still
+                    // canonicalizes the callback's trailing slash. Render at the
+                    // app root internally; earlyInit reads the untouched browser
+                    // URL. Dropping the query also bypasses SSR callback handling.
+                    req.url = basePath;
+                    // Start's standalone dev handler restores this before dispatch.
+                    req.originalUrl = basePath;
+                }
+                next();
+            });
+        },
         configurePreviewServer: configureTanstackStartPreview
     };
 }
