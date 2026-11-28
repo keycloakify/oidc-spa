@@ -1,7 +1,0 @@
-*
-!Dockerfile
-!.output/
-!.output/public/
-!.output/public/**
-!.output/server/
-!.output/server/**

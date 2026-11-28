@@ -1,154 +1,88 @@
-# TanStack Start Example
+# TanStack Start + oidc-spa
 
-A minimal TanStack Start v1 example:
+[Live example](https://tanstack-start.oidc-spa.dev/)
 
--   Home: `/`
--   Todo List (Server Function): `/todo-list-server-function`
--   Todo List (API): `/todo-list-api`
--   Todo List Admin: `/todo-list-admin`
--   Account: `/account`
--   Inactivity logout: `/inactivity-logout`
+This example uses TanStack Start's default server rendering and Nitro deployment setup.
+Public pages render on each request. Protected pages render in the browser after their login
+check. API routes and server functions run in the same application.
 
-Both todo pages load and add per-user todos using the same store. One uses server functions protected
-by `oidcFnMiddleware`; the other calls the `/api/todos` GET/POST endpoint protected by
-`oidcRequestMiddleware`. Both pages are linked from the home page and navigation.
-Todo List Admin lets admins view todos grouped by user ID and delete individual items.
-Account displays the user's profile and provides account management actions when using Keycloak.
+For a static prerendered frontend served by a CDN, see `examples/tanstack-start-prerendered`
+(planned as a separate example).
 
-The account and todo pages share the pathless `src/routes/_app/_authenticated/route.tsx` route, which
-calls `enforceLogin` once for all its children. Their URLs do not include `_app` or `_authenticated`.
-The home and inactivity logout pages remain public.
-
-`src/routes/__root.tsx` contains only the HTML document, head, and bootstrap scripts.
-The pathless `src/routes/_app/route.tsx` layout holds `AppHeader`, the page outlet, and
-`AutoLogoutWarningOverlay` for every app page. Protected pages render on the client. After an
-automatic logout, the inactivity page offers a link to resume the previous page, whose login
-guard handles sign-in when needed.
-
-## Development
-
-From this directory:
+## Run locally
 
 ```sh
 yarn install
 yarn dev
 ```
 
-Open <http://app.localhost:3000>.
-Register `http://app.localhost:3000/openid-callback/` as the redirect URI in your IAM console.
-For an app hosted under `/dashboard/`, register `/dashboard/openid-callback/` on its origin.
+Open <http://app.localhost:3000/>. In your identity provider's administration console, register
+**`http://app.localhost:3000/` as the redirect URI**. The application's home is the only redirect
+URI; no callback route needs to be created. If the app is deployed under `/dashboard/`, register
+its full home URL, such as `https://your-app.example/dashboard/`.
 
-In the tracked `.env` file, choose `OIDC_PROVIDER` and configure the matching variables.
-Set `OIDC_PROVIDER=mock` to try the example without an identity provider.
+Choose `OIDC_PROVIDER` and its corresponding settings in `.env`. The example supports Keycloak,
+Auth0, Microsoft Entra ID, and mock mode. Set `OIDC_PROVIDER=mock` to try it without an identity
+provider; the mock user is an admin. The `app.localhost` development hostname is needed for
+Auth0; other providers can also use `localhost` if their registered redirect URI matches.
 
-To run against the local oidc-spa source, run this from the repository root:
+To use the current oidc-spa repository source, run this from the repository root:
 
 ```sh
 yarn start-tanstack-start-example
 ```
 
-## Production
+## Integration
 
-With `STATIC_FRONTEND` enabled, Start automatically discovers and prerenders static page paths and generates a separate
-`_shell.html`. Public pages contain their rendered content; protected page components inherit
-`ssr: false` and render on the client. API routes are excluded from page discovery.
-Parameterized routes need concrete URLs, either discovered by crawling links or supplied through
-Start's `pages` option. The distinct `spa.maskPath` works around
-[Start issue #8741](https://github.com/TanStack/router/issues/8741), which otherwise prevents the
-home page from being prerendered alongside the shell.
+-   `vite.config.ts` adds `oidcSpa()` alongside the standard `nitro()`, `tanstackStart()`, and React
+    plugins. There is no custom server entry or deployment routing.
+-   `src/oidc.ts` defines the client and server user models, runtime provider configuration,
+    hooks, login guard, and token validation middleware.
+-   `src/routes/__root.tsx` contains the document and shared UI: header, page outlet, and inactivity
+    warning overlay.
+-   `src/routes/_authenticated/route.tsx` protects the account and todo pages with
+    `beforeLoad: enforceLogin`. The layout is pathless: `_authenticated` does not appear in URLs.
+-   `/todo-list-server-function` uses Start server functions with `oidcFnMiddleware`.
+-   `/todo-list-api` calls the `/api/todos` resource route through `fetchWithAuth`;
+    `oidcRequestMiddleware` validates its access tokens.
+-   `/todo-list-admin` checks admin permissions on the server. `/account` displays the user profile
+    and Keycloak account actions. `/inactivity-logout` is public and links back to the previous page.
 
-The generic `_shell.html` contains no app UI. Start omits non-root route components when rendering
-this shell, including the `_app` layout. Its header and page content mount on the client after
-oidc-spa restores the return URL. Ordinary prerendered pages still include the shared layout,
-and public pages include their content. Development also uses SPA mode: Start renders the neutral
-shell on demand, and pages render in the browser. The oidc-spa plugin handles the callback URL
-internally without a redirect. Run `STATIC_FRONTEND=false npm run dev` to use SSR during development.
+Both todo implementations share the same per-user store. Browser login state is not authorization
+for the backend: the middleware validates each request's access token independently.
 
-Build all five deployment targets:
+When registering your own backend API with your provider, configure its audience and required
+scopes, allow this application's public client to request them, and update `src/oidc.ts` to match.
+Configure the provider's claims or roles for the server user model, including the `admin` role
+used by this example. The included configurations demonstrate offline JWT validation and token
+introspection; `Keycloak2` uses introspection.
 
-```sh
-npm run build
-```
+Hosting the app on the same site as the authorization server avoids redirects and flashes during
+session restoration. Microsoft Entra ID is an exception because its authorization endpoint has
+a fixed domain.
 
-Or build one target:
-
-| Command                                     | Frontend                                                     | Backend / deployment configuration                                   |
-| ------------------------------------------- | ------------------------------------------------------------ | -------------------------------------------------------------------- |
-| `npm run build:vercel`                      | `.vercel/output/static`                                      | `.vercel/output/functions`, `.vercel/output/config.json`             |
-| `npm run build:cloudflare`                  | `.output/public`                                             | `.output/server`, `.output/server/wrangler.json`                     |
-| `npm run build:netlify`                     | `dist`                                                       | `.netlify/functions-internal`                                        |
-| `npm run build:self-hosted-static-frontend` | `self-hosted-static-frontend/.output/public`                 | `self-hosted-static-frontend/.output/server`, its own `compose.yaml` |
-| `npm run build:self-hosted-ssr`             | Rendered by Node; assets in `self-hosted-ssr/.output/public` | `self-hosted-ssr/.output/server`, its own `compose.yaml`             |
-
-All five outputs remain available after `npm run build`. With newer Nitro versions, Netlify uses
-`.netlify/v1/functions` instead.
-
-`npm run build:self-hosted` builds both self-hosted variants. Their build scripts select
-`STATIC_FRONTEND=true` or `false` without editing Vite configuration. Each directory contains its
-own Dockerfile, Compose file, and deployment guide:
-
--   [Static frontend](self-hosted-static-frontend/README.md): Nginx serves prerendered pages and the
-    callback shell, with a separate Node backend for APIs and server functions.
--   [SSR](self-hosted-ssr/README.md): one Node container serves assets, renders public pages per
-    request, and handles APIs and server functions. This target disables SPA mode and prerendering.
-
-From this directory, start the variant you built:
+## Build and deploy
 
 ```sh
-docker compose -f self-hosted-static-frontend/compose.yaml up --build -d --wait
-# Or:
-docker compose -f self-hosted-ssr/compose.yaml up --build -d --wait
+yarn build
+yarn preview
 ```
 
-Both default to <http://app.localhost:3000> and have independent data volumes. Set
-`SELF_HOSTED_PORT=3001` on one command to run them together. The Docker configuration lives in
-this example; the oidc-spa plugin prepares static SPA documents automatically when a shell exists.
+The build command is `vite build && tsc --noEmit`. Locally, Nitro produces its standard Node
+server output in `.output`; you can run it directly with `node .output/server/index.mjs`.
 
-For Vercel, import the repository with `examples/tanstack-start` as the project root and the TanStack
-Start framework preset. `vercel.json` selects `npm run build:vercel`; it contains no routing rules.
-For Cloudflare Workers, select `npm run build:cloudflare` as the build command and deploy with
-`npx wrangler deploy`. You can preview the Cloudflare output locally with `npx wrangler dev`.
-For Netlify, `netlify.toml` selects `npm run build:netlify` and `dist` as the publish directory.
-Set the project base directory to `examples/tanstack-start`.
+For Vercel, import the repository with `examples/tanstack-start` as the project root.
+`vercel.json` matches the official CLI scaffold and selects the `tanstack-start` framework.
+Vercel and Nitro detect the deployment environment automatically; no custom build command,
+rewrites, or `NITRO_PRESET` setting is needed. To inspect a Vercel build locally:
 
-Cloudflare Workers Builds currently does not honor Wrangler's custom `build.command` setting, so
-its hosted build command must be selected in the project's build settings. Nitro generates the
-Wrangler deployment configuration automatically; no handwritten routing configuration is needed.
+```sh
+NITRO_PRESET=vercel yarn build
+```
 
-For the three cloud targets, the `oidcSpa()` Vite plugin generates deployment routing only when
-Start emits `_shell.html`.
-Existing static pages and assets are served directly, remaining page URLs use the shell, and
-`/api/*` and `/_serverFn/*` remain dynamic. `/openid-callback/` receives the neutral shell for
-both query and fragment responses, while the browser retains the callback URL. The home page
-always receives its prerendered content, including when its query contains `state`.
-These paths include the application's base path when configured with Vite's `base`.
-SSR builds without a shell retain Nitro's normal routing. Static builds use the plugin's document
-preparation without an application-level build hook. Self-hosted static routing lives in Nginx;
-self-hosted SSR uses Nitro's Node server.
+Set the provider environment variables in the deployment environment. Do not prefix secrets with
+`VITE_`. Configure `KV_REST_API_URL` and `KV_REST_API_TOKEN` for persistent todos on Vercel;
+the filesystem fallback is intended for local development or a Node host with persistent storage.
 
-Run `yarn preview` after building to preview the most recently built target. After `yarn build`,
-that is the self-hosted SSR output because it runs last. The oidc-spa plugin uses Nitro's build
-metadata to find the selected output. Static SPA builds get the same callback and fallback routing
-locally: callbacks retain their trailing slash, existing frontend files are served directly, and
-other page URLs receive the shell. APIs and server functions continue through Nitro. SSR builds
-without a shell use the normal server preview. No extra preview configuration is needed.
-
-All three cloud targets use native static routing; no callback edge function or generated Worker
-dispatcher is needed. On Cloudflare, the native SPA fallback requires the shell at `/index.html`.
-For an app at `/`, the plugin preserves the prerendered home as `_prerendered-index.html` and
-adds a static home rewrite. Cloudflare's native fallback also returns the shell for missing asset
-URLs. Its build-time preview receives Start's prerender flag so the shell is empty; the flag is
-removed from the final preview command.
-
-`useLegacyRedirectUri: true` preserves an existing IAM registration using the application's home
-URL in integrations that support it. TanStack Start SPA deployments require the dedicated callback
-path: update the IAM registration before upgrading this example. The build reports a migration
-error if the legacy option is enabled in SPA mode.
-
-No custom `src/server.ts` is required: Start's default server entry handles APIs, server functions,
-and build-time prerendering. The oidc-spa plugin automatically wraps that entry with
-`withOidcSpaServerEntry` for request-time SSR callbacks. Static callback routing runs at the CDN,
-before that entry is invoked.
-
-Set `KV_REST_API_URL` and `KV_REST_API_TOKEN` in the deployment environment for persistent todos on
-the three cloud platforms. Both self-hosted variants persist the filesystem store in their own Docker volume.
+The framework setup follows the [official TanStack Start CLI](https://tanstack.com/start/latest/docs/framework/react/getting-started)
+and [Vercel deployment guide](https://tanstack.com/start/latest/docs/framework/react/guide/hosting#vercel--official-partner).

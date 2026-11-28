@@ -1,9 +1,9 @@
 import { useState, type SubmitEvent } from "react";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
-import { fetchWithAuth } from "~/oidc";
-import type { TodoItem } from "~/data/todos";
+import { fetchWithAuth } from "#/oidc";
+import type { TodoItem } from "#/data/todos";
 
-export const Route = createFileRoute("/_app/_authenticated/todo-list-api")({
+export const Route = createFileRoute("/_authenticated/todo-list-api")({
     loader: async () => {
         const response = await fetchWithAuth("/api/todos");
 

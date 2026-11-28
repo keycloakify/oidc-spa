@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { createKeycloakUtils, isKeycloak } from "oidc-spa/keycloak-utils";
-import { useOidc } from "~/oidc";
+import { useOidc } from "#/oidc";
 
-export const Route = createFileRoute("/_app/_authenticated/account")({
+export const Route = createFileRoute("/_authenticated/account")({
     component: Account,
     pendingComponent: () => <p>Loading account...</p>
 });

@@ -2,8 +2,8 @@ import { useState } from "react";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { oidcFnMiddleware } from "~/oidc";
-import { getTodosStore } from "~/data/todos";
+import { oidcFnMiddleware } from "#/oidc";
+import { getTodosStore } from "#/data/todos";
 
 const getAllTodos = createServerFn({ method: "GET" })
     .middleware([
@@ -36,7 +36,7 @@ const deleteTodo = createServerFn({ method: "POST" })
         });
     });
 
-export const Route = createFileRoute("/_app/_authenticated/todo-list-admin")({
+export const Route = createFileRoute("/_authenticated/todo-list-admin")({
     loader: () => getAllTodos(),
     component: TodoListAdmin,
     pendingComponent: () => <p>Loading todos...</p>,

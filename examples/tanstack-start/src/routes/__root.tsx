@@ -1,7 +1,8 @@
-/// <reference types="vite/client" />
-import { HeadContent, Scripts, createRootRoute } from "@tanstack/react-router";
+import { HeadContent, Scripts, createRootRoute, Outlet } from "@tanstack/react-router";
 import type { ReactNode } from "react";
-import stylesheetUrl from "~/styles.css?url";
+import { AppHeader } from "#/components/AppHeader";
+import { AutoLogoutWarningOverlay } from "#/components/AutoLogoutWarningOverlay";
+import stylesheetUrl from "#/styles.css?url";
 
 export const Route = createRootRoute({
     head: () => ({
@@ -19,8 +20,21 @@ export const Route = createRootRoute({
         ],
         links: [{ rel: "stylesheet", href: stylesheetUrl }]
     }),
-    shellComponent: RootDocument
+    shellComponent: RootDocument,
+    component: RootLayout
 });
+
+function RootLayout() {
+    return (
+        <>
+            <AppHeader />
+            <main>
+                <Outlet />
+            </main>
+            <AutoLogoutWarningOverlay />
+        </>
+    );
+}
 
 function RootDocument({ children }: { children: ReactNode }) {
     return (

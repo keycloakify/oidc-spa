@@ -1,8 +1,0 @@
-*
-!Dockerfile
-!nginx.conf
-!.output/
-!.output/public/
-!.output/public/**
-!.output/server/
-!.output/server/**

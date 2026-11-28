@@ -9,159 +9,175 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as AppRouteRouteImport } from './routes/_app/route'
-import { Route as AppIndexRouteImport } from './routes/_app/index'
-import { Route as AppAuthenticatedRouteRouteImport } from './routes/_app/_authenticated/route'
-import { Route as AppInactivityLogoutRouteImport } from './routes/_app/inactivity-logout'
+import { Route as IndexRouteImport } from './routes/index'
+import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
+import { Route as InactivityLogoutRouteImport } from './routes/inactivity-logout'
+import { Route as AuthenticatedAccountRouteImport } from './routes/_authenticated/account'
+import { Route as AuthenticatedTodoListAdminRouteImport } from './routes/_authenticated/todo-list-admin'
+import { Route as AuthenticatedTodoListApiRouteImport } from './routes/_authenticated/todo-list-api'
+import { Route as AuthenticatedTodoListServerFunctionRouteImport } from './routes/_authenticated/todo-list-server-function'
 import { Route as ApiTodosRouteImport } from './routes/api/todos'
-import { Route as AppAuthenticatedAccountRouteImport } from './routes/_app/_authenticated/account'
-import { Route as AppAuthenticatedTodoListAdminRouteImport } from './routes/_app/_authenticated/todo-list-admin'
-import { Route as AppAuthenticatedTodoListApiRouteImport } from './routes/_app/_authenticated/todo-list-api'
-import { Route as AppAuthenticatedTodoListServerFunctionRouteImport } from './routes/_app/_authenticated/todo-list-server-function'
 
-const AppRouteRoute = AppRouteRouteImport.update({
-  id: '/_app',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AppIndexRoute = AppIndexRouteImport.update({
+const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => AppRouteRoute,
+  getParentRoute: () => rootRouteImport,
 } as any)
-const AppAuthenticatedRouteRoute = AppAuthenticatedRouteRouteImport.update({
+const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
   id: '/_authenticated',
-  getParentRoute: () => AppRouteRoute,
+  getParentRoute: () => rootRouteImport,
 } as any)
-const AppInactivityLogoutRoute = AppInactivityLogoutRouteImport.update({
+const InactivityLogoutRoute = InactivityLogoutRouteImport.update({
   id: '/inactivity-logout',
   path: '/inactivity-logout',
-  getParentRoute: () => AppRouteRoute,
+  getParentRoute: () => rootRouteImport,
 } as any)
+const AuthenticatedAccountRoute = AuthenticatedAccountRouteImport.update({
+  id: '/account',
+  path: '/account',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedTodoListAdminRoute =
+  AuthenticatedTodoListAdminRouteImport.update({
+    id: '/todo-list-admin',
+    path: '/todo-list-admin',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedTodoListApiRoute =
+  AuthenticatedTodoListApiRouteImport.update({
+    id: '/todo-list-api',
+    path: '/todo-list-api',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedTodoListServerFunctionRoute =
+  AuthenticatedTodoListServerFunctionRouteImport.update({
+    id: '/todo-list-server-function',
+    path: '/todo-list-server-function',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const ApiTodosRoute = ApiTodosRouteImport.update({
   id: '/api/todos',
   path: '/api/todos',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AppAuthenticatedAccountRoute = AppAuthenticatedAccountRouteImport.update({
-  id: '/account',
-  path: '/account',
-  getParentRoute: () => AppAuthenticatedRouteRoute,
-} as any)
-const AppAuthenticatedTodoListAdminRoute =
-  AppAuthenticatedTodoListAdminRouteImport.update({
-    id: '/todo-list-admin',
-    path: '/todo-list-admin',
-    getParentRoute: () => AppAuthenticatedRouteRoute,
-  } as any)
-const AppAuthenticatedTodoListApiRoute =
-  AppAuthenticatedTodoListApiRouteImport.update({
-    id: '/todo-list-api',
-    path: '/todo-list-api',
-    getParentRoute: () => AppAuthenticatedRouteRoute,
-  } as any)
-const AppAuthenticatedTodoListServerFunctionRoute =
-  AppAuthenticatedTodoListServerFunctionRouteImport.update({
-    id: '/todo-list-server-function',
-    path: '/todo-list-server-function',
-    getParentRoute: () => AppAuthenticatedRouteRoute,
-  } as any)
 
 export interface FileRoutesByFullPath {
-  '/': typeof AppIndexRoute
-  '/inactivity-logout': typeof AppInactivityLogoutRoute
+  '/': typeof IndexRoute
+  '/inactivity-logout': typeof InactivityLogoutRoute
+  '/account': typeof AuthenticatedAccountRoute
+  '/todo-list-admin': typeof AuthenticatedTodoListAdminRoute
+  '/todo-list-api': typeof AuthenticatedTodoListApiRoute
+  '/todo-list-server-function': typeof AuthenticatedTodoListServerFunctionRoute
   '/api/todos': typeof ApiTodosRoute
-  '/account': typeof AppAuthenticatedAccountRoute
-  '/todo-list-admin': typeof AppAuthenticatedTodoListAdminRoute
-  '/todo-list-api': typeof AppAuthenticatedTodoListApiRoute
-  '/todo-list-server-function': typeof AppAuthenticatedTodoListServerFunctionRoute
 }
 export interface FileRoutesByTo {
-  '/': typeof AppIndexRoute
-  '/inactivity-logout': typeof AppInactivityLogoutRoute
+  '/': typeof IndexRoute
+  '/inactivity-logout': typeof InactivityLogoutRoute
+  '/account': typeof AuthenticatedAccountRoute
+  '/todo-list-admin': typeof AuthenticatedTodoListAdminRoute
+  '/todo-list-api': typeof AuthenticatedTodoListApiRoute
+  '/todo-list-server-function': typeof AuthenticatedTodoListServerFunctionRoute
   '/api/todos': typeof ApiTodosRoute
-  '/account': typeof AppAuthenticatedAccountRoute
-  '/todo-list-admin': typeof AppAuthenticatedTodoListAdminRoute
-  '/todo-list-api': typeof AppAuthenticatedTodoListApiRoute
-  '/todo-list-server-function': typeof AppAuthenticatedTodoListServerFunctionRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
-  '/_app': typeof AppRouteRouteWithChildren
-  '/_app/_authenticated': typeof AppAuthenticatedRouteRouteWithChildren
-  '/_app/inactivity-logout': typeof AppInactivityLogoutRoute
+  '/': typeof IndexRoute
+  '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
+  '/inactivity-logout': typeof InactivityLogoutRoute
+  '/_authenticated/account': typeof AuthenticatedAccountRoute
+  '/_authenticated/todo-list-admin': typeof AuthenticatedTodoListAdminRoute
+  '/_authenticated/todo-list-api': typeof AuthenticatedTodoListApiRoute
+  '/_authenticated/todo-list-server-function': typeof AuthenticatedTodoListServerFunctionRoute
   '/api/todos': typeof ApiTodosRoute
-  '/_app/': typeof AppIndexRoute
-  '/_app/_authenticated/account': typeof AppAuthenticatedAccountRoute
-  '/_app/_authenticated/todo-list-admin': typeof AppAuthenticatedTodoListAdminRoute
-  '/_app/_authenticated/todo-list-api': typeof AppAuthenticatedTodoListApiRoute
-  '/_app/_authenticated/todo-list-server-function': typeof AppAuthenticatedTodoListServerFunctionRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
     | '/inactivity-logout'
-    | '/api/todos'
     | '/account'
     | '/todo-list-admin'
     | '/todo-list-api'
     | '/todo-list-server-function'
+    | '/api/todos'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/inactivity-logout'
-    | '/api/todos'
     | '/account'
     | '/todo-list-admin'
     | '/todo-list-api'
     | '/todo-list-server-function'
+    | '/api/todos'
   id:
     | '__root__'
-    | '/_app'
-    | '/_app/_authenticated'
-    | '/_app/inactivity-logout'
+    | '/'
+    | '/_authenticated'
+    | '/inactivity-logout'
+    | '/_authenticated/account'
+    | '/_authenticated/todo-list-admin'
+    | '/_authenticated/todo-list-api'
+    | '/_authenticated/todo-list-server-function'
     | '/api/todos'
-    | '/_app/'
-    | '/_app/_authenticated/account'
-    | '/_app/_authenticated/todo-list-admin'
-    | '/_app/_authenticated/todo-list-api'
-    | '/_app/_authenticated/todo-list-server-function'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
-  AppRouteRoute: typeof AppRouteRouteWithChildren
+  IndexRoute: typeof IndexRoute
+  AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
+  InactivityLogoutRoute: typeof InactivityLogoutRoute
   ApiTodosRoute: typeof ApiTodosRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/_app': {
-      id: '/_app'
-      path: ''
-      fullPath: '/'
-      preLoaderRoute: typeof AppRouteRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/_app/': {
-      id: '/_app/'
+    '/': {
+      id: '/'
       path: '/'
       fullPath: '/'
-      preLoaderRoute: typeof AppIndexRouteImport
-      parentRoute: typeof AppRouteRoute
+      preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/_app/_authenticated': {
-      id: '/_app/_authenticated'
+    '/_authenticated': {
+      id: '/_authenticated'
       path: ''
       fullPath: '/'
-      preLoaderRoute: typeof AppAuthenticatedRouteRouteImport
-      parentRoute: typeof AppRouteRoute
+      preLoaderRoute: typeof AuthenticatedRouteRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/_app/inactivity-logout': {
-      id: '/_app/inactivity-logout'
+    '/inactivity-logout': {
+      id: '/inactivity-logout'
       path: '/inactivity-logout'
       fullPath: '/inactivity-logout'
-      preLoaderRoute: typeof AppInactivityLogoutRouteImport
-      parentRoute: typeof AppRouteRoute
+      preLoaderRoute: typeof InactivityLogoutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/account': {
+      id: '/_authenticated/account'
+      path: '/account'
+      fullPath: '/account'
+      preLoaderRoute: typeof AuthenticatedAccountRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/todo-list-admin': {
+      id: '/_authenticated/todo-list-admin'
+      path: '/todo-list-admin'
+      fullPath: '/todo-list-admin'
+      preLoaderRoute: typeof AuthenticatedTodoListAdminRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/todo-list-api': {
+      id: '/_authenticated/todo-list-api'
+      path: '/todo-list-api'
+      fullPath: '/todo-list-api'
+      preLoaderRoute: typeof AuthenticatedTodoListApiRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/todo-list-server-function': {
+      id: '/_authenticated/todo-list-server-function'
+      path: '/todo-list-server-function'
+      fullPath: '/todo-list-server-function'
+      preLoaderRoute: typeof AuthenticatedTodoListServerFunctionRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
     '/api/todos': {
       id: '/api/todos'
@@ -170,75 +186,31 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiTodosRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_app/_authenticated/account': {
-      id: '/_app/_authenticated/account'
-      path: '/account'
-      fullPath: '/account'
-      preLoaderRoute: typeof AppAuthenticatedAccountRouteImport
-      parentRoute: typeof AppAuthenticatedRouteRoute
-    }
-    '/_app/_authenticated/todo-list-admin': {
-      id: '/_app/_authenticated/todo-list-admin'
-      path: '/todo-list-admin'
-      fullPath: '/todo-list-admin'
-      preLoaderRoute: typeof AppAuthenticatedTodoListAdminRouteImport
-      parentRoute: typeof AppAuthenticatedRouteRoute
-    }
-    '/_app/_authenticated/todo-list-api': {
-      id: '/_app/_authenticated/todo-list-api'
-      path: '/todo-list-api'
-      fullPath: '/todo-list-api'
-      preLoaderRoute: typeof AppAuthenticatedTodoListApiRouteImport
-      parentRoute: typeof AppAuthenticatedRouteRoute
-    }
-    '/_app/_authenticated/todo-list-server-function': {
-      id: '/_app/_authenticated/todo-list-server-function'
-      path: '/todo-list-server-function'
-      fullPath: '/todo-list-server-function'
-      preLoaderRoute: typeof AppAuthenticatedTodoListServerFunctionRouteImport
-      parentRoute: typeof AppAuthenticatedRouteRoute
-    }
   }
 }
 
-interface AppAuthenticatedRouteRouteChildren {
-  AppAuthenticatedAccountRoute: typeof AppAuthenticatedAccountRoute
-  AppAuthenticatedTodoListAdminRoute: typeof AppAuthenticatedTodoListAdminRoute
-  AppAuthenticatedTodoListApiRoute: typeof AppAuthenticatedTodoListApiRoute
-  AppAuthenticatedTodoListServerFunctionRoute: typeof AppAuthenticatedTodoListServerFunctionRoute
+interface AuthenticatedRouteRouteChildren {
+  AuthenticatedAccountRoute: typeof AuthenticatedAccountRoute
+  AuthenticatedTodoListAdminRoute: typeof AuthenticatedTodoListAdminRoute
+  AuthenticatedTodoListApiRoute: typeof AuthenticatedTodoListApiRoute
+  AuthenticatedTodoListServerFunctionRoute: typeof AuthenticatedTodoListServerFunctionRoute
 }
 
-const AppAuthenticatedRouteRouteChildren: AppAuthenticatedRouteRouteChildren = {
-  AppAuthenticatedAccountRoute: AppAuthenticatedAccountRoute,
-  AppAuthenticatedTodoListAdminRoute: AppAuthenticatedTodoListAdminRoute,
-  AppAuthenticatedTodoListApiRoute: AppAuthenticatedTodoListApiRoute,
-  AppAuthenticatedTodoListServerFunctionRoute:
-    AppAuthenticatedTodoListServerFunctionRoute,
+const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedAccountRoute: AuthenticatedAccountRoute,
+  AuthenticatedTodoListAdminRoute: AuthenticatedTodoListAdminRoute,
+  AuthenticatedTodoListApiRoute: AuthenticatedTodoListApiRoute,
+  AuthenticatedTodoListServerFunctionRoute:
+    AuthenticatedTodoListServerFunctionRoute,
 }
 
-const AppAuthenticatedRouteRouteWithChildren =
-  AppAuthenticatedRouteRoute._addFileChildren(
-    AppAuthenticatedRouteRouteChildren,
-  )
-
-interface AppRouteRouteChildren {
-  AppAuthenticatedRouteRoute: typeof AppAuthenticatedRouteRouteWithChildren
-  AppInactivityLogoutRoute: typeof AppInactivityLogoutRoute
-  AppIndexRoute: typeof AppIndexRoute
-}
-
-const AppRouteRouteChildren: AppRouteRouteChildren = {
-  AppAuthenticatedRouteRoute: AppAuthenticatedRouteRouteWithChildren,
-  AppInactivityLogoutRoute: AppInactivityLogoutRoute,
-  AppIndexRoute: AppIndexRoute,
-}
-
-const AppRouteRouteWithChildren = AppRouteRoute._addFileChildren(
-  AppRouteRouteChildren,
-)
+const AuthenticatedRouteRouteWithChildren =
+  AuthenticatedRouteRoute._addFileChildren(AuthenticatedRouteRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
-  AppRouteRoute: AppRouteRouteWithChildren,
+  IndexRoute: IndexRoute,
+  AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
+  InactivityLogoutRoute: InactivityLogoutRoute,
   ApiTodosRoute: ApiTodosRoute,
 }
 export const routeTree = rootRouteImport
