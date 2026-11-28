@@ -3,11 +3,20 @@ import { createUtils } from "./createUtils";
 import { assert } from "../tools/tsafe/assert";
 import type { OptionallyAsyncGetterOrDirectValue } from "../tools/GetterOrDirectValue";
 
-export type OidcSpa<User, Excluded extends "withUser" | "withRuntimeConfigs" = never> = Omit<
+export type OidcSpa<
+    User,
+    IsClientOnly extends boolean = false,
+    Excluded extends "withUser" | "withRuntimeConfigs" | "withClientOnly" = never
+> = Omit<
     {
+        /**
+         * Enable client-only optimizations and suspensePromise. Components using
+         * these utilities must never render on the server, including at build time.
+         */
+        withClientOnly: () => OidcSpa<User, true, Excluded | "withClientOnly">;
         withUser: <User>(
             createClientUser: CreateClientUser<User>
-        ) => OidcSpa<User, Excluded | "withUser">;
+        ) => OidcSpa<User, IsClientOnly, Excluded | "withUser">;
     },
     Excluded
 > &
@@ -18,45 +27,56 @@ export type OidcSpa<User, Excluded extends "withUser" | "withRuntimeConfigs" = n
                       void,
                       RuntimeConfigs
                   >
-              ) => OidcSpa<User, Excluded | "withRuntimeConfigs">;
+              ) => OidcSpa<User, IsClientOnly, Excluded | "withRuntimeConfigs">;
           }
         : {}) &
     ("withRuntimeConfigs" extends Excluded
         ? {
-              createUtils: () => OidcSpaUtils<User>;
+              createUtils: () => OidcSpaUtils<User, IsClientOnly>;
           }
         : {});
 
-function createOidcSpa<User>(params: {
+function createOidcSpa<User, IsClientOnly extends boolean>(params: {
     createClientUser: CreateClientUser<User> | undefined;
     getRuntimeConfigsOrRuntimeConfigs:
         | OptionallyAsyncGetterOrDirectValue<void, RuntimeConfigs>
         | undefined;
-}): OidcSpa<User> {
+    isClientOnly: IsClientOnly;
+}): OidcSpa<User, IsClientOnly> {
     return {
+        withClientOnly: () =>
+            createOidcSpa({
+                createClientUser: params.createClientUser,
+                getRuntimeConfigsOrRuntimeConfigs: params.getRuntimeConfigsOrRuntimeConfigs,
+                isClientOnly: true
+            }),
         withUser: createClientUser =>
             createOidcSpa({
                 createClientUser,
-                getRuntimeConfigsOrRuntimeConfigs: params.getRuntimeConfigsOrRuntimeConfigs
+                getRuntimeConfigsOrRuntimeConfigs: params.getRuntimeConfigsOrRuntimeConfigs,
+                isClientOnly: params.isClientOnly
             }) as any,
         // @ts-expect-error
         withRuntimeConfigs: getRuntimeConfigsOrRuntimeConfigs =>
             createOidcSpa({
                 createClientUser: params.createClientUser,
-                getRuntimeConfigsOrRuntimeConfigs
+                getRuntimeConfigsOrRuntimeConfigs,
+                isClientOnly: params.isClientOnly
             }) as any,
         createUtils: () => {
             assert(params.createClientUser !== undefined);
             assert(params.getRuntimeConfigsOrRuntimeConfigs !== undefined);
             return createUtils({
                 createClientUser: params.createClientUser,
-                getRuntimeConfigsOrRuntimeConfigs: params.getRuntimeConfigsOrRuntimeConfigs
+                getRuntimeConfigsOrRuntimeConfigs: params.getRuntimeConfigsOrRuntimeConfigs,
+                isClientOnly: params.isClientOnly
             });
         }
     };
 }
 
-export const oidcSpa = createOidcSpa<unknown>({
+export const oidcSpa = createOidcSpa<unknown, false>({
     createClientUser: undefined,
-    getRuntimeConfigsOrRuntimeConfigs: undefined
+    getRuntimeConfigsOrRuntimeConfigs: undefined,
+    isClientOnly: false
 });

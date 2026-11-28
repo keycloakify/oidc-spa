@@ -48,12 +48,8 @@ export function createHandleClientEntrypoint(params: {
         applicationEntrypointImportSpecifier: string;
     }): string {
         const { applicationEntrypointImportSpecifier } = params;
-        const {
-            browserRuntimeFreeze,
-            tokenSubstitution,
-            DPoP,
-            useLegacyRedirectUri = false
-        } = oidcSpaVitePluginParams ?? {};
+        const { browserRuntimeFreeze, tokenSubstitution, DPoP, enableRoutingCookie, redirectUriPath } =
+            oidcSpaVitePluginParams ?? {};
 
         return [
             // prettier-ignore

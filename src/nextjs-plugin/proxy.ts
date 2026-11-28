@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse, type NextProxy } from "next/server.js";
 import type { ProxyMatcher } from "next/dist/build/analysis/get-page-static-info.js";
 import { getMiddlewareRouteMatcher } from "next/dist/shared/lib/router/utils/middleware-route-matcher.js";
-import { getStateDataCookies } from "../core/StateDataCookie";
+import { getRootingCookies } from "../core/RoutingCookie";
 import { getIsOidcSpaStateUrlParamValue } from "../core/StateData";
 import { REDIRECT_URI_RESERVED_PATH } from "../core/validRedirectUri";
 
@@ -21,10 +21,10 @@ export async function proxy(request: NextRequest) {
         return NextResponse.next();
     }
 
-    const { stateDataCookies } = getStateDataCookies({
+    const { routingCookies } = getRootingCookies({
         cookieHeaderParamValue: request.headers.get("cookie")
     });
-    const entry = stateDataCookies.find(entry => entry.stateUrlParamValue === stateUrlParamValue);
+    const entry = routingCookies.find(entry => entry.stateUrlParamValue === stateUrlParamValue);
 
     const url = new URL(request.url);
     const basePath = request.nextUrl.basePath;
@@ -38,7 +38,7 @@ export async function proxy(request: NextRequest) {
         }
         rootRelativeReturnToUrl = `${basePath}/`;
     } else {
-        rootRelativeReturnToUrl = entry.stateDataCookie.rootRelativeReturnToUrl;
+        rootRelativeReturnToUrl = entry.routingCookie.rootRelativeReturnToUrl;
     }
 
     if (!rootRelativeReturnToUrl.startsWith("/") || !URL.canParse(rootRelativeReturnToUrl, url.origin)) {

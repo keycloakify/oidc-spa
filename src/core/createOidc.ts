@@ -51,7 +51,7 @@ import {
     notifyNewInstanceThatCantUseIframes
 } from "./instancesThatCantUseIframes";
 import { ensureNonBlankPaint } from "../tools/ensureNonBlankPaint";
-import { setStateDataCookie, clearStateDataCookie } from "./StateDataCookie";
+import { setRoutingCookie, clearRoutingCookie } from "./RoutingCookie";
 import {
     loadWebcryptoLinerShim,
     hasLoadWebcryptoLinerShimBeenCalled
@@ -66,10 +66,8 @@ import { addOrUpdateSearchParam } from "../tools/urlSearchParams";
 import { deepLinkToRootRelativeUrl } from "../tools/deepLinkToRootRelativeUrl";
 import { simulateUserInteraction as resetAutoLogoutCountdown } from "../tools/getPrUserInteraction";
 import { Mutex } from "../tools/async-mutex";
-import { getValidRedirectUri } from "./validRedirectUri";
-import { getHomeUrl_earlyInit } from "./earlyInit_homeUrl";
 import { getIsDeepLink } from "../tools/isDeepLink";
-import { getSsr_earlyInit } from "./earlyInit_ssr";
+import { getHomeUrlAndValidRedirectUri } from "./earlyInit_homeUrlAndValidRedirectUri";
 
 // NOTE: Replaced at build time
 const VERSION = "{{OIDC_SPA_VERSION}}";
@@ -96,6 +94,7 @@ export namespace Exports_earlyInit {
         getRedirectAuthResponse: () =>
             | { authResponse: AuthResponse; clearAuthResponse: () => void }
             | { authResponse: undefined; clearAuthResponse?: never };
+        enableRoutingCookie: boolean;
     };
 }
 
@@ -215,10 +214,8 @@ export async function createOidc<User = undefined>(
 
         const scopes = Array.from(new Set(["openid", ...(params.scopes ?? ["profile"])]));
 
-        const ssr = getSsr_earlyInit();
-
         const response_mode = (() => {
-            if (ssr) {
+            if (exports_earlyInit.enableRoutingCookie) {
                 return "query";
             }
             return isKeycloak({ issuerUri: issuerUri }) &&
@@ -227,7 +224,7 @@ export async function createOidc<User = undefined>(
                 : "query";
         })();
 
-        const homeUrl = getHomeUrl_earlyInit();
+        const { homeUrl, validRedirectUri } = getHomeUrlAndValidRedirectUri();
 
         const getAuthorizationParams = (():
             | ((params: { isNonInteractive: boolean }) => Record<string, string | string[] | undefined>)
@@ -270,7 +267,7 @@ export async function createOidc<User = undefined>(
                 const { audience, resource } = getAuthorizationAudienceAndResourceParamsValues({
                     oidcProviderMetadata,
                     clientId,
-                    homeUrl,
+                    validRedirectUri,
                     scopes,
                     response_mode,
                     transformAuthorizationUrl_paramOfCreateOidc: params.transformAuthorizationUrl,
@@ -372,7 +369,7 @@ export async function createOidc<User = undefined>(
             `createOidc v${VERSION} ${JSON.stringify(
                 {
                     ...configId_seed,
-                    validRedirectUri: getValidRedirectUri({ homeUrl })
+                    validRedirectUri
                 },
                 null,
                 2
@@ -390,7 +387,7 @@ export async function createOidc<User = undefined>(
                 oidcProviderMetadata,
                 exports_earlyInit,
                 homeUrl,
-                ssr,
+                validRedirectUri,
                 response_mode,
                 scopes,
                 isFirstInstance: prOidcByConfigId.size === 1,
@@ -441,7 +438,7 @@ export async function createOidc_nonMemoized<User>(params: {
         oidcProviderMetadata: OidcProviderMetadata | undefined;
         exports_earlyInit: Exports_earlyInit.ShouldLoadApp;
         homeUrl: string;
-        ssr: boolean;
+        validRedirectUri: string;
         response_mode: "fragment" | "query";
         scopes: string[];
         isFirstInstance: boolean;
@@ -468,14 +465,14 @@ export async function createOidc_nonMemoized<User>(params: {
         tokenParams,
         oidcProviderMetadata,
         homeUrl,
-        ssr,
+        validRedirectUri,
         response_mode,
         scopes,
         isFirstInstance,
         log
     } = params_preProcesses;
 
-    const { getEvtIframeAuthResponse, getRedirectAuthResponse } = exports_earlyInit;
+    const { getEvtIframeAuthResponse, getRedirectAuthResponse, enableRoutingCookie } = exports_earlyInit;
 
     const { value: exports_tokenSubstitution } = globalContext.dExports_tokenSubstitution.getState();
 
@@ -724,9 +721,9 @@ export async function createOidc_nonMemoized<User>(params: {
             stateUrlParamValue: stateUrlParamValue_instance,
             authority: issuerUri,
             client_id: clientId,
-            redirect_uri: getValidRedirectUri({ homeUrl }),
-            silent_redirect_uri: getValidRedirectUri({ homeUrl }),
-            post_logout_redirect_uri: getValidRedirectUri({ homeUrl }),
+            redirect_uri: validRedirectUri,
+            silent_redirect_uri: validRedirectUri,
+            post_logout_redirect_uri: validRedirectUri,
             response_mode,
             response_type: "code",
             scope: scopes.join(" "),
@@ -778,12 +775,12 @@ export async function createOidc_nonMemoized<User>(params: {
 
     const { loginOrStartAuthorization } = createLoginOrStartAuthorization({
         configId,
-        ssr,
         oidcClientTsUserManager,
         transformAuthorizationUrl_paramOfCreateOidc: transformAuthorizationUrl,
         getAuthorizationParams_paramsOfCreateOidc: getAuthorizationParams,
         tokenParams,
         homeUrl,
+        enableRoutingCookie,
         stateUrlParamValue_instance,
         evtInitializationOutcomeUserNotLoggedIn,
         log
@@ -893,7 +890,7 @@ export async function createOidc_nonMemoized<User>(params: {
 
                         const authResponseUrl = authResponseToUrl(authResponse);
 
-                        clearStateDataCookie({ homeUrl, stateUrlParamValue: authResponse.state });
+                        clearRoutingCookie({ homeUrl, stateUrlParamValue: authResponse.state });
 
                         let oidcClientTsUser: OidcClientTsUser | undefined = undefined;
 
@@ -1092,7 +1089,7 @@ export async function createOidc_nonMemoized<User>(params: {
                     assert(authorization_endpoint !== undefined, "39447394");
 
                     return (await import("./diagnostic")).createIframeTimeoutInitializationError({
-                        redirectUri: getValidRedirectUri({ homeUrl }),
+                        redirectUri: validRedirectUri,
                         clientId,
                         issuerUri,
                         authorizationEndpointUrl: authorization_endpoint
@@ -1118,7 +1115,7 @@ export async function createOidc_nonMemoized<User>(params: {
                     )}`
                 );
 
-                clearStateDataCookie({ homeUrl, stateUrlParamValue: authResponse_iframe.state });
+                clearRoutingCookie({ homeUrl, stateUrlParamValue: authResponse_iframe.state });
 
                 try {
                     oidcClientTsUser = await oidcClientTsUserManager.signinRedirectCallback(
@@ -1230,7 +1227,7 @@ export async function createOidc_nonMemoized<User>(params: {
     const oidc_common: Oidc.Common = {
         issuerUri,
         clientId,
-        validRedirectUri: getValidRedirectUri({ homeUrl })
+        validRedirectUri
     };
 
     not_loggedIn_case: {
@@ -1287,7 +1284,7 @@ export async function createOidc_nonMemoized<User>(params: {
                                 "IMPORTANT DEBUG INFO:",
                                 "\nWe are about to redirect to your Identity Provider (IdP).",
                                 "\nIf you see an 'Invalid Redirect URI' error on the IdP page, make sure you've added:",
-                                `\n${getValidRedirectUri({ homeUrl })}`,
+                                `\n${validRedirectUri}`,
                                 "\nto the list of valid redirect URIs in your IdP configuration.",
                                 "\nIf you see a 'Client not found' error make sure you've created the flowing OIDC client:",
                                 `\n${clientId}`
@@ -1510,7 +1507,7 @@ export async function createOidc_nonMemoized<User>(params: {
                     {
                         const { authResponse } = result_loginSilent;
 
-                        clearStateDataCookie({ homeUrl, stateUrlParamValue: authResponse.state });
+                        clearRoutingCookie({ homeUrl, stateUrlParamValue: authResponse.state });
 
                         const authResponse_error = authResponse.error;
 
@@ -1629,7 +1626,7 @@ export async function createOidc_nonMemoized<User>(params: {
         getTokens: (): Promise<OidcTokens> => oidc_loggedIn.getTokens(),
         issuerUri,
         clientId,
-        validRedirectUri: getValidRedirectUri({ homeUrl }),
+        validRedirectUri,
         oidcProviderMetadata,
         renewTokens
     });
@@ -1923,7 +1920,7 @@ export async function createOidc_nonMemoized<User>(params: {
                     "IMPORTANT DEBUG INFO:",
                     "\nWe are about to redirect to your Identity Provider (IdP).",
                     "\nIf you see an 'Invalid Redirect URI' error on the IdP page, make sure you've added:",
-                    `\n${getValidRedirectUri({ homeUrl })}`,
+                    `\n${validRedirectUri}`,
                     "\nto the list of valid post logout redirect URIs in your IdP configuration."
                 ].join(" ")
             );
@@ -1935,11 +1932,11 @@ export async function createOidc_nonMemoized<User>(params: {
                 location.reload();
             });
 
-            if (ssr) {
-                setStateDataCookie({
+            if (enableRoutingCookie) {
+                setRoutingCookie({
                     homeUrl,
                     stateUrlParamValue_instance,
-                    stateDataCookie: {
+                    routingCookie: {
                         rootRelativeReturnToUrl
                     }
                 });

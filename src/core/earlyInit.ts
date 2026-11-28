@@ -2,13 +2,14 @@ import { getStateData, getIsOidcSpaStateUrlParamValue } from "./StateData";
 import { assert, type Equals } from "../tools/tsafe/assert";
 import { typeGuard } from "../tools/tsafe/typeGuard";
 import type { AuthResponse } from "./AuthResponse";
-import { getHomeUrl_earlyInit, setHomeUrl_earlyInit } from "./earlyInit_homeUrl";
 import { isBrowser } from "../tools/isBrowser";
 import { createEvt, type Evt } from "../tools/Evt";
 import { setRootRelativeOriginalLocationHref_earlyInit } from "./earlyInit_rootRelativeOriginalLocationHref";
 import { prModuleCreateOidc } from "./earlyInit_prModuleCreateOidc";
-import { getValidRedirectUri, enableCompatibilityModeHomeAsRedirectUri } from "./validRedirectUri";
-import { setSsr_earlyInit } from "./earlyInit_ssr";
+import {
+    setHomeUrlAndValidRedirectUri,
+    getHomeUrlAndValidRedirectUri
+} from "./earlyInit_homeUrlAndValidRedirectUri";
 
 const IFRAME_MESSAGE_PREFIX = "oidc-spa:cross-window-messaging:";
 
@@ -26,15 +27,17 @@ export type ParamsOfEarlyInit = {
         enableTokenSubstitution?: () => void;
     };
 
-    ssr?: boolean;
+    /** Default: false */
+    enableRoutingCookie?: boolean;
 
     /**
-     * Use the application home URL, including its base path, as the redirect URI
-     * to preserve existing IAM registrations when migrating from oidc-spa v10.
-     * Defaults to false: the redirect URI is /openid-callback/ under the base path.
-     * Not supported with TanStack Start in SPA mode.
-     */
-    useLegacyRedirectUri?: boolean;
+     * Default "/", can be for example "/openid-callback/"
+     * You do not need to create this route in your application.
+     * It's handled internally.
+     * We offer this option only to facilitate CND routing in certain
+     * deployment scenario.
+     * */
+    redirectUriPath?: string;
 };
 
 let shouldLoadApp: boolean | undefined = undefined;
@@ -50,18 +53,18 @@ export function oidcEarlyInit(params: ParamsOfEarlyInit) {
 }
 
 function oidcEarlyInit_nonMemoized(params: ParamsOfEarlyInit) {
-    const { ssr = false, BASE_URL, securityDefenses = {}, useLegacyRedirectUri = false } = params;
+    const {
+        BASE_URL,
+        securityDefenses = {},
+        enableRoutingCookie = false,
+        redirectUriPath = "/"
+    } = params;
 
     if (!isBrowser) {
         return { shouldLoadApp: true };
     }
 
-    setHomeUrl_earlyInit({ BASE_URL });
-    setSsr_earlyInit({ ssr });
-
-    if (useLegacyRedirectUri) {
-        enableCompatibilityModeHomeAsRedirectUri();
-    }
+    setHomeUrlAndValidRedirectUri({ BASE_URL, redirectUriPath });
 
     const { shouldLoadApp } = handleOidcCallback();
 
@@ -155,7 +158,8 @@ function oidcEarlyInit_nonMemoized(params: ParamsOfEarlyInit) {
                               redirectAuthResponse = undefined;
                           }
                       };
-            }
+            },
+            enableRoutingCookie
         };
     } else {
         exports_earlyInit = {
@@ -175,8 +179,7 @@ let redirectAuthResponse: AuthResponse | undefined = undefined;
 function handleOidcCallback(): { shouldLoadApp: boolean } {
     const originalLocationHref_obj = new URL(window.location.href);
 
-    const homeUrl = getHomeUrl_earlyInit();
-    const validRedirectUri = getValidRedirectUri({ homeUrl });
+    const { homeUrl, validRedirectUri } = getHomeUrlAndValidRedirectUri();
 
     const areWeOnTheCallbackUrl = (() => {
         const removeQueryAndHash = (url: string) => {
@@ -240,7 +243,7 @@ function handleOidcCallback(): { shouldLoadApp: boolean } {
 
     const toRootRelative = (url: string) => url.slice(new URL(url).origin.length);
 
-    const { hasAuthResponseInUrl, responseMode } = (() => {
+    const { hasStateParamInUrl, responseMode } = (() => {
         fragment: {
             const stateUrlParamValue = readUrlParameter({ from: "fragment", name: "state" });
 
@@ -249,7 +252,7 @@ function handleOidcCallback(): { shouldLoadApp: boolean } {
             }
 
             return {
-                hasAuthResponseInUrl: true,
+                hasStateParamInUrl: true,
                 responseMode: "fragment"
             } as const;
         }
@@ -270,15 +273,15 @@ function handleOidcCallback(): { shouldLoadApp: boolean } {
             }
 
             return {
-                hasAuthResponseInUrl: true,
+                hasStateParamInUrl: true,
                 responseMode: "query"
             } as const;
         }
-        return { hasAuthResponseInUrl: false } as const;
+        return { hasStateParamInUrl: false } as const;
     })();
 
     const getRootRelativeOriginalLocationHref_withAuthResponseCleared = () => {
-        assert(hasAuthResponseInUrl, "3922");
+        assert(hasStateParamInUrl, "3922");
 
         const url_obj = new URL(originalLocationHref_obj.href);
 
@@ -307,10 +310,10 @@ function handleOidcCallback(): { shouldLoadApp: boolean } {
 
         switch (responseMode) {
             case "fragment":
-                url_obj.hash = `#${urlSearchParams}`;
+                url_obj.hash = urlSearchParams.toString();
                 break;
             case "query":
-                url_obj.search = `?${urlSearchParams}`;
+                url_obj.search = urlSearchParams.toString();
                 break;
             default:
                 assert<Equals<typeof responseMode, never>>(false);
@@ -322,7 +325,7 @@ function handleOidcCallback(): { shouldLoadApp: boolean } {
     if (!areWeOnTheCallbackUrl) {
         // See: https://github.com/keycloakify/keycloak-account-ui/issues/10
         special_compat_case: {
-            if (!hasAuthResponseInUrl) {
+            if (!hasStateParamInUrl) {
                 break special_compat_case;
             }
 
@@ -360,7 +363,7 @@ function handleOidcCallback(): { shouldLoadApp: boolean } {
 
     block_rogue_authorization: {
         do_not_block_if_state_is_from_oidc_spa: {
-            if (!hasAuthResponseInUrl) {
+            if (!hasStateParamInUrl) {
                 break do_not_block_if_state_is_from_oidc_spa;
             }
 
@@ -391,7 +394,27 @@ function handleOidcCallback(): { shouldLoadApp: boolean } {
         return { shouldLoadApp: false };
     }
 
-    if (!hasAuthResponseInUrl) {
+    handle_not_for_us: {
+        const isForUs = (() => {
+            if (!hasStateParamInUrl) {
+                return false;
+            }
+
+            const stateUrlParamValue = readUrlParameter({ from: responseMode, name: "state" });
+
+            assert(stateUrlParamValue !== undefined);
+
+            const isOidcSpaState = getIsOidcSpaStateUrlParamValue({
+                maybeStateUrlParamValue: stateUrlParamValue
+            });
+
+            return isOidcSpaState;
+        })();
+
+        if (isForUs) {
+            break handle_not_for_us;
+        }
+
         if (homeUrl === validRedirectUri) {
             const rootRelativeOriginalLocationHref = toRootRelative(originalLocationHref_obj.href);
 
@@ -410,6 +433,8 @@ function handleOidcCallback(): { shouldLoadApp: boolean } {
 
         return { shouldLoadApp: true };
     }
+
+    assert(hasStateParamInUrl, "3940");
 
     const authResponse = readAllUrlParameters({ from: responseMode });
 

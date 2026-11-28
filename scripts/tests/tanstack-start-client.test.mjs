@@ -240,6 +240,72 @@ function assertFailedInitialization(state, error) {
     assert.equal(state.validRedirectUri, undefined);
 }
 
+for (const clientOnly of [false, true]) {
+    test(`react: server rendering stays pending without initializing auth, clientOnly=${clientOnly}`, () => {
+        const f = fixture({ browser: false });
+        const builder = clientOnly ? f.reactSpa.withClientOnly() : f.reactSpa;
+        let configCalls = 0;
+        const utils = builder
+            .withUser(() => ({}))
+            .withRuntimeConfigs(() => {
+                configCalls++;
+                throw new Error("Runtime configuration must not be read on the server");
+            })
+            .createUtils();
+        const state = f.render(utils.useOidc);
+        assert.equal(state.isOidcReady, false);
+        assert.equal(state.initializationError, undefined);
+        assert.throws(() => state.suspensePromise, /requires \.withClientOnly\(\).*browser/);
+        f.commit();
+        assert.equal(configCalls, 0);
+        assert.equal(f.record.coreCalls, 0);
+    });
+}
+
+test("react: default mode preserves the pending hydration render even when auth is ready", async () => {
+    const f = fixture({ loggedIn: false });
+    const utils = f.reactSpa
+        .withUser(() => ({}))
+        .withRuntimeConfigs({ mode: "real", issuerUri: "https://issuer.test", clientId: "client" })
+        .createUtils();
+    await utils.getOidc();
+    const state = f.render(utils.useOidc);
+    assert.equal(state.isOidcReady, false);
+    assert.equal(state.initializationError, undefined);
+    assert.throws(() => state.suspensePromise, /requires \.withClientOnly\(\)/);
+    assert.equal(Object.keys(state).includes("suspensePromise"), false);
+    f.commit();
+    assert.equal(f.render(utils.useOidc).isOidcReady, true);
+});
+
+test("react: client-only mode exposes initialized auth without waiting for a mount effect", async () => {
+    const f = fixture({ loggedIn: false });
+    const utils = f.reactSpa
+        .withClientOnly()
+        .withUser(() => ({}))
+        .withRuntimeConfigs({ mode: "real", issuerUri: "https://issuer.test", clientId: "client" })
+        .createUtils();
+    await utils.getOidc();
+    const state = f.render(utils.useOidc);
+    assert.equal(state.isOidcReady, true);
+    assert.equal(state.isUserLoggedIn, false);
+});
+
+test("react: client-only Suspense initializes auth without committing the suspended render", async () => {
+    const f = fixture({ loggedIn: false });
+    const utils = f.reactSpa
+        .withClientOnly()
+        .withUser(() => ({}))
+        .withRuntimeConfigs({ mode: "real", issuerUri: "https://issuer.test", clientId: "client" })
+        .createUtils();
+    const state = f.render(utils.useOidc);
+    assert.equal(state.isOidcReady, false);
+    assert.equal(f.record.coreCalls, 0);
+    await state.suspensePromise;
+    assert.equal(f.record.coreCalls, 1);
+    assert.equal(f.render(utils.useOidc).isOidcReady, true);
+});
+
 for (const asynchronous of [false, true]) {
     test(`configuration errors reach navigation boundaries, async=${asynchronous}`, async () => {
         const f = fixture();
@@ -311,6 +377,8 @@ for (const adapter of ["react", "tanstack-start"]) {
         assertFailedInitialization(f.render(utils.useOidc), initializationError);
         if (adapter === "react") {
             const Protected = utils.withLoginEnforced({ component() {} });
+            assert.equal(f.render(Protected), null);
+            f.commit();
             assert.equal(f.render(Protected).props.role, "alert");
         }
         await assert.rejects(enforceLogin(utils), error => error === initializationError);

@@ -14,14 +14,14 @@ import { assert, type Equals } from "../tools/tsafe/assert";
 
 export type { IdTokenClaims, OidcProviderMetadata, OidcUserInfo, OidcTokens, Oidc, AutoLogoutState };
 
-export type UseOidc<User> = {
-    (params?: { assert?: undefined }): Oidc_react<User>;
+export type UseOidc<User, IsClientOnly extends boolean = false> = {
+    (params?: { assert?: undefined }): Oidc_react<User, IsClientOnly>;
     (params: { assert: "user logged in" }): Oidc_react.LoggedIn<User>;
     (params: { assert: "user not logged in" }): Oidc_react.NotLoggedIn;
 };
 
-export type Oidc_react<User> =
-    | (Oidc_react.NotReady & {
+export type Oidc_react<User, IsClientOnly extends boolean = false> =
+    | (Oidc_react.NotReady<IsClientOnly> & {
           isUserLoggedIn?: never;
           issuerUri?: never;
           clientId?: never;
@@ -54,14 +54,17 @@ export type Oidc_react<User> =
       });
 
 export namespace Oidc_react {
-    export type NotReady = {
+    export type NotReady<IsClientOnly extends boolean = false> = {
         isOidcReady: false;
-        suspensePromise: Promise<void | never>;
         autoLogoutState: {
             shouldDisplayWarning: false;
         };
         initializationError: OidcInitializationError | undefined;
-    };
+    } & (IsClientOnly extends true
+        ? {
+              suspensePromise: Promise<void | never>;
+          }
+        : {});
 
     export type NotLoggedIn = {
         isOidcReady: true;
@@ -142,8 +145,8 @@ export namespace RuntimeConfigs {
     };
 }
 
-export type OidcSpaUtils<User> = {
-    useOidc: UseOidc<User>;
+export type OidcSpaUtils<User, IsClientOnly extends boolean = false> = {
+    useOidc: UseOidc<User, IsClientOnly>;
     getOidc: GetOidc<User>;
     enforceLogin: (loaderContext: LoaderContext) => Promise<void | never>;
     withLoginEnforced: <Props extends Record<string, unknown>>(params: {

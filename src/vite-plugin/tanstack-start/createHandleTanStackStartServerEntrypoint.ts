@@ -1,4 +1,4 @@
-import type { ResolvedConfig } from "vite";
+import type { HandlerFactoryParams } from "../handlers";
 import type { PluginContext } from "rollup";
 import { promises as fs } from "node:fs";
 import * as path from "node:path";
@@ -18,8 +18,8 @@ type EntryResolution = {
 
 const ORIGINAL_QUERY_PARAM = "oidc-spa-original";
 
-export function createHandleTanStackStartServerEntrypoint(params: { resolvedConfig: ResolvedConfig }) {
-    const { resolvedConfig } = params;
+export function createHandleTanStackStartServerEntrypoint(params: HandlerFactoryParams) {
+    const { resolvedConfig, oidcSpaVitePluginParams } = params;
 
     const entryResolution = (() => {
         const { root } = resolvedConfig;
@@ -83,7 +83,13 @@ export function createHandleTanStackStartServerEntrypoint(params: { resolvedConf
             )}?${ORIGINAL_QUERY_PARAM}=true";`,
             `import { withOidcSpaServerEntry } from "oidc-spa/tanstack-start/server-entry";`,
             ``,
-            `const serverEntry = withOidcSpaServerEntry(serverEntry_original);`,
+            `const serverEntry = withOidcSpaServerEntry({`,
+            `    serverEntry_original,`,
+            `    resolvedConfigBase: ${JSON.stringify(resolvedConfig.base)},`,
+            `    oidcSpaVitePluginParams_redirectUriPath: ${
+                JSON.stringify(oidcSpaVitePluginParams.redirectUriPath) ?? "undefined"
+            }`,
+            `});`,
             ``,
             `export default serverEntry;`
         ].join("\n");

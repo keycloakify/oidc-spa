@@ -10,11 +10,10 @@ import { addOrUpdateSearchParam, getAllSearchParams } from "../tools/urlSearchPa
 import { getIsOnline } from "../tools/getIsOnline";
 import { isNetworkError } from "../tools/isNetworkError";
 import { OidcInitializationError } from "./OidcInitializationError";
-import { setStateDataCookie } from "./StateDataCookie";
+import { setRoutingCookie } from "./RoutingCookie";
 import type { OidcProviderMetadata } from "./types";
 import { getIsDeepLink } from "../tools/isDeepLink";
 import { deepLinkToRootRelativeUrl } from "../tools/deepLinkToRootRelativeUrl";
-import { getValidRedirectUri } from "./validRedirectUri";
 
 const globalContext = {
     evtHasLoginBeenCalled: createStatefulEvt(() => false)
@@ -64,7 +63,6 @@ export function getPrSafelyRestoredFromBfCacheAfterLoginBackNavigationOrInitiali
 
 export function createLoginOrStartAuthorization(params: {
     configId: string;
-    ssr: boolean;
     oidcClientTsUserManager: OidcClientTsUserManager;
     transformAuthorizationUrl_paramOfCreateOidc:
         | ((params: { authorizationUrl: string; isNonInteractive: boolean }) => string)
@@ -77,6 +75,7 @@ export function createLoginOrStartAuthorization(params: {
     tokenParams: Record<string, string | string[] | undefined> | undefined;
 
     homeUrl: string;
+    enableRoutingCookie: boolean;
     stateUrlParamValue_instance: string;
     evtInitializationOutcomeUserNotLoggedIn: NonPostableEvt<void>;
 
@@ -84,7 +83,6 @@ export function createLoginOrStartAuthorization(params: {
 }) {
     const {
         configId,
-        ssr,
         oidcClientTsUserManager,
 
         transformAuthorizationUrl_paramOfCreateOidc,
@@ -92,6 +90,7 @@ export function createLoginOrStartAuthorization(params: {
         tokenParams,
 
         homeUrl,
+        enableRoutingCookie,
         stateUrlParamValue_instance,
         evtInitializationOutcomeUserNotLoggedIn,
 
@@ -217,11 +216,11 @@ export function createLoginOrStartAuthorization(params: {
             }
         })();
 
-        if (ssr) {
-            setStateDataCookie({
+        if (enableRoutingCookie) {
+            setRoutingCookie({
                 homeUrl,
                 stateUrlParamValue_instance,
-                stateDataCookie: {
+                routingCookie: {
                     rootRelativeReturnToUrl
                 }
             });
@@ -518,7 +517,7 @@ export function transformAuthorizationUrl_internal(params: {
 export function getAuthorizationAudienceAndResourceParamsValues(params: {
     oidcProviderMetadata: Pick<OidcProviderMetadata, "authorization_endpoint">;
     clientId: string;
-    homeUrl: string;
+    validRedirectUri: string;
     scopes: string[];
     response_mode: "fragment" | "query";
     transformAuthorizationUrl_paramOfCreateOidc:
@@ -535,7 +534,7 @@ export function getAuthorizationAudienceAndResourceParamsValues(params: {
     const {
         oidcProviderMetadata,
         clientId,
-        homeUrl,
+        validRedirectUri,
         scopes,
         response_mode,
         transformAuthorizationUrl_paramOfCreateOidc,
@@ -557,7 +556,7 @@ export function getAuthorizationAudienceAndResourceParamsValues(params: {
                             case "client_id":
                                 return clientId;
                             case "redirect_uri":
-                                return getValidRedirectUri({ homeUrl });
+                                return validRedirectUri;
                             case "response_type":
                                 return "code";
                             case "scope":

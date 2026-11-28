@@ -30,7 +30,10 @@ export function createTanstackStartHandlers(params: HandlerFactoryParams): Handl
         ssr
     });
     const runtimeConfigs = createHandleTanstackStartRuntimeConfigs({ resolvedConfig });
-    const serverEntrypoint = createHandleTanStackStartServerEntrypoint({ resolvedConfig });
+    const serverEntrypoint = createHandleTanStackStartServerEntrypoint({
+        resolvedConfig,
+        oidcSpaVitePluginParams
+    });
     const clientOutput =
         resolvedConfig.command === "build"
             ? createHandleTanstackStartClientOutput({

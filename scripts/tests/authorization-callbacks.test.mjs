@@ -52,7 +52,7 @@ function load(source, globals = {}) {
 // callback handling, state parsing, cookies and the server entry run unchanged.
 const callbackSource = await bundle(
     `
-    export * from "./src/core/StateDataCookie";
+    export * from "./src/core/RoutingCookie";
     export { oidcEarlyInit } from "./src/entrypoint";
     export { getRootRelativeOriginalLocationHref_earlyInit } from "./src/core/earlyInit_rootRelativeOriginalLocationHref";
     export { withOidcSpaServerEntry } from "./src/tanstack-start-react/withOidcSpaServerEntry";
@@ -68,8 +68,8 @@ const state = "b2lkYy1zcGEu".padEnd(32, "a");
 const destination = "/app/account-auth0?tab=security#methods";
 const cookieValue = `${Math.floor(Date.now() / 1000)}%_${encodeURIComponent(destination)}`;
 
-function browser(authResponse, data, { legacyRedirect = false, responseMode = "query" } = {}) {
-    const location = new URL(`https://app.test/app/${legacyRedirect ? "" : "openid-callback/"}`);
+function browser(authResponse, data, { redirectUriPath = "/", responseMode = "query" } = {}) {
+    const location = new URL(`https://app.test/app/${redirectUriPath.slice(1)}`);
     location[responseMode === "query" ? "search" : "hash"] = new URLSearchParams(
         authResponse
     ).toString();
@@ -93,7 +93,10 @@ function browser(authResponse, data, { legacyRedirect = false, responseMode = "q
         navigator: {},
         parent,
         top: parent,
-        localStorage: { getItem: key => (key === `oidc.${state}` ? JSON.stringify({ data }) : null) },
+        localStorage: {
+            getItem: key =>
+                key === `oidc.${state}` && data !== undefined ? JSON.stringify({ data }) : null
+        },
         registerEarlyInit: exports => {
             record.earlyInit = exports;
         }
@@ -123,20 +126,21 @@ for (const legacy of [false, true]) {
                 JSON.stringify(authResponse)
             );
 
-            const cookie = `oidc_${state}=${cookieValue}${legacy ? "%_%2Fapp%2Fpublic" : ""}`;
-            const parsed = api.getStateDataCookies({ cookieHeaderParamValue: cookie });
+            const cookie = `oidc_rte_${state}=${cookieValue}${legacy ? "%_%2Fapp%2Fpublic" : ""}`;
+            const parsed = api.getRootingCookies({ cookieHeaderParamValue: cookie });
             assert.equal(parsed.unparsableCookieNames.length, 0);
-            assert.equal(
-                parsed.stateDataCookies[0].stateDataCookie.rootRelativeReturnToUrl,
-                destination
-            );
+            assert.equal(parsed.routingCookies[0].routingCookie.rootRelativeReturnToUrl, destination);
 
             let renderedRequest;
             const server = api.withOidcSpaServerEntry({
-                fetch: request => {
-                    renderedRequest = request;
-                    return Response.json({ ok: true });
-                }
+                serverEntry_original: {
+                    fetch: request => {
+                        renderedRequest = request;
+                        return Response.json({ ok: true });
+                    }
+                },
+                resolvedConfigBase: "/app/",
+                oidcSpaVitePluginParams_redirectUriPath: "/openid-callback/"
             });
             await server.fetch(
                 new Request(
@@ -146,7 +150,7 @@ for (const legacy of [false, true]) {
                     }
                 )
             );
-            assert.equal(renderedRequest.url, location.href);
+            assert.equal(renderedRequest.url, location.href.split("#")[0]);
             assert.equal(renderedRequest.headers.get("X-Fixture"), "preserved");
         });
     }
@@ -154,17 +158,15 @@ for (const legacy of [false, true]) {
 
 test("cookies serialize one destination and preserve query and fragment", () => {
     const { api, document } = browser({}, undefined);
-    api.setStateDataCookie({
+    api.setRoutingCookie({
         homeUrl: "https://app.test/app/",
         stateUrlParamValue_instance: state,
-        stateDataCookie: { rootRelativeReturnToUrl: destination }
+        routingCookie: { rootRelativeReturnToUrl: destination }
     });
     assert.equal(document.cookie.split(";")[0].split("%_").length, 2);
-    const parsed = api.getStateDataCookies({ cookieHeaderParamValue: document.cookie });
-    assert.equal(parsed.stateDataCookies[0].stateDataCookie.rootRelativeReturnToUrl, destination);
-    assert.deepEqual(Object.keys(parsed.stateDataCookies[0].stateDataCookie), [
-        "rootRelativeReturnToUrl"
-    ]);
+    const parsed = api.getRootingCookies({ cookieHeaderParamValue: document.cookie });
+    assert.equal(parsed.routingCookies[0].routingCookie.rootRelativeReturnToUrl, destination);
+    assert.deepEqual(Object.keys(parsed.routingCookies[0].routingCookie), ["rootRelativeReturnToUrl"]);
 });
 
 test("logout still restores its requested destination", () => {
@@ -201,20 +203,82 @@ test("the server leaves ordinary requests and unmatched callbacks unchanged", as
         const opts = {};
         const response = new Response("unchanged");
         const server = withOidcSpaServerEntry({
-            fetch: (received, receivedOpts) => {
-                assert.equal(received, request);
-                assert.equal(receivedOpts, opts);
-                return response;
-            }
+            serverEntry_original: {
+                fetch: (received, receivedOpts) => {
+                    assert.equal(received, request);
+                    assert.equal(receivedOpts, opts);
+                    return response;
+                }
+            },
+            resolvedConfigBase: "/app/",
+            oidcSpaVitePluginParams_redirectUriPath: "/openid-callback/"
         });
         assert.equal(await server.fetch(request, opts), response);
     }
 });
 
-for (const legacyRedirect of [false, true]) {
+test("cookie destinations containing credentials leave the original request unchanged", async () => {
+    const { withOidcSpaServerEntry } = load(callbackSource);
+    const opts = {};
+    const response = new Response("unchanged");
+    let calls = 0;
+    let expectedRequest;
+    const server = withOidcSpaServerEntry({
+        serverEntry_original: {
+            fetch(request, requestOpts) {
+                calls++;
+                assert.equal(request, expectedRequest);
+                assert.equal(requestOpts, opts);
+                return response;
+            }
+        },
+        resolvedConfigBase: "/app/",
+        oidcSpaVitePluginParams_redirectUriPath: "/openid-callback/"
+    });
+
+    for (const authority of ["user@", ":pass@", "user:pass@"]) {
+        const destination = `//${authority}app.test/app/account`;
+        expectedRequest = new Request(`https://app.test/app/openid-callback/?state=${state}`, {
+            headers: {
+                cookie: `oidc_rte_${state}=1%_${encodeURIComponent(destination)}`
+            }
+        });
+        assert.equal(await server.fetch(expectedRequest, opts), response);
+    }
+    assert.equal(calls, 3);
+});
+
+test("the server accepts the exact application base without a trailing slash", async () => {
+    const { withOidcSpaServerEntry } = load(callbackSource);
+    let received;
+    const server = withOidcSpaServerEntry({
+        serverEntry_original: {
+            fetch(request) {
+                received = request;
+                return new Response("ok");
+            }
+        },
+        resolvedConfigBase: "/app/",
+        oidcSpaVitePluginParams_redirectUriPath: "/openid-callback/"
+    });
+
+    for (const destination of ["/app", "/app/", "/app/account", "/application", "/app2/account"]) {
+        const request = new Request(`https://app.test/app/openid-callback/?state=${state}`, {
+            headers: { cookie: `oidc_rte_${state}=1%_${encodeURIComponent(destination)}` }
+        });
+        await server.fetch(request);
+        if (["/app", "/app/", "/app/account"].includes(destination)) {
+            assert.equal(received.url, `https://app.test${destination}`);
+        } else {
+            assert.equal(received, request);
+        }
+    }
+});
+
+for (const redirectUriPath of ["/", "/openid-callback/"]) {
     for (const responseMode of ["query", "fragment"]) {
         for (const context of ["redirect", "iframe"]) {
-            test(`callback: ${responseMode}, ${context}, legacy redirect=${legacyRedirect}`, async () => {
+            test(`callback: ${responseMode}, ${context}, redirectUriPath=${redirectUriPath}`, async () => {
                 const authResponse = { state, code: "code" };
                 const data =
                     context === "iframe"
@@ -227,12 +291,11 @@ for (const legacyRedirect of [false, true]) {
                               rootRelativeReturnToUrl: destination
                           };
                 const { api, location, record } = browser(authResponse, data, {
-                    legacyRedirect,
+                    redirectUriPath,
                     responseMode
                 });
                 assert.equal(
-                    api.oidcEarlyInit({ BASE_URL: "/app/", useLegacyRedirectUri: legacyRedirect })
-                        .shouldLoadApp,
+                    api.oidcEarlyInit({ BASE_URL: "/app/", redirectUriPath }).shouldLoadApp,
                     context === "redirect"
                 );
                 await Promise.resolve();
@@ -247,31 +310,111 @@ for (const legacyRedirect of [false, true]) {
     }
 }
 
-test("ordinary legacy home visits retain query parameters and fragments", () => {
-    const { api, location } = browser({}, undefined, { legacyRedirect: true });
+test("ordinary home visits retain query parameters and fragments", () => {
+    const { api, location } = browser({}, undefined);
     location.search = "?tab=security";
     location.hash = "#methods";
-    assert.equal(
-        api.oidcEarlyInit({ BASE_URL: "/app/", useLegacyRedirectUri: true }).shouldLoadApp,
-        true
-    );
+    assert.equal(api.oidcEarlyInit({ BASE_URL: "/app/" }).shouldLoadApp, true);
     assert.equal(location.href, "https://app.test/app/?tab=security#methods");
 });
+
+for (const responseMode of ["query", "fragment"]) {
+    test(`ordinary application state in the ${responseMode} is preserved`, () => {
+        const { api, location } = browser(
+            { state: "ordinary-application-state", tab: "security" },
+            undefined,
+            { responseMode }
+        );
+        const originalUrl = location.href;
+        assert.equal(api.oidcEarlyInit({ BASE_URL: "/app/" }).shouldLoadApp, true);
+        assert.equal(location.href, originalUrl);
+        assert.equal(
+            api.getRootRelativeOriginalLocationHref_earlyInit(),
+            originalUrl.slice(location.origin.length)
+        );
+    });
+
+    test(`a foreign authorization code in the ${responseMode} is still rejected`, () => {
+        const { api, location } = browser({ state: "foreign-state", code: "foreign-code" }, undefined, {
+            responseMode
+        });
+        assert.equal(api.oidcEarlyInit({ BASE_URL: "/app/" }).shouldLoadApp, false);
+        assert.equal(location.href, "https://app.test/app/");
+    });
+}
+
+for (const redirectUriPath of ["/../outside/", "/%2e%2e/outside/", "/#fragment/", "/?tab=security/"]) {
+    test(`invalid redirect path gives a client configuration error: ${redirectUriPath}`, () => {
+        const { api } = browser({}, undefined);
+        assert.throws(
+            () => api.oidcEarlyInit({ BASE_URL: "/app/", redirectUriPath }),
+            /oidc-spa: Configuration Error, redirectUriPath.*(?:outside|query parameters or a fragment)/
+        );
+    });
+}
+
+for (const redirectUriPath of ["/", "/openid-callback/", "/nested/../callback/"]) {
+    test(`valid callback subpath is accepted: ${redirectUriPath}`, () => {
+        const { api } = browser({}, undefined);
+        assert.equal(api.oidcEarlyInit({ BASE_URL: "/app/", redirectUriPath }).shouldLoadApp, true);
+    });
+
+    for (const invalidCookie of [false, true]) {
+        for (const extraQuery of [false, true]) {
+            for (const response of [{ code: "expired" }, { error: "login_required" }, {}]) {
+                test(`expired callback matches server/client URLs: ${redirectUriPath}, invalidCookie=${invalidCookie}, extraQuery=${extraQuery}, ${JSON.stringify(
+                    response
+                )}`, async () => {
+                    const { api, location } = browser(
+                        { state, ...response, ...(extraQuery ? { tab: "security" } : {}) },
+                        undefined,
+                        { redirectUriPath }
+                    );
+                    const headers = invalidCookie
+                        ? { cookie: `oidc_rte_${state}=1%_${encodeURIComponent("/elsewhere/")}` }
+                        : undefined;
+                    const request = new Request(location.href, { headers });
+                    assert.equal(
+                        api.oidcEarlyInit({ BASE_URL: "/app/", redirectUriPath }).shouldLoadApp,
+                        true
+                    );
+                    let renderedUrl;
+                    const server = api.withOidcSpaServerEntry({
+                        serverEntry_original: {
+                            fetch(request) {
+                                renderedUrl = request.url;
+                                return new Response("ok");
+                            }
+                        },
+                        resolvedConfigBase: "/app/",
+                        oidcSpaVitePluginParams_redirectUriPath: redirectUriPath
+                    });
+                    await server.fetch(request);
+                    const expectedUrl =
+                        "https://app.test/app/" +
+                        (redirectUriPath === "/" && extraQuery ? "?tab=security" : "");
+                    assert.equal(location.href, expectedUrl);
+                    assert.equal(renderedUrl, expectedUrl);
+                });
+            }
+        }
+    }
+}
 
 test("creation, explicit deletion and stale cleanup use the application base path", () => {
     const { api, document } = browser({}, undefined);
     const writes = [];
     Object.defineProperty(document, "cookie", {
-        get: () => "oidc_stale=1%_%2Fapp%2Faccount; oidc_invalid=unparseable",
+        get: () => "oidc_rte_stale=1%_%2Fapp%2Faccount; oidc_rte_invalid=unparseable",
         set: value => writes.push(value)
     });
     const homeUrl = "https://app.test/app/";
-    api.setStateDataCookie({
+    api.setRoutingCookie({
         homeUrl,
         stateUrlParamValue_instance: state,
-        stateDataCookie: { rootRelativeReturnToUrl: destination }
+        routingCookie: { rootRelativeReturnToUrl: destination }
     });
-    api.clearStateDataCookie({ homeUrl, stateUrlParamValue: state });
+    api.clearRoutingCookie({ homeUrl, stateUrlParamValue: state });
     assert.equal(writes.length, 4);
     for (const value of writes) assert.match(value, /Path=\/app\/(?:;|$)/);
     assert.equal(writes.filter(value => value.includes("Max-Age=0")).length, 3);

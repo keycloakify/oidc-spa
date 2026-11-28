@@ -25,12 +25,12 @@ import type { OptionallyAsyncGetterOrDirectValue } from "../tools/GetterOrDirect
 import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";
 import { getHomeUrl_earlyInit } from "../core/earlyInit_homeUrl";
 import { getValidRedirectUri } from "../core/validRedirectUri";
-import { getSsr_earlyInit } from "../core/earlyInit_ssr";
 
-export function createUtils<User>(params: {
+export function createUtils<User, IsClientOnly extends boolean>(params: {
     createClientUser: CreateClientUser<User>;
     getRuntimeConfigsOrRuntimeConfigs: OptionallyAsyncGetterOrDirectValue<void, RuntimeConfigs>;
-}): OidcSpaUtils<User> {
+    isClientOnly: IsClientOnly;
+}): OidcSpaUtils<User, IsClientOnly> {
     const getRuntimeConfigs = (() => {
         const { getRuntimeConfigsOrRuntimeConfigs } = params;
 
@@ -46,7 +46,7 @@ export function createUtils<User>(params: {
     })();
 
     const { useOidc, getOidc, enforceLogin, withLoginEnforced } = (() => {
-        const { createClientUser } = params;
+        const { createClientUser, isClientOnly } = params;
 
         const dClientCtx = new Deferred<
             | {
@@ -310,17 +310,9 @@ export function createUtils<User>(params: {
 
             const prNever = new Promise<never>(() => {});
 
-            const getIsSsrEnabled = () => {
-                try {
-                    return getSsr_earlyInit();
-                } catch {
-                    return false;
-                }
-            };
-
             function useOidc(params?: {
                 assert?: "user logged in" | "user not logged in";
-            }): Oidc_react<User> {
+            }): Oidc_react<User, IsClientOnly> {
                 useIsomorphicLayoutEffect(() => {
                     triggerClientInitializationIfNotAlreadyDone();
                 }, []);
@@ -581,7 +573,7 @@ export function createUtils<User>(params: {
 
                 const [hasHydrated, setHasHydratedToTrue] = useReducer(
                     () => true,
-                    assert_params !== undefined || !getIsSsrEnabled() ? undefined : false
+                    assert_params !== undefined || isClientOnly ? undefined : false
                 );
 
                 useEffect(() => {
@@ -601,7 +593,9 @@ export function createUtils<User>(params: {
                 });
 
                 if (!state.isReady || hasHydrated === false) {
-                    const oidc_react = id<Oidc_react.NotReady>({
+                    // Keep the runtime guard for JavaScript callers while exposing
+                    // suspensePromise in TypeScript only in client-only mode.
+                    const oidc_react = {
                         isOidcReady: false,
                         autoLogoutState: {
                             shouldDisplayWarning: false
@@ -611,12 +605,13 @@ export function createUtils<User>(params: {
                                 ? state.oidcInitializationError
                                 : undefined,
                         get suspensePromise() {
-                            if (getIsSsrEnabled() || !isBrowser) {
+                            if (!isClientOnly || !isBrowser) {
                                 throw new Error(
                                     [
-                                        "oidc-spa: Usage error, oidc.suspensePromise cannot be used,",
-                                        "in apps where SSR or SSG is involved. Throwing a promise on",
-                                        "the server means streaming HTML, not delegate to the client."
+                                        "oidc-spa: oidc.suspensePromise requires .withClientOnly()",
+                                        "and can only be used in the browser. Components using these",
+                                        "utilities must never render on the server, including during",
+                                        "build-time prerendering."
                                     ].join(" ")
                                 );
                             }
@@ -633,7 +628,10 @@ export function createUtils<User>(params: {
 
                             return prNoLongerPending;
                         }
-                    });
+                    } satisfies Oidc_react.NotReady<true> as Extract<
+                        Oidc_react<User, IsClientOnly>,
+                        { isOidcReady: false }
+                    >;
 
                     {
                         const pd = Object.getOwnPropertyDescriptor(oidc_react, "suspensePromise");

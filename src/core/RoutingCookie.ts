@@ -1,26 +1,26 @@
-export type StateDataCookie = {
+const SEPARATOR = "%_";
+
+export type RoutingCookie = {
     rootRelativeReturnToUrl: string;
 };
 
-const SEPARATOR = "%_";
-
-function serializeStateDataCookie(params: { stateDataCookie: StateDataCookie; time: number }): string {
-    const { stateDataCookie, time } = params;
+function serializeRoutingCookie(params: { routingCookie: RoutingCookie; time: number }): string {
+    const { routingCookie, time } = params;
 
     return `${Math.floor(time / 1_000)}${SEPARATOR}${encodeURIComponent(
-        stateDataCookie.rootRelativeReturnToUrl
+        routingCookie.rootRelativeReturnToUrl
     )}`;
 }
 
-function parseStateDataCookie(params: { stateDataCookie_str: string }):
+function parseRoutingCookie(params: { routingCookie_str: string }):
     | {
-          stateDataCookie: StateDataCookie;
+          routingCookie: RoutingCookie;
           time: number;
       }
     | undefined {
-    const { stateDataCookie_str } = params;
+    const { routingCookie_str } = params;
 
-    const [time_seconds_str, ...rest] = stateDataCookie_str.split(SEPARATOR);
+    const [time_seconds_str, ...rest] = routingCookie_str.split(SEPARATOR);
 
     const time = parseInt(time_seconds_str) * 1000;
 
@@ -42,28 +42,28 @@ function parseStateDataCookie(params: { stateDataCookie_str: string }):
         return undefined;
     }
 
-    return { stateDataCookie: { rootRelativeReturnToUrl }, time };
+    return { routingCookie: { rootRelativeReturnToUrl }, time };
 }
 
-const COOKIE_NAME_PREFIX = "oidc_";
+const ROUTING_COOKIE_NAME_PREFIX = "oidc_rte_";
 
-export function setStateDataCookie(params: {
-    stateDataCookie: StateDataCookie;
+export function setRoutingCookie(params: {
+    routingCookie: RoutingCookie;
     stateUrlParamValue_instance: string;
     homeUrl: string;
 }): void {
-    const { stateDataCookie, stateUrlParamValue_instance, homeUrl } = params;
+    const { routingCookie, stateUrlParamValue_instance, homeUrl } = params;
 
-    const { stateDataCookies, unparsableCookieNames } = getStateDataCookies({
+    const { routingCookies, unparsableCookieNames } = getRootingCookies({
         cookieHeaderParamValue: document.cookie
     });
 
     {
         const cookieNames_toDelete = [...unparsableCookieNames];
 
-        stateDataCookies.forEach(({ stateUrlParamValue, time }) => {
+        routingCookies.forEach(({ stateUrlParamValue, time }) => {
             if (Date.now() - time > 15 * 60 * 1_000) {
-                cookieNames_toDelete.push(`${COOKIE_NAME_PREFIX}${stateUrlParamValue}`);
+                cookieNames_toDelete.push(`${ROUTING_COOKIE_NAME_PREFIX}${stateUrlParamValue}`);
             }
         });
 
@@ -73,9 +73,9 @@ export function setStateDataCookie(params: {
     }
 
     document.cookie = [
-        `${COOKIE_NAME_PREFIX}${stateUrlParamValue_instance}=`,
-        `${serializeStateDataCookie({
-            stateDataCookie,
+        `${ROUTING_COOKIE_NAME_PREFIX}${stateUrlParamValue_instance}=`,
+        `${serializeRoutingCookie({
+            routingCookie,
             time: Date.now()
         })}; `,
         "Max-Age=432000; ",
@@ -83,18 +83,18 @@ export function setStateDataCookie(params: {
     ].join("");
 }
 
-export function clearStateDataCookie(params: { stateUrlParamValue: string; homeUrl: string }) {
+export function clearRoutingCookie(params: { stateUrlParamValue: string; homeUrl: string }) {
     const { stateUrlParamValue, homeUrl } = params;
 
-    document.cookie = `${COOKIE_NAME_PREFIX}${stateUrlParamValue}=; Path=${
+    document.cookie = `${ROUTING_COOKIE_NAME_PREFIX}${stateUrlParamValue}=; Path=${
         new URL(homeUrl).pathname
     }; Max-Age=0`;
 }
 
-export function getStateDataCookies(params: { cookieHeaderParamValue: string | null }): {
-    stateDataCookies: {
+export function getRootingCookies(params: { cookieHeaderParamValue: string | null }): {
+    routingCookies: {
         stateUrlParamValue: string;
-        stateDataCookie: StateDataCookie;
+        routingCookie: RoutingCookie;
         time: number;
     }[];
     unparsableCookieNames: string[];
@@ -103,14 +103,14 @@ export function getStateDataCookies(params: { cookieHeaderParamValue: string | n
 
     if (cookieHeaderParamValue === null) {
         return {
-            stateDataCookies: [],
+            routingCookies: [],
             unparsableCookieNames: []
         };
     }
 
-    const stateDataCookies: {
+    const routingCookies: {
         stateUrlParamValue: string;
-        stateDataCookie: StateDataCookie;
+        routingCookie: RoutingCookie;
         time: number;
     }[] = [];
 
@@ -124,7 +124,7 @@ export function getStateDataCookies(params: { cookieHeaderParamValue: string | n
 
             name = name.trim();
 
-            if (!name.startsWith(COOKIE_NAME_PREFIX)) {
+            if (!name.startsWith(ROUTING_COOKIE_NAME_PREFIX)) {
                 continue;
             }
 
@@ -133,8 +133,8 @@ export function getStateDataCookies(params: { cookieHeaderParamValue: string | n
 
         const { name, value } = entry;
 
-        const result = parseStateDataCookie({
-            stateDataCookie_str: value
+        const result = parseRoutingCookie({
+            routingCookie_str: value
         });
 
         if (result === undefined) {
@@ -142,14 +142,14 @@ export function getStateDataCookies(params: { cookieHeaderParamValue: string | n
             continue;
         }
 
-        const { stateDataCookie, time } = result;
+        const { routingCookie, time } = result;
 
-        stateDataCookies.push({
-            stateUrlParamValue: name.slice(COOKIE_NAME_PREFIX.length),
-            stateDataCookie,
+        routingCookies.push({
+            stateUrlParamValue: name.slice(ROUTING_COOKIE_NAME_PREFIX.length),
+            routingCookie,
             time
         });
     }
 
-    return { stateDataCookies, unparsableCookieNames };
+    return { routingCookies, unparsableCookieNames };
 }

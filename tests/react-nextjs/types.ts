@@ -6,6 +6,7 @@ import {
     type OidcInitializationError,
     type Oidc,
     type Oidc_react,
+    type UseOidc,
     type RuntimeConfigs
 } from "../../src/react";
 import { assert, type Equals } from "../../src/tools/tsafe/assert";
@@ -29,11 +30,17 @@ export async function checkTypes() {
     const configured = builder.withRuntimeConfigs({ mode: "mock", isUserInitiallyLoggedIn: false });
     const utils = configured.createUtils();
     assert<Equals<typeof utils, OidcSpaUtils<User>>>;
+    assert<Equals<UseOidc<User>, UseOidc<User, false>>>;
+    assert<Equals<OidcSpaUtils<User>, OidcSpaUtils<User, false>>>;
+    assert<Equals<Oidc_react<User>, Oidc_react<User, false>>>;
+    assert<Equals<Oidc_react.NotReady, Oidc_react.NotReady<false>>>;
     const state = utils.useOidc();
     assert<Equals<typeof state, Oidc_react<User>>>;
     if (!state.isOidcReady) {
         assert<Equals<typeof state.isUserLoggedIn, undefined>>;
         assert<Equals<typeof state.initializationError, OidcInitializationError | undefined>>;
+        // @ts-expect-error Suspense requires an explicit client-only opt-in
+        state.suspensePromise;
     }
     const loggedIn = utils.useOidc({ assert: "user logged in" });
     assert<Equals<typeof loggedIn.user, User>>;
@@ -78,6 +85,31 @@ export async function checkTypes() {
         .withRuntimeConfigs(async (): Promise<RuntimeConfigs> => ({ mode: "mock" }))
         .createUtils();
     assert<Equals<typeof inferred, typeof utils>>;
+
+    const clientOnlyBuilder = oidcSpa.withClientOnly();
+    // @ts-expect-error the client-only opt-in can only be called once
+    clientOnlyBuilder.withClientOnly();
+    // @ts-expect-error client-only mode still requires a user factory and runtime configs
+    clientOnlyBuilder.createUtils();
+    const clientOnly = clientOnlyBuilder
+        .withUser(createUser)
+        .withRuntimeConfigs({ mode: "mock" })
+        .createUtils();
+    assert<Equals<typeof clientOnly, OidcSpaUtils<User, true>>>;
+    const clientState = clientOnly.useOidc();
+    assert<Equals<typeof clientState, Oidc_react<User, true>>>;
+    if (!clientState.isOidcReady) {
+        assert<Equals<typeof clientState.suspensePromise, Promise<void | never>>>;
+    }
+    const clientOnlyAfterUser = builder
+        .withClientOnly()
+        .withRuntimeConfigs({ mode: "mock" })
+        .createUtils();
+    assert<Equals<typeof clientOnlyAfterUser, typeof clientOnly>>;
+    const clientOnlyAfterConfigs = configured.withClientOnly().createUtils();
+    assert<Equals<typeof clientOnlyAfterConfigs, typeof clientOnly>>;
+    // Opting in returns a new builder and leaves the original hydration-safe.
+    assert<Equals<ReturnType<typeof configured.createUtils>, OidcSpaUtils<User>>>;
 
     // @ts-expect-error auto-login mode has been removed
     configured.withAutoLogin();

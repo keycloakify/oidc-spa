@@ -4,7 +4,7 @@ import { DPoP } from "../DPoP";
 import { tokenSubstitution } from "../token-substitution";
 
 // Next.js replaces these expressions at build time, including in dependency modules.
-const { shouldLoadApp } = oidcEarlyInit({
+oidcEarlyInit({
     BASE_URL: process.env.OIDC_SPA_NEXTJS_BASE_URL!,
     securityDefenses: {
         ...(process.env.OIDC_SPA_NEXTJS_BROWSER_RUNTIME_FREEZE === "false"
@@ -17,10 +17,5 @@ const { shouldLoadApp } = oidcEarlyInit({
             ? undefined
             : tokenSubstitution(JSON.parse(process.env.OIDC_SPA_NEXTJS_TOKEN_SUBSTITUTION!)))
     },
-    ssr: true,
-    useLegacyRedirectUri: process.env.OIDC_SPA_NEXTJS_USE_LEGACY_REDIRECT_URI === "true"
+    enableRoutingCookie: true
 });
-
-if (!shouldLoadApp) {
-    // TODO: Here we would like to find a way to cancel normal rendering.
-}

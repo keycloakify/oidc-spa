@@ -21,8 +21,7 @@ import { type KeycloakUtils, createKeycloakUtils } from "../keycloak-utils/keycl
 import { type StatefulEvt, createStatefulEvt } from "../tools/StatefulEvt";
 import { readExpirationTimeInJwt } from "../tools/readExpirationTimeInJwt";
 import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";
-import { getHomeUrl_earlyInit } from "../core/earlyInit_homeUrl";
-import { getValidRedirectUri } from "../core/validRedirectUri";
+import { getHomeUrlAndValidRedirectUri } from "../core/earlyInit_homeUrlAndValidRedirectUri";
 
 type ConstructorParams = KeycloakServerConfig & {
     /**
@@ -895,10 +894,10 @@ export class Keycloak {
                     });
                 }
 
-                let homeUrl: string;
+                let validRedirectUri: string;
 
                 try {
-                    homeUrl = getHomeUrl_earlyInit();
+                    ({ validRedirectUri } = getHomeUrlAndValidRedirectUri());
                 } catch {
                     const url_obj = new URL(window.location.href);
 
@@ -906,10 +905,10 @@ export class Keycloak {
                     url_obj.search = "";
                     url_obj.hash = "";
 
-                    homeUrl = url_obj.href;
+                    validRedirectUri = url_obj.href;
                 }
 
-                return getValidRedirectUri({ homeUrl });
+                return validRedirectUri;
             })(),
             locale
         });

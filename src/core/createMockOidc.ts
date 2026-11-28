@@ -4,12 +4,14 @@ import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";
 import { getSearchParam, addOrUpdateSearchParam } from "../tools/urlSearchParams";
 import { getRootRelativeOriginalLocationHref_earlyInit } from "../core/earlyInit_rootRelativeOriginalLocationHref";
 import { INFINITY_TIME } from "../tools/INFINITY_TIME";
-import { getHomeUrl_earlyInit, prHomeUrl_earlyInit_set } from "./earlyInit_homeUrl";
+import {
+    prHomeUrlAndValidRedirectUriEstablished,
+    getHomeUrlAndValidRedirectUri
+} from "./earlyInit_homeUrlAndValidRedirectUri";
 import { decodeJwt } from "../tools/decodeJwt";
 import type { OidcTokens, ParamsOfCreateMockOidc } from "./types";
 import { createGetUser } from "./createGetUser";
 import { createEvt } from "../tools/Evt";
-import { getValidRedirectUri } from "./validRedirectUri";
 
 const URL_SEARCH_PARAM_NAME = "isUserLoggedIn";
 
@@ -41,7 +43,7 @@ export async function createMockOidc<User = never>(
             );
         }, 3_000);
 
-        await prHomeUrl_earlyInit_set;
+        await prHomeUrlAndValidRedirectUriEstablished;
 
         window.clearTimeout(timer);
     }
@@ -76,12 +78,12 @@ export async function createMockOidc<User = never>(
         return values[0] === "true";
     })();
 
-    const homeUrl = getHomeUrl_earlyInit();
+    const { homeUrl, validRedirectUri } = getHomeUrlAndValidRedirectUri();
 
     const common: Oidc.Common = {
         clientId: clientId_mock ?? "myclientmock",
         issuerUri: issuerUri_mock ?? "https://auth.mycompany.com/realms/mymockrealm",
-        validRedirectUri: getValidRedirectUri({ homeUrl })
+        validRedirectUri
     };
 
     const loginOrStartAuthorization = async (params: {
