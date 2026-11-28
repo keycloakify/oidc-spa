@@ -80,6 +80,19 @@ export function createUtils<User, IsClientOnly extends boolean>(params: {
               }
         >();
 
+        dClientCtx.pr.then(
+            ctx => {
+                if (!ctx.doWeHaveOidcInstance) {
+                    console.error(
+                        `oidc-spa: ${ctx.oidcInitializationError}`,
+                        ctx.oidcInitializationError
+                    );
+                }
+            },
+            // Unexpected initialization errors are handled by the existing callers.
+            () => {}
+        );
+
         const { triggerClientInitializationIfNotAlreadyDone } = (() => {
             const d = new Deferred<void>();
 
