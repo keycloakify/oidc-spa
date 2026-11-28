@@ -6,14 +6,14 @@ This example uses TanStack Start's default server rendering and Nitro deployment
 Public pages render on each request. Protected pages render in the browser after their login
 check. API routes and server functions run in the same application.
 
-For a static prerendered frontend served by a CDN, see `examples/tanstack-start-prerendered`
-(planned as a separate example).
+For a static prerendered frontend served by a CDN, see the
+[prerendered example](../tanstack-start-prerendered/README.md).
 
 ## Run locally
 
 ```sh
-yarn install
-yarn dev
+npm install
+npm run dev
 ```
 
 Open <http://app.localhost:3000/>. In your identity provider's administration console, register
@@ -29,7 +29,7 @@ Auth0; other providers can also use `localhost` if their registered redirect URI
 To use the current oidc-spa repository source, run this from the repository root:
 
 ```sh
-yarn start-tanstack-start-example
+npm run start-tanstack-start-example
 ```
 
 ## Integration
@@ -64,8 +64,8 @@ a fixed domain.
 ## Build and deploy
 
 ```sh
-yarn build
-yarn preview
+npm run build
+npm run preview
 ```
 
 The build command is `vite build && tsc --noEmit`. Locally, Nitro produces its standard Node
@@ -77,7 +77,7 @@ Vercel and Nitro detect the deployment environment automatically; no custom buil
 rewrites, or `NITRO_PRESET` setting is needed. To inspect a Vercel build locally:
 
 ```sh
-NITRO_PRESET=vercel yarn build
+NITRO_PRESET=vercel npm run build
 ```
 
 Set the provider environment variables in the deployment environment. Do not prefix secrets with

@@ -1,0 +1,17 @@
+{
+    "$schema": "https://openapi.vercel.sh/vercel.json",
+    "framework": "tanstack-start",
+    "routes": [
+        {
+            "src": "^/openid-callback/$",
+            "methods": ["GET", "HEAD"],
+            "dest": "/_shell.html"
+        }
+    ],
+    "rewrites": [
+        {
+            "source": "/((?!api(?:/|$)|_serverFn(?:/|$)|assets(?:/|$)).*)",
+            "destination": "/_shell.html"
+        }
+    ]
+}

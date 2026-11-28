@@ -8,6 +8,9 @@
 /examples/tanstack-start/src/routeTree.gen.ts
 /examples/tanstack-start/.output
 /examples/tanstack-start/.nitro
+/examples/tanstack-start-prerendered/src/routeTree.gen.ts
+/examples/tanstack-start-prerendered/.output
+/examples/tanstack-start-prerendered/.nitro
 /examples/nuxt/.nuxt
 /examples/nuxt/.output
 /examples/nuxt/.nitro

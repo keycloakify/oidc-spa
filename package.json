@@ -31,6 +31,7 @@
         "start-react-router-declarative-example": "bash ./scripts/start-example.sh react-router-declarative dev",
         "start-next-example": "bash ./scripts/start-example.sh next dev",
         "start-tanstack-start-example": "bash ./scripts/start-example.sh tanstack-start dev",
+        "start-tanstack-start-prerendered-example": "bash ./scripts/start-example.sh tanstack-start-prerendered dev",
         "start-tanstack-router-example": "bash ./scripts/start-example.sh tanstack-router dev",
         "start-framework-agnostic-example": "bash ./scripts/start-example.sh framework-agnostic dev",
         "start-vue-example": "bash ./scripts/start-example.sh vue dev",
