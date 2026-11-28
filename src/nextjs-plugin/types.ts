@@ -6,11 +6,13 @@ export type OidcSpaNextjsPluginParams = {
     /** Defaults to process.cwd(). Set this when invoking Next from outside the app directory. */
     projectRoot?: string;
     /**
-     * Use the application home URL, including its base path, as the redirect URI
-     * to preserve existing IAM registrations when migrating from oidc-spa v10.
-     * Defaults to false: the redirect URI is /openid-callback/ under the base path.
+     * Callback path relative to the application base path. Defaults to "/":
+     * the application home is the redirect URI. For example, "/openid-callback/"
+     * uses that subpath beneath Next's basePath. Register the resulting URL with
+     * your identity provider; the plugin handles it without an application route.
+     * Must start and end with "/" and contain no query parameters or fragment.
      */
-    useLegacyRedirectUri?: boolean;
+    redirectUriPath?: string;
     /** Next.js requires the Array prototype to remain mutable for its RSC chunk queue. */
     browserRuntimeFreeze?: false | { enabled: true; excludes?: ApiName[] };
     tokenSubstitution?:

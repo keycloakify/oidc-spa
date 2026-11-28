@@ -6,6 +6,7 @@ import { tokenSubstitution } from "../token-substitution";
 // Next.js replaces these expressions at build time, including in dependency modules.
 oidcEarlyInit({
     BASE_URL: process.env.OIDC_SPA_NEXTJS_BASE_URL!,
+    redirectUriPath: process.env.OIDC_SPA_NEXTJS_REDIRECT_URI_PATH!,
     securityDefenses: {
         ...(process.env.OIDC_SPA_NEXTJS_BROWSER_RUNTIME_FREEZE === "false"
             ? undefined

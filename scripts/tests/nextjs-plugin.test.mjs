@@ -35,7 +35,15 @@ async function load(contents, { stubs = {}, globals = {} } = {}) {
         ]
     });
     const module = { exports: {} };
-    runInNewContext(outputFiles[0].text, { module, require, URL, console, process, ...globals });
+    runInNewContext(outputFiles[0].text, {
+        module,
+        require,
+        URL,
+        Request,
+        console,
+        process,
+        ...globals
+    });
     return module.exports;
 }
 
@@ -45,14 +53,29 @@ const { withOidcSpa } = await load('export { withOidcSpa } from "./src/nextjs-pl
 const { generateProxy } = await load(
     'export { generateProxy } from "./src/nextjs-plugin/generateProxy";'
 );
-const loadProxy = (fetch = () => assert.fail("Unexpected forwarded request")) =>
-    load('export * from "./src/nextjs-plugin/proxy";', { globals: { Headers, fetch } });
+const loadProxy = (
+    fetch = () => assert.fail("Unexpected forwarded request"),
+    { basePath = "", redirectUriPath = "/" } = {}
+) =>
+    load('export * from "./src/nextjs-plugin/proxy";', {
+        globals: {
+            Headers,
+            fetch,
+            process: {
+                env: {
+                    OIDC_SPA_NEXTJS_BASE_URL: `${basePath}/`,
+                    OIDC_SPA_NEXTJS_REDIRECT_URI_PATH: redirectUriPath
+                }
+            }
+        }
+    });
 const state = "b2lkYy1zcGEu".padEnd(32, "a");
 const cookie = destination =>
-    `oidc_${state}=${Math.floor(Date.now() / 1000)}%_${encodeURIComponent(destination)}`;
-async function forwardedUrl(request) {
+    `oidc_rte_${state}=${Math.floor(Date.now() / 1000)}%_${encodeURIComponent(destination)}`;
+async function forwardedUrl(request, options = {}) {
     const { proxy } = await loadProxy(
-        async url => new Response(null, { headers: { "x-target": url.href } })
+        async url => new Response(null, { headers: { "x-target": url.href } }),
+        { basePath: request.nextUrl.basePath, ...options }
     );
     return (await proxy(request)).headers.get("x-target");
 }
@@ -139,12 +162,14 @@ test("injected client calls earlyInit synchronously with configured defenses and
         assert.equal(name, "earlyInit");
         assert.equal(params.BASE_URL, "/app/");
         assert.equal(Object.keys(params.securityDefenses).length, options.DPoP ? 3 : 0);
-        assert.equal(params.ssr, true);
+        assert.equal(params.enableRoutingCookie, true);
+        assert.equal(params.redirectUriPath, "/");
+        assert.equal("ssr" in params, false);
         assert.equal(calls.length, options.DPoP ? 4 : 1);
     }
 });
 
-test("Next client instrumentation passes the SSR flag regardless of callback handling", async () => {
+test("Next client instrumentation enables routing cookies regardless of callback handling", async () => {
     const { env } = await withOidcSpa()("phase-production-build", { defaultConfig: {} });
     for (const shouldLoadApp of [false, true]) {
         let received;
@@ -161,7 +186,7 @@ test("Next client instrumentation passes the SSR flag regardless of callback han
                     "export function oidcEarlyInit(params) { capture(params); return { shouldLoadApp }; }"
             }
         });
-        assert.equal(received.ssr, true);
+        assert.equal(received.enableRoutingCookie, true);
     }
 });
 
@@ -184,15 +209,18 @@ for (const [outcome, callbackPath] of ["code=auth-code", "error=login_required"]
         fetched.headers.append("set-cookie", "first=one; Path=/");
         fetched.headers.append("set-cookie", "second=two; Path=/");
         let calls = 0;
-        const { proxy } = await loadProxy(async (url, options) => {
-            calls++;
-            assert.equal(url.href, "https://app.test/account?tab=security");
-            assert.equal(options.cache, "no-store");
-            assert.equal(options.redirect, "manual");
-            assert.strictEqual(options.signal, req.signal);
-            assert.equal(options.headers.get("cookie"), "session=kept; deployment-protection=kept");
-            return fetched;
-        });
+        const { proxy } = await loadProxy(
+            async (url, options) => {
+                calls++;
+                assert.equal(url.href, "https://app.test/account?tab=security");
+                assert.equal(options.cache, "no-store");
+                assert.equal(options.redirect, "manual");
+                assert.strictEqual(options.signal, req.signal);
+                assert.equal(options.headers.get("cookie"), "session=kept; deployment-protection=kept");
+                return fetched;
+            },
+            { redirectUriPath: callbackPath }
+        );
         const response = await proxy(req);
         assert.equal(calls, 1);
         assert.strictEqual(response.body, fetched.body);
@@ -206,7 +234,7 @@ for (const [outcome, callbackPath] of ["code=auth-code", "error=login_required"]
         assert.equal(response.cookies.get("first").value, "one");
         assert.equal(response.cookies.get("second").value, "two");
         assert.equal(new URL(req.url).searchParams.get("state"), state);
-        assert(req.headers.get("cookie").includes(`oidc_${state}=`));
+        assert(req.headers.get("cookie").includes(`oidc_rte_${state}=`));
     });
 }
 
@@ -230,7 +258,6 @@ test("ordinary requests and invalid callback destinations are left alone", async
     const { proxy } = await loadProxy();
     for (const req of [
         request("/", { destination: "/account" }),
-        request(`/?code=x&state=${state}`),
         request("/?code=x&state=different", { destination: "/account" }),
         request(`/account?code=x&state=${state}`),
         request(`/?code=x&state=${state}`, { destination: "/account", method: "POST" }),
@@ -247,7 +274,7 @@ test("malformed unrelated OIDC cookies do not break callback rendering", async (
         await forwardedUrl(
             request(`/?code=x&state=${state}`, {
                 destination: "/account",
-                extraCookie: "oidc_invalid=123%_%ZZ"
+                extraCookie: "oidc_rte_invalid=123%_%ZZ"
             })
         ),
         "https://app.test/account"
@@ -315,9 +342,9 @@ test("the internal request cannot reprocess the same callback, including a retur
         assert.equal(response.headers.get("x-middleware-next"), "1");
         return new Response("home");
     });
-    await proxy(request(`/?code=x&state=${state}`, { destination: `/?state=${state}` }));
+    await proxy(request(`/?code=x&state=${state}`, { destination: "/" }));
     assert.equal(calls, 1);
-    await proxy(request(`/openid-callback/?code=x&state=${state}`));
+    await proxy(request(`/?code=x&state=${state}`));
     assert.equal(calls, 2);
 });
 
@@ -451,7 +478,7 @@ test("proxy generation writes an ignored literal config once and preserves exist
     assert(source.includes("// noinspection JSUnusedGlobalSymbols"));
     assert(source.includes("// @formatter:off"));
     assert(source.includes('withOidcSpa(nextConfig, { proxy: "./my-proxy.ts" })'));
-    assert(source.includes('"source": "/:path*"'));
+    assert(source.includes('"source": "/"'));
     assert(source.includes('"key": "state"'));
     assert(source.includes('export { proxy } from "oidc-spa/nextjs-plugin/proxy"'));
     await generateProxy(generationParams(root));
@@ -568,19 +595,22 @@ test("custom proxy runs once on the forwarded destination and preserves normal N
     const pending = [];
     const event = { waitUntil: promise => pending.push(promise) };
     let calls = 0;
-    const { withOidcSpaProxy } = await loadProxy(async (url, { headers }) => {
-        const response = await wrapped(
-            new NextRequest(url, { headers, nextConfig: { basePath: "/app" } }),
-            event
-        );
-        assert.equal(response.headers.get("x-middleware-next"), "1");
-        assert.equal(response.headers.get("x-middleware-request-x-user"), "alice");
-        // Next applies continuation/request overrides and renders the destination.
-        const responseHeaders = new Headers({ "x-custom": response.headers.get("x-custom") });
-        for (const { name, value } of response.cookies.getAll())
-            responseHeaders.append("set-cookie", `${name}=${value}; Path=/`);
-        return new Response("rendered destination", { headers: responseHeaders });
-    });
+    const { withOidcSpaProxy } = await loadProxy(
+        async (url, { headers }) => {
+            const response = await wrapped(
+                new NextRequest(url, { headers, nextConfig: { basePath: "/app" } }),
+                event
+            );
+            assert.equal(response.headers.get("x-middleware-next"), "1");
+            assert.equal(response.headers.get("x-middleware-request-x-user"), "alice");
+            // Next applies continuation/request overrides and renders the destination.
+            const responseHeaders = new Headers({ "x-custom": response.headers.get("x-custom") });
+            for (const { name, value } of response.cookies.getAll())
+                responseHeaders.append("set-cookie", `${name}=${value}; Path=/`);
+            return new Response("rendered destination", { headers: responseHeaders });
+        },
+        { basePath: "/app" }
+    );
     const wrapped = withOidcSpaProxy(async (request_user, event_user) => {
         calls++;
         assert.equal(request_user.url, "https://app.test/app/private?tab=profile");
@@ -665,7 +695,7 @@ for (const basePath of ["", "/app"]) {
         const home = `https://app.test${basePath}/`;
         for (const outcome of ["code=x", "error=login_required"]) {
             const req = request(`${callbackPath}?${outcome}&state=${state}`, { basePath });
-            assert.equal(await forwardedUrl(req), home);
+            assert.equal(await forwardedUrl(req, { redirectUriPath: "/openid-callback/" }), home);
             assert.equal(new URL(req.url).pathname, callbackPath);
             assert.equal(new URL(req.url).searchParams.get("state"), state);
             assert.equal(
@@ -673,15 +703,14 @@ for (const basePath of ["", "/app"]) {
                     request(`${callbackPath}?${outcome}&state=${state}`, {
                         basePath,
                         destination: `${basePath}/pricing?plan=pro#details`
-                    })
+                    }),
+                    { redirectUriPath: "/openid-callback/" }
                 ),
                 `https://app.test${basePath}/pricing?plan=pro`
             );
         }
-        const { proxy } = await loadProxy();
+        const { proxy } = await loadProxy(undefined, { basePath, redirectUriPath: "/openid-callback/" });
         for (const path of [
-            callbackPath,
-            `${callbackPath}?state=unrelated&code=x`,
             `${basePath}/nested/openid-callback/?state=${state}&code=x`,
             `${basePath}/?state=${state}&code=x`
         ]) {
@@ -704,29 +733,153 @@ test("a matching cookie without an oidc-spa state identifier does not trigger ca
     }
 });
 
-test("matching state cookies support callback paths other than the home URL", async () => {
+test("matching state cookies support the configured callback subpath", async () => {
     assert.equal(
         await forwardedUrl(
-            request(`/previous-callback?state=${state}&code=x`, {
+            request(`/previous-callback/?state=${state}&code=x`, {
                 destination: "/account"
-            })
+            }),
+            { redirectUriPath: "/previous-callback/" }
         ),
         "https://app.test/account"
     );
 });
 
-test("Next configuration preserves callback trailing slashes and passes the legacy option to early initialization", async () => {
+for (const basePath of ["", "/app"]) {
+    test(`home callbacks preserve ordinary visits and clean expired responses: ${
+        basePath || "/"
+    }`, async () => {
+        const { proxy } = await loadProxy(undefined, { basePath });
+        for (const suffix of ["", "?tab=security#methods", "?state=application-state&tab=security"]) {
+            assert.equal(
+                (await proxy(request(`${basePath}/${suffix}`, { basePath }))).headers.get(
+                    "x-middleware-next"
+                ),
+                "1"
+            );
+        }
+        for (const outcome of ["code=expired&", "error=login_required&", ""]) {
+            const req = request(`${basePath}/?${outcome}state=${state}&tab=security`, { basePath });
+            const originalUrl = req.url;
+            assert.equal(await forwardedUrl(req), `https://app.test${basePath}/?tab=security`);
+            assert.equal(req.url, originalUrl);
+        }
+    });
+
+    test(`custom callback without an oidc-spa response renders home: ${basePath || "/"}`, async () => {
+        for (const query of [
+            "",
+            "?state=application-state&tab=security",
+            "?state=foreign&code=foreign"
+        ]) {
+            assert.equal(
+                await forwardedUrl(request(`${basePath}/openid-callback/${query}`, { basePath }), {
+                    redirectUriPath: "/openid-callback/"
+                }),
+                `https://app.test${basePath}/`
+            );
+        }
+    });
+
+    test(`state-only logout callbacks restore their destination: ${basePath || "/"}`, async () => {
+        for (const redirectUriPath of ["/", "/openid-callback/"]) {
+            assert.equal(
+                await forwardedUrl(
+                    request(`${basePath}${redirectUriPath}?state=${state}`, {
+                        basePath,
+                        destination: `${basePath}/pricing?plan=pro`
+                    }),
+                    { redirectUriPath }
+                ),
+                `https://app.test${basePath}/pricing?plan=pro`
+            );
+        }
+    });
+
+    test(`cookie destinations are restricted to this application: ${basePath || "/"}`, async () => {
+        const { proxy } = await loadProxy(undefined, { basePath, redirectUriPath: "/openid-callback/" });
+        const invalid = [
+            "//other.test/app/account",
+            "//[",
+            `//user@app.test${basePath}/account`,
+            `//:password@app.test${basePath}/account`,
+            `//user:password@app.test${basePath}/account`,
+            ...(basePath
+                ? ["/elsewhere/", "/app2/account", "/app/../elsewhere/", "/app/%2e%2e/elsewhere/"]
+                : [])
+        ];
+        for (const destination of invalid) {
+            assert.equal(
+                (
+                    await proxy(
+                        request(`${basePath}/openid-callback/?state=${state}`, { basePath, destination })
+                    )
+                ).headers.get("x-middleware-next"),
+                "1",
+                destination
+            );
+        }
+        for (const destination of [basePath || "/", `${basePath}/`, `${basePath}/account`]) {
+            assert.equal(
+                await forwardedUrl(
+                    request(`${basePath}/openid-callback/?state=${state}`, {
+                        basePath,
+                        destination
+                    }),
+                    { redirectUriPath: "/openid-callback/" }
+                ),
+                `https://app.test${destination}`
+            );
+        }
+    });
+}
+
+test("HEAD callbacks forward HEAD and return no document body", async () => {
+    const req = request(`/openid-callback/?state=${state}`, { method: "HEAD", destination: "/account" });
+    let calls = 0;
+    const { proxy } = await loadProxy(
+        async (url, options) => {
+            calls++;
+            assert.equal(url.href, "https://app.test/account");
+            assert.equal(options.method, "HEAD");
+            return new Response("unused body", { headers: { "x-destination": "account" } });
+        },
+        { redirectUriPath: "/openid-callback/" }
+    );
+    const response = await proxy(req);
+    assert.equal(calls, 1);
+    assert.equal(response.body, null);
+    assert.equal(response.headers.get("x-destination"), "account");
+});
+
+test("non-navigation callback methods and invalid callback configuration pass through", async () => {
+    for (const method of ["POST", "PUT", "DELETE"]) {
+        const { proxy } = await loadProxy(undefined, { redirectUriPath: "/openid-callback/" });
+        assert.equal(
+            (await proxy(request("/openid-callback/", { method }))).headers.get("x-middleware-next"),
+            "1"
+        );
+    }
+    for (const redirectUriPath of ["/../outside/", "/callback", "/#fragment/", "/?tab=security/"]) {
+        const { proxy } = await loadProxy(undefined, { basePath: "/app", redirectUriPath });
+        assert.equal(
+            (await proxy(request(`/app/?state=${state}`, { basePath: "/app" }))).headers.get(
+                "x-middleware-next"
+            ),
+            "1"
+        );
+    }
+});
+
+test("Next configuration passes the home default and configured callback path to early initialization", async () => {
     for (const basePath of [undefined, "/app"]) {
-        for (const useLegacyRedirectUri of [false, true]) {
-            const config = await withOidcSpa({ basePath }, { useLegacyRedirectUri })(
+        for (const redirectUriPath of [undefined, "/openid-callback/", '/callback-"quoted"/']) {
+            const config = await withOidcSpa({ basePath }, { redirectUriPath })(
                 "phase-production-build",
                 { defaultConfig: {} }
             );
             assert.equal(config.skipTrailingSlashRedirect, true);
-            assert.equal(
-                config.env.OIDC_SPA_NEXTJS_USE_LEGACY_REDIRECT_URI,
-                String(useLegacyRedirectUri)
-            );
+            assert.equal(config.env.OIDC_SPA_NEXTJS_REDIRECT_URI_PATH, redirectUriPath ?? "/");
             let received;
             await load('import "./src/nextjs-plugin/client";', {
                 globals: {
@@ -740,28 +893,48 @@ test("Next configuration preserves callback trailing slashes and passes the lega
                         "export function oidcEarlyInit(params) { capture(params); return { shouldLoadApp: true }; }"
                 }
             });
-            assert.equal(received.useLegacyRedirectUri, useLegacyRedirectUri);
+            assert.equal(received.redirectUriPath, redirectUriPath ?? "/");
             assert.equal(received.BASE_URL, `${basePath ?? ""}/`);
-            assert.equal(received.ssr, true);
+            assert.equal(received.enableRoutingCookie, true);
+            assert.equal("ssr" in received, false);
+            assert.equal("useLegacyRedirectUri" in received, false);
+            assert.equal("OIDC_SPA_NEXTJS_USE_LEGACY_REDIRECT_URI" in config.env, false);
         }
     }
 });
 
-test("generated matchers cover dedicated and legacy callbacks with Next's base-path handling", async t => {
+test("generated matchers cover only the configured callback with Next's base-path handling", async t => {
     const { getMiddlewareMatchers } = require("next/dist/build/analysis/get-page-static-info.js");
     const {
         getMiddlewareRouteMatcher
     } = require("next/dist/shared/lib/router/utils/middleware-route-matcher.js");
     for (const basePath of ["", "/app"]) {
         const root = await project(t);
-        await generateProxy({ ...generationParams(root), nextConfig: { basePath } });
-        const source = await readFile(join(root, "proxy.ts"), "utf8");
-        const config = JSON.parse(source.match(/export const config = ([\s\S]*);\s*$/)[1]);
-        const matches = getMiddlewareRouteMatcher(getMiddlewareMatchers(config.matcher, { basePath }));
-        for (const path of ["/", "/openid-callback/", "/previous-callback"]) {
-            assert.equal(matches(`${basePath}${path}`, { headers: {} }, { state }), true);
-            assert.equal(matches(`${basePath}${path}`, { headers: {} }, {}), false);
+        for (const redirectUriPath of [
+            "/",
+            "/openid-callback/",
+            "/callback.v1/",
+            "/callback:done/",
+            "/callback(1)/",
+            "/nested/../callback/"
+        ]) {
+            await generateProxy({
+                ...generationParams(root),
+                nextConfig: { basePath, env: { OIDC_SPA_NEXTJS_REDIRECT_URI_PATH: redirectUriPath } }
+            });
+            const source = await readFile(join(root, "proxy.ts"), "utf8");
+            const config = JSON.parse(source.match(/export const config = ([\s\S]*);\s*$/)[1]);
+            const matches = getMiddlewareRouteMatcher(
+                getMiddlewareMatchers(config.matcher, { basePath })
+            );
+            const callbackPath = new URL(`https://app.test${basePath}${redirectUriPath}`).pathname;
+            assert.equal(matches(callbackPath, { headers: {} }, { state }), true);
+            assert.equal(matches(callbackPath, { headers: {} }, {}), redirectUriPath !== "/");
+            assert.equal(matches(`${basePath}/unrelated`, { headers: {} }, { state }), false);
+            if (redirectUriPath === "/callback.v1/") {
+                assert.equal(matches(`${basePath}/callbackXv1/`, { headers: {} }, { state }), false);
+            }
+            if (basePath) assert.equal(matches("/openid-callback/", { headers: {} }, { state }), false);
         }
-        if (basePath) assert.equal(matches("/openid-callback/", { headers: {} }, { state }), false);
     }
 });
