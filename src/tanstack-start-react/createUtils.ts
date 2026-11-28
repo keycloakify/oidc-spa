@@ -22,8 +22,7 @@ import { createServerFn, createMiddleware } from "@tanstack/react-start";
 import { getRequest, setResponseHeader, setResponseStatus } from "@tanstack/react-start/server";
 //import { getRequest, setResponseHeader, setResponseStatus } from "@tanstack/react-start-server";
 import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";
-import { getHomeUrl_earlyInit } from "../core/earlyInit_homeUrl";
-import { getValidRedirectUri } from "../core/validRedirectUri";
+import { getHomeUrlAndValidRedirectUri } from "../core/earlyInit_homeUrlAndValidRedirectUri";
 import { BEFORE_LOAD_FN_BRAND_PROPERTY_NAME } from "./disableSsrIfLoginEnforced";
 import type { MaybeAsync } from "../tools/MaybeAsync";
 import { createObjectThatThrowsIfAccessed } from "../tools/createObjectThatThrowsIfAccessed";
@@ -749,13 +748,11 @@ export function createUtils<User_client, User_server>(params: {
                                     ? "not-resolved-yet"
                                     : ctx.runtimeConfigs.clientId,
                             get validRedirectUri() {
-                                let homeUrl: string;
                                 try {
-                                    homeUrl = getHomeUrl_earlyInit();
+                                    return getHomeUrlAndValidRedirectUri().validRedirectUri;
                                 } catch {
                                     return "redirect-uri-is-unknown";
                                 }
-                                return getValidRedirectUri({ homeUrl });
                             },
                             login: async () => {
                                 throw ctx.oidcInitializationError;
@@ -835,7 +832,7 @@ export function createUtils<User_client, User_server>(params: {
             const returnToUrl = toFullyQualifiedUrl({
                 urlish: loaderContext.location.href,
                 doAssertNoQueryParams: false,
-                rootUrl_fullyQualified: getHomeUrl_earlyInit()
+                rootUrl_fullyQualified: getHomeUrlAndValidRedirectUri().homeUrl
             });
 
             const isUrlAlreadyReplaced =

@@ -10,6 +10,7 @@ import { createServer } from "node:net";
 
 const repository = fileURLToPath(new URL("../../", import.meta.url));
 const example = join(repository, "examples/tanstack-start");
+// Pin the fixture compatibility date below: installed workerd can lag the current date.
 const json = async path => JSON.parse(await readFile(path, "utf8"));
 
 test(
@@ -81,9 +82,11 @@ test(
                     import { oidcSpa } from "oidc-spa/vite-plugin";
                     export default defineConfig({ base: ${JSON.stringify(
                         base
-                    )}, resolve: { tsconfigPaths: true }, plugins: [
+                    )}, resolve: { tsconfigPaths: true, dedupe: ["oidc-spa"] }, plugins: [
                         tanstackStart({ prerender: { enabled: ${spa} }, spa: { enabled: ${spa}, maskPath: "/?__spa_shell" } }),
-                        nitro({ preset: ${JSON.stringify(preset)} }), react(), oidcSpa()
+                        nitro({ preset: ${JSON.stringify(
+                            preset
+                        )} }), react(), oidcSpa({redirectUriPath:"/openid-callback/",enableRoutingCookie:${!spa}})
                     ] });
                 `
                     );

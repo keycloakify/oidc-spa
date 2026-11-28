@@ -50,7 +50,7 @@ import {
 import { firstValueFrom, Subject } from "rxjs";
 import { oidcSpa, type Oidc_angular } from "../../src/angular";
 import { OidcInitializationError } from "../../src/core/OidcInitializationError";
-import { setHomeUrl_earlyInit } from "../../src/core/earlyInit_homeUrl";
+import { setHomeUrlAndValidRedirectUri } from "../../src/core/earlyInit_homeUrlAndValidRedirectUri";
 import { setRootRelativeOriginalLocationHref_earlyInit } from "../../src/core/earlyInit_rootRelativeOriginalLocationHref";
 import { resetCore } from "./core";
 
@@ -67,7 +67,7 @@ Object.assign(globalThis, {
     history,
     document
 });
-setHomeUrl_earlyInit({ BASE_URL: "/base/" });
+setHomeUrlAndValidRedirectUri({ BASE_URL: "/base/", redirectUriPath: "/openid-callback/" });
 setRootRelativeOriginalLocationHref_earlyInit({ rootRelativeOriginalLocationHref: "/base/" });
 const OPTIONAL = new HttpContextToken(() => false);
 const REQUIRED = new HttpContextToken(() => false);

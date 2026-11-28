@@ -5,7 +5,7 @@ import { patchVercelOutput } from "./vercelOutput";
 import { patchCloudflareOutput, prepareCloudflarePrerender } from "./cloudflareOutput";
 import { patchNetlifyOutput, removeNetlifyCallback } from "./netlifyOutput";
 
-import { getSpaPaths, LEGACY_REDIRECT_URI_SPA_ERROR } from "./spaRouting";
+import { getSpaPaths, HOME_REDIRECT_URI_SPA_ERROR } from "./spaRouting";
 import { prepareSpaOutput } from "./prepareSpaOutput";
 
 export type NitroOutput = { dir: string; publicDir: string; serverDir: string };
@@ -18,7 +18,7 @@ type NitroContext = {
 
 export function createTanstackStartNitroOutput(params: {
     isTanstackStart: () => boolean;
-    useLegacyRedirectUri?: boolean;
+    redirectUriPath?: string;
 }) {
     let nitro: NitroContext | undefined;
     let base = "/";
@@ -55,7 +55,7 @@ export function createTanstackStartNitroOutput(params: {
                 if (!["vercel", "cloudflare-module", "netlify", "node-server"].includes(preset ?? ""))
                     return;
 
-                const { basePath, shell } = getSpaPaths(base);
+                const { basePath, callback, shell } = getSpaPaths(base, params.redirectUriPath ?? "/");
                 const unmounted = existsSync(join(output.publicDir, "_shell.html"));
                 // Start does not expose its resolved SPA config. Inspect the final
                 // artifact after prerendering; Nitro clears it on each rebuild.
@@ -64,17 +64,17 @@ export function createTanstackStartNitroOutput(params: {
                     if (preset === "netlify") await removeNetlifyCallback(output);
                     return;
                 }
-                if (params.useLegacyRedirectUri) throw new Error(LEGACY_REDIRECT_URI_SPA_ERROR);
+                if (callback === basePath) throw new Error(HOME_REDIRECT_URI_SPA_ERROR);
                 if (unmounted) await prepareSpaOutput(output.publicDir, basePath);
                 switch (preset) {
                     case "vercel":
-                        await patchVercelOutput(output, base);
+                        await patchVercelOutput(output, base, params.redirectUriPath ?? "/");
                         break;
                     case "cloudflare-module":
-                        await patchCloudflareOutput(output, base);
+                        await patchCloudflareOutput(output, base, params.redirectUriPath ?? "/");
                         break;
                     case "netlify":
-                        await patchNetlifyOutput(output, base);
+                        await patchNetlifyOutput(output, base, params.redirectUriPath ?? "/");
                         break;
                 }
             }

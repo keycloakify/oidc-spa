@@ -150,7 +150,7 @@ for (const legacy of [false, true]) {
                     }
                 )
             );
-            assert.equal(renderedRequest.url, location.href.split("#")[0]);
+            assert.equal(renderedRequest.url, location.href);
             assert.equal(renderedRequest.headers.get("X-Fixture"), "preserved");
         });
     }
@@ -362,7 +362,7 @@ for (const redirectUriPath of ["/", "/openid-callback/", "/nested/../callback/"]
     for (const invalidCookie of [false, true]) {
         for (const extraQuery of [false, true]) {
             for (const response of [{ code: "expired" }, { error: "login_required" }, {}]) {
-                test(`expired callback matches server/client URLs: ${redirectUriPath}, invalidCookie=${invalidCookie}, extraQuery=${extraQuery}, ${JSON.stringify(
+                test(`expired callback handles missing or invalid routing metadata: ${redirectUriPath}, invalidCookie=${invalidCookie}, extraQuery=${extraQuery}, ${JSON.stringify(
                     response
                 )}`, async () => {
                     const { api, location } = browser(
@@ -394,7 +394,7 @@ for (const redirectUriPath of ["/", "/openid-callback/", "/nested/../callback/"]
                         "https://app.test/app/" +
                         (redirectUriPath === "/" && extraQuery ? "?tab=security" : "");
                     assert.equal(location.href, expectedUrl);
-                    assert.equal(renderedUrl, expectedUrl);
+                    assert.equal(renderedUrl, invalidCookie ? request.url : expectedUrl);
                 });
             }
         }

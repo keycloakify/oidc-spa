@@ -7,7 +7,14 @@ import { createTanstackStartNitroOutput } from "../../dist/esm/vite-plugin/tanst
 
 async function fixture(
     t,
-    { preset = "vercel", shell = true, base = "/", legacy = false, tanstack = true, dev = false } = {}
+    {
+        preset = "vercel",
+        shell = true,
+        base = "/",
+        homeCallback = false,
+        tanstack = true,
+        dev = false
+    } = {}
 ) {
     const dir = await mkdtemp(join(tmpdir(), "oidc-spa-vercel-"));
     t.after(() => rm(dir, { recursive: true, force: true }));
@@ -30,7 +37,7 @@ async function fixture(
     await writeFile(configPath, originalSource);
     const { nitroModule, plugin } = createTanstackStartNitroOutput({
         isTanstackStart: () => tanstack,
-        useLegacyRedirectUri: legacy
+        redirectUriPath: homeCallback ? "/" : "/openid-callback/"
     });
     plugin.configResolved({ base });
     nitroModule.setup({ options: { preset, dev, output: { dir, publicDir } }, hooks: { hook() {} } });

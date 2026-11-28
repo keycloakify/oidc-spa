@@ -24,8 +24,8 @@ export function prepareCloudflarePrerender(options: {
     };
 }
 
-export async function patchCloudflareOutput(output: NitroOutput, base = "/") {
-    const { basePath, callback, shell, backend } = getSpaPaths(base);
+export async function patchCloudflareOutput(output: NitroOutput, base = "/", redirectUriPath = "/") {
+    const { basePath, callback, shell, backend } = getSpaPaths(base, redirectUriPath);
     const configPath = join(output.serverDir, "wrangler.json");
     const config = JSON.parse(await readFile(configPath, "utf8"));
     if (typeof config.main !== "string" || typeof config.assets?.binding !== "string") {

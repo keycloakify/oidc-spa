@@ -10,7 +10,7 @@ const { outputFiles } = await build({
         contents: `
             export * from "./src/tanstack-start-react";
             export { oidcSpa as reactSpa } from "./src/react";
-            export { setHomeUrl_earlyInit } from "./src/core/earlyInit_homeUrl";
+            export { setHomeUrlAndValidRedirectUri } from "./src/core/earlyInit_homeUrlAndValidRedirectUri";
             export { setRootRelativeOriginalLocationHref_earlyInit } from "./src/core/earlyInit_rootRelativeOriginalLocationHref";
         `,
         resolveDir: repo
@@ -204,7 +204,11 @@ function fixture({ browser = true, loggedIn = true, envNames = [] } = {}) {
             navigator: {}
         });
     runInNewContext(outputFiles[0].text, context);
-    if (browser) module.exports.setHomeUrl_earlyInit({ BASE_URL: "/" });
+    if (browser)
+        module.exports.setHomeUrlAndValidRedirectUri({
+            BASE_URL: "/",
+            redirectUriPath: "/openid-callback/"
+        });
     module.exports.setRootRelativeOriginalLocationHref_earlyInit({
         rootRelativeOriginalLocationHref: "/public"
     });

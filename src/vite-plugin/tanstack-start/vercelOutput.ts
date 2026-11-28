@@ -2,8 +2,8 @@ import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { getSpaPaths } from "./spaRouting";
 
-export async function patchVercelOutput(output: { dir: string }, base = "/") {
-    const { basePath, callback, shell } = getSpaPaths(base);
+export async function patchVercelOutput(output: { dir: string }, base = "/", redirectUriPath = "/") {
+    const { basePath, callback, shell } = getSpaPaths(base, redirectUriPath);
     const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const configPath = join(output.dir, "config.json");
     const config = JSON.parse(await readFile(configPath, "utf8")) as {

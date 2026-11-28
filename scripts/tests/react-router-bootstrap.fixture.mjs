@@ -30,7 +30,7 @@ import { oidcSpa } from "oidc-spa/vite-plugin";
 export default defineConfig({ base:${JSON.stringify(
             base
         )},server:{host:"127.0.0.1",port:${port},strictPort:true},
-    plugins:[reactRouter(),oidcSpa({browserRuntimeFreeze:{enabled:true},DPoP:{enabled:true,mode:"auto"}})] });`,
+    plugins:[reactRouter(),oidcSpa({redirectUriPath:"/openid-callback/",browserRuntimeFreeze:{enabled:true},DPoP:{enabled:true,mode:"auto"}})] });`,
         "react-router.config.ts": `export default {appDirectory:"ui", basename:${JSON.stringify(
             base
         )},ssr:${apiOnly ? '"unstable_api-only"' : "false"}};`,

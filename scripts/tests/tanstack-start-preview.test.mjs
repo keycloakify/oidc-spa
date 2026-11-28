@@ -51,12 +51,15 @@ async function fixture(
     await mkdir(join(root, "dist"));
     await writeFile(join(root, "dist/_shell.html"), "STALE BUILD");
     const middlewares = [];
-    await configureTanstackStartPreview({
-        config: { root, base },
-        middlewares: {
-            use: middleware => middlewares.push(middleware)
-        }
-    });
+    await configureTanstackStartPreview(
+        {
+            config: { root, base },
+            middlewares: {
+                use: middleware => middlewares.push(middleware)
+            }
+        },
+        "/openid-callback/"
+    );
     const forwarded = [];
     const server = createServer((req, res) => {
         let index = 0;

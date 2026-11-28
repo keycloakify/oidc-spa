@@ -1,3 +1,4 @@
+import { getIsOidcSpaStateUrlParamValue } from "../../core/StateData";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { createRequire } from "node:module";
 import { existsSync } from "node:fs";
@@ -19,7 +20,10 @@ type NodeAdapter = {
     sendNodeResponse(response: ServerResponse, webResponse: Response): Promise<void>;
 };
 
-export async function configureTanstackStartPreview(server: PreviewServer): Promise<void> {
+export async function configureTanstackStartPreview(
+    server: PreviewServer,
+    redirectUriPath = "/"
+): Promise<void> {
     // Nitro is optional. Resolve it from the application, not oidc-spa's installation.
     const projectRequire = createRequire(join(server.config.root, "package.json"));
     let builderPath: string;
@@ -34,7 +38,7 @@ export async function configureTanstackStartPreview(server: PreviewServer): Prom
     if (outputDir === undefined || buildInfo?.publicDir === undefined) return;
 
     const publicDir = resolve(outputDir, buildInfo.publicDir);
-    const { basePath, callback, shell, backend } = getSpaPaths(server.config.base);
+    const { basePath, callback, shell, backend } = getSpaPaths(server.config.base, redirectUriPath);
     // No shell during SSR builds or while Start is still prerendering this build.
     if (!existsSync(join(publicDir, shell.slice(1)))) return;
 
@@ -82,7 +86,11 @@ export async function configureTanstackStartPreview(server: PreviewServer): Prom
             // Serve the shell directly, keeping the callback URL and its slash in
             // the browser. A filesystem/CDN canonicalization redirect would break it.
             const response =
-                url.pathname === callback
+                url.pathname === callback &&
+                (callback !== basePath ||
+                    getIsOidcSpaStateUrlParamValue({
+                        maybeStateUrlParamValue: url.searchParams.get("state") ?? ""
+                    }))
                     ? await serveFile(shell)
                     : (await serveFile(
                           cloudflareHome && url.pathname === "/"

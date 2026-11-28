@@ -23,8 +23,7 @@ import { createStatefulEvt, type StatefulReadonlyEvt, type StatefulEvt } from ".
 import { id } from "../tools/tsafe/id";
 import type { OptionallyAsyncGetterOrDirectValue } from "../tools/GetterOrDirectValue";
 import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";
-import { getHomeUrl_earlyInit } from "../core/earlyInit_homeUrl";
-import { getValidRedirectUri } from "../core/validRedirectUri";
+import { getHomeUrlAndValidRedirectUri } from "../core/earlyInit_homeUrlAndValidRedirectUri";
 
 export function createUtils<User, IsClientOnly extends boolean>(params: {
     createClientUser: CreateClientUser<User>;
@@ -750,13 +749,11 @@ export function createUtils<User, IsClientOnly extends boolean>(params: {
                                     ? "not-resolved-yet"
                                     : ctx.runtimeConfigs.clientId,
                             get validRedirectUri() {
-                                let homeUrl: string;
                                 try {
-                                    homeUrl = getHomeUrl_earlyInit();
+                                    return getHomeUrlAndValidRedirectUri().validRedirectUri;
                                 } catch {
                                     return "redirect-uri-is-unknown";
                                 }
-                                return getValidRedirectUri({ homeUrl });
                             },
                             login: async () => {
                                 throw ctx.oidcInitializationError;
@@ -853,7 +850,7 @@ export function createUtils<User, IsClientOnly extends boolean>(params: {
                         return toFullyQualifiedUrl({
                             urlish: loaderContext_discriminated.loaderContext.location.href,
                             doAssertNoQueryParams: false,
-                            rootUrl_fullyQualified: getHomeUrl_earlyInit()
+                            rootUrl_fullyQualified: getHomeUrlAndValidRedirectUri().homeUrl
                         });
                     case "React Router":
                         return loaderContext_discriminated.loaderContext.request.url;

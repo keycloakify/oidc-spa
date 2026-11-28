@@ -34,25 +34,29 @@ export type OidcSpaVitePluginParams = {
           };
 
     /**
-     *  Default:
-     *  TanStack Start: true
-     *  Other: false
+     * Advanced deployment escape hatch. Leave unset in most applications; configure
+     * only when following the deployment setup of a supported oidc-spa example.
      *
-     *  Forces response mode to query (instead of fragment).
-     *  Set a cookie that enable to avoid hydration error
-     *  after redirection from the IAM provider.
-     *
-     *  Set it to false for frontend statically build.
+     * Defaults to true for TanStack Start and false otherwise. Write a temporary
+     * return-URL cookie for the server integration to render the post-login page
+     * before hydration. Forces response_mode=query so the server sees the state.
+     * Set to false for a statically served frontend. This option does not control
+     * SSR or prerendering; configure those in your framework.
      */
     enableRoutingCookie?: boolean;
 
     /**
-     * Default "/", can be for example "/openid-callback/"
-     * You do not need to create this route in your application.
-     * It's handled internally.
-     * We offer this option only to facilitate CND routing in certain
-     * deployment scenario.
-     * */
+     * Advanced deployment escape hatch. Leave unset in most applications; configure
+     * only when following the deployment setup of a supported oidc-spa example.
+     *
+     * Callback path relative to Vite's base. Defaults to "/" (application home).
+     * For example, "/openid-callback/" under base "/dashboard/" registers
+     * "https://your-app.example/dashboard/openid-callback/" with your provider.
+     * Must start and end with "/", contain no query or fragment, and stay within
+     * the application base. No application route is needed, but the server or CDN
+     * must serve the application's HTML at this URL. Static prerendered frontends
+     * should route a dedicated callback path to their neutral app shell.
+     */
     redirectUriPath?: string;
 };
 
@@ -61,7 +65,7 @@ export function oidcSpa(params: OidcSpaVitePluginParams = {}) {
     let projectType: ProjectType | undefined;
     const nitroOutput = createTanstackStartNitroOutput({
         isTanstackStart: () => projectType === "tanstack-start",
-        useLegacyRedirectUri: params.useLegacyRedirectUri
+        redirectUriPath: params.redirectUriPath
     });
 
     const plugin: Plugin = {

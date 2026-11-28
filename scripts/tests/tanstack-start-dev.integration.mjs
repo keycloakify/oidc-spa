@@ -133,9 +133,15 @@ test(
                     base
                 )},server:{fs:{allow:[${JSON.stringify(root)},${JSON.stringify(
                             example
-                        )}]}},resolve:{tsconfigPaths:true},plugins:[
+                        )}]}},resolve:{tsconfigPaths:true,dedupe:["oidc-spa"]},plugins:[
                     tanstackStart({spa:{enabled:${spa}}}),react(),
-                    ${withNitro ? (oidcFirst ? "oidcSpa(),nitro()" : "nitro(),oidcSpa()") : "oidcSpa()"}
+                    ${
+                        withNitro
+                            ? oidcFirst
+                                ? `oidcSpa({redirectUriPath:"/openid-callback/",enableRoutingCookie:${!spa}}),nitro()`
+                                : `nitro(),oidcSpa({redirectUriPath:"/openid-callback/",enableRoutingCookie:${!spa}})`
+                            : `oidcSpa({redirectUriPath:"/openid-callback/",enableRoutingCookie:${!spa}})`
+                    }
                 ]});`
                     );
                     const server = await startDev(root, base);
@@ -149,21 +155,23 @@ test(
                         const clientPath = entryCode.match(/await import\("([^"]+)"\)/)[1];
                         const bootstrap = await (await server.request(clientPath)).text();
                         assert.match(bootstrap, /oidcEarlyInit/);
-                        assert.match(bootstrap, new RegExp(`ssr:\\s*${!spa}`));
+                        assert.match(bootstrap, new RegExp(`enableRoutingCookie:\\s*${!spa}`));
                         const pricing = await (await server.request(base + "pricing")).text();
                         assert.equal(pricing.includes("<h1>DEV PRICING"), !spa);
                         for (const query of spa
                             ? ["", "?state=b2lkYy1zcGEu" + "a".repeat(20) + "&code=example"]
                             : [""]) {
                             const response = await server.request(base + "openid-callback/" + query);
-                            assert.equal(response.status, spa ? 200 : 307);
+                            assert.equal(response.status, 200);
+                            assert.equal(response.headers.get("location"), null);
                             if (spa) {
-                                assert.equal(response.headers.get("location"), null);
                                 assert(!(await response.text()).includes("<h1>"));
+                            } else {
+                                assert((await response.text()).includes("<h1>DEV HOME"));
                             }
                         }
                         const head = await server.request(base + "openid-callback/", { method: "HEAD" });
-                        assert.equal(head.status, spa ? 200 : 307);
+                        assert.equal(head.status, 200);
                         assert.equal(await head.text(), "");
                         assert.equal(await (await server.request(base + "asset.svg")).text(), asset);
                         const api = await (await server.request(base + "api/probe")).json();

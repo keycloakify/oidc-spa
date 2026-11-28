@@ -20,8 +20,8 @@ export async function removeNetlifyCallback(output: NitroOutput) {
     await writeFile(manifestPath, JSON.stringify(manifest, null, 2) + "\n");
 }
 
-export async function patchNetlifyOutput(output: NitroOutput, base = "/") {
-    const { basePath, callback, shell, backend } = getSpaPaths(base);
+export async function patchNetlifyOutput(output: NitroOutput, base = "/", redirectUriPath = "/") {
+    const { basePath, callback, shell, backend } = getSpaPaths(base, redirectUriPath);
     const entryPath = join(output.serverDir, "server.mjs");
     const original = await readFile(entryPath, "utf8");
     // Netlify statically reads this exported object; importing or spreading a

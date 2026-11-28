@@ -4,7 +4,7 @@ import type { Handlers, HandlerFactoryParams } from "./handlers";
 export function createSharedHandlers(
     params: HandlerFactoryParams & { projectType: "nuxt" | "other" }
 ): Handlers {
-    const clientEntrypoint = createHandleClientEntrypoint({ ...params, ssr: false });
+    const clientEntrypoint = createHandleClientEntrypoint(params);
 
     return {
         load(id) {

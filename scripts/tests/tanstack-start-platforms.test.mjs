@@ -10,7 +10,11 @@ const json = async path => JSON.parse(await readFile(path, "utf8"));
 const shell = "<!doctype html><html><head></head><body>SHELL</body></html>";
 const home = shell.replace("SHELL", "HOME");
 
-async function fixture(t, preset, { spa = true, modern = false, base = "/", legacy = false } = {}) {
+async function fixture(
+    t,
+    preset,
+    { spa = true, modern = false, base = "/", homeCallback = false } = {}
+) {
     const root = await mkdtemp(join(tmpdir(), "oidc-spa-platform-"));
     t.after(() => rm(root, { recursive: true, force: true }));
     const dir =
@@ -24,7 +28,7 @@ async function fixture(t, preset, { spa = true, modern = false, base = "/", lega
     await writeFile(join(output.publicDir, "index.html"), home);
     const { plugin, nitroModule } = createTanstackStartNitroOutput({
         isTanstackStart: () => true,
-        useLegacyRedirectUri: legacy
+        redirectUriPath: homeCallback ? "/" : "/openid-callback/"
     });
     plugin.configResolved({ base });
     let compiled;
@@ -184,9 +188,12 @@ test("Node server SSR without a shell leaves documents untouched", async t => {
 });
 
 for (const preset of ["vercel", "node-server"]) {
-    test(`${preset} SPA rejects legacy home callbacks with migration instructions`, async t => {
-        const f = await fixture(t, preset, { legacy: true });
-        await assert.rejects(f.build(), /useLegacyRedirectUri is not supported.*openid-callback/);
+    test(`${preset} SPA rejects home callbacks with routing instructions`, async t => {
+        const f = await fixture(t, preset, { homeCallback: true });
+        await assert.rejects(
+            f.build(),
+            /static SPA routing requires a dedicated redirectUriPath.*openid-callback/
+        );
         assert.equal(await readFile(join(f.output.publicDir, "index.html"), "utf8"), home);
     });
 }

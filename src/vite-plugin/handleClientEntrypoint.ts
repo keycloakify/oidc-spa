@@ -35,9 +35,8 @@ export function createHandleClientEntrypoint(params: {
     oidcSpaVitePluginParams: OidcSpaVitePluginParams;
     resolvedConfig: ResolvedConfig;
     projectType: ProjectType;
-    ssr: boolean | string;
 }) {
-    const { oidcSpaVitePluginParams, resolvedConfig, projectType, ssr } = params;
+    const { oidcSpaVitePluginParams, resolvedConfig, projectType } = params;
 
     const entryResolution = resolveEntryForProject({
         config: resolvedConfig,
@@ -48,8 +47,25 @@ export function createHandleClientEntrypoint(params: {
         applicationEntrypointImportSpecifier: string;
     }): string {
         const { applicationEntrypointImportSpecifier } = params;
-        const { browserRuntimeFreeze, tokenSubstitution, DPoP, enableRoutingCookie, redirectUriPath } =
-            oidcSpaVitePluginParams ?? {};
+        const {
+            browserRuntimeFreeze,
+            tokenSubstitution,
+            DPoP,
+            enableRoutingCookie: enableRoutingCookie_params,
+            redirectUriPath
+        } = oidcSpaVitePluginParams ?? {};
+
+        const enableRoutingCookie = (() => {
+            if (enableRoutingCookie_params !== undefined) {
+                return enableRoutingCookie_params;
+            }
+
+            if (projectType === "tanstack-start") {
+                return true;
+            }
+
+            return undefined;
+        })();
 
         return [
             // prettier-ignore
@@ -62,7 +78,7 @@ export function createHandleClientEntrypoint(params: {
             !tokenSubstitution ? "" : `import { tokenSubstitution } from "oidc-spa/token-substitution";`,
             `const { shouldLoadApp } = oidcEarlyInit({`,
             // prettier-ignore
-            `BASE_URL: ${(() => { switch (projectType) { case "nuxt": return "__NUXT__.config.app.baseURL"; default: return `"${resolvedConfig.base}"`; } })()},`,
+            `BASE_URL: ${(() => { switch (projectType) { case "nuxt": return "__NUXT__.config.app.baseURL"; default: return JSON.stringify(resolvedConfig.base); } })()},`,
             `securityDefenses: {`,
             // prettier-ignore
             !browserRuntimeFreeze ? "" : `...browserRuntimeFreeze(${paramsToJsLiteral(browserRuntimeFreeze)}),`,
@@ -71,8 +87,10 @@ export function createHandleClientEntrypoint(params: {
             // prettier-ignore
             !tokenSubstitution ? "" : `...tokenSubstitution(${paramsToJsLiteral_tokenSubstitution(tokenSubstitution)}),`,
             `},`,
-            `ssr: ${typeof ssr === "string" ? ssr : JSON.stringify(ssr)},`,
-            !useLegacyRedirectUri ? "" : `useLegacyRedirectUri: true,`,
+            // prettier-ignore
+            enableRoutingCookie === undefined ? "" : `enableRoutingCookie: ${enableRoutingCookie ? "true" : "false"},`,
+            // prettier-ignore
+            redirectUriPath === undefined ? "" : `redirectUriPath: ${JSON.stringify(redirectUriPath)},`,
             `});`,
             ``,
             `if (shouldLoadApp) {`,

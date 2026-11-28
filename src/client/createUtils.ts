@@ -6,8 +6,7 @@ import { assert } from "../tools/tsafe/assert";
 import { id } from "../tools/tsafe/id";
 import type { OptionallyAsyncGetterOrDirectValue } from "../tools/GetterOrDirectValue";
 import { toFullyQualifiedUrl } from "../tools/toFullyQualifiedUrl";
-import { getHomeUrl_earlyInit } from "../core/earlyInit_homeUrl";
-import { getValidRedirectUri } from "../core/validRedirectUri";
+import { getHomeUrlAndValidRedirectUri } from "../core/earlyInit_homeUrlAndValidRedirectUri";
 
 export function createUtils<User>(params: {
     createClientUser: CreateClientUser<User>;
@@ -250,13 +249,11 @@ export function createUtils<User>(params: {
                                 ? "not-resolved-yet"
                                 : ctx.runtimeConfigs.clientId,
                         get validRedirectUri() {
-                            let homeUrl: string;
                             try {
-                                homeUrl = getHomeUrl_earlyInit();
+                                return getHomeUrlAndValidRedirectUri().validRedirectUri;
                             } catch {
                                 return "redirect-uri-is-unknown";
                             }
-                            return getValidRedirectUri({ homeUrl });
                         },
                         login: async () => {
                             throw ctx.oidcInitializationError;

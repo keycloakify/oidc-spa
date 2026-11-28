@@ -13,8 +13,7 @@ export function createReactRouterFrameworkHandlers(params: HandlerFactoryParams)
 
     const clientEntrypoint = createHandleClientEntrypoint({
         ...params,
-        projectType: "react-router-framework",
-        ssr: false
+        projectType: "react-router-framework"
     });
     const document = createHandleReactRouter({
         resolvedConfig,

@@ -233,7 +233,7 @@ test("dependency optimization distinguishes the main and child React Router comp
 
 for (const command of ["serve", "build"]) {
     for (const spa of [false, true]) {
-        test(`TanStack bootstrap sets ssr correctly: command=${command}, spa=${spa}`, async t => {
+        test(`TanStack bootstrap defaults routing cookies independently of SPA mode: command=${command}, spa=${spa}`, async t => {
             const f = await fixture(t);
             const plugin = oidcSpa();
             callHook(plugin, "configResolved", undefined, {
@@ -253,31 +253,19 @@ for (const command of ["serve", "build"]) {
                     return { shouldLoadApp: false };
                 }
             });
-            assert.equal(received.ssr, !spa);
-            assert(!Object.hasOwn(received.securityDefenses, "ssr"));
+            assert.equal(received.enableRoutingCookie, true);
+            assert.equal(received.redirectUriPath, "/");
+            assert.equal("ssr" in received, false);
+            assert.equal("enableRoutingCookie" in received.securityDefenses, false);
         });
     }
 }
-
-test("TanStack dev SPA rejects the legacy redirect URI before startup", async t => {
-    const f = await fixture(t);
-    const plugin = oidcSpa({ useLegacyRedirectUri: true });
-    assert.throws(
-        () =>
-            callHook(plugin, "configResolved", undefined, {
-                ...f.config,
-                define: { "import.meta.env.TSS_SHELL": JSON.stringify("true") },
-                plugins: [{ name: "tanstack-react-start:config" }]
-            }),
-        /useLegacyRedirectUri is not supported.*openid-callback/
-    );
-});
 
 for (const spa of [false, true]) {
     for (const base of ["/", "/dashboard/"]) {
         test(`TanStack dev rewrites only SPA callback document requests: spa=${spa}, base=${base}`, async t => {
             const f = await fixture(t);
-            const plugin = oidcSpa();
+            const plugin = oidcSpa({ redirectUriPath: "/openid-callback/", enableRoutingCookie: false });
             callHook(plugin, "configResolved", undefined, {
                 ...f.config,
                 base,
@@ -324,4 +312,115 @@ for (const spa of [false, true]) {
             assert.equal(watcher.listenerCount("change"), 0);
         });
     }
+}
+
+for (const project of ["tanstack-start", "react-router-framework", "other", "nuxt"]) {
+    for (const enableRoutingCookie of [undefined, false, true]) {
+        test(`bootstrap options execute correctly: ${project}, cookie=${enableRoutingCookie}`, async t => {
+            const f = await fixture(t);
+            const redirectUriPath = '/login-"callback/';
+            const plugin = oidcSpa({ redirectUriPath, enableRoutingCookie });
+            callHook(plugin, "configResolved", undefined, {
+                ...f.config,
+                base: '/team-"quoted/',
+                plugins:
+                    project === "tanstack-start"
+                        ? [{ name: "tanstack-react-start:config" }]
+                        : project === "react-router-framework"
+                        ? [{ name: "react-router" }]
+                        : project === "nuxt"
+                        ? [{ name: "nuxt:environments" }]
+                        : [],
+                build: { rollupOptions: { input: f.client } },
+                __reactRouterPluginContext: {
+                    entryClientFilePath: f.client,
+                    reactRouterConfig: { ssr: false, basename: "/" }
+                }
+            });
+            const { context } = pluginContext("client");
+            let source;
+            if (project === "react-router-framework") {
+                const id = await callHook(
+                    plugin,
+                    "resolveId",
+                    context,
+                    "virtual:oidc-spa/react-router-bootstrap"
+                );
+                source = await callHook(plugin, "load", context, id);
+            } else {
+                source = await callHook(plugin, "load", context, f.client);
+            }
+            const { runInNewContext } = await import("node:vm");
+            let received;
+            runInNewContext(source.replace(/^import .*;$/gm, ""), {
+                __NUXT__: { config: { app: { baseURL: '/team-"quoted/' } } },
+                oidcEarlyInit(params) {
+                    received = params;
+                    return { shouldLoadApp: false };
+                }
+            });
+            assert.equal(received.BASE_URL, '/team-"quoted/');
+            assert.equal(received.redirectUriPath, redirectUriPath);
+            assert.equal(
+                received.enableRoutingCookie,
+                enableRoutingCookie ?? project === "tanstack-start"
+            );
+            assert.equal("ssr" in received, false);
+            assert.equal("useLegacyRedirectUri" in received, false);
+            assert.equal("redirectUriPath" in received.securityDefenses, false);
+            if (project === "tanstack-start") {
+                const serverEntry_original = { fetch() {} };
+                const serverSource = await callHook(plugin, "load", context, f.server);
+                let serverParams;
+                runInNewContext(
+                    serverSource
+                        .replace(/^import .*;$/gm, "")
+                        .replace("export default serverEntry;", ""),
+                    {
+                        serverEntry_original,
+                        withOidcSpaServerEntry(params) {
+                            serverParams = params;
+                            return params.serverEntry_original;
+                        }
+                    }
+                );
+                assert.equal(serverParams.serverEntry_original, serverEntry_original);
+                assert.equal(serverParams.resolvedConfigBase, received.BASE_URL);
+                assert.equal(serverParams.oidcSpaVitePluginParams_redirectUriPath, redirectUriPath);
+            }
+        });
+    }
+}
+
+for (const redirectUriPath of [undefined, "/", "/login/return/"]) {
+    test(`SPA development uses the configured callback path: ${redirectUriPath}`, async t => {
+        const f = await fixture(t);
+        const plugin = oidcSpa({ redirectUriPath });
+        callHook(plugin, "configResolved", undefined, {
+            ...f.config,
+            define: { "import.meta.env.TSS_SHELL": JSON.stringify("true") },
+            plugins: [{ name: "tanstack-react-start:config" }]
+        });
+        const middlewares = [];
+        const httpServer = new EventEmitter();
+        callHook(plugin, "configureServer", undefined, {
+            environments: {},
+            watcher: new EventEmitter(),
+            httpServer,
+            middlewares: { use: handler => middlewares.push(handler) }
+        });
+        t.after(() => httpServer.emit("close"));
+        const callback = "/app/" + (redirectUriPath ?? "/").slice(1);
+        for (const [path, expected] of [
+            [callback, callback],
+            [callback + "?tab=security&state=ordinary", callback + "?tab=security&state=ordinary"],
+            [callback + "?state=b2lkYy1zcGEu" + "a".repeat(20), "/app/"],
+            ["/app/pricing", "/app/pricing"]
+        ]) {
+            const request = { url: path, originalUrl: path, method: "GET" };
+            for (const middleware of middlewares) middleware(request, {}, () => {});
+            const dedicatedCallback = callback !== "/app/" && path.startsWith(callback);
+            assert.equal(request.url, dedicatedCallback ? "/app/" : expected);
+        }
+    });
 }

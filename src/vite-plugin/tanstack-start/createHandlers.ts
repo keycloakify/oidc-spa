@@ -1,33 +1,20 @@
+import { getIsOidcSpaStateUrlParamValue } from "../../core/StateData";
 import { createHandleClientEntrypoint } from "../handleClientEntrypoint";
 import type { Handlers, HandlerFactoryParams } from "../handlers";
 import { createHandleTanStackStartServerEntrypoint } from "./createHandleTanStackStartServerEntrypoint";
 import { createHandleTanstackStartClientOutput } from "./handleTanstackStartClientOutput";
 import { createHandleTanstackStartRuntimeConfigs } from "./handleTanstackStartRuntimeConfigs";
-import { getSpaPaths, SPA_DOCUMENT_ATTRIBUTE, LEGACY_REDIRECT_URI_SPA_ERROR } from "./spaRouting";
+import { getSpaPaths } from "./spaRouting";
 import { transformCreateFileRoute } from "./transformTanstackRouterCreateFileRoute";
 import { configureTanstackStartPreview } from "./configurePreviewServer";
 
 export function createTanstackStartHandlers(params: HandlerFactoryParams): Handlers {
     const { resolvedConfig, oidcSpaVitePluginParams } = params;
 
-    // Start exposes the shell flag in dev. Build-time SPA options are private;
-    // the output hook marks static SPA documents once prerendering has finished.
-    const ssr =
-        resolvedConfig.command === "serve"
-            ? resolvedConfig.define?.["import.meta.env.TSS_SHELL"] !== JSON.stringify("true")
-            : `typeof document === "undefined" || !document.documentElement.hasAttribute(${JSON.stringify(
-                  SPA_DOCUMENT_ATTRIBUTE
-              )})`;
-
-    if (oidcSpaVitePluginParams.useLegacyRedirectUri === true && ssr === false) {
-        throw new Error(LEGACY_REDIRECT_URI_SPA_ERROR);
-    }
-
     const clientEntrypoint = createHandleClientEntrypoint({
         oidcSpaVitePluginParams,
         resolvedConfig,
-        projectType: "tanstack-start",
-        ssr
+        projectType: "tanstack-start"
     });
     const runtimeConfigs = createHandleTanstackStartRuntimeConfigs({ resolvedConfig });
     const serverEntrypoint = createHandleTanStackStartServerEntrypoint({
@@ -76,13 +63,21 @@ export function createTanstackStartHandlers(params: HandlerFactoryParams): Handl
         generateBundle: clientOutput?.generateBundle,
         configureServer(server) {
             runtimeConfigs.configureServer(server);
-            if (ssr !== false) return;
+            if (resolvedConfig.define?.["import.meta.env.TSS_SHELL"] !== JSON.stringify("true")) return;
 
-            const { basePath, callback } = getSpaPaths(resolvedConfig.base);
+            const { basePath, callback } = getSpaPaths(
+                resolvedConfig.base,
+                oidcSpaVitePluginParams.redirectUriPath
+            );
             server.middlewares.use((req, _res, next) => {
                 if (
                     (req.method === "GET" || req.method === "HEAD") &&
-                    req.url?.split("?", 1)[0] === callback
+                    req.url?.split("?", 1)[0] === callback &&
+                    (callback !== basePath ||
+                        getIsOidcSpaStateUrlParamValue({
+                            maybeStateUrlParamValue:
+                                new URL(req.url, "http://localhost").searchParams.get("state") ?? ""
+                        }))
                 ) {
                     // Start renders a live shell in SPA dev mode, but still
                     // canonicalizes the callback's trailing slash. Render at the
@@ -95,6 +90,7 @@ export function createTanstackStartHandlers(params: HandlerFactoryParams): Handl
                 next();
             });
         },
-        configurePreviewServer: configureTanstackStartPreview
+        configurePreviewServer: server =>
+            configureTanstackStartPreview(server, oidcSpaVitePluginParams.redirectUriPath)
     };
 }

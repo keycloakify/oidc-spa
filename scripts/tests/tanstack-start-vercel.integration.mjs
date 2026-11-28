@@ -32,21 +32,22 @@ test("packaged plugin detects SPA output across rebuilds and either Nitro plugin
         "ssr-after-spa",
         "ssr-prerender",
         "oidc-first",
-        "ssr-legacy",
+        "ssr-home",
         "spa-base",
-        "spa-legacy-rejected"
+        "spa-home-rejected"
     ]) {
         await t.test(mode, async t => {
             const spa = mode === "nitro-first" || mode === "oidc-first" || mode.startsWith("spa-");
             const base = mode === "spa-base" ? "/dashboard/" : "/";
             const shellPath = base + "_shell.html";
             const prerender = spa || mode === "ssr-prerender";
+            const oidcPlugin = `oidcSpa({redirectUriPath:${JSON.stringify(
+                mode.includes("home") ? "/" : "/openid-callback/"
+            )},enableRoutingCookie:${!spa}})`;
             const plugins =
                 mode === "oidc-first"
-                    ? 'oidcSpa(), nitro({ preset: "vercel" })'
-                    : `nitro({ preset: "vercel" }), oidcSpa({ useLegacyRedirectUri: ${mode.includes(
-                          "legacy"
-                      )} })`;
+                    ? `${oidcPlugin}, nitro({ preset: "vercel" })`
+                    : `nitro({ preset: "vercel" }), ${oidcPlugin}`;
             await writeFile(
                 join(root, "vite.config.ts"),
                 `import { defineConfig } from "vite";
@@ -56,7 +57,7 @@ test("packaged plugin detects SPA output across rebuilds and either Nitro plugin
                 import { oidcSpa } from "oidc-spa/vite-plugin";
                 export default defineConfig({
                     base: ${JSON.stringify(base)},
-                    resolve: { tsconfigPaths: true },
+                    resolve: { tsconfigPaths: true, dedupe: ["oidc-spa"] },
                     plugins: [
                         tanstackStart({
                             prerender: { enabled: ${prerender} },
@@ -78,10 +79,10 @@ test("packaged plugin detects SPA output across rebuilds and either Nitro plugin
                     }
                 );
             } catch (error) {
-                if (mode === "spa-legacy-rejected") {
+                if (mode === "spa-home-rejected") {
                     assert.match(
                         error.stdout + error.stderr,
-                        /useLegacyRedirectUri is not supported.*openid-callback/s
+                        /static SPA routing requires a dedicated redirectUriPath.*openid-callback/s
                     );
                     return;
                 }
@@ -89,7 +90,7 @@ test("packaged plugin detects SPA output across rebuilds and either Nitro plugin
                     cause: error
                 });
             }
-            assert.notEqual(mode, "spa-legacy-rejected", "legacy SPA must reject the build");
+            assert.notEqual(mode, "spa-home-rejected", "home callback SPA must reject the build");
             const output = join(root, ".vercel/output");
             const config = JSON.parse(await readFile(join(output, "config.json"), "utf8"));
             if (!spa) {

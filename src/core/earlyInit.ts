@@ -15,8 +15,8 @@ const IFRAME_MESSAGE_PREFIX = "oidc-spa:cross-window-messaging:";
 
 export type ParamsOfEarlyInit = {
     /**
-     * Base path of where is deployed the webapp
-     * it's `import.meta.env.BASE_URL`
+     * Application base URL, typically import.meta.env.BASE_URL in Vite.
+     * Use "/" when hosted at the domain root, or e.g. "/dashboard/" for a subpath.
      */
     BASE_URL: string;
 
@@ -27,16 +27,33 @@ export type ParamsOfEarlyInit = {
         enableTokenSubstitution?: () => void;
     };
 
-    /** Default: false */
+    /**
+     * Advanced deployment escape hatch. Leave unset in most applications; configure
+     * only when following the deployment setup of a supported oidc-spa example.
+     *
+     * Defaults to false. Write a temporary cookie containing the post-login return
+     * URL so a server integration can render the destination at the callback URL,
+     * matching the page the client will hydrate. This is routing metadata, not
+     * authentication evidence, and requires a corresponding server integration.
+     * Forces response_mode=query because URL fragments are not sent to the server.
+     * Leave disabled when the frontend is served as static files.
+     */
     enableRoutingCookie?: boolean;
 
     /**
-     * Default "/", can be for example "/openid-callback/"
-     * You do not need to create this route in your application.
-     * It's handled internally.
-     * We offer this option only to facilitate CND routing in certain
-     * deployment scenario.
-     * */
+     * Advanced deployment escape hatch. Leave unset in most applications; configure
+     * only when following the deployment setup of a supported oidc-spa example.
+     *
+     * Callback path relative to BASE_URL. Defaults to "/": the application home
+     * is the redirect URI. For example, BASE_URL="/dashboard/" with
+     * redirectUriPath="/openid-callback/" uses "/dashboard/openid-callback/".
+     * Register the resulting absolute URL with your identity provider.
+     * Must start and end with "/", contain no query or fragment, and stay within
+     * the application base. No application route is needed: early initialization
+     * consumes the callback before loading the app. Your server or CDN must still
+     * serve the application's HTML at this URL; a static deployment may need a
+     * rewrite to a neutral app shell instead of a prerendered page.
+     */
     redirectUriPath?: string;
 };
 

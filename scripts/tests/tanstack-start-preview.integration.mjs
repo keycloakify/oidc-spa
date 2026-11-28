@@ -10,6 +10,7 @@ import { fileURLToPath } from "node:url";
 
 const repository = fileURLToPath(new URL("../../", import.meta.url));
 const example = join(repository, "examples/tanstack-start");
+// Pin the fixture compatibility date below: installed workerd can lag the current date.
 async function freePort() {
     const socket = createServer();
     await new Promise(resolve => socket.listen(0, "127.0.0.1", resolve));
@@ -92,7 +93,10 @@ test(
             await writeFile(join(root, name), source);
 
         const build = async ({ preset, base, spa, oidcFirst }) => {
-            const nitro = `nitro({ preset: ${JSON.stringify(preset)} })`;
+            const nitro = `nitro({ preset: ${JSON.stringify(
+                preset
+            )}, compatibilityDate: "2026-11-01" })`;
+            const oidc = `oidcSpa({redirectUriPath:"/openid-callback/",enableRoutingCookie:${!spa}})`;
             await writeFile(
                 join(root, "vite.config.ts"),
                 `
@@ -100,9 +104,9 @@ test(
             import react from '@vitejs/plugin-react';import {nitro} from 'nitro/vite';import {oidcSpa} from 'oidc-spa/vite-plugin';
             export default defineConfig({base:${JSON.stringify(
                 base
-            )},resolve:{tsconfigPaths:true},plugins:[
+            )},resolve:{tsconfigPaths:true,dedupe:["oidc-spa"]},plugins:[
                 tanstackStart({prerender:{enabled:${spa}},spa:{enabled:${spa},maskPath:'/?__spa_shell'}}),react(),
-                ${oidcFirst ? `oidcSpa(),${nitro}` : `${nitro},oidcSpa()`}
+                ${oidcFirst ? `${oidc},${nitro}` : `${nitro},${oidc}`}
             ]});`
             );
             try {
@@ -186,7 +190,10 @@ test(
                 try {
                     assert.match(await (await preview.request("/")).text(), /PRERENDERED HOME/);
                     assert.equal((await preview.request("/unknown-page")).status, 404);
-                    assert.equal((await preview.request("/openid-callback/")).status, 307);
+                    const callback = await preview.request("/openid-callback/");
+                    assert.equal(callback.status, 200);
+                    assert.equal(callback.headers.get("location"), null);
+                    assert.match(await callback.text(), /PRERENDERED HOME/);
                     assert.equal((await (await preview.request("/api/probe")).json()).api, "working");
                 } finally {
                     await preview.stop();
