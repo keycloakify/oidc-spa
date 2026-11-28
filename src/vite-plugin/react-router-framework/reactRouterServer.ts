@@ -6,7 +6,6 @@ import type { RouteObject, ServerBuild } from "react-router" assert { "resolutio
 import * as reactRouter from "react-router";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { getSpaPaths } from "../tanstack-start/spaRouting";
 
 const { createRequestHandler, matchRoutes } = reactRouter as typeof ReactRouter;
 
@@ -92,7 +91,7 @@ export function createReactRouterFetchHandler(getBuild: () => ServerBuild) {
 
 function createRuntime(build: ServerBuild) {
     const handleRequest = createReactRouterRequestHandler(build);
-    const { basePath, callback } = getSpaPaths(build.basename);
+    const basePath = new URL(build.basename ?? "/", "http://localhost").pathname.replace(/\/?$/, "/");
     const manifestPath =
         build.routeDiscovery.mode === "lazy"
             ? basePath + build.routeDiscovery.manifestPath.replace(/^\//, "")
@@ -124,9 +123,7 @@ function createRuntime(build: ServerBuild) {
         const isWithinBase = url.pathname === basePath.slice(0, -1) || url.pathname.startsWith(basePath);
         const isAsset = url.pathname === assetsPath.slice(0, -1) || url.pathname.startsWith(assetsPath);
         const isDocument =
-            handleRequest.isDocumentRequest(url) ||
-            url.pathname === callback ||
-            request.headers.get("Accept")?.includes("text/html");
+            handleRequest.isDocumentRequest(url) || request.headers.get("Accept")?.includes("text/html");
         if (!isWithinBase || isAsset || !isDocument) return handleRequest(request);
         if (request.method !== "GET" && request.method !== "HEAD") {
             return new Response("Method not allowed", { status: 405, headers: { Allow: "GET, HEAD" } });

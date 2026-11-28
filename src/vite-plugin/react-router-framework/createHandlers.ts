@@ -17,6 +17,7 @@ export function createReactRouterFrameworkHandlers(params: HandlerFactoryParams)
     });
     const document = createHandleReactRouter({
         resolvedConfig,
+        oidcSpaVitePluginParams: params.oidcSpaVitePluginParams,
         getClientEntrypointSource: clientEntrypoint.getClientEntrypointSource
     });
 

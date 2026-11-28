@@ -7,7 +7,6 @@ import { createTanstackStartHandlers } from "./tanstack-start/createHandlers";
 import { createReactRouterFrameworkHandlers } from "./react-router-framework/createHandlers";
 import { configureDependencyOptimization } from "./manageOptimizedDeps";
 import { getProjectType, type ProjectType } from "./projectType";
-import { createTanstackStartNitroOutput } from "./tanstack-start/nitroOutput";
 
 export type OidcSpaVitePluginParams = {
     /** See: https://docs.oidc-spa.dev/v/v10/security-features/browser-runtime-freeze */
@@ -60,14 +59,9 @@ export type OidcSpaVitePluginParams = {
     redirectUriPath?: string;
 };
 
-export function oidcSpa(params: OidcSpaVitePluginParams = {}) {
+export function oidcSpa(params: OidcSpaVitePluginParams = {}): Plugin {
     let handlers: Handlers | undefined;
     let projectType: ProjectType | undefined;
-    const nitroOutput = createTanstackStartNitroOutput({
-        isTanstackStart: () => projectType === "tanstack-start",
-        redirectUriPath: params.redirectUriPath
-    });
-
     const plugin: Plugin = {
         name: "oidc-spa",
         enforce: "pre",
@@ -116,22 +110,9 @@ export function oidcSpa(params: OidcSpaVitePluginParams = {}) {
             assert(handlers !== undefined);
             return handlers.buildStart?.call(this, options);
         },
-        configureServer: {
-            // Apply SPA callback rewrites before Nitro or Start handles the request.
-            order: "pre",
-            handler(server) {
-                assert(handlers !== undefined);
-                return handlers.configureServer?.call(this, server);
-            }
-        },
-        configurePreviewServer: {
-            // Nitro's preview handler consumes misses too, so install our static
-            // SPA routing before it, regardless of plugin array order.
-            order: "pre",
-            handler(server) {
-                assert(handlers !== undefined);
-                return handlers.configurePreviewServer?.call(this, server);
-            }
+        configureServer(server) {
+            assert(handlers !== undefined);
+            return handlers.configureServer?.call(this, server);
         },
         generateBundle: {
             order: "pre",
@@ -142,7 +123,5 @@ export function oidcSpa(params: OidcSpaVitePluginParams = {}) {
         }
     };
 
-    // Nitro discovers modules across the complete plugin array, regardless of
-    // whether nitro() appears before or after oidcSpa().
-    return [Object.assign(plugin, { nitro: nitroOutput.nitroModule }), nitroOutput.plugin];
+    return plugin;
 }

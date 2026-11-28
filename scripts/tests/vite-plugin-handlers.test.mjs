@@ -254,7 +254,7 @@ for (const command of ["serve", "build"]) {
                 }
             });
             assert.equal(received.enableRoutingCookie, true);
-            assert.equal(received.redirectUriPath, "/");
+            assert.equal(received.redirectUriPath, undefined);
             assert.equal("ssr" in received, false);
             assert.equal("enableRoutingCookie" in received.securityDefenses, false);
         });
@@ -262,56 +262,30 @@ for (const command of ["serve", "build"]) {
 }
 
 for (const spa of [false, true]) {
-    for (const base of ["/", "/dashboard/"]) {
-        test(`TanStack dev rewrites only SPA callback document requests: spa=${spa}, base=${base}`, async t => {
-            const f = await fixture(t);
-            const plugin = oidcSpa({ redirectUriPath: "/openid-callback/", enableRoutingCookie: false });
-            callHook(plugin, "configResolved", undefined, {
-                ...f.config,
-                base,
-                define: { "import.meta.env.TSS_SHELL": JSON.stringify(String(spa)) },
-                plugins: [{ name: "tanstack-react-start:config" }]
-            });
-            const middleware = [];
-            const watcher = new EventEmitter();
-            const httpServer = new EventEmitter();
-            callHook(plugin, "configureServer", undefined, {
-                environments: {},
-                watcher,
-                httpServer,
-                middlewares: { use: handler => middleware.push(handler) }
-            });
-            assert.equal(watcher.listenerCount("change"), 1, "runtime config watching remains active");
-            assert.equal(middleware.length, spa ? 1 : 0);
-            for (const method of ["GET", "HEAD", "POST", "PUT"]) {
-                for (const path of [
-                    "openid-callback/",
-                    "openid-callback/?state=example&code=example",
-                    "openid-callback",
-                    "openid-callback/other",
-                    "api/todos?state=example",
-                    "_serverFn/example?state=example",
-                    "@vite/client",
-                    "src/router.tsx"
-                ]) {
-                    const url = base + path;
-                    const req = { method, url, originalUrl: url };
-                    let nextCalls = 0;
-                    for (const handler of middleware) handler(req, {}, () => nextCalls++);
-                    const rewrite =
-                        spa &&
-                        ["GET", "HEAD"].includes(method) &&
-                        path.startsWith("openid-callback/") &&
-                        path.split("?", 1)[0] === "openid-callback/";
-                    assert.equal(req.url, rewrite ? base : url, `${method} ${url}`);
-                    assert.equal(req.originalUrl, rewrite ? base : url);
-                    assert.equal(nextCalls, middleware.length);
-                }
-            }
-            httpServer.emit("close");
-            assert.equal(watcher.listenerCount("change"), 0);
+    test(`TanStack dev leaves document routing to Start and retains runtime config watching: spa=${spa}`, async t => {
+        const f = await fixture(t);
+        const plugin = oidcSpa({ redirectUriPath: "/openid-callback/", enableRoutingCookie: false });
+        callHook(plugin, "configResolved", undefined, {
+            ...f.config,
+            define: { "import.meta.env.TSS_SHELL": JSON.stringify(String(spa)) },
+            plugins: [{ name: "tanstack-react-start:config" }]
         });
-    }
+        const middleware = [];
+        const watcher = new EventEmitter();
+        const httpServer = new EventEmitter();
+        callHook(plugin, "configureServer", undefined, {
+            environments: {},
+            watcher,
+            httpServer,
+            middlewares: { use: handler => middleware.push(handler) }
+        });
+        assert.equal(watcher.listenerCount("change"), 1);
+        assert.equal(middleware.length, 0);
+        assert.equal(plugin.configurePreviewServer, undefined);
+        assert.equal(plugin.nitro, undefined);
+        httpServer.emit("close");
+        assert.equal(watcher.listenerCount("change"), 0);
+    });
 }
 
 for (const project of ["tanstack-start", "react-router-framework", "other", "nuxt"]) {
@@ -363,7 +337,7 @@ for (const project of ["tanstack-start", "react-router-framework", "other", "nux
             assert.equal(received.redirectUriPath, redirectUriPath);
             assert.equal(
                 received.enableRoutingCookie,
-                enableRoutingCookie ?? project === "tanstack-start"
+                enableRoutingCookie ?? (project === "tanstack-start" ? true : undefined)
             );
             assert.equal("ssr" in received, false);
             assert.equal("useLegacyRedirectUri" in received, false);
@@ -392,35 +366,58 @@ for (const project of ["tanstack-start", "react-router-framework", "other", "nux
     }
 }
 
-for (const redirectUriPath of [undefined, "/", "/login/return/"]) {
-    test(`SPA development uses the configured callback path: ${redirectUriPath}`, async t => {
+for (const redirectUriPath of [undefined, "/login/callback/"]) {
+    test(`React Router dev preserves ordinary home loaders and isolates callbacks: ${redirectUriPath}`, async t => {
         const f = await fixture(t);
         const plugin = oidcSpa({ redirectUriPath });
         callHook(plugin, "configResolved", undefined, {
             ...f.config,
-            define: { "import.meta.env.TSS_SHELL": JSON.stringify("true") },
-            plugins: [{ name: "tanstack-react-start:config" }]
+            publicDir: join(f.root, "public"),
+            plugins: [{ name: "react-router" }],
+            __reactRouterPluginContext: {
+                entryClientFilePath: f.client,
+                reactRouterConfig: { ssr: false, basename: "/app/" }
+            }
         });
-        const middlewares = [];
-        const httpServer = new EventEmitter();
+        const middleware = [];
         callHook(plugin, "configureServer", undefined, {
-            environments: {},
-            watcher: new EventEmitter(),
-            httpServer,
-            middlewares: { use: handler => middlewares.push(handler) }
+            middlewares: { use: handler => middleware.push(handler) },
+            environments: {
+                ssr: {
+                    runner: {
+                        import: async () => ({
+                            isApiOnly: false,
+                            basename: "/app/",
+                            isResourceRequest: () => false,
+                            handleDocument: async () => new Response(null, { status: 204 })
+                        })
+                    }
+                }
+            }
         });
-        t.after(() => httpServer.emit("close"));
         const callback = "/app/" + (redirectUriPath ?? "/").slice(1);
-        for (const [path, expected] of [
-            [callback, callback],
-            [callback + "?tab=security&state=ordinary", callback + "?tab=security&state=ordinary"],
-            [callback + "?state=b2lkYy1zcGEu" + "a".repeat(20), "/app/"],
-            ["/app/pricing", "/app/pricing"]
+        const state = "b2lkYy1zcGEu" + "a".repeat(20);
+        for (const [url, servesNeutralDocument] of [
+            ["/app/", false],
+            ["/app/?state=ordinary&tab=security", false],
+            [callback + "?state=" + state, true],
+            [callback, redirectUriPath !== undefined]
         ]) {
-            const request = { url: path, originalUrl: path, method: "GET" };
-            for (const middleware of middlewares) middleware(request, {}, () => {});
-            const dedicatedCallback = callback !== "/app/" && path.startsWith(callback);
-            assert.equal(request.url, dedicatedCallback ? "/app/" : expected);
+            const request = { url, method: "GET", headers: { host: "app.test", accept: "text/html" } };
+            let forwarded = false;
+            let ended = false;
+            const response = Object.assign(new EventEmitter(), {
+                setHeader() {},
+                end() {
+                    ended = true;
+                }
+            });
+            await middleware[0](request, response, error => {
+                if (error) throw error;
+                forwarded = true;
+            });
+            assert.equal(ended, servesNeutralDocument, url);
+            assert.equal(forwarded, !servesNeutralDocument, url);
         }
     });
 }

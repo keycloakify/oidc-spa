@@ -7,7 +7,9 @@ import { Readable } from "node:stream";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { babelParser, babelTraverse, babelTypes, babelGenerate } from "../../vendor/build-runtime/babel";
 import { resumeReactRouterDocument } from "./reactRouterDocument";
-import { getSpaPaths } from "../tanstack-start/spaRouting";
+import { buildValidRedirectUri } from "../../core/earlyInit_homeUrlAndValidRedirectUri";
+import { getIsOidcSpaStateUrlParamValue } from "../../core/StateData";
+import type { OidcSpaVitePluginParams } from "../vite-plugin";
 import type { createReactRouterRequestHandler } from "./reactRouterServer";
 
 const BOOTSTRAP_ID = "virtual:oidc-spa/react-router-bootstrap";
@@ -35,9 +37,10 @@ type DevDocumentModule = {
 
 export function createHandleReactRouter(params: {
     resolvedConfig: ResolvedConfig;
+    oidcSpaVitePluginParams: OidcSpaVitePluginParams;
     getClientEntrypointSource: (params: { applicationEntrypointImportSpecifier: string }) => string;
 }) {
-    const { resolvedConfig, getClientEntrypointSource } = params;
+    const { resolvedConfig, oidcSpaVitePluginParams, getClientEntrypointSource } = params;
     const context = (resolvedConfig as FrameworkConfig).__reactRouterPluginContext;
     if (!context?.reactRouterConfig) {
         throw new Error(
@@ -314,7 +317,28 @@ function __oidcSpaDocumentRoutes(routes) {
                 }
                 // Dedicated callbacks always receive the neutral document. Other
                 // SPA requests retain their public build-time root loader.
-                const isCallback = pathname === getSpaPaths(module.basename).callback;
+                const isCallback = (() => {
+                    const homeUrl = new URL(module.basename.replace(/\/?$/, "/"), url.origin);
+                    let callback: URL;
+                    try {
+                        callback = new URL(
+                            buildValidRedirectUri({
+                                homeUrl: homeUrl.href,
+                                redirectUriPath: oidcSpaVitePluginParams.redirectUriPath ?? "/"
+                            })
+                        );
+                    } catch {
+                        // Leave invalid configuration to earlyInit's detailed error.
+                        return false;
+                    }
+                    return (
+                        pathname === callback.pathname &&
+                        (callback.pathname !== homeUrl.pathname ||
+                            getIsOidcSpaStateUrlParamValue({
+                                maybeStateUrlParamValue: url.searchParams.get("state") ?? ""
+                            }))
+                    );
+                })();
                 if ((!module.isApiOnly && !isCallback) || pathname === module.manifestPath)
                     return next();
                 const base = module.basename.replace(/\/$/, "");

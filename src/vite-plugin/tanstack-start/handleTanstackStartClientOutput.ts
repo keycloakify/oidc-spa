@@ -1,3 +1,6 @@
+// Auth bootstrap isolation, independent of SSR, prerendering and deployment targets.
+// Keep application modules out of the bootstrap graph so oidcEarlyInit can consume
+// callbacks and install security defenses before any application code executes.
 import * as path from "node:path";
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
