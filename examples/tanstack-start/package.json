@@ -8,7 +8,7 @@
         "preview": "vite preview"
     },
     "dependencies": {
-        "oidc-spa": "11.0.0-rc.13",
+        "oidc-spa": "next",
         "@tanstack/react-router": "1.170.46",
         "@tanstack/react-start": "1.169.7",
         "@upstash/redis": "1.41.1",
