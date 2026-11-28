@@ -13,6 +13,7 @@ export type User_client = {
 };
 
 export const { useOidc, getOidc, withLoginEnforced } = oidcSpa
+    .withClientOnly()
     .withUser<User_client>(async ({ isMock, idTokenClaims, accessToken }) => {
         if (isMock) {
             const user_mock: User_client = {
